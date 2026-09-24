@@ -272,6 +272,7 @@ const AdminOrderDetail = () => {
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
     queryClient.invalidateQueries({ queryKey: ["admin-order-summaries"] });
+    queryClient.invalidateQueries({ queryKey: ["admin-alert-summary"] });
   };
 
   const updateStatusMutation = useMutation({

@@ -55,18 +55,11 @@ export const TopBar = ({ onMenuClick, variant = "vendor" }: TopBarProps) => {
     return customerNotifications.filter((n) => !n.readAt).length;
   }, [customerNotifications]);
 
-  const { data: adminOrders = [] } = useQuery({
-    queryKey: ["admin-orders"],
-    queryFn: () => adminApi.getAdminOrders({ quiet: true }),
+  const { data: adminAlertSummary } = useQuery({
+    queryKey: ["admin-alert-summary"],
+    queryFn: () => adminApi.getAdminAlertSummary({ quiet: true }),
     enabled: variant === "admin" && !!user,
-    refetchInterval: 30000, // every 30 seconds
-  });
-
-  const { data: adminVendors = [] } = useQuery({
-    queryKey: ["admin-vendors"],
-    queryFn: () => adminApi.getVendors({ quiet: true }),
-    enabled: variant === "admin" && !!user,
-    refetchInterval: 30000, // every 30 seconds
+    refetchInterval: 30000,
   });
 
   const { data: adminChatUnread } = useQuery({
@@ -84,15 +77,13 @@ export const TopBar = ({ onMenuClick, variant = "vendor" }: TopBarProps) => {
   });
 
   const unreadAdminCount = useMemo(() => {
-    const criticalOrders = adminOrders.filter((o) => {
-      const s = o.status.toLowerCase().replace(/_/g, " ");
-      return s.includes("dispatch failed") || s.includes("cancelled");
-    }).length;
-    const pendingVendors = adminVendors.filter((v) => v.accountStatus === "pending").length;
+    const criticalOrders = adminAlertSummary?.criticalOrderCount ?? 0;
+    const pendingVendors = adminAlertSummary?.pendingVendorCount ?? 0;
+    const listingPricingAlerts = adminAlertSummary?.listingPricingAlertCount ?? 0;
     const chatUnread = adminChatUnread?.count ?? 0;
     const supportUnread = adminSupportUnread?.count ?? 0;
-    return criticalOrders + pendingVendors + chatUnread + supportUnread;
-  }, [adminOrders, adminVendors, adminChatUnread, adminSupportUnread]);
+    return criticalOrders + pendingVendors + listingPricingAlerts + chatUnread + supportUnread;
+  }, [adminAlertSummary, adminChatUnread, adminSupportUnread]);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);

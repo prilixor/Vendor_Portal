@@ -1,7 +1,7 @@
 import { useState, useMemo, useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { adminApi } from "@/app/services/adminApi";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { adminApi, type AdminAlertFeedItem } from "@/app/services/adminApi";
 import { chatApi } from "@/app/services/chatApi";
 import { supportApi } from "@/app/services/supportApi";
 import { PageHeader } from "@/app/components/shared/PageHeader";
@@ -29,6 +29,30 @@ import {
   CheckCircle2,
 } from "lucide-react";
 import { cn } from "@/app/helpers/utils";
+
+function mapFeedItemToAlert(item: AdminAlertFeedItem) {
+  return {
+    id: item.id,
+    type: item.type,
+    title: item.title,
+    description: item.description,
+    status: item.status,
+    timestamp: item.timestamp,
+    meta: {
+      listingTitle: item.listingTitle,
+      customerName: item.customerName,
+      vendorName: item.vendorName,
+      amount: item.amount ?? 0,
+      orderId: item.orderId,
+      company: item.company,
+      name: item.ownerName,
+      email: item.email,
+      kind: item.kind,
+      notes: item.notes,
+    },
+    link: item.link,
+  };
+}
 
 export const AdminNotifications = () => {
   const navigate = useNavigate();
@@ -64,24 +88,16 @@ export const AdminNotifications = () => {
     setSearchParams(searchParams, { replace: true });
   };
 
-  // Fetch all orders to extract critical notifications
-  const { data: orders = [], isLoading: isLoadingOrders, refetch: refetchOrders, isFetching: isFetchingOrders } = useQuery({
-    queryKey: ["admin-orders"],
-    queryFn: () => adminApi.getAdminOrders({ quiet: true }),
-    refetchInterval: 30000,
-  });
+  const feedTab = activeTab === "chats" || activeTab === "support" ? "all" : activeTab;
+  const feedPage = activeTab === "chats" || activeTab === "support" ? 1 : page;
 
-  // Fetch all vendors to find pending verification approvals
-  const { data: vendors = [], isLoading: isLoadingVendors, refetch: refetchVendors, isFetching: isFetchingVendors } = useQuery({
-    queryKey: ["admin-vendors"],
-    queryFn: () => adminApi.getVendors({ quiet: true }),
-    refetchInterval: 30000,
-  });
-
-  // Fetch all audit logs to render the Activity Stream
-  const { data: logs = [], isLoading: isLoadingLogs, refetch: refetchLogs, isFetching: isFetchingLogs } = useQuery({
-    queryKey: ["admin-audit-logs"],
-    queryFn: () => adminApi.getAuditLogs(undefined, { quiet: true }),
+  const { data: feed, isLoading: isLoadingFeed, refetch: refetchFeed, isFetching: isFetchingFeed } = useQuery({
+    queryKey: ["admin-alert-feed", feedTab, feedPage],
+    queryFn: () => adminApi.getAdminAlertFeed({
+      tab: feedTab,
+      page: feedPage,
+      pageSize: PAGE_SIZE,
+    }, { quiet: true }),
     refetchInterval: 30000,
   });
 
@@ -104,51 +120,26 @@ export const AdminNotifications = () => {
     refetchInterval: 15000,
   });
 
-  const isLoading = isLoadingOrders || isLoadingVendors || isLoadingLogs || isLoadingContinuations || isLoadingChats || isLoadingSupport;
-  const isFetching = isFetchingOrders || isFetchingVendors || isFetchingLogs || isFetchingContinuations || isFetchingChats || isFetchingSupport;
+  const isLoading = isLoadingFeed || isLoadingContinuations || isLoadingChats || isLoadingSupport;
+  const isFetching = isFetchingFeed || isFetchingContinuations || isFetchingChats || isFetchingSupport;
 
   const handleRefreshAll = async () => {
     await Promise.all([
-      refetchOrders(),
-      refetchVendors(),
-      refetchLogs(),
+      refetchFeed(),
       refetchContinuations(),
       refetchChats(),
       refetchSupport(),
     ]);
   };
 
-  // Process dispatch failed and critical alerts
-  const criticalOrders = useMemo(() => {
-    const list = orders
-      .filter((o) => {
-        const s = o.status.toLowerCase().replace(/_/g, " ");
-        return s.includes("dispatch failed") || s.includes("cancelled");
-      })
-      .map((o) => ({
-        id: `order-${o.orderId}-${o.status}`,
-        type: "order" as const,
-        title: `Order ${o.orderNumber.split("-").slice(0,3).join("-")} Dispatch Failed`,
-        description: `Vendor dispatch reassignment failed for item "${o.listingTitle}". High priority action required.`,
-        status: o.status,
-        timestamp: o.createdOnUtc,
-        meta: {
-          listingTitle: o.listingTitle,
-          customerName: o.customerName,
-          vendorName: o.vendorName,
-          amount: o.totalAmount,
-        },
-        link: "/admin/orders?tab=dispatch_failed",
-      }));
-
-    // Add extensions/buyouts alerts
-    pendingContinuations.forEach(cont => {
+  const continuationAlerts = useMemo(() => {
+    return pendingContinuations.flatMap((cont) => {
       if (cont.type === "extension") {
-        list.push({
+        return [{
           id: `ext-${cont.extensionId}`,
-          type: "extension" as any,
-          title: `Extension Requested: Order ${cont.orderNumber.split("-").slice(0,3).join("-")}`,
-          description: `Customer requested an extension. Requires admin review.`,
+          type: "extension" as const,
+          title: `Extension Requested: Order ${String(cont.orderNumber || "").split("-").slice(0, 3).join("-")}`,
+          description: "Customer requested an extension. Requires admin review.",
           status: "pending_extension",
           timestamp: cont.createdOnUtc,
           meta: {
@@ -158,14 +149,15 @@ export const AdminNotifications = () => {
             amount: cont.totalAmount,
             orderId: cont.orderId,
           },
-          link: `/admin/orders`,
-        });
-      } else if (cont.type === "buyout") {
-        list.push({
+          link: "/admin/orders",
+        }];
+      }
+      if (cont.type === "buyout") {
+        return [{
           id: `buy-${cont.extensionId}`,
-          type: "buyout" as any,
-          title: `Buyout Requested: Order ${cont.orderNumber.split("-").slice(0,3).join("-")}`,
-          description: `Customer requested to buyout the rented item. Requires admin review.`,
+          type: "buyout" as const,
+          title: `Buyout Requested: Order ${String(cont.orderNumber || "").split("-").slice(0, 3).join("-")}`,
+          description: "Customer requested to buyout the rented item. Requires admin review.",
           status: "pending_buyout",
           timestamp: cont.createdOnUtc,
           meta: {
@@ -175,75 +167,51 @@ export const AdminNotifications = () => {
             amount: cont.totalAmount,
             orderId: cont.orderId,
           },
-          link: `/admin/orders`,
-        });
+          link: "/admin/orders",
+        }];
       }
+      return [];
     });
+  }, [pendingContinuations]);
 
-    return list.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-  }, [orders, pendingContinuations]);
+  const feedAlerts = useMemo(
+    () => (feed?.items ?? []).filter((item) => item.type !== "log").map(mapFeedItemToAlert),
+    [feed],
+  );
 
-  // Process pending vendor verification alerts
+  const criticalOrders = useMemo(() => {
+    const orders = feedAlerts.filter((a) => a.type === "order");
+    const extras = page === 1 ? continuationAlerts : [];
+    return [...orders, ...extras].sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  }, [feedAlerts, continuationAlerts, page]);
+
   const pendingVendors = useMemo(() => {
-    return vendors
-      .filter((v) => v.accountStatus === "pending")
-      .map((v) => ({
-        id: `vendor-${v.id}`,
-        type: "vendor" as const,
-        title: "Vendor Onboarding Pending Approval",
-        description: `New vendor "${v.companyName || v.fullName}" has submitted document details and requires validation.`,
-        status: v.accountStatus,
-        timestamp: (v as any).createdAt || new Date().toISOString(),
-        meta: {
-          name: v.fullName,
-          company: v.companyName,
-          email: v.email,
-        },
-        link: `/admin/vendors/${v.id}?tab=docs`,
-      }))
+    return feedAlerts
+      .filter((a) => a.type === "vendor")
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-  }, [vendors]);
+  }, [feedAlerts]);
+
+  const listingAlerts = useMemo(() => {
+    return feedAlerts
+      .filter((a) => a.type === "listing")
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  }, [feedAlerts]);
 
   const sortedLogs = useMemo(() => {
-    return [...logs].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [logs]);
-
-  // Vendor listing create/update → Admin should review catalog pricing
-  const listingAlerts = useMemo(() => {
-    return logs
-      .filter((l) => {
-        const a = (l.actionType || "").toLowerCase();
-        return a === "vendor.listing.created" || a === "vendor.listing.updated";
-      })
-      .map((l) => {
-        const created = (l.actionType || "").toLowerCase().includes("created");
-        let kind = "product";
-        try {
-          if (l.newValue) {
-            const parsed = JSON.parse(l.newValue) as { kind?: string };
-            if (parsed.kind === "chemical" || parsed.kind === "product") kind = parsed.kind;
-          }
-        } catch {
-          /* ignore malformed JSON */
-        }
-        if ((l.notes || "").toLowerCase().includes("chemical")) kind = "chemical";
-        return {
-          id: `listing-${l.id}`,
-          type: "listing" as const,
-          title: created ? "New vendor listing needs pricing" : "Vendor listing updated",
-          description: l.notes || `A vendor ${created ? "created" : "updated"} a ${kind} listing. Review catalog pricing.`,
-          status: created ? "created" : "updated",
-          timestamp: l.createdAt,
-          meta: {
-            kind,
-            notes: l.notes,
-            listingTitle: l.notes?.match(/listing "([^"]+)"/)?.[1] || "Listing",
-          },
-          link: kind === "chemical" ? "/admin/chemicals" : "/admin/products",
-        };
-      })
-      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-  }, [logs]);
+    return (feed?.items ?? [])
+      .filter((item) => item.type === "log")
+      .map((item) => ({
+        id: item.id,
+        actionType: item.actionType || item.title,
+        entityType: item.entityType || "system",
+        adminId: item.adminId || "",
+        adminName: item.adminName,
+        adminEmail: item.adminEmail,
+        oldValue: item.oldValue,
+        newValue: item.newValue,
+        createdAt: item.timestamp,
+      }));
+  }, [feed]);
 
   const chatAlerts = useMemo(() => {
     return chatSessions
@@ -299,22 +267,21 @@ export const AdminNotifications = () => {
       .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
   }, [supportTickets]);
 
-  // Combine Alerts
   const allAlerts = useMemo(() => {
-    const list = [...criticalOrders, ...pendingVendors, ...listingAlerts, ...chatAlerts, ...supportAlerts];
+    const extras = page === 1 ? [...chatAlerts, ...supportAlerts] : [];
+    const list = [...criticalOrders, ...pendingVendors, ...listingAlerts, ...extras];
     return list.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-  }, [criticalOrders, pendingVendors, listingAlerts, chatAlerts, supportAlerts]);
+  }, [criticalOrders, pendingVendors, listingAlerts, chatAlerts, supportAlerts, page]);
 
-  // Count Badges
   const counts = useMemo(() => ({
-    all: allAlerts.length,
-    orders: criticalOrders.length,
-    vendors: pendingVendors.length,
-    listings: listingAlerts.length,
+    all: (feed?.counts.all ?? 0) + continuationAlerts.length + chatAlerts.length + supportAlerts.length,
+    orders: (feed?.counts.orders ?? 0) + continuationAlerts.length,
+    vendors: feed?.counts.vendors ?? 0,
+    listings: feed?.counts.listings ?? 0,
     chats: chatAlerts.length,
     support: supportAlerts.length,
-    logs: logs.length,
-  }), [allAlerts, criticalOrders, pendingVendors, listingAlerts, chatAlerts, supportAlerts, logs]);
+    logs: feed?.counts.logs ?? 0,
+  }), [feed, continuationAlerts, chatAlerts, supportAlerts]);
 
   // Helper to format audit log timeline icons
   const getLogIcon = (action: string) => {
@@ -399,7 +366,7 @@ export const AdminNotifications = () => {
         <div className="space-y-4">
           {/* TAB: ALL ALERTS */}
           {activeTab === "all" && (
-            allAlerts.length === 0 ? (
+            counts.all === 0 ? (
               <Card className="border-border/60 p-12 text-center">
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-950/40">
                   <CheckCircle2 className="h-6 w-6" />
@@ -409,19 +376,19 @@ export const AdminNotifications = () => {
               </Card>
             ) : (
               <div>
-                {allAlerts.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((alert) => (
+                {allAlerts.map((alert) => (
                   <div key={alert.id} className="mb-4 last:mb-0">
                     <AlertCard alert={alert} navigate={navigate} />
                   </div>
                 ))}
-                {renderPagination(allAlerts.length)}
+                {renderPagination(counts.all)}
               </div>
             )
           )}
 
           {/* TAB: DISPATCH FAILURES */}
           {activeTab === "orders" && (
-            criticalOrders.length === 0 ? (
+            counts.orders === 0 ? (
               <Card className="border-border/60 p-12 text-center">
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-950/40">
                   <CheckCircle2 className="h-6 w-6" />
@@ -431,19 +398,19 @@ export const AdminNotifications = () => {
               </Card>
             ) : (
               <div>
-                {criticalOrders.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((alert) => (
+                {criticalOrders.map((alert) => (
                   <div key={alert.id} className="mb-4 last:mb-0">
                     <AlertCard alert={alert} navigate={navigate} />
                   </div>
                 ))}
-                {renderPagination(criticalOrders.length)}
+                {renderPagination(counts.orders)}
               </div>
             )
           )}
 
           {/* TAB: PENDING VENDORS */}
           {activeTab === "vendors" && (
-            pendingVendors.length === 0 ? (
+            counts.vendors === 0 ? (
               <Card className="border-border/60 p-12 text-center">
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-950/40">
                   <CheckCircle2 className="h-6 w-6" />
@@ -453,19 +420,19 @@ export const AdminNotifications = () => {
               </Card>
             ) : (
               <div>
-                {pendingVendors.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((alert) => (
+                {pendingVendors.map((alert) => (
                   <div key={alert.id} className="mb-4 last:mb-0">
                     <AlertCard alert={alert} navigate={navigate} />
                   </div>
                 ))}
-                {renderPagination(pendingVendors.length)}
+                {renderPagination(counts.vendors)}
               </div>
             )
           )}
 
           {/* TAB: LISTING PRICING */}
           {activeTab === "listings" && (
-            listingAlerts.length === 0 ? (
+            counts.listings === 0 ? (
               <Card className="border-border/60 p-12 text-center">
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-950/40">
                   <CheckCircle2 className="h-6 w-6" />
@@ -475,12 +442,12 @@ export const AdminNotifications = () => {
               </Card>
             ) : (
               <div>
-                {listingAlerts.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((alert) => (
+                {listingAlerts.map((alert) => (
                   <div key={alert.id} className="mb-4 last:mb-0">
                     <AlertCard alert={alert} navigate={navigate} />
                   </div>
                 ))}
-                {renderPagination(listingAlerts.length)}
+                {renderPagination(counts.listings)}
               </div>
             )
           )}
@@ -535,7 +502,7 @@ export const AdminNotifications = () => {
 
           {/* TAB: SYSTEM ACTIVITY STREAM */}
           {activeTab === "logs" && (
-            sortedLogs.length === 0 ? (
+            counts.logs === 0 ? (
               <Card className="border-border/60 p-12 text-center">
                 <p className="text-sm text-muted-foreground">No recent system activity logs recorded.</p>
               </Card>
@@ -545,7 +512,7 @@ export const AdminNotifications = () => {
                   <ScrollText className="h-5 w-5 text-primary" /> Live Audit Log Feed
                 </h3>
                 <div className="relative border-l border-border pl-6 ml-3 mt-2 space-y-6">
-                  {sortedLogs.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((log) => (
+                  {sortedLogs.map((log) => (
                     <div key={log.id} className="relative group hover:bg-accent/10 p-3 rounded-lg border border-transparent hover:border-border/40 transition-colors">
                       {/* Left icon marker */}
                       <span className="absolute -left-[37px] top-4 flex h-7 w-7 items-center justify-center rounded-full border border-border bg-background shadow-sm transition-all group-hover:scale-105">
@@ -589,7 +556,7 @@ export const AdminNotifications = () => {
                     </div>
                   ))}
                 </div>
-                {renderPagination(sortedLogs.length)}
+                {renderPagination(counts.logs)}
               </Card>
             )
           )}

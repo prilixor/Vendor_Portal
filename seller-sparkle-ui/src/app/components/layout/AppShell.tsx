@@ -268,23 +268,9 @@ export const AppShell = ({ variant }: AppShellProps) => {
 
 
 
-  const { data: adminOrders = [] } = useQuery({
-    queryKey: ["admin-orders"],
-    queryFn: () => adminApi.getAdminOrders({ quiet: true }),
-    enabled: variant === "admin" && !!user,
-    refetchInterval: 30000,
-  });
-
-  const { data: adminVendors = [] } = useQuery({
-    queryKey: ["admin-vendors"],
-    queryFn: () => adminApi.getVendors({ quiet: true }),
-    enabled: variant === "admin" && !!user,
-    refetchInterval: 30000,
-  });
-
-  const { data: adminAuditLogs = [] } = useQuery({
-    queryKey: ["admin-audit-logs"],
-    queryFn: () => adminApi.getAuditLogs(undefined, { quiet: true }),
+  const { data: adminAlertSummary } = useQuery({
+    queryKey: ["admin-alert-summary"],
+    queryFn: () => adminApi.getAdminAlertSummary({ quiet: true }),
     enabled: variant === "admin" && !!user,
     refetchInterval: 30000,
   });
@@ -307,22 +293,11 @@ export const AppShell = ({ variant }: AppShellProps) => {
   const vendorSupportUnread = adminSupportUnread?.count ?? 0;
 
   const unreadAdminCount = useMemo(() => {
-    const criticalOrders = (adminOrders || []).filter((o) => {
-      if (!o || !o.status) return false;
-      const s = o.status.toLowerCase().replace(/_/g, " ");
-      return s.includes("dispatch failed") || s.includes("cancelled");
-    }).length;
-
-    const pendingVendors = (adminVendors || []).filter((v) => v && v.accountStatus === "pending").length;
-
-    const listingPricingAlerts = (adminAuditLogs || []).filter((l) => {
-      const a = (l.actionType || "").toLowerCase();
-      return a === "vendor.listing.created" || a === "vendor.listing.updated";
-    }).length;
-
-    // Live unread Customer→Admin + Vendor→Admin support (clears when admin opens the thread).
+    const criticalOrders = adminAlertSummary?.criticalOrderCount ?? 0;
+    const pendingVendors = adminAlertSummary?.pendingVendorCount ?? 0;
+    const listingPricingAlerts = adminAlertSummary?.listingPricingAlertCount ?? 0;
     return criticalOrders + pendingVendors + listingPricingAlerts + customerChatUnread + vendorSupportUnread;
-  }, [adminOrders, adminVendors, adminAuditLogs, customerChatUnread, vendorSupportUnread]);
+  }, [adminAlertSummary, customerChatUnread, vendorSupportUnread]);
 
 
 

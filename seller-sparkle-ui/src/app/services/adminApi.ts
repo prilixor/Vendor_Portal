@@ -46,6 +46,57 @@ export interface AdminVerificationListResult {
   pageSize: number;
 }
 
+export interface AdminAlertSummaryDto {
+  criticalOrderCount: number;
+  pendingVendorCount: number;
+  listingPricingAlertCount: number;
+}
+
+export interface AdminAlertFeedCounts {
+  all: number;
+  orders: number;
+  vendors: number;
+  listings: number;
+  logs: number;
+}
+
+export interface AdminAlertFeedItem {
+  id: string;
+  type: "order" | "vendor" | "listing" | "log";
+  title: string;
+  description: string;
+  status: string;
+  timestamp: string;
+  link: string;
+  orderId?: string | null;
+  orderNumber?: string | null;
+  listingTitle?: string | null;
+  customerName?: string | null;
+  vendorName?: string | null;
+  amount?: number | null;
+  vendorId?: string | null;
+  company?: string | null;
+  ownerName?: string | null;
+  email?: string | null;
+  kind?: string | null;
+  notes?: string | null;
+  actionType?: string | null;
+  entityType?: string | null;
+  adminId?: string | null;
+  adminName?: string | null;
+  adminEmail?: string | null;
+  oldValue?: string | null;
+  newValue?: string | null;
+}
+
+export interface AdminAlertFeedResult {
+  items: AdminAlertFeedItem[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  counts: AdminAlertFeedCounts;
+}
+
 export interface VendorProfileDto {
   id: string;
   vendorId: string;
@@ -1204,6 +1255,22 @@ export const adminApi = {
   async downloadCatalogExcel(isChemical: boolean = false): Promise<void> {
     const filename = `catalog_${isChemical ? 'chemical' : 'equipment'}_export_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "_")}.xlsx`;
     return apiClient.downloadBlob(`/admin/catalog/download-excel?isChemical=${isChemical}`, filename);
+  },
+
+  async getAdminAlertSummary(options?: ApiClientOptions): Promise<AdminAlertSummaryDto> {
+    return apiClient.get<AdminAlertSummaryDto>('/admin/alerts/summary', options);
+  },
+
+  async getAdminAlertFeed(params: {
+    tab?: string;
+    page?: number;
+    pageSize?: number;
+  } = {}, options?: ApiClientOptions): Promise<AdminAlertFeedResult> {
+    const qs = new URLSearchParams();
+    if (params.tab) qs.set("tab", params.tab);
+    qs.set("page", String(params.page && params.page > 0 ? params.page : 1));
+    qs.set("pageSize", String(params.pageSize && params.pageSize > 0 ? params.pageSize : 15));
+    return apiClient.get<AdminAlertFeedResult>(`/admin/alerts/feed?${qs.toString()}`, options);
   },
 
   async getAdminOrders(options?: ApiClientOptions): Promise<AdminOrderDto[]> {

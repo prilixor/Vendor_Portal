@@ -1,3 +1,4 @@
+using Prilixor.Shared.Extensions;
 using Prilixor.VendorPortal.Application.Abstractions;
 using Prilixor.VendorPortal.Application.Onboarding;
 using Prilixor.VendorPortal.Domain.Options;
@@ -1849,6 +1850,99 @@ public sealed class VendorOnboardingRepository(
         return query
             .OrderByDescending(x => x.CreatedOnUtc)
             .ToListAsync(cancellationToken);
+    }
+
+    public Task<int> CountPendingVendorsAsync(CancellationToken cancellationToken)
+    {
+        return dbContext.Vendors
+            .AsNoTracking()
+            .Where(v => !v.IsDeleted && v.AccountStatus.ToLower() == "pending")
+            .CountAsync(cancellationToken);
+    }
+
+    public Task<int> CountListingPricingAlertsAsync(CancellationToken cancellationToken)
+    {
+        return adminDbContext.AdminAuditLogs
+            .AsNoTracking()
+            .Where(x => !x.IsDeleted && (
+                x.ActionType.ToLower() == "vendor.listing.created" ||
+                x.ActionType.ToLower() == "vendor.listing.updated"))
+            .CountAsync(cancellationToken);
+    }
+
+    public Task<int> CountAdminAuditLogsAsync(CancellationToken cancellationToken)
+    {
+        return adminDbContext.AdminAuditLogs
+            .AsNoTracking()
+            .Where(x => !x.IsDeleted)
+            .CountAsync(cancellationToken);
+    }
+
+    public async Task<List<AdminAlertPendingVendorRow>> SearchPendingVendorAlertsAsync(
+        int take,
+        CancellationToken cancellationToken)
+    {
+        var limit = Math.Clamp(take, 1, 200);
+        return await dbContext.Vendors
+            .AsNoTracking()
+            .Where(v => !v.IsDeleted && v.AccountStatus.ToLower() == "pending")
+            .OrderByDescending(v => v.CreatedOnUtc)
+            .Take(limit)
+            .Select(v => new AdminAlertPendingVendorRow(
+                v.Id.ToString(),
+                v.Email,
+                v.AccountStatus,
+                v.Profile != null && !v.Profile.IsDeleted ? v.Profile.BusinessName : null,
+                v.Profile != null && !v.Profile.IsDeleted ? v.Profile.OwnerName : null,
+                v.CreatedOnUtc))
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<AdminAlertAuditLogPage> SearchAdminAlertAuditLogsAsync(
+        string kind,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        var safePage = Math.Max(1, page);
+        var safePageSize = Math.Clamp(pageSize, 1, 200);
+        var filter = (kind ?? "all").Trim().ToLowerInvariant();
+
+        var query = adminDbContext.AdminAuditLogs
+            .AsNoTracking()
+            .Where(x => !x.IsDeleted);
+
+        if (filter == "listing")
+        {
+            query = query.Where(x =>
+                x.ActionType.ToLower() == "vendor.listing.created" ||
+                x.ActionType.ToLower() == "vendor.listing.updated");
+        }
+
+        var totalCount = await query.CountAsync(cancellationToken);
+        var rows = await query
+            .Include(x => x.AdminUser)
+            .OrderByDescending(x => x.CreatedOnUtc)
+            .Skip((safePage - 1) * safePageSize)
+            .Take(safePageSize)
+            .ToListAsync(cancellationToken);
+
+        return new AdminAlertAuditLogPage
+        {
+            TotalCount = totalCount,
+            Items = rows.Select(x => new AdminAuditLogDto(
+                x.Id.ToString(),
+                x.AdminId.ToString(),
+                x.AdminUser?.FullName,
+                x.AdminUser?.Email,
+                x.ActionType,
+                x.EntityType,
+                x.EntityId?.ToString(),
+                x.OldValue,
+                x.NewValue,
+                x.Notes,
+                x.CreatedOnUtc.ToSafeDateTimeOffset())).ToList(),
+        };
     }
 
     public Task<PasswordResetToken?> GetPasswordResetTokenAsync(string token, CancellationToken cancellationToken)

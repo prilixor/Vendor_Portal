@@ -827,7 +827,7 @@ public sealed class CustomerRepository(
         CancellationToken cancellationToken)
     {
         var page = Math.Max(1, spec.Page);
-        var pageSize = Math.Clamp(spec.PageSize, 1, 100);
+        var pageSize = Math.Clamp(spec.PageSize, 1, 200);
         var search = spec.Search?.Trim() ?? string.Empty;
         var status = (spec.Status ?? "all").Trim().ToLowerInvariant();
         if (string.IsNullOrWhiteSpace(status)) status = "all";
@@ -903,6 +903,18 @@ public sealed class CustomerRepository(
             Stats = stats,
             StatusCounts = statusCounts,
         };
+    }
+
+    public Task<int> CountCriticalAdminOrdersAsync(CancellationToken cancellationToken)
+    {
+        return customerDb.CustomerRentalOrders
+            .AsNoTracking()
+            .Where(o => !o.IsDeleted)
+            .Where(o =>
+                o.Status.ToLower().Contains("dispatch_failed") ||
+                o.Status.ToLower().Contains("dispatch failed") ||
+                o.Status.ToLower().Contains("cancelled"))
+            .CountAsync(cancellationToken);
     }
 
     public async Task AddCustomerRentalOrderExtensionAsync(CustomerRentalOrderExtension extension, CancellationToken cancellationToken)
@@ -1663,6 +1675,11 @@ public sealed class CustomerRepository(
             "cancelled" => query.Where(o =>
                 o.Status.ToLower() == "cancelled" || o.Status.ToLower() == "canceled"),
             "dispatch_failed" => query.Where(o => o.Status.ToLower() == "dispatch_failed"),
+            "critical" => query.Where(o =>
+                o.Status.ToLower().Contains("dispatch_failed") ||
+                o.Status.ToLower().Contains("dispatch failed") ||
+                o.Status.ToLower().Contains("cancelled") ||
+                o.Status.ToLower().Contains("canceled")),
             _ => query.Where(o => o.Status.ToLower() == status),
         };
     }
@@ -1677,6 +1694,8 @@ public sealed class CustomerRepository(
             "in_transit" => s.Contains("transit", StringComparison.Ordinal),
             "dispatch_failed" => s == "dispatch failed",
             "cancelled" => s is "cancelled" or "canceled",
+            "critical" => s.Contains("dispatch failed", StringComparison.Ordinal) ||
+                          s is "cancelled" or "canceled",
             _ => s == tab.Replace('_', ' '),
         };
     }

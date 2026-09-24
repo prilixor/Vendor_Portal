@@ -335,6 +335,49 @@ public sealed class GetAdminVerificationSummariesEndpoint(IMediator mediator)
     }
 }
 
+public sealed class GetAdminAlertSummaryEndpoint(IMediator mediator)
+    : EndpointWithoutRequest<Results<Ok<AdminAlertSummaryDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("alerts/summary");
+        Group<AdminApiGroup>();
+    }
+
+    public override async Task<Results<Ok<AdminAlertSummaryDto>, ProblemHttpResult>> ExecuteAsync(CancellationToken ct)
+    {
+        var result = await mediator.Send(new GetAdminAlertSummaryQuery(), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class GetAdminAlertFeedRequest
+{
+    public string? Tab { get; set; }
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 15;
+}
+
+public sealed class GetAdminAlertFeedEndpoint(IMediator mediator)
+    : Endpoint<GetAdminAlertFeedRequest, Results<Ok<AdminAlertFeedResult>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("alerts/feed");
+        Group<AdminApiGroup>();
+    }
+
+    public override async Task<Results<Ok<AdminAlertFeedResult>, ProblemHttpResult>> ExecuteAsync(
+        GetAdminAlertFeedRequest req,
+        CancellationToken ct)
+    {
+        var page = req.Page < 1 ? 1 : req.Page;
+        var pageSize = req.PageSize is < 1 or > 100 ? 15 : req.PageSize;
+        var result = await mediator.Send(new GetAdminAlertFeedQuery(req.Tab, page, pageSize), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
 public sealed class AddAdminAuditLogEndpoint(IMediator mediator)
     : Endpoint<AddAdminAuditLogRequest, Results<Ok<AdminAuditLogDto>, ProblemHttpResult>>
 {
