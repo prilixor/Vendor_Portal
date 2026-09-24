@@ -251,6 +251,13 @@ export interface AdminCustomerListItemDto {
   orderCount: number;
 }
 
+export interface AdminCustomerListResult {
+  items: AdminCustomerListItemDto[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
+
 export interface AdminCustomerDetailDto {
   id: string;
   email: string;
@@ -1431,6 +1438,19 @@ export const adminApi = {
   async getAdminCustomers(search?: string): Promise<AdminCustomerListItemDto[]> {
     const q = search ? `?search=${encodeURIComponent(search)}` : "";
     return apiClient.get<AdminCustomerListItemDto[]>(`/admin/customers${q}`);
+  },
+
+  async getAdminCustomerSummaries(params: {
+    search?: string;
+    page?: number;
+    pageSize?: number;
+  } = {}, options?: ApiClientOptions): Promise<AdminCustomerListResult> {
+    const qs = new URLSearchParams();
+    const search = params.search?.trim();
+    if (search) qs.set("search", search);
+    qs.set("page", String(params.page && params.page > 0 ? params.page : 1));
+    qs.set("pageSize", String(params.pageSize && params.pageSize > 0 ? params.pageSize : 8));
+    return apiClient.get<AdminCustomerListResult>(`/admin/customers/summaries?${qs.toString()}`, options);
   },
 
   async getAdminCustomer(

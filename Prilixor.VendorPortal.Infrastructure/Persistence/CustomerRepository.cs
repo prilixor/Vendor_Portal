@@ -2511,6 +2511,18 @@ public sealed class CustomerRepository(
             countMap.GetValueOrDefault(c.Id))).ToList();
     }
 
+    public Task<int> CountCustomersForAdminAsync(string? search, CancellationToken cancellationToken)
+    {
+        var q = customerDb.Customers.AsNoTracking().Where(c => !c.IsDeleted);
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var s = search.Trim().ToLowerInvariant();
+            q = q.Where(c => c.Email.Contains(s) || c.FullName.ToLower().Contains(s) || (c.Phone != null && c.Phone.Contains(s)));
+        }
+
+        return q.CountAsync(cancellationToken);
+    }
+
     public async Task<AdminCustomerDetailDto?> GetCustomerDetailForAdminAsync(
         Guid customerId, int ordersPage, int ordersPageSize, CancellationToken cancellationToken)
     {

@@ -33,6 +33,33 @@ public sealed class GetAdminCustomersEndpoint(IMediator mediator)
     }
 }
 
+public sealed class GetAdminCustomerSummariesRequest
+{
+    public string? Search { get; set; }
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 8;
+}
+
+public sealed class GetAdminCustomerSummariesEndpoint(IMediator mediator)
+    : Endpoint<GetAdminCustomerSummariesRequest, Results<Ok<AdminCustomerListResult>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("customers/summaries");
+        Group<AdminApiGroup>();
+        Policies($"Perm:{AdminPermissions.CustomersView}");
+    }
+
+    public override async Task<Results<Ok<AdminCustomerListResult>, ProblemHttpResult>> ExecuteAsync(
+        GetAdminCustomerSummariesRequest req, CancellationToken ct)
+    {
+        var page = req.Page < 1 ? 1 : req.Page;
+        var pageSize = req.PageSize is < 1 or > 100 ? 8 : req.PageSize;
+        var result = await mediator.Send(new GetAdminCustomerListQuery(req.Search, page, pageSize), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
 public sealed class GetAdminCustomerDetailRequest
 {
     public int OrdersPage { get; set; } = 1;
