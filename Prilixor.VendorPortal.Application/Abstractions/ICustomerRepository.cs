@@ -30,6 +30,7 @@ public interface ICustomerRepository
     Task<CustomerRentalOrderWithListing?> GetCustomerOrderByIdAsync(Guid orderId, CancellationToken cancellationToken);
     Task<CustomerRentalOrder?> GetCustomerOrderEntityByIdAsync(Guid orderId, CancellationToken cancellationToken);
     Task<List<CustomerRentalOrderWithListing>> GetAllCustomerOrdersForAdminAsync(CancellationToken cancellationToken);
+    Task<List<CustomerRentalOrderWithListing>?> GetCustomerOrderGroupForAdminAsync(Guid orderId, CancellationToken cancellationToken);
     Task<AdminOrderListResult> SearchAdminOrderSummariesAsync(AdminOrderListQuerySpec spec, CancellationToken cancellationToken);
     Task<int> CountCriticalAdminOrdersAsync(CancellationToken cancellationToken);
     Task<bool> OrderNumberExistsAsync(string orderNumber, CancellationToken cancellationToken);

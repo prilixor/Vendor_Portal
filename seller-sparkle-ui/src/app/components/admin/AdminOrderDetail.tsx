@@ -217,10 +217,12 @@ const AdminOrderDetail = () => {
     setSelectedItemId(null);
   }, [orderId]);
 
-  const { data: orders = [], isLoading, error } = useQuery({
-    queryKey: ["admin-orders"],
-    queryFn: () => adminApi.getAdminOrders({ quiet: true }),
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["admin-order-detail", orderId],
+    queryFn: () => adminApi.getAdminOrderDetail(orderId!, { quiet: true }),
+    enabled: !!orderId,
   });
+  const orders = data?.items ?? [];
 
   const { data: prescriptionFiles = [] } = useQuery({
     queryKey: ["admin-order-prescriptions", currentItemId],
@@ -270,6 +272,7 @@ const AdminOrderDetail = () => {
   }, [selectedOrder?.orderId]);
 
   const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ["admin-order-detail"] });
     queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
     queryClient.invalidateQueries({ queryKey: ["admin-order-summaries"] });
     queryClient.invalidateQueries({ queryKey: ["admin-alert-summary"] });

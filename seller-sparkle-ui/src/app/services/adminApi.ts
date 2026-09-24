@@ -846,6 +846,10 @@ export interface ExcelUploadResponseDto {
   productsCreated: number;
 }
 
+export interface AdminOrderDetailResult {
+  items: AdminOrderDto[];
+}
+
 export interface AdminOrderDto {
   orderId: string;
   orderNumber: string;
@@ -1350,6 +1354,10 @@ export const adminApi = {
 
   async getAdminOrders(options?: ApiClientOptions): Promise<AdminOrderDto[]> {
     return apiClient.get<AdminOrderDto[]>('/admin/orders', options);
+  },
+
+  async getAdminOrderDetail(orderId: string, options?: ApiClientOptions): Promise<AdminOrderDetailResult> {
+    return apiClient.get<AdminOrderDetailResult>(`/admin/orders/${encodeURIComponent(orderId)}`, options);
   },
 
   async getAdminOrderSummaries(params: {

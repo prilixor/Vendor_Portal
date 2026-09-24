@@ -822,6 +822,44 @@ public sealed class CustomerRepository(
         return await AttachVariantDescriptionsAsync(withMedical, cancellationToken);
     }
 
+    public async Task<List<CustomerRentalOrderWithListing>?> GetCustomerOrderGroupForAdminAsync(
+        Guid orderId,
+        CancellationToken cancellationToken)
+    {
+        var seed = await customerDb.CustomerRentalOrders
+            .AsNoTracking()
+            .FirstOrDefaultAsync(o => o.Id == orderId && !o.IsDeleted, cancellationToken);
+        if (seed is null)
+            return null;
+
+        var parts = seed.OrderNumber.Split('-', StringSplitOptions.RemoveEmptyEntries);
+        var baseNumber = parts.Length >= 3 ? string.Join("-", parts.Take(3)) : seed.OrderNumber;
+        var prefix = baseNumber + "-";
+
+        var orders = await customerDb.CustomerRentalOrders
+            .AsNoTracking()
+            .Include(o => o.Customer)
+            .Where(o => !o.IsDeleted && (o.OrderNumber == baseNumber || o.OrderNumber.StartsWith(prefix)))
+            .OrderBy(o => o.OrderNumber)
+            .ToListAsync(cancellationToken);
+
+        if (orders.Count == 0)
+            return [];
+
+        var listingIds = orders.ConvertAll(o => o.VendorProductListingId);
+        var map = await LoadListingsWithVendorAsync(listingIds, cancellationToken);
+        var productMap = await LoadProductsWithImagesAsync(map.Values.Select(l => l.ProductId), cancellationToken);
+
+        var results = orders.ConvertAll(o =>
+        {
+            var listing = map.GetValueOrDefault(o.VendorProductListingId);
+            var img = ResolveOrderPrimaryImageUrl(listing, productMap);
+            return new CustomerRentalOrderWithListing(o, listing, img);
+        });
+        var withMedical = await AttachMedicalReferencesAsync(results, cancellationToken);
+        return await AttachVariantDescriptionsAsync(withMedical, cancellationToken);
+    }
+
     public async Task<AdminOrderListResult> SearchAdminOrderSummariesAsync(
         AdminOrderListQuerySpec spec,
         CancellationToken cancellationToken)
