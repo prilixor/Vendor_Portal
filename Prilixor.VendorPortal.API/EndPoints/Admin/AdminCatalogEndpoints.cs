@@ -60,6 +60,7 @@ public sealed class CreateProductRequest
     public string? BaseUnit { get; set; }
     public string? SdsDocumentUrl { get; set; }
     public string? CoaDocumentUrl { get; set; }
+    public int? MinimumRentalDays { get; set; }
 }
 
 public sealed class UpdateProductRequest
@@ -94,6 +95,7 @@ public sealed class UpdateProductRequest
     public string? BaseUnit { get; set; }
     public string? SdsDocumentUrl { get; set; }
     public string? CoaDocumentUrl { get; set; }
+    public int? MinimumRentalDays { get; set; }
 }
 
 public sealed class AddProductImageRequest
@@ -358,7 +360,8 @@ public sealed class CreateProductEndpoint(IMediator mediator)
             req.MolecularWeight,
             req.BaseUnit,
             req.SdsDocumentUrl,
-            req.CoaDocumentUrl), ct);
+            req.CoaDocumentUrl,
+            RentalPricingEngine.NormalizeMinimumRentalDays(req.MinimumRentalDays)), ct);
 
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
@@ -407,7 +410,8 @@ public sealed class UpdateProductEndpoint(IMediator mediator)
             req.MolecularWeight,
             req.BaseUnit,
             req.SdsDocumentUrl,
-            req.CoaDocumentUrl), ct);
+            req.CoaDocumentUrl,
+            RentalPricingEngine.NormalizeMinimumRentalDays(req.MinimumRentalDays)), ct);
 
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
@@ -495,6 +499,7 @@ public sealed class PreviewProductRentalPricingRequest
     public decimal DailyRent { get; set; }
     public decimal? BuyPrice { get; set; }
     public bool IsRentEnabled { get; set; } = true;
+    public int? MinimumRentalDays { get; set; }
     public List<CreateOrUpdateProductRentalPricingPlanDto>? ExistingPlans { get; set; }
 }
 
@@ -513,7 +518,12 @@ public sealed class PreviewProductRentalPricingEndpoint(IMediator mediator)
         CancellationToken ct)
     {
         var result = await mediator.Send(
-            new PreviewProductRentalPricingQuery(req.DailyRent, req.BuyPrice, req.IsRentEnabled, req.ExistingPlans),
+            new PreviewProductRentalPricingQuery(
+                req.DailyRent,
+                req.BuyPrice,
+                req.IsRentEnabled,
+                req.ExistingPlans,
+                RentalPricingEngine.NormalizeMinimumRentalDays(req.MinimumRentalDays)),
             ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }

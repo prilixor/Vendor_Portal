@@ -36,6 +36,14 @@ public sealed class GetAdminOrderExpirationsRequest
     public int WithinDays { get; set; } = 7;
 }
 
+public sealed class GetAdminOrderSummariesRequest
+{
+    public string? Search { get; set; }
+    public string? Status { get; set; }
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 8;
+}
+
 public sealed class VerifyVendorBankAccountRequest : AdminUserIdRequest
 {
     public string VendorId { get; set; } = string.Empty;
@@ -265,6 +273,64 @@ public sealed class GetVendorsEndpoint(IMediator mediator)
     public override async Task<Results<Ok<List<VendorDto>>, ProblemHttpResult>> ExecuteAsync(CancellationToken ct)
     {
         var result = await mediator.Send(new GetVendorsQuery(), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class GetAdminVendorSummariesRequest
+{
+    public string? Search { get; set; }
+    public string? Status { get; set; }
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 9;
+}
+
+public sealed class GetAdminVendorSummariesEndpoint(IMediator mediator)
+    : Endpoint<GetAdminVendorSummariesRequest, Results<Ok<AdminVendorListResult>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("vendors/summaries");
+        Group<AdminApiGroup>();
+        Policies("Perm:vendors.view");
+    }
+
+    public override async Task<Results<Ok<AdminVendorListResult>, ProblemHttpResult>> ExecuteAsync(
+        GetAdminVendorSummariesRequest req,
+        CancellationToken ct)
+    {
+        var page = req.Page < 1 ? 1 : req.Page;
+        var pageSize = req.PageSize is < 1 or > 100 ? 9 : req.PageSize;
+        var result = await mediator.Send(new GetAdminVendorListQuery(req.Search, req.Status, page, pageSize), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class GetAdminVerificationSummariesRequest
+{
+    public string? Search { get; set; }
+    public string? Status { get; set; }
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 8;
+}
+
+public sealed class GetAdminVerificationSummariesEndpoint(IMediator mediator)
+    : Endpoint<GetAdminVerificationSummariesRequest, Results<Ok<AdminVerificationListResult>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("vendors/verification-summaries");
+        Group<AdminApiGroup>();
+        Policies("Perm:vendors.view");
+    }
+
+    public override async Task<Results<Ok<AdminVerificationListResult>, ProblemHttpResult>> ExecuteAsync(
+        GetAdminVerificationSummariesRequest req,
+        CancellationToken ct)
+    {
+        var page = req.Page < 1 ? 1 : req.Page;
+        var pageSize = req.PageSize is < 1 or > 100 ? 8 : req.PageSize;
+        var result = await mediator.Send(new GetAdminVerificationListQuery(req.Search, req.Status, page, pageSize), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }
@@ -561,6 +627,27 @@ public sealed class GetAdminOrdersEndpoint(IMediator mediator)
     public override async Task<Results<Ok<List<AdminOrderDto>>, ProblemHttpResult>> ExecuteAsync(CancellationToken ct)
     {
         var result = await mediator.Send(new GetAdminAllOrdersQuery(), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class GetAdminOrderSummariesEndpoint(IMediator mediator)
+    : Endpoint<GetAdminOrderSummariesRequest, Results<Ok<AdminOrderListResult>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("orders/summaries");
+        Group<AdminApiGroup>();
+        Policies("Perm:orders.view");
+    }
+
+    public override async Task<Results<Ok<AdminOrderListResult>, ProblemHttpResult>> ExecuteAsync(
+        GetAdminOrderSummariesRequest req,
+        CancellationToken ct)
+    {
+        var page = req.Page < 1 ? 1 : req.Page;
+        var pageSize = req.PageSize is < 1 or > 100 ? 8 : req.PageSize;
+        var result = await mediator.Send(new GetAdminOrderListQuery(req.Search, req.Status, page, pageSize), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }

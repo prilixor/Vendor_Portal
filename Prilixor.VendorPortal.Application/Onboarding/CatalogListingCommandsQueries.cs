@@ -131,7 +131,8 @@ public sealed record CreateProductCommand(
     decimal? MolecularWeight = null,
     string? BaseUnit = null,
     string? SdsDocumentUrl = null,
-    string? CoaDocumentUrl = null) : ICommand<ProductDto>;
+    string? CoaDocumentUrl = null,
+    int? MinimumRentalDays = null) : ICommand<ProductDto>;
 
 public sealed class CreateProductCommandValidator : AbstractValidator<CreateProductCommand>
 {
@@ -150,6 +151,9 @@ public sealed class CreateProductCommandValidator : AbstractValidator<CreateProd
             .When(x => x.IsRentEnabled)
             .WithErrorCode(RentalPricingEngine.DailyRateRequiredCode)
             .WithMessage(RentalPricingEngine.DailyRateRequiredMessage);
+        RuleFor(x => x.MinimumRentalDays)
+            .InclusiveBetween(1, 3650)
+            .When(x => x.MinimumRentalDays.HasValue);
     }
 }
 
@@ -194,7 +198,8 @@ internal sealed class CreateProductCommandHandler(
             GstPercent = request.GstPercent,
             IsRentEnabled = request.IsRentEnabled,
             IsBuyEnabled = request.IsBuyEnabled,
-            IsActive = request.IsActive
+            IsActive = request.IsActive,
+            MinimumRentalDays = RentalPricingEngine.NormalizeMinimumRentalDays(request.MinimumRentalDays)
         };
 
         if (request.Variants != null && request.Variants.Count > 0)
@@ -299,7 +304,8 @@ internal sealed class CreateProductCommandHandler(
             entity.ChemicalProperty?.CoaDocumentUrl,
             0,
             ProductRentalPricingPlanSync.ToDtos(entity.RentalPricingPlans, fileUrlResolver, liveIcons),
-            ProductCatalogDocuments.ToDtos(entity, fileUrlResolver)));
+            ProductCatalogDocuments.ToDtos(entity, fileUrlResolver),
+            entity.MinimumRentalDays));
     }
 }
 
@@ -386,7 +392,8 @@ internal sealed class GetProductsQueryHandler(
             x.ChemicalProperty?.CoaDocumentUrl,
             favoriteCounts.GetValueOrDefault(x.Id, 0),
             ProductRentalPricingPlanSync.ToProjectedDtos(x, durationMasters, pricingOptions, fileUrlResolver, liveIcons),
-            ProductCatalogDocuments.ToDtos(x, fileUrlResolver))).ToList();
+            ProductCatalogDocuments.ToDtos(x, fileUrlResolver),
+            x.MinimumRentalDays)).ToList();
 
         return Result.Success(result);
     }
@@ -1556,7 +1563,8 @@ public sealed record UpdateProductCommand(
     decimal? MolecularWeight = null,
     string? BaseUnit = null,
     string? SdsDocumentUrl = null,
-    string? CoaDocumentUrl = null) : ICommand<ProductDto>;
+    string? CoaDocumentUrl = null,
+    int? MinimumRentalDays = null) : ICommand<ProductDto>;
 
 public sealed class UpdateProductCommandValidator : AbstractValidator<UpdateProductCommand>
 {
@@ -1576,6 +1584,9 @@ public sealed class UpdateProductCommandValidator : AbstractValidator<UpdateProd
             .When(x => x.IsRentEnabled)
             .WithErrorCode(RentalPricingEngine.DailyRateRequiredCode)
             .WithMessage(RentalPricingEngine.DailyRateRequiredMessage);
+        RuleFor(x => x.MinimumRentalDays)
+            .InclusiveBetween(1, 3650)
+            .When(x => x.MinimumRentalDays.HasValue);
     }
 }
 
@@ -1629,6 +1640,7 @@ internal sealed class UpdateProductCommandHandler(
         entity.IsRentEnabled = request.IsRentEnabled;
         entity.IsBuyEnabled = request.IsBuyEnabled;
         entity.IsActive = request.IsActive;
+        entity.MinimumRentalDays = RentalPricingEngine.NormalizeMinimumRentalDays(request.MinimumRentalDays);
 
         if (request.Variants != null)
         {
@@ -1766,7 +1778,8 @@ internal sealed class UpdateProductCommandHandler(
             entity.ChemicalProperty?.CoaDocumentUrl,
             0,
             ProductRentalPricingPlanSync.ToDtos(entity.RentalPricingPlans, fileUrlResolver, liveIcons),
-            ProductCatalogDocuments.ToDtos(entity, fileUrlResolver)));
+            ProductCatalogDocuments.ToDtos(entity, fileUrlResolver),
+            entity.MinimumRentalDays));
     }
 
     private static ProductVariant? FindMatchingVariant(
@@ -1840,7 +1853,8 @@ public static class ProductRentalPricingPlanSync
                 product.BuyPrice,
                 ProductRentalPricingApplicator.ToDurationInputs(masters),
                 ProductRentalPricingApplicator.ToExistingInputs(product.RentalPricingPlans),
-                options ?? new Domain.Options.RentalPricingOptions());
+                options ?? new Domain.Options.RentalPricingOptions(),
+                minimumRentalDays: product.MinimumRentalDays);
             return ToDtosFromCalculation(product.Id, calculation, product.RentalPricingPlans, fileUrlResolver, liveIcons);
         }
 
@@ -2028,7 +2042,8 @@ public static class ProductRentalPricingPlanSync
             dailyRate,
             entity.BuyPrice,
             ProductRentalPricingApplicator.ToDurationInputs(masters),
-            ProductRentalPricingApplicator.ToExistingInputs(entity.RentalPricingPlans));
+            ProductRentalPricingApplicator.ToExistingInputs(entity.RentalPricingPlans),
+            minimumRentalDays: entity.MinimumRentalDays);
         ProductRentalPricingApplicator.Apply(entity, calculation);
     }
 }

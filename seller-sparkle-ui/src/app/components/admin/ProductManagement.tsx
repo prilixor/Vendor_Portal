@@ -252,6 +252,7 @@ const ProductManagement = () => {
             dailyRent: Number(latest.dailyRent) || 0,
             buyPrice: latest.buyPrice,
             isRentEnabled: latest.isRentEnabled,
+            minimumRentalDays: latest.minimumRentalDays,
             existingPlans: (latest.rentalPricingPlans ?? []).map((plan, index) =>
               toRentalPlanSaveDto(plan, index),
             ),
@@ -281,6 +282,7 @@ const ProductManagement = () => {
     productForm.dailyRent,
     productForm.buyPrice,
     productForm.isRentEnabled,
+    productForm.minimumRentalDays,
     pricingPreviewNonce,
   ]);
 
@@ -375,6 +377,7 @@ const ProductManagement = () => {
         isRentEnabled: product.isRentEnabled,
         isBuyEnabled: product.isBuyEnabled,
         isActive: action === 'activate',
+        minimumRentalDays: product.minimumRentalDays,
         rentalPricingPlans: product.rentalPricingPlans,
       });
 
@@ -564,6 +567,7 @@ const ProductManagement = () => {
           isRentEnabled: full.isRentEnabled,
           isBuyEnabled: full.isBuyEnabled,
           isActive: full.isActive,
+          minimumRentalDays: full.minimumRentalDays ?? undefined,
           rentalPricingPlans: (full.rentalPricingPlans ?? []).map((p) => ({ ...p })),
         });
         void loadProductImages(full.id, { silent: true });
@@ -598,6 +602,7 @@ const ProductManagement = () => {
         isRentEnabled: true,
         isBuyEnabled: true,
         isActive: true,
+        minimumRentalDays: undefined,
         rentalPricingPlans: [],
       });
       setProductImages([]);
@@ -1637,42 +1642,64 @@ const ProductManagement = () => {
                   Set daily rate, deposit, and buy. Open the duration chart to set discounts per plan.
                 </p>
               </div>
-              <FormGrid cols={3}>
-                <div className="space-y-1.5">
-                  <Label required={productForm.isRentEnabled}>Daily rate (INR)</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    value={productForm.dailyRent}
-                    onChange={(e) => {
-                      setProductForm({ ...productForm, dailyRent: Number(e.target.value) || 0 });
-                      clearFieldError("dailyRent");
-                      clearFieldError("rentalPricingPlans");
-                    }}
-                    className={fieldErrors.dailyRent ? "border-destructive" : ""}
-                  />
-                  <p className="text-[11px] text-muted-foreground">Base rent per day for duration plans.</p>
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Security Deposit (INR)</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    value={productForm.securityDeposit}
-                    onChange={(e) => setProductForm({ ...productForm, securityDeposit: Number(e.target.value) || 0 })}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Buy Price (INR, optional)</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    value={productForm.buyPrice ?? ""}
-                    onChange={(e) => setProductForm({ ...productForm, buyPrice: e.target.value === "" ? undefined : Number(e.target.value) })}
-                    placeholder="Leave empty if buy not offered"
-                  />
-                </div>
-                <div className="flex flex-wrap items-center gap-4 sm:col-span-2 lg:col-span-3">
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                <Label required={productForm.isRentEnabled}>Daily rate (INR)</Label>
+                <Label>Minimum rental days</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={productForm.dailyRent}
+                  onChange={(e) => {
+                    setProductForm({ ...productForm, dailyRent: Number(e.target.value) || 0 });
+                    clearFieldError("dailyRent");
+                    clearFieldError("rentalPricingPlans");
+                  }}
+                  className={fieldErrors.dailyRent ? "border-destructive" : ""}
+                />
+                <Input
+                  type="number"
+                  min={1}
+                  value={productForm.minimumRentalDays ?? ""}
+                  placeholder="Optional"
+                  onChange={(e) => {
+                    const raw = e.target.value.trim();
+                    const parsed = raw === "" ? undefined : Number(raw);
+                    setProductForm({
+                      ...productForm,
+                      minimumRentalDays: parsed && parsed > 0 ? Math.floor(parsed) : undefined,
+                    });
+                  }}
+                />
+                <p className="min-h-8 text-[11px] leading-4 text-muted-foreground">
+                  Base rent per day for duration plans.
+                </p>
+                <p className="min-h-8 text-[11px] leading-4 text-muted-foreground">
+                  Empty offers every duration. A value hides shorter plans.
+                </p>
+
+                <Label className="mt-2">Security deposit (INR)</Label>
+                <Label className="mt-2">Buy price (INR, optional)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={productForm.securityDeposit}
+                  onChange={(e) => setProductForm({ ...productForm, securityDeposit: Number(e.target.value) || 0 })}
+                />
+                <Input
+                  type="number"
+                  min={0}
+                  value={productForm.buyPrice ?? ""}
+                  onChange={(e) => setProductForm({ ...productForm, buyPrice: e.target.value === "" ? undefined : Number(e.target.value) })}
+                  placeholder="Optional"
+                />
+                <p className="min-h-8 text-[11px] leading-4 text-muted-foreground">
+                  Held for the rental.
+                </p>
+                <p className="min-h-8 text-[11px] leading-4 text-muted-foreground">
+                  Caps plans whose rent exceeds this price.
+                </p>
+
+                <div className="col-span-2 flex items-center gap-6 pt-1">
                   <label className="flex items-center gap-2 text-sm">
                     <input
                       type="checkbox"
@@ -1690,11 +1717,12 @@ const ProductManagement = () => {
                     Buy enabled
                   </label>
                 </div>
-              </FormGrid>
+              </div>
             </section>
 
             <RentalDurationPricingEditor
               dailyRate={productForm.dailyRent}
+              minimumRentalDays={productForm.minimumRentalDays}
               hideDailyRateInput
               masters={rentalDurationMasters}
               icons={rentalDurationIcons}
@@ -1719,26 +1747,23 @@ const ProductManagement = () => {
                   What you pay the vendor. Rental payout = vendor daily rate × plan days.
                 </p>
               </div>
-              <FormGrid cols={2}>
-                <div className="space-y-1.5">
-                  <Label>Vendor daily rate (INR)</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    value={productForm.vendorDailyRent}
-                    onChange={(e) => setProductForm({ ...productForm, vendorDailyRent: Number(e.target.value) || 0 })}
-                  />
-                </div>
-                <div className="space-y-1.5">
-                  <Label>Vendor Buy Price (INR, optional)</Label>
-                  <Input
-                    type="number"
-                    min={0}
-                    value={productForm.vendorBuyPrice ?? ""}
-                    onChange={(e) => setProductForm({ ...productForm, vendorBuyPrice: e.target.value === "" ? undefined : Number(e.target.value) })}
-                  />
-                </div>
-              </FormGrid>
+              <div className="grid grid-cols-2 gap-x-4 gap-y-1.5">
+                <Label>Vendor daily rate (INR)</Label>
+                <Label>Vendor buy price (INR)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  value={productForm.vendorDailyRent}
+                  onChange={(e) => setProductForm({ ...productForm, vendorDailyRent: Number(e.target.value) || 0 })}
+                />
+                <Input
+                  type="number"
+                  min={0}
+                  value={productForm.vendorBuyPrice ?? ""}
+                  placeholder="Optional"
+                  onChange={(e) => setProductForm({ ...productForm, vendorBuyPrice: e.target.value === "" ? undefined : Number(e.target.value) })}
+                />
+              </div>
             </section>
             </>
             )}

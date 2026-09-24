@@ -9,6 +9,38 @@ public class RentalPricingEngineTests
     private static readonly RentalPricingOptions Options = new();
 
     [Fact]
+    public void Minimum_rental_days_marks_shorter_plans_unavailable()
+    {
+        var durations = Durations(
+            (7, 7), (14, 14), (21, 21), (28, 28), (42, 42), (56, 56), (70, 70));
+
+        var result = RentalPricingEngine.Calculate(
+            13m,
+            10_000m,
+            durations,
+            options: Options,
+            minimumRentalDays: 30);
+
+        Assert.Equal(
+            [7, 14, 21, 28],
+            result.Plans.Where(p => !p.IsEligible).Select(p => p.DurationDays).ToArray());
+        Assert.Equal(
+            [42, 56, 70],
+            result.Plans.Where(p => p.IsEligible).Select(p => p.DurationDays).ToArray());
+        Assert.Equal(3, result.EligibleCount);
+    }
+
+    [Fact]
+    public void Missing_minimum_rental_days_keeps_short_plans_available()
+    {
+        var durations = Durations((7, 7), (14, 14), (42, 42));
+
+        var result = RentalPricingEngine.Calculate(13m, 10_000m, durations, options: Options);
+
+        Assert.True(result.Plans.All(p => p.IsEligible));
+    }
+
+    [Fact]
     public void Durations_are_taken_from_input_not_hardcoded()
     {
         var durations = Durations((10, 10), (30, 30), (45, 45), (60, 60), (180, 180));
