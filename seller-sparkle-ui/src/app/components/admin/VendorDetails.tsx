@@ -539,10 +539,13 @@ const VendorDetails = () => {
       const sortedListings = listingsData.sort((a, b) => a.listingTitle.localeCompare(b.listingTitle));
       setProductListings(sortedListings);
 
-      // Load catalog products (with per-size variants) so chemical listings can show pricing.
+      // Load only catalog products used by this vendor's listings (variants + images).
       let productsById: Record<string, ProductDto> = {};
+      const productIds = [...new Set(sortedListings.map((l) => l.productId).filter(Boolean))];
       try {
-        const productsData = await adminApi.getAllProductSummaries();
+        const productsData = productIds.length === 0
+          ? []
+          : await adminApi.getAllProductSummaries({ ids: productIds });
         const map: Record<string, ProductDto> = {};
         productsData.forEach((prod) => { map[prod.id] = prod; });
         productsById = map;

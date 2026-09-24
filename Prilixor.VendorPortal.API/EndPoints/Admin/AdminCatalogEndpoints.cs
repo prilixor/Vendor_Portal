@@ -245,6 +245,7 @@ public sealed class GetProductSummariesRequest
     public string? Status { get; set; }
     public bool FavoritesOnly { get; set; }
     public bool? IsChemical { get; set; }
+    public string? Ids { get; set; }
     public int Page { get; set; } = 1;
     public int PageSize { get; set; } = 10;
 }
@@ -294,7 +295,8 @@ public sealed class GetProductSummariesEndpoint(IMediator mediator)
             req.FavoritesOnly,
             req.IsChemical,
             page,
-            pageSize), ct);
+            pageSize,
+            req.Ids), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }

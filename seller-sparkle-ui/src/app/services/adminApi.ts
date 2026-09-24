@@ -1210,6 +1210,7 @@ export const adminApi = {
     status?: "all" | "active" | "inactive";
     favoritesOnly?: boolean;
     isChemical?: boolean;
+    ids?: string[];
     page?: number;
     pageSize?: number;
   } = {}): Promise<PagedResult<ProductDto>> {
@@ -1220,6 +1221,8 @@ export const adminApi = {
     if (params.status && params.status !== "all") qs.set("status", params.status);
     if (params.favoritesOnly) qs.set("favoritesOnly", "true");
     if (typeof params.isChemical === "boolean") qs.set("isChemical", String(params.isChemical));
+    const ids = params.ids?.map((id) => id.trim()).filter(Boolean) ?? [];
+    if (ids.length > 0) qs.set("ids", ids.join(","));
     qs.set("page", String(params.page && params.page > 0 ? params.page : 1));
     qs.set("pageSize", String(params.pageSize && params.pageSize > 0 ? params.pageSize : 10));
     return apiClient.get<PagedResult<ProductDto>>(`/admin/catalog/product-summaries?${qs.toString()}`);
@@ -1235,6 +1238,7 @@ export const adminApi = {
     status?: "all" | "active" | "inactive";
     favoritesOnly?: boolean;
     isChemical?: boolean;
+    ids?: string[];
   } = {}): Promise<ProductDto[]> {
     const pageSize = 100;
     const first = await this.getProductSummaries({ ...params, page: 1, pageSize });

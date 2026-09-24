@@ -15,7 +15,8 @@ public sealed record GetProductListQuery(
     bool FavoritesOnly,
     bool? IsChemical,
     int Page = 1,
-    int PageSize = 10) : IQuery<PagedResult<ProductDto>>;
+    int PageSize = 10,
+    string? Ids = null) : IQuery<PagedResult<ProductDto>>;
 
 public sealed class GetProductListQueryValidator : AbstractValidator<GetProductListQuery>
 {
@@ -58,12 +59,15 @@ internal sealed class GetProductListQueryHandler(
             _ => null
         };
 
-        IReadOnlyCollection<Guid>? restrictToIds = null;
+        IReadOnlyCollection<Guid>? restrictToIds = ParseProductIds(request.Ids);
         Dictionary<Guid, int>? favoriteLookup = null;
         if (request.FavoritesOnly)
         {
             favoriteLookup = await customerRepository.GetFavoriteCountsByProductsAsync(cancellationToken);
-            restrictToIds = favoriteLookup.Where(kv => kv.Value > 0).Select(kv => kv.Key).ToList();
+            var favoriteIds = favoriteLookup.Where(kv => kv.Value > 0).Select(kv => kv.Key).ToList();
+            restrictToIds = restrictToIds is null
+                ? favoriteIds
+                : favoriteIds.Where(restrictToIds.Contains).ToList();
             if (restrictToIds.Count == 0)
             {
                 return Result.Success(new PagedResult<ProductDto>([], 0, request.Page, request.PageSize));
@@ -148,6 +152,22 @@ internal sealed class GetProductListQueryHandler(
             favoriteCounts.GetValueOrDefault(row.Id, 0),
             [],
             []);
+    }
+
+    private static List<Guid>? ParseProductIds(string? ids)
+    {
+        if (string.IsNullOrWhiteSpace(ids))
+            return null;
+
+        var parsed = ids
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(value => Guid.TryParse(value, out var id) ? id : Guid.Empty)
+            .Where(id => id != Guid.Empty)
+            .Distinct()
+            .Take(200)
+            .ToList();
+
+        return parsed.Count == 0 ? null : parsed;
     }
 }
 
