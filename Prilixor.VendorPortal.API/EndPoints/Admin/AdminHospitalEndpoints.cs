@@ -55,6 +55,35 @@ public sealed class ListAdminHospitalsEndpoint(IMediator mediator)
     }
 }
 
+public sealed class GetAdminHospitalSummariesRequest
+{
+    public string? Search { get; set; }
+    public bool? IsActive { get; set; }
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 8;
+}
+
+public sealed class GetAdminHospitalSummariesEndpoint(IMediator mediator)
+    : Endpoint<GetAdminHospitalSummariesRequest, Results<Ok<AdminHospitalListResult>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("hospitals/summaries");
+        Group<AdminApiGroup>();
+        Policies("Perm:catalog.manage");
+    }
+
+    public override async Task<Results<Ok<AdminHospitalListResult>, ProblemHttpResult>> ExecuteAsync(
+        GetAdminHospitalSummariesRequest req,
+        CancellationToken ct)
+    {
+        var page = req.Page < 1 ? 1 : req.Page;
+        var pageSize = req.PageSize is < 1 or > 100 ? 8 : req.PageSize;
+        var result = await mediator.Send(new GetAdminHospitalListQuery(req.Search, req.IsActive, page, pageSize), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
 public sealed class GetAdminHospitalEndpoint(IMediator mediator)
     : EndpointWithoutRequest<Results<Ok<HospitalDto>, ProblemHttpResult>>
 {

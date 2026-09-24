@@ -159,6 +159,12 @@ public interface ICustomerRepository
 
     Task<Prilixor.VendorPortal.Domain.Common.Hospital?> GetHospitalByIdAsync(Guid hospitalId, CancellationToken cancellationToken);
     Task<List<Prilixor.VendorPortal.Domain.Common.Hospital>> ListHospitalsForAdminAsync(string? searchTerm, bool? isActive, CancellationToken cancellationToken);
+    Task<(List<Prilixor.VendorPortal.Domain.Common.Hospital> Items, int TotalCount)> SearchHospitalsForAdminPagedAsync(
+        string? searchTerm,
+        bool? isActive,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken);
     Task AddHospitalAsync(Prilixor.VendorPortal.Domain.Common.Hospital hospital, CancellationToken cancellationToken);
     Task UpdateHospitalAsync(Prilixor.VendorPortal.Domain.Common.Hospital hospital, CancellationToken cancellationToken);
     Task SoftDeleteHospitalAsync(Guid hospitalId, Guid? deletedBy, CancellationToken cancellationToken);

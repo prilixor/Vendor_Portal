@@ -1,4 +1,4 @@
-using Microsoft.Extensions.Configuration;
+using FluentValidation;
 using Prilixor.Shared.Abstractions.CQRS;
 using Prilixor.Shared.Models;
 using Prilixor.VendorPortal.Application.Abstractions;
@@ -16,6 +16,55 @@ public sealed record CreateHospitalInput(
     decimal? Latitude,
     decimal? Longitude,
     string? ContactNumber);
+
+public sealed class AdminHospitalListResult
+{
+    public List<HospitalDto> Items { get; init; } = [];
+    public int TotalCount { get; init; }
+    public int Page { get; init; }
+    public int PageSize { get; init; }
+}
+
+public sealed record GetAdminHospitalListQuery(
+    string? Search,
+    bool? IsActive,
+    int Page = 1,
+    int PageSize = 8) : IQuery<AdminHospitalListResult>;
+
+public sealed class GetAdminHospitalListQueryValidator : AbstractValidator<GetAdminHospitalListQuery>
+{
+    public GetAdminHospitalListQueryValidator()
+    {
+        RuleFor(x => x.Page).GreaterThan(0);
+        RuleFor(x => x.PageSize).InclusiveBetween(1, 100);
+    }
+}
+
+internal sealed class GetAdminHospitalListQueryHandler(ICustomerRepository repository)
+    : IQueryHandler<GetAdminHospitalListQuery, AdminHospitalListResult>
+{
+    public async Task<Result<AdminHospitalListResult>> Handle(
+        GetAdminHospitalListQuery request,
+        CancellationToken cancellationToken)
+    {
+        var page = Math.Max(1, request.Page);
+        var pageSize = Math.Clamp(request.PageSize, 1, 100);
+        var (items, totalCount) = await repository.SearchHospitalsForAdminPagedAsync(
+            request.Search,
+            request.IsActive,
+            page,
+            pageSize,
+            cancellationToken);
+
+        return Result.Success(new AdminHospitalListResult
+        {
+            Items = items.Select(HospitalDtoMapper.Map).ToList(),
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize,
+        });
+    }
+}
 
 public sealed record ListAdminHospitalsQuery(string? Search, bool? IsActive) : IQuery<List<HospitalDto>>;
 

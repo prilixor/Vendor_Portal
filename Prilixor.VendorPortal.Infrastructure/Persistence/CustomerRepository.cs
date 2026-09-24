@@ -1733,6 +1733,49 @@ public sealed class CustomerRepository(
         return await query.OrderBy(x => x.Name).Take(200).ToListAsync(cancellationToken);
     }
 
+    public async Task<(List<Prilixor.VendorPortal.Domain.Common.Hospital> Items, int TotalCount)> SearchHospitalsForAdminPagedAsync(
+        string? searchTerm,
+        bool? isActive,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
+        var filtered = FilterAdminHospitals(commonDb.Hospitals.AsNoTracking(), searchTerm, isActive);
+        var totalCount = await filtered.CountAsync(cancellationToken);
+        var items = await filtered
+            .Include(h => h.Doctors)
+            .ThenInclude(hd => hd.Doctor)
+            .OrderBy(x => x.Name)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        return (items, totalCount);
+    }
+
+    private static IQueryable<Prilixor.VendorPortal.Domain.Common.Hospital> FilterAdminHospitals(
+        IQueryable<Prilixor.VendorPortal.Domain.Common.Hospital> query,
+        string? searchTerm,
+        bool? isActive)
+    {
+        query = query.Where(x => !x.IsDeleted);
+
+        if (isActive.HasValue)
+            query = query.Where(x => x.IsActive == isActive.Value);
+
+        if (string.IsNullOrWhiteSpace(searchTerm))
+            return query;
+
+        var term = $"%{searchTerm.Trim()}%";
+        return query.Where(x =>
+            EF.Functions.ILike(x.Name, term)
+            || EF.Functions.ILike(x.City ?? "", term)
+            || EF.Functions.ILike(x.AddressLine1 ?? "", term));
+    }
+
     public async Task AddHospitalAsync(Prilixor.VendorPortal.Domain.Common.Hospital hospital, CancellationToken cancellationToken)
     {
         commonDb.Hospitals.Add(hospital);

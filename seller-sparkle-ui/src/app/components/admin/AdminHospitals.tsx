@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
@@ -18,7 +19,6 @@ import { SearchableMultiSelect } from "@/app/components/shared/SearchableMultiSe
 import {
   adminApi,
   AdminHospitalDto,
-  AdminDoctorDto,
   CreateAdminHospitalRequest,
   UpdateAdminHospitalRequest,
 } from "@/app/services/adminApi";
@@ -57,11 +57,10 @@ const emptyForm = (): HospitalForm => ({
 const PAGE_SIZE = 8;
 
 const AdminHospitals = () => {
-  const [hospitals, setHospitals] = useState<AdminHospitalDto[]>([]);
-  const [doctors, setDoctors] = useState<AdminDoctorDto[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
   const [page, setPage] = useState(1);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -69,36 +68,54 @@ const AdminHospitals = () => {
   const [form, setForm] = useState<HospitalForm>(emptyForm());
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
-  const load = async () => {
-    setLoading(true);
-    try {
-      const isActive = statusFilter === "all" ? undefined : statusFilter === "active";
-      const [h, d] = await Promise.all([
-        adminApi.getHospitals(search, isActive),
-        adminApi.getDoctors(undefined, true),
-      ]);
-      setHospitals(h);
-      setDoctors(d);
-      setPage(1);
-    } catch (e) {
-      toast.error(getUserFriendlyMessage(e, "Failed to load hospitals"));
-    } finally {
-      setLoading(false);
-    }
+  const applySearch = () => {
+    setAppliedSearch(searchInput.trim());
+    setPage(1);
   };
 
-  useEffect(() => {
-    void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter]);
+  const { data, isLoading, isPlaceholderData, isError, error } = useQuery({
+    queryKey: ["admin-hospital-summaries", page, appliedSearch, statusFilter],
+    queryFn: () =>
+      adminApi.getHospitalSummaries({
+        search: appliedSearch,
+        isActive: statusFilter === "all" ? undefined : statusFilter === "active",
+        page,
+        pageSize: PAGE_SIZE,
+      }),
+    placeholderData: keepPreviousData,
+  });
+  const isPageChanging = isPlaceholderData && !isLoading;
 
-  const filtered = useMemo(() => hospitals, [hospitals]);
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const { data: doctors = [] } = useQuery({
+    queryKey: ["admin-doctors-lookup"],
+    queryFn: () => adminApi.getDoctors(undefined, true),
+  });
+
+  const hospitals = data?.items ?? [];
+  const totalCount = data?.totalCount ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const safePage = Math.min(Math.max(1, page), totalPages);
-  const pageRows = useMemo(
-    () => filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
-    [filtered, safePage],
-  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter, appliedSearch]);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
+  useEffect(() => {
+    if (isError) {
+      toast.error(getUserFriendlyMessage(error, "Failed to load hospitals"));
+    }
+  }, [isError, error]);
+
+  const load = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["admin-hospital-summaries"] }),
+      queryClient.invalidateQueries({ queryKey: ["admin-doctors-lookup"] }),
+    ]);
+  };
 
   const openCreate = () => {
     setEditing(null);
@@ -221,10 +238,10 @@ const AdminHospitals = () => {
             <Input
               className="pl-9"
               placeholder="Search by name, city, or address…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter") void load();
+                if (e.key === "Enter") applySearch();
               }}
             />
           </div>
@@ -238,27 +255,27 @@ const AdminHospitals = () => {
               <SelectItem value="inactive">Inactive</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="secondary" onClick={() => void load()}>
+          <Button variant="secondary" onClick={applySearch}>
             Search
           </Button>
         </div>
       </Card>
 
       <Card className="overflow-hidden">
-        <PageContentGate loading={loading}>{filtered.length === 0 ? (
+        <PageContentGate loading={isLoading}>{totalCount === 0 ? (
           <div className="flex flex-col items-center justify-center gap-2 py-16 text-muted-foreground">
             <Building2 className="h-10 w-10 opacity-40" />
             <p>No hospitals yet. Add one with address and map pin.</p>
           </div>
         ) : (
-          <div>
+          <div className={cn("transition-opacity duration-200", isPageChanging && "opacity-50")}>
             <div className="divide-y">
-            {pageRows.map((h) => {
+            {hospitals.map((h) => {
               const address =
                 [h.addressLine1, h.city, h.state, h.postalCode].filter(Boolean).join(", ") || "No address";
               return (
-              <div key={h.id} className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
-                <div className="min-w-0 space-y-1">
+              <div key={h.id} className="flex flex-col gap-3 p-4 sm:flex-row sm:items-start sm:justify-between">
+                <div className="min-w-0 flex-1 space-y-1">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="font-semibold text-foreground">{h.name}</p>
                     <Badge
@@ -283,17 +300,17 @@ const AdminHospitals = () => {
                     <span className="min-w-0 break-words">{address}</span>
                   </p>
                   {h.doctorNames && h.doctorNames.length > 0 && (
-                    <p className="text-xs text-muted-foreground">
+                    <p className="break-words text-xs text-muted-foreground">
                       {h.doctorNames.length} {h.doctorNames.length === 1 ? "doctor" : "doctors"} · {h.doctorNames.join(", ")}
                     </p>
                   )}
                 </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button size="sm" variant="outline" onClick={() => openEdit(h)}>
+                <div className="flex w-full shrink-0 flex-nowrap items-center gap-2 sm:w-auto sm:justify-end">
+                  <Button size="sm" variant="outline" className="min-w-[6.25rem] flex-1 sm:flex-none" onClick={() => openEdit(h)}>
                     <Pencil className="mr-1.5 h-3.5 w-3.5" />
                     Edit
                   </Button>
-                  <Button size="sm" variant="outline" onClick={() => void remove(h)}>
+                  <Button size="sm" variant="outline" className="min-w-[6.25rem] flex-1 sm:flex-none" onClick={() => void remove(h)}>
                     <Trash2 className="mr-1.5 h-3.5 w-3.5" />
                     Remove
                   </Button>
@@ -306,7 +323,7 @@ const AdminHospitals = () => {
               <TablePagination
                 page={safePage}
                 pageSize={PAGE_SIZE}
-                total={filtered.length}
+                total={totalCount}
                 onPageChange={setPage}
                 label="hospitals"
               />
