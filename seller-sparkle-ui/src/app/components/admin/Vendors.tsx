@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { ArrowRight, Building2, FileText, Package, Search } from "lucide-react";
 
 import { PageHeader } from "@/app/components/shared/PageHeader";
@@ -12,6 +12,7 @@ import { TablePagination } from "@/app/components/shared/TablePagination";
 import { StatusBadge } from "@/app/components/shared/StatusBadge";
 import { CopyableEmail } from "@/app/components/shared/CopyableEmail";
 import { adminApi } from "@/app/services/adminApi";
+import { cn } from "@/app/helpers/utils";
 import type { AccountStatus } from "@/app/models";
 
 const PAGE_SIZE = 9;
@@ -42,7 +43,7 @@ const Vendors = () => {
     setPage(1);
   }, [debouncedSearch, statusFilter]);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isPlaceholderData } = useQuery({
     queryKey: ["admin-vendor-summaries", page, debouncedSearch, statusFilter],
     queryFn: () =>
       adminApi.getVendorSummaries({
@@ -51,7 +52,9 @@ const Vendors = () => {
         page,
         pageSize: PAGE_SIZE,
       }),
+    placeholderData: keepPreviousData,
   });
+  const isPageChanging = isPlaceholderData && !isLoading;
 
   const vendors = data?.items ?? [];
   const totalCount = data?.totalCount ?? 0;
@@ -93,7 +96,7 @@ const Vendors = () => {
       </div>
 
       <PageContentGate loading={isLoading}>
-        <>
+        <div className={cn("transition-opacity duration-200", isPageChanging && "opacity-50")}>
           <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-3">
             {vendors.map((v) => {
               const name = v.businessName || v.email;
@@ -195,7 +198,7 @@ const Vendors = () => {
             onPageChange={setPage}
             label="vendors"
           />
-        </>
+        </div>
       </PageContentGate>
     </div>
   );

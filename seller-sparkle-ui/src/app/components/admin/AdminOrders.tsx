@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { adminApi, type AdminOrderDto } from "@/app/services/adminApi";
 import { useSearchParams, useNavigate, useLocation } from "react-router-dom";
 import { PageHeader } from "@/app/components/shared/PageHeader";
@@ -103,7 +103,7 @@ export const AdminOrders = () => {
   }, [urlTab]);
   const [page, setPage] = useState(1);
 
-  const { data, isLoading, refetch, isFetching } = useQuery({
+  const { data, isLoading, refetch, isFetching, isPlaceholderData } = useQuery({
     queryKey: ["admin-order-summaries", page, debouncedSearch, activeTab],
     queryFn: () =>
       adminApi.getAdminOrderSummaries({
@@ -112,7 +112,9 @@ export const AdminOrders = () => {
         page,
         pageSize: PAGE_SIZE,
       }, { quiet: true }),
+    placeholderData: keepPreviousData,
   });
+  const isPageChanging = isPlaceholderData && !isLoading;
 
   const orders = data?.items ?? [];
   const stats = data?.stats ?? { totalCount: 0, revenue: 0, active: 0, returned: 0, failed: 0 };
@@ -327,7 +329,7 @@ export const AdminOrders = () => {
         <PageContentGate loading={isLoading}>{groupedOrders.length === 0 ? (
           <p className="py-12 text-center text-sm text-muted-foreground">No customer orders found matching current criteria.</p>
         ) : (
-          <div className="space-y-4">
+          <div className={cn("space-y-4 transition-opacity duration-200", isPageChanging && "opacity-50")}>
             {groupedOrders.map((group) => (
               <div key={group.baseOrderNumber} className="min-w-0 overflow-hidden rounded-xl border border-border/80 bg-card p-4 shadow-sm transition-all hover:border-border/100 sm:p-6">
                 {/* Transaction Group Header */}

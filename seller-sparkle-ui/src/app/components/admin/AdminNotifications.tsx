@@ -1,5 +1,5 @@
 import { useState, useMemo, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { adminApi, type AdminAlertFeedItem } from "@/app/services/adminApi";
 import { chatApi } from "@/app/services/chatApi";
@@ -91,15 +91,17 @@ export const AdminNotifications = () => {
   const feedTab = activeTab === "chats" || activeTab === "support" ? "all" : activeTab;
   const feedPage = activeTab === "chats" || activeTab === "support" ? 1 : page;
 
-  const { data: feed, isLoading: isLoadingFeed, refetch: refetchFeed, isFetching: isFetchingFeed } = useQuery({
+  const { data: feed, isLoading: isLoadingFeed, refetch: refetchFeed, isFetching: isFetchingFeed, isPlaceholderData } = useQuery({
     queryKey: ["admin-alert-feed", feedTab, feedPage],
     queryFn: () => adminApi.getAdminAlertFeed({
       tab: feedTab,
       page: feedPage,
       pageSize: PAGE_SIZE,
     }, { quiet: true }),
+    placeholderData: keepPreviousData,
     refetchInterval: 30000,
   });
+  const isFeedPageChanging = isPlaceholderData && !isLoadingFeed && activeTab !== "chats" && activeTab !== "support";
 
   // Fetch all pending continuations (extensions & buyouts) globally
   const { data: pendingContinuations = [], isLoading: isLoadingContinuations, refetch: refetchContinuations, isFetching: isFetchingContinuations } = useQuery({
@@ -363,7 +365,7 @@ export const AdminNotifications = () => {
       </Tabs>
 
       <PageContentGate loading={isLoading}>
-        <div className="space-y-4">
+        <div className={cn("space-y-4 transition-opacity duration-200", isFeedPageChanging && "opacity-50")}>
           {/* TAB: ALL ALERTS */}
           {activeTab === "all" && (
             counts.all === 0 ? (

@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card } from "@/app/components/ui/card";
 import { Input } from "@/app/components/ui/input";
@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { PageContentGate } from "@/app/components/shared/PageLoader";
 import { TablePagination } from "@/app/components/shared/TablePagination";
 import { adminApi, AdminAuditLogListRow } from "@/app/services/adminApi";
+import { cn } from "@/app/helpers/utils";
 import { Search, ArrowRight } from "lucide-react";
 
 const PAGE_SIZE = 8;
@@ -26,7 +27,7 @@ const AuditLogs = () => {
     setPage(1);
   }, [debouncedSearch, actor]);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isPlaceholderData } = useQuery({
     queryKey: ["admin-audit-log-summaries", page, debouncedSearch, actor],
     queryFn: () =>
       adminApi.getAdminAuditLogSummaries({
@@ -35,7 +36,9 @@ const AuditLogs = () => {
         page,
         pageSize: PAGE_SIZE,
       }),
+    placeholderData: keepPreviousData,
   });
+  const isPageChanging = isPlaceholderData && !isLoading;
 
   const pageRows = data?.items ?? [];
   const totalCount = data?.totalCount ?? 0;
@@ -71,7 +74,12 @@ const AuditLogs = () => {
               <p className="py-12 text-center text-sm text-muted-foreground">No audit logs match your filters.</p>
             ) : (
               <>
-                <div className="overflow-x-auto rounded-lg border border-border">
+                <div
+                  className={cn(
+                    "overflow-x-auto rounded-lg border border-border transition-opacity duration-200",
+                    isPageChanging && "opacity-50",
+                  )}
+                >
                   <table className="w-full min-w-[700px] text-sm">
                     <thead className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
                       <tr>
