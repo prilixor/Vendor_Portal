@@ -285,12 +285,36 @@ public sealed class GetVendorsEndpoint(IMediator mediator)
     }
 }
 
+public sealed class GetAdminVendorByIdRequest
+{
+    public string VendorId { get; set; } = string.Empty;
+}
+
+public sealed class GetAdminVendorByIdEndpoint(IMediator mediator)
+    : Endpoint<GetAdminVendorByIdRequest, Results<Ok<VendorDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("vendors/{vendorId}");
+        Group<AdminApiGroup>();
+        Policies("Perm:vendors.view");
+    }
+
+    public override async Task<Results<Ok<VendorDto>, ProblemHttpResult>> ExecuteAsync(
+        GetAdminVendorByIdRequest req,
+        CancellationToken ct)
+    {
+        var result = await mediator.Send(new GetVendorByIdQuery(req.VendorId), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
 public sealed class GetAdminVendorSummariesRequest
 {
     public string? Search { get; set; }
     public string? Status { get; set; }
     public int Page { get; set; } = 1;
-    public int PageSize { get; set; } = 9;
+    public int PageSize { get; set; } = 8;
 }
 
 public sealed class GetAdminVendorSummariesEndpoint(IMediator mediator)
@@ -308,7 +332,7 @@ public sealed class GetAdminVendorSummariesEndpoint(IMediator mediator)
         CancellationToken ct)
     {
         var page = req.Page < 1 ? 1 : req.Page;
-        var pageSize = req.PageSize is < 1 or > 100 ? 9 : req.PageSize;
+        var pageSize = req.PageSize is < 1 or > 100 ? 8 : req.PageSize;
         var result = await mediator.Send(new GetAdminVendorListQuery(req.Search, req.Status, page, pageSize), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }

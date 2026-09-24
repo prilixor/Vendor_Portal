@@ -939,6 +939,10 @@ export const adminApi = {
     return apiClient.get<VendorDto[]>('/admin/vendors', options);
   },
 
+  async getVendor(vendorId: string, options?: ApiClientOptions): Promise<VendorDto> {
+    return apiClient.get<VendorDto>(`/admin/vendors/${encodeURIComponent(vendorId)}`, options);
+  },
+
   async getVendorSummaries(params: {
     search?: string;
     status?: string;
@@ -950,7 +954,7 @@ export const adminApi = {
     if (search) qs.set("search", search);
     if (params.status && params.status !== "all") qs.set("status", params.status);
     qs.set("page", String(params.page && params.page > 0 ? params.page : 1));
-    qs.set("pageSize", String(params.pageSize && params.pageSize > 0 ? params.pageSize : 9));
+    qs.set("pageSize", String(params.pageSize && params.pageSize > 0 ? params.pageSize : 8));
     return apiClient.get<AdminVendorListResult>(`/admin/vendors/summaries?${qs.toString()}`, options);
   },
 

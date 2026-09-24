@@ -15,7 +15,7 @@ import { adminApi } from "@/app/services/adminApi";
 import { cn } from "@/app/helpers/utils";
 import type { AccountStatus } from "@/app/models";
 
-const PAGE_SIZE = 9;
+const PAGE_SIZE = 8;
 
 const STATUS_FILTERS = ["all", "pending", "active", "rejected", "suspended", "banned"] as const;
 type StatusFilter = (typeof STATUS_FILTERS)[number];

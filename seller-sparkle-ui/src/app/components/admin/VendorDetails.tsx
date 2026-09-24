@@ -502,17 +502,7 @@ const VendorDetails = () => {
 
     try {
 
-      // Get vendor from the list (we can fetch all and filter, or create a getVendorById endpoint)
-
-      const vendors = await adminApi.getVendors();
-
-      const vendorData = vendors.find((v) => v.id === id);
-
-      if (!vendorData) {
-
-        throw new Error("Vendor not found");
-
-      }
+      const vendorData = await adminApi.getVendor(id);
 
       setVendor(vendorData);
 

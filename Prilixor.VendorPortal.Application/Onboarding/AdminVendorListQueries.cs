@@ -9,7 +9,7 @@ public sealed record GetAdminVendorListQuery(
     string? Search,
     string? Status,
     int Page = 1,
-    int PageSize = 9) : IQuery<AdminVendorListResult>;
+    int PageSize = 8) : IQuery<AdminVendorListResult>;
 
 public sealed class GetAdminVendorListQueryValidator : AbstractValidator<GetAdminVendorListQuery>
 {
