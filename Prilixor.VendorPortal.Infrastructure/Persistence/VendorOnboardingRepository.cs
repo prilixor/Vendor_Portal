@@ -1725,6 +1725,40 @@ public sealed class VendorOnboardingRepository(
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<(List<AdminUser> Items, int TotalCount)> SearchAdminUsersPagedAsync(
+        string? searchTerm,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
+        var filtered = adminDbContext.AdminUsers.AsNoTracking().Where(x => !x.IsDeleted);
+
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            var term = $"%{searchTerm.Trim()}%";
+            filtered = filtered.Where(x =>
+                EF.Functions.ILike(x.FullName, term)
+                || EF.Functions.ILike(x.Email, term)
+                || EF.Functions.ILike(x.Role, term)
+                || (x.AdminRole != null && (
+                    EF.Functions.ILike(x.AdminRole.Code, term)
+                    || EF.Functions.ILike(x.AdminRole.Name, term))));
+        }
+
+        var totalCount = await filtered.CountAsync(cancellationToken);
+        var items = await filtered
+            .Include(x => x.AdminRole)
+            .OrderBy(x => x.FullName)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        return (items, totalCount);
+    }
+
     public Task<int> CountActiveSuperAdminsAsync(CancellationToken cancellationToken)
     {
         return adminDbContext.AdminUsers

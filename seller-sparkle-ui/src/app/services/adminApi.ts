@@ -118,6 +118,7 @@ export interface AdminDashboardSummaryDto {
   pendingVendorCount: number;
   activeVendorCount: number;
   auditEventCountLast7Days: number;
+  dueReturnsCount: number;
   pendingVendors: AdminDashboardPendingVendorRow[];
   recentAuditLogs: AdminDashboardAuditLogRow[];
 }
@@ -211,6 +212,14 @@ export interface AdminUserDto {
   roleId?: string;
   isSystemUser?: boolean;
   mustChangePassword?: boolean;
+}
+
+export interface AdminUserListResult {
+  items: AdminUserDto[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  superAdminCount: number;
 }
 
 export interface RegisterAdminUserRequest {
@@ -1030,6 +1039,19 @@ export const adminApi = {
   // Admin Users
   async getAdminUsers(): Promise<AdminUserDto[]> {
     return apiClient.get<AdminUserDto[]>('/admin/users');
+  },
+
+  async getAdminUserSummaries(params: {
+    search?: string;
+    page?: number;
+    pageSize?: number;
+  } = {}, options?: ApiClientOptions): Promise<AdminUserListResult> {
+    const qs = new URLSearchParams();
+    const search = params.search?.trim();
+    if (search) qs.set("search", search);
+    qs.set("page", String(params.page && params.page > 0 ? params.page : 1));
+    qs.set("pageSize", String(params.pageSize && params.pageSize > 0 ? params.pageSize : 8));
+    return apiClient.get<AdminUserListResult>(`/admin/users/summaries?${qs.toString()}`, options);
   },
 
   async registerAdminUser(data: RegisterAdminUserRequest): Promise<AdminUserDto> {

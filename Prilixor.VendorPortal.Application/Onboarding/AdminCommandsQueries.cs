@@ -123,6 +123,56 @@ internal sealed class GetAdminUsersQueryHandler(IVendorOnboardingRepository repo
     }
 }
 
+public sealed class AdminUserListResult
+{
+    public List<AdminUserDto> Items { get; init; } = [];
+    public int TotalCount { get; init; }
+    public int Page { get; init; }
+    public int PageSize { get; init; }
+    public int SuperAdminCount { get; init; }
+}
+
+public sealed record GetAdminUserListQuery(
+    string? Search,
+    int Page = 1,
+    int PageSize = 8) : IQuery<AdminUserListResult>;
+
+public sealed class GetAdminUserListQueryValidator : AbstractValidator<GetAdminUserListQuery>
+{
+    public GetAdminUserListQueryValidator()
+    {
+        RuleFor(x => x.Page).GreaterThan(0);
+        RuleFor(x => x.PageSize).InclusiveBetween(1, 100);
+    }
+}
+
+internal sealed class GetAdminUserListQueryHandler(IVendorOnboardingRepository repository)
+    : IQueryHandler<GetAdminUserListQuery, AdminUserListResult>
+{
+    public async Task<Result<AdminUserListResult>> Handle(
+        GetAdminUserListQuery request,
+        CancellationToken cancellationToken)
+    {
+        var page = Math.Max(1, request.Page);
+        var pageSize = Math.Clamp(request.PageSize, 1, 100);
+        var (items, totalCount) = await repository.SearchAdminUsersPagedAsync(
+            request.Search,
+            page,
+            pageSize,
+            cancellationToken);
+        var superAdminCount = await repository.CountActiveSuperAdminsAsync(cancellationToken);
+
+        return Result.Success(new AdminUserListResult
+        {
+            Items = items.Select(RegisterAdminUserCommandHandler.ToDto).ToList(),
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize,
+            SuperAdminCount = superAdminCount,
+        });
+    }
+}
+
 public sealed record UpdateAdminUserCommand(
     Guid TargetAdminId,
     Guid ActorAdminId,

@@ -139,6 +139,11 @@ public interface IVendorOnboardingRepository
     Task AddAdminUserAsync(AdminUser adminUser, CancellationToken cancellationToken);
     Task UpdateAdminUserAsync(AdminUser adminUser, CancellationToken cancellationToken);
     Task<List<AdminUser>> GetAdminUsersAsync(CancellationToken cancellationToken);
+    Task<(List<AdminUser> Items, int TotalCount)> SearchAdminUsersPagedAsync(
+        string? searchTerm,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken);
     Task<int> CountActiveSuperAdminsAsync(CancellationToken cancellationToken);
     Task<List<string>> GetAdminPermissionCodesAsync(Guid adminUserId, CancellationToken cancellationToken);
     Task<string?> GetAdminRoleCodeAsync(Guid adminUserId, CancellationToken cancellationToken);

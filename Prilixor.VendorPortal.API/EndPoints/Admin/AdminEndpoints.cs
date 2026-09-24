@@ -276,6 +276,34 @@ public sealed class GetAdminUsersEndpoint(IMediator mediator)
     }
 }
 
+public sealed class GetAdminUserSummariesRequest
+{
+    public string? Search { get; set; }
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 8;
+}
+
+public sealed class GetAdminUserSummariesEndpoint(IMediator mediator)
+    : Endpoint<GetAdminUserSummariesRequest, Results<Ok<AdminUserListResult>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("users/summaries");
+        Group<AdminApiGroup>();
+        Policies("Perm:admins.manage");
+    }
+
+    public override async Task<Results<Ok<AdminUserListResult>, ProblemHttpResult>> ExecuteAsync(
+        GetAdminUserSummariesRequest req,
+        CancellationToken ct)
+    {
+        var page = req.Page < 1 ? 1 : req.Page;
+        var pageSize = req.PageSize is < 1 or > 100 ? 8 : req.PageSize;
+        var result = await mediator.Send(new GetAdminUserListQuery(req.Search, page, pageSize), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
 public sealed class GetVendorsEndpoint(IMediator mediator)
     : EndpointWithoutRequest<Results<Ok<List<VendorDto>>, ProblemHttpResult>>
 {
