@@ -107,6 +107,11 @@ public interface ICustomerRepository
     Task<List<ChatSession>> GetCustomerChatSessionsAsync(Guid customerId, CancellationToken cancellationToken);
     Task<List<ChatSession>> GetVendorChatSessionsAsync(Guid vendorId, CancellationToken cancellationToken);
     Task<List<ChatSession>> GetAdminChatSessionsAsync(CancellationToken cancellationToken);
+    Task<(List<ChatSession> Items, int TotalCount)> SearchAdminChatSessionsPagedAsync(
+        string? searchTerm,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken);
     Task<ChatSession?> GetChatSessionAsync(Guid customerId, Guid vendorId, Guid? orderId, CancellationToken cancellationToken);
     Task<ChatSession?> GetAdminChatSessionForOrderAsync(Guid customerId, Guid orderId, CancellationToken cancellationToken);
     Task<ChatSession?> GetChatSessionByIdAsync(Guid sessionId, CancellationToken cancellationToken);

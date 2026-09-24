@@ -1,3 +1,4 @@
+using FluentValidation;
 using Prilixor.Shared.Abstractions.CQRS;
 using Prilixor.Shared.Models;
 using Prilixor.VendorPortal.Application.Abstractions;
@@ -206,6 +207,111 @@ internal sealed class GetAdminChatSessionsQueryHandler(ICustomerRepository custo
         }
 
         return Result.Success(dtos);
+    }
+}
+
+public sealed class AdminChatSessionListResult
+{
+    public List<ChatSessionDto> Items { get; init; } = [];
+    public int TotalCount { get; init; }
+    public int Page { get; init; }
+    public int PageSize { get; init; }
+}
+
+public sealed record GetAdminChatSessionListQuery(
+    string? Search,
+    int Page = 1,
+    int PageSize = 8) : IQuery<AdminChatSessionListResult>;
+
+public sealed class GetAdminChatSessionListQueryValidator : AbstractValidator<GetAdminChatSessionListQuery>
+{
+    public GetAdminChatSessionListQueryValidator()
+    {
+        RuleFor(x => x.Page).GreaterThan(0);
+        RuleFor(x => x.PageSize).InclusiveBetween(1, 100);
+    }
+}
+
+internal sealed class GetAdminChatSessionListQueryHandler(ICustomerRepository customers)
+    : IQueryHandler<GetAdminChatSessionListQuery, AdminChatSessionListResult>
+{
+    public async Task<Result<AdminChatSessionListResult>> Handle(
+        GetAdminChatSessionListQuery request,
+        CancellationToken cancellationToken)
+    {
+        var page = Math.Max(1, request.Page);
+        var pageSize = Math.Clamp(request.PageSize, 1, 100);
+        var (sessions, totalCount) = await customers.SearchAdminChatSessionsPagedAsync(
+            request.Search, page, pageSize, cancellationToken);
+        var items = await ChatSessionAdminMapping.MapManyAsync(customers, sessions, cancellationToken);
+
+        return Result.Success(new AdminChatSessionListResult
+        {
+            Items = items,
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize,
+        });
+    }
+}
+
+public sealed record GetAdminChatSessionQuery(Guid SessionId) : IQuery<ChatSessionDto>;
+
+internal sealed class GetAdminChatSessionQueryHandler(ICustomerRepository customers)
+    : IQueryHandler<GetAdminChatSessionQuery, ChatSessionDto>
+{
+    public async Task<Result<ChatSessionDto>> Handle(
+        GetAdminChatSessionQuery request,
+        CancellationToken cancellationToken)
+    {
+        var session = await customers.GetChatSessionByIdAsync(request.SessionId, cancellationToken);
+        if (session is null
+            || session.IsDeleted
+            || !string.Equals(session.CounterpartyType, ChatCounterpartyTypes.Admin, StringComparison.OrdinalIgnoreCase))
+        {
+            return Result.Failure<ChatSessionDto>(new Error("chats.not_found", "Chat session not found.", ErrorCategory.NotFound));
+        }
+
+        var items = await ChatSessionAdminMapping.MapManyAsync(customers, [session], cancellationToken);
+        return Result.Success(items[0]);
+    }
+}
+
+file static class ChatSessionAdminMapping
+{
+    public static async Task<List<ChatSessionDto>> MapManyAsync(
+        ICustomerRepository customers,
+        IReadOnlyList<ChatSession> sessions,
+        CancellationToken cancellationToken)
+    {
+        var unreadBySession = await customers.GetUnreadChatCountsBySessionAsync(
+            sessions.Select(s => s.Id).ToList(),
+            "Customer",
+            cancellationToken);
+        var dtos = new List<ChatSessionDto>();
+
+        foreach (var s in sessions)
+        {
+            var customer = await customers.GetCustomerByIdAsync(s.CustomerId, cancellationToken);
+            var customerName = customer?.FullName ?? "Customer";
+            string? orderNumber = null;
+            string? orderStatus = null;
+
+            if (s.OrderId.HasValue)
+            {
+                var order = await customers.GetCustomerOrderByIdAsync(s.OrderId.Value, cancellationToken);
+                orderNumber = order?.Order.OrderNumber;
+                orderStatus = order?.Order.Status;
+            }
+
+            var (vendorName, counterpartyName) = await ChatSessionMapping.ResolveNamesAsync(
+                customers, s, cancellationToken, orderStatus);
+
+            unreadBySession.TryGetValue(s.Id, out var unread);
+            dtos.Add(ChatSessionMapping.ToDto(s, customerName, vendorName, counterpartyName, orderNumber, unread));
+        }
+
+        return dtos;
     }
 }
 

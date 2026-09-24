@@ -2517,6 +2517,59 @@ public sealed class CustomerRepository(
             .OrderByDescending(s => s.LastMessageAt)
             .ToListAsync(cancellationToken);
 
+    public async Task<(List<ChatSession> Items, int TotalCount)> SearchAdminChatSessionsPagedAsync(
+        string? searchTerm,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
+        var query = customerDb.ChatSessions
+            .AsNoTracking()
+            .Where(s => !s.IsDeleted && s.CounterpartyType == ChatCounterpartyTypes.Admin);
+
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            var term = $"%{searchTerm.Trim()}%";
+            query = query.Where(s =>
+                EF.Functions.ILike(s.Subject, term)
+                || customerDb.Customers.Any(c =>
+                    c.Id == s.CustomerId && !c.IsDeleted && EF.Functions.ILike(c.FullName, term))
+                || (s.OrderId.HasValue && customerDb.CustomerRentalOrders.Any(o =>
+                    o.Id == s.OrderId.Value && !o.IsDeleted && EF.Functions.ILike(o.OrderNumber, term))));
+        }
+
+        var totalCount = await query.CountAsync(cancellationToken);
+        var pageIds = await query
+            .Select(s => new
+            {
+                s.Id,
+                Unread = s.Messages.Count(m =>
+                    !m.IsDeleted && !m.IsRead && m.SenderType == "Customer"),
+                s.LastMessageAt
+            })
+            .OrderByDescending(x => x.Unread > 0)
+            .ThenByDescending(x => x.LastMessageAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(x => x.Id)
+            .ToListAsync(cancellationToken);
+
+        var items = pageIds.Count == 0
+            ? []
+            : await customerDb.ChatSessions
+                .AsNoTracking()
+                .Where(s => pageIds.Contains(s.Id))
+                .ToListAsync(cancellationToken);
+
+        var order = pageIds.Select((id, index) => (id, index)).ToDictionary(x => x.id, x => x.index);
+        items = items.OrderBy(s => order.GetValueOrDefault(s.Id, int.MaxValue)).ToList();
+
+        return (items, totalCount);
+    }
+
     public Task<ChatSession?> GetChatSessionAsync(Guid customerId, Guid vendorId, Guid? orderId, CancellationToken cancellationToken)
     {
         if (orderId.HasValue)

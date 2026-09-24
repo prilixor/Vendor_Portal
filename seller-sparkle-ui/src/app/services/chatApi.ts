@@ -1,4 +1,4 @@
-import { apiClient } from "@/app/services/apiClient";
+import { apiClient, type ApiClientOptions } from "@/app/services/apiClient";
 
 export interface ChatSessionApi {
   id: string;
@@ -15,6 +15,13 @@ export interface ChatSessionApi {
   isClosed: boolean;
   /** Unread messages from the other party (Customer→Admin for admin inbox). */
   unreadCount?: number;
+}
+
+export interface AdminChatSessionListResult {
+  items: ChatSessionApi[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
 }
 
 export interface ChatMessageApi {
@@ -49,6 +56,29 @@ export const chatApi = {
   // Admin Chat Methods (Customer ↔ Admin inbox)
   getAdminSessions(): Promise<ChatSessionApi[]> {
     return apiClient.get<ChatSessionApi[]>("/admin/chats/sessions");
+  },
+
+  getAdminSessionSummaries(params: {
+    search?: string;
+    page?: number;
+    pageSize?: number;
+  } = {}, options?: ApiClientOptions): Promise<AdminChatSessionListResult> {
+    const qs = new URLSearchParams();
+    const search = params.search?.trim();
+    if (search) qs.set("search", search);
+    qs.set("page", String(params.page && params.page > 0 ? params.page : 1));
+    qs.set("pageSize", String(params.pageSize && params.pageSize > 0 ? params.pageSize : 8));
+    return apiClient.get<AdminChatSessionListResult>(
+      `/admin/chats/sessions/summaries?${qs.toString()}`,
+      options,
+    );
+  },
+
+  getAdminSession(sessionId: string, options?: ApiClientOptions): Promise<ChatSessionApi> {
+    return apiClient.get<ChatSessionApi>(
+      `/admin/chats/sessions/${encodeURIComponent(sessionId)}`,
+      options,
+    );
   },
 
   getAdminUnreadCount(): Promise<{ count: number }> {

@@ -25,6 +25,55 @@ public sealed class GetAdminChatSessionsEndpoint(IMediator mediator)
     }
 }
 
+public sealed class GetAdminChatSessionSummariesRequest
+{
+    public string? Search { get; set; }
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 8;
+}
+
+public sealed class GetAdminChatSessionSummariesEndpoint(IMediator mediator)
+    : Endpoint<GetAdminChatSessionSummariesRequest, Results<Ok<AdminChatSessionListResult>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("chats/sessions/summaries");
+        Group<AdminApiGroup>();
+        Policies($"Perm:{AdminPermissions.SupportManage}");
+    }
+
+    public override async Task<Results<Ok<AdminChatSessionListResult>, ProblemHttpResult>> ExecuteAsync(
+        GetAdminChatSessionSummariesRequest req,
+        CancellationToken ct)
+    {
+        var page = req.Page < 1 ? 1 : req.Page;
+        var pageSize = req.PageSize is < 1 or > 100 ? 8 : req.PageSize;
+        var result = await mediator.Send(new GetAdminChatSessionListQuery(req.Search, page, pageSize), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class GetAdminChatSessionEndpoint(IMediator mediator)
+    : EndpointWithoutRequest<Results<Ok<ChatSessionDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("chats/sessions/{sessionId}");
+        Group<AdminApiGroup>();
+        Policies($"Perm:{AdminPermissions.SupportManage}");
+    }
+
+    public override async Task<Results<Ok<ChatSessionDto>, ProblemHttpResult>> ExecuteAsync(CancellationToken ct)
+    {
+        var idStr = Route<string>("sessionId");
+        if (!Guid.TryParse(idStr, out var sessionId))
+            return TypedResults.Problem(title: "chats.invalid_id", detail: "Invalid session id.", statusCode: 400);
+
+        var result = await mediator.Send(new GetAdminChatSessionQuery(sessionId), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
 public sealed class AdminChatUnreadCountResponse
 {
     public int Count { get; set; }
