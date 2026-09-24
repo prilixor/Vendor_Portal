@@ -334,6 +334,30 @@ export interface AdminAuditLogDto {
   createdAt: string;
 }
 
+export interface AdminAuditLogActorOption {
+  id: string;
+  label: string;
+}
+
+export interface AdminAuditLogListRow {
+  id: string;
+  actionType: string;
+  entityType: string;
+  adminId: string;
+  adminName?: string | null;
+  adminEmail?: string | null;
+  oldValue?: string | null;
+  newValue?: string | null;
+}
+
+export interface AdminAuditLogListResult {
+  items: AdminAuditLogListRow[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  actors: AdminAuditLogActorOption[];
+}
+
 export interface AddAdminAuditLogRequest {
   adminUserId: string;
   actionType: string;
@@ -1009,6 +1033,21 @@ export const adminApi = {
   async getAuditLogs(adminUserId?: string, options?: ApiClientOptions): Promise<AdminAuditLogDto[]> {
     const url = adminUserId ? `/admin/audit-logs?adminUserId=${adminUserId}` : '/admin/audit-logs';
     return apiClient.get<AdminAuditLogDto[]>(url, options);
+  },
+
+  async getAdminAuditLogSummaries(params: {
+    search?: string;
+    adminUserId?: string;
+    page?: number;
+    pageSize?: number;
+  } = {}, options?: ApiClientOptions): Promise<AdminAuditLogListResult> {
+    const qs = new URLSearchParams();
+    const search = params.search?.trim();
+    if (search) qs.set("search", search);
+    if (params.adminUserId && params.adminUserId !== "all") qs.set("adminUserId", params.adminUserId);
+    qs.set("page", String(params.page && params.page > 0 ? params.page : 1));
+    qs.set("pageSize", String(params.pageSize && params.pageSize > 0 ? params.pageSize : 8));
+    return apiClient.get<AdminAuditLogListResult>(`/admin/audit-logs/summaries?${qs.toString()}`, options);
   },
 
   async addAuditLog(data: AddAdminAuditLogRequest): Promise<AdminAuditLogDto> {

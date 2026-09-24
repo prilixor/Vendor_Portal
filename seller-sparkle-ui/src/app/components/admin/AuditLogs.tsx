@@ -1,96 +1,73 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card } from "@/app/components/ui/card";
 import { Input } from "@/app/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import { PageContentGate } from "@/app/components/shared/PageLoader";
 import { TablePagination } from "@/app/components/shared/TablePagination";
-import { adminApi, AdminAuditLogDto, AdminUserDto } from "@/app/services/adminApi";
+import { adminApi, AdminAuditLogListRow } from "@/app/services/adminApi";
 import { Search, ArrowRight } from "lucide-react";
-import { toast } from "sonner";
 
 const PAGE_SIZE = 8;
 
 const AuditLogs = () => {
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [actor, setActor] = useState<string>("all");
   const [page, setPage] = useState(1);
-  const [auditLogs, setAuditLogs] = useState<AdminAuditLogDto[]>([]);
-  const [adminUsers, setAdminUsers] = useState<AdminUserDto[]>([]);
-  const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    loadAuditLogs();
-  }, []);
-
-  const loadAuditLogs = async () => {
-    setLoading(true);
-    try {
-      const [logsData, adminsData] = await Promise.all([
-        adminApi.getAuditLogs(),
-        adminApi.getAdminUsers()
-      ]);
-      setAuditLogs(logsData);
-      setAdminUsers(adminsData);
-      setPage(1);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to load audit logs.";
-      toast.error(message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const actors = Array.from(new Set([
-    ...adminUsers.map(a => a.fullName || a.email),
-    ...auditLogs.map((l) => l.adminName || l.adminEmail || l.adminId)
-  ]));
-
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return auditLogs.filter((l) => {
-      const actorName = l.adminName || l.adminEmail || l.adminId;
-      const m = actor === "all" || actorName === actor;
-      const s =
-        !q ||
-        l.actionType.toLowerCase().includes(q) ||
-        l.entityType.toLowerCase().includes(q);
-      return m && s;
-    });
-  }, [auditLogs, search, actor]);
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const safePage = Math.min(Math.max(1, page), totalPages);
-  const pageRows = useMemo(
-    () => filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
-    [filtered, safePage],
-  );
+    const t = window.setTimeout(() => setDebouncedSearch(searchInput.trim()), 350);
+    return () => window.clearTimeout(t);
+  }, [searchInput]);
 
   useEffect(() => {
     setPage(1);
-  }, [search, actor]);
+  }, [debouncedSearch, actor]);
+
+  const { data, isLoading } = useQuery({
+    queryKey: ["admin-audit-log-summaries", page, debouncedSearch, actor],
+    queryFn: () =>
+      adminApi.getAdminAuditLogSummaries({
+        search: debouncedSearch,
+        adminUserId: actor,
+        page,
+        pageSize: PAGE_SIZE,
+      }),
+  });
+
+  const pageRows = data?.items ?? [];
+  const totalCount = data?.totalCount ?? 0;
+  const actors = data?.actors ?? [];
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
 
   return (
     <div>
       <PageHeader title="Audit logs" description="Track every important action taken by admins and the system." />
 
       <Card className="border-border/60 p-4 sm:p-6 lg:p-8">
-        <PageContentGate loading={loading}>
+        <PageContentGate loading={isLoading}>
           <>
             <div className="flex flex-col gap-3 border-b border-border pb-4 sm:flex-row sm:items-center">
               <div className="relative w-full sm:max-w-xs">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search action or entity…" className="pl-9" />
+                <Input value={searchInput} onChange={(e) => setSearchInput(e.target.value)} placeholder="Search action or entity…" className="pl-9" />
               </div>
               <Select value={actor} onValueChange={setActor}>
                 <SelectTrigger className="w-full sm:w-48"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All actors</SelectItem>
-                  {actors.map((a) => <SelectItem key={a} value={a}>{a}</SelectItem>)}
+                  {actors.map((a) => <SelectItem key={a.id} value={a.id}>{a.label}</SelectItem>)}
                 </SelectContent>
               </Select>
             </div>
-            {filtered.length === 0 ? (
+            {totalCount === 0 ? (
               <p className="py-12 text-center text-sm text-muted-foreground">No audit logs match your filters.</p>
             ) : (
               <>
@@ -121,7 +98,7 @@ const AuditLogs = () => {
                 <TablePagination
                   page={safePage}
                   pageSize={PAGE_SIZE}
-                  total={filtered.length}
+                  total={totalCount}
                   onPageChange={setPage}
                   label="logs"
                 />
@@ -134,7 +111,7 @@ const AuditLogs = () => {
   );
 };
 
-const ChangeDisplay = ({ log }: { log: AdminAuditLogDto }) => {
+const ChangeDisplay = ({ log }: { log: AdminAuditLogListRow }) => {
   // Get color based on the actual status value
   const getStatusColor = (value: string | null): string => {
     if (!value) return 'bg-muted text-muted-foreground';

@@ -31,6 +31,14 @@ public sealed class GetAdminAuditLogsRequest
     public string? AdminUserId { get; set; }
 }
 
+public sealed class GetAdminAuditLogSummariesRequest
+{
+    public string? Search { get; set; }
+    public string? AdminUserId { get; set; }
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 8;
+}
+
 public sealed class GetAdminOrderExpirationsRequest
 {
     public int WithinDays { get; set; } = 7;
@@ -433,6 +441,27 @@ public sealed class GetAdminAuditLogsEndpoint(IMediator mediator)
     public override async Task<Results<Ok<List<AdminAuditLogDto>>, ProblemHttpResult>> ExecuteAsync(GetAdminAuditLogsRequest req, CancellationToken ct)
     {
         var result = await mediator.Send(new GetAdminAuditLogsQuery(req.AdminUserId), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class GetAdminAuditLogSummariesEndpoint(IMediator mediator)
+    : Endpoint<GetAdminAuditLogSummariesRequest, Results<Ok<AdminAuditLogListResult>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("audit-logs/summaries");
+        Group<AdminApiGroup>();
+        Policies("Perm:audit.view");
+    }
+
+    public override async Task<Results<Ok<AdminAuditLogListResult>, ProblemHttpResult>> ExecuteAsync(
+        GetAdminAuditLogSummariesRequest req,
+        CancellationToken ct)
+    {
+        var page = req.Page < 1 ? 1 : req.Page;
+        var pageSize = req.PageSize is < 1 or > 100 ? 8 : req.PageSize;
+        var result = await mediator.Send(new GetAdminAuditLogListQuery(req.Search, req.AdminUserId, page, pageSize), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }

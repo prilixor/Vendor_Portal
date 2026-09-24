@@ -2009,6 +2009,87 @@ public sealed class VendorOnboardingRepository(
         };
     }
 
+    public async Task<AdminAuditLogListResult> SearchAdminAuditLogSummariesAsync(
+        AdminAuditLogListQuerySpec spec,
+        CancellationToken cancellationToken)
+    {
+        var page = Math.Max(1, spec.Page);
+        var pageSize = Math.Clamp(spec.PageSize, 1, 100);
+        var search = spec.Search?.Trim() ?? string.Empty;
+        Guid? adminId = Guid.TryParse(spec.AdminUserId, out var parsed) && parsed != Guid.Empty
+            ? parsed
+            : null;
+
+        var actorRows = await adminDbContext.AdminAuditLogs
+            .AsNoTracking()
+            .Where(x => !x.IsDeleted)
+            .Select(x => new
+            {
+                x.AdminId,
+                FullName = x.AdminUser != null ? x.AdminUser.FullName : null,
+                Email = x.AdminUser != null ? x.AdminUser.Email : null,
+            })
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        var actors = actorRows
+            .GroupBy(x => x.AdminId)
+            .OrderBy(g => g.First().FullName ?? g.First().Email ?? g.Key.ToString())
+            .Select(g =>
+            {
+                var row = g.First();
+                var label = !string.IsNullOrWhiteSpace(row.FullName)
+                    ? row.FullName
+                    : !string.IsNullOrWhiteSpace(row.Email)
+                        ? row.Email!
+                        : g.Key.ToString();
+                return new AdminAuditLogActorOption(g.Key.ToString(), label);
+            })
+            .ToList();
+
+        var query = adminDbContext.AdminAuditLogs
+            .AsNoTracking()
+            .Where(x => !x.IsDeleted);
+
+        if (adminId.HasValue)
+        {
+            query = query.Where(x => x.AdminId == adminId.Value);
+        }
+
+        if (!string.IsNullOrEmpty(search))
+        {
+            var s = search.ToLower();
+            query = query.Where(x =>
+                x.ActionType.ToLower().Contains(s) ||
+                x.EntityType.ToLower().Contains(s));
+        }
+
+        var totalCount = await query.CountAsync(cancellationToken);
+        var items = await query
+            .OrderByDescending(x => x.CreatedOnUtc)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(x => new AdminAuditLogListRow(
+                x.Id.ToString(),
+                x.ActionType,
+                x.EntityType,
+                x.AdminId.ToString(),
+                x.AdminUser != null ? x.AdminUser.FullName : null,
+                x.AdminUser != null ? x.AdminUser.Email : null,
+                x.OldValue,
+                x.NewValue))
+            .ToListAsync(cancellationToken);
+
+        return new AdminAuditLogListResult
+        {
+            Items = items,
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize,
+            Actors = actors,
+        };
+    }
+
     public Task<PasswordResetToken?> GetPasswordResetTokenAsync(string token, CancellationToken cancellationToken)
     {
         return adminDbContext.PasswordResetTokens
