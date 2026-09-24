@@ -14,16 +14,17 @@ public sealed class TwoFactorOptions
     public string SenderId { get; set; } = string.Empty;
 
     /// <summary>
-    /// 2Factor OTP template name (e.g. SmsTemp1). Used with AUTOGEN or transactional OTP send.
+    /// 2Factor SMS OTP template name from OTP Services (e.g. OtpTemp1).
+    /// AUTOGEN URL: .../SMS/{phone}/AUTOGEN/{OtpTemplateName}
     /// </summary>
     public string OtpTemplateName { get; set; } = string.Empty;
 
     /// <summary>
-    /// When true, send OTP via transactional TSMS (TemplateName + VAR1) instead of AUTOGEN.
-    /// Use this when the template was approved under Transactional SMS (not OTP Services),
-    /// because AUTOGEN often falls back to Voice on Personal accounts.
+    /// When true, send OTP via transactional TSMS (TemplateName + VAR1).
+    /// When false (preferred for SMS OTP templates), use AUTOGEN + OtpTemplateName;
+    /// 2Factor generates the OTP and VERIFY uses the session id.
     /// </summary>
-    public bool UseTransactionalTemplateForOtp { get; set; } = true;
+    public bool UseTransactionalTemplateForOtp { get; set; }
 
     public string BaseUrl { get; set; } = "https://2factor.in/API/V1";
 
