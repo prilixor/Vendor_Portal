@@ -708,6 +708,13 @@ export interface AdminDoctorDto {
   hospitals?: AdminHospitalDto[] | null;
 }
 
+export interface AdminDoctorListResult {
+  items: AdminDoctorDto[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
+
 export interface AdminHospitalDto {
   id: string;
   name: string;
@@ -1545,6 +1552,21 @@ export const adminApi = {
     if (typeof isActive === "boolean") qs.set("isActive", String(isActive));
     const q = qs.toString();
     return apiClient.get<AdminDoctorDto[]>(`/admin/doctors${q ? `?${q}` : ""}`);
+  },
+
+  async getDoctorSummaries(params: {
+    search?: string;
+    isActive?: boolean;
+    page?: number;
+    pageSize?: number;
+  } = {}, options?: ApiClientOptions): Promise<AdminDoctorListResult> {
+    const qs = new URLSearchParams();
+    const search = params.search?.trim();
+    if (search) qs.set("search", search);
+    if (typeof params.isActive === "boolean") qs.set("isActive", String(params.isActive));
+    qs.set("page", String(params.page && params.page > 0 ? params.page : 1));
+    qs.set("pageSize", String(params.pageSize && params.pageSize > 0 ? params.pageSize : 8));
+    return apiClient.get<AdminDoctorListResult>(`/admin/doctors/summaries?${qs.toString()}`, options);
   },
 
   async getDoctor(id: string): Promise<AdminDoctorDto> {

@@ -1,4 +1,5 @@
 using System.Text.RegularExpressions;
+using FluentValidation;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Prilixor.Shared.Abstractions.CQRS;
@@ -93,6 +94,55 @@ internal static class DoctorHospitalLinkHelper
         }
 
         return Result.Success(ids.Distinct().ToList());
+    }
+}
+
+public sealed class AdminDoctorListResult
+{
+    public List<DoctorDto> Items { get; init; } = [];
+    public int TotalCount { get; init; }
+    public int Page { get; init; }
+    public int PageSize { get; init; }
+}
+
+public sealed record GetAdminDoctorListQuery(
+    string? Search,
+    bool? IsActive,
+    int Page = 1,
+    int PageSize = 8) : IQuery<AdminDoctorListResult>;
+
+public sealed class GetAdminDoctorListQueryValidator : AbstractValidator<GetAdminDoctorListQuery>
+{
+    public GetAdminDoctorListQueryValidator()
+    {
+        RuleFor(x => x.Page).GreaterThan(0);
+        RuleFor(x => x.PageSize).InclusiveBetween(1, 100);
+    }
+}
+
+internal sealed class GetAdminDoctorListQueryHandler(ICustomerRepository repository, IConfiguration configuration)
+    : IQueryHandler<GetAdminDoctorListQuery, AdminDoctorListResult>
+{
+    public async Task<Result<AdminDoctorListResult>> Handle(
+        GetAdminDoctorListQuery request,
+        CancellationToken cancellationToken)
+    {
+        var page = Math.Max(1, request.Page);
+        var pageSize = Math.Clamp(request.PageSize, 1, 100);
+        var (items, totalCount) = await repository.SearchDoctorsForAdminPagedAsync(
+            request.Search,
+            request.IsActive,
+            page,
+            pageSize,
+            cancellationToken);
+
+        return Result.Success(new AdminDoctorListResult
+        {
+            Items = items.Select(d => DoctorDtoMapper.Map(d, PublicSiteUrls.DoctorSharePage(configuration, d.UniqueCode))).ToList(),
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize,
+        });
     }
 }
 

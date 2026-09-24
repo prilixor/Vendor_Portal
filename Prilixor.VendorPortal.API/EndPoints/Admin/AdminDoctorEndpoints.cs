@@ -63,6 +63,35 @@ public sealed class ListAdminDoctorsEndpoint(IMediator mediator)
     }
 }
 
+public sealed class GetAdminDoctorSummariesRequest
+{
+    public string? Search { get; set; }
+    public bool? IsActive { get; set; }
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 8;
+}
+
+public sealed class GetAdminDoctorSummariesEndpoint(IMediator mediator)
+    : Endpoint<GetAdminDoctorSummariesRequest, Results<Ok<AdminDoctorListResult>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("doctors/summaries");
+        Group<AdminApiGroup>();
+        Policies("Perm:catalog.manage");
+    }
+
+    public override async Task<Results<Ok<AdminDoctorListResult>, ProblemHttpResult>> ExecuteAsync(
+        GetAdminDoctorSummariesRequest req,
+        CancellationToken ct)
+    {
+        var page = req.Page < 1 ? 1 : req.Page;
+        var pageSize = req.PageSize is < 1 or > 100 ? 8 : req.PageSize;
+        var result = await mediator.Send(new GetAdminDoctorListQuery(req.Search, req.IsActive, page, pageSize), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
 public sealed class GetAdminDoctorEndpoint(IMediator mediator)
     : EndpointWithoutRequest<Results<Ok<DoctorDto>, ProblemHttpResult>>
 {

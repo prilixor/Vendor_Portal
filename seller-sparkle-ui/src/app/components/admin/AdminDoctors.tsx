@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
@@ -28,6 +29,7 @@ import { CopyableEmail } from "@/app/components/shared/CopyableEmail";
 import { Copy, Download, ExternalLink, Loader2, Mail, Pencil, Plus, Search, Stethoscope, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
+import { cn } from "@/app/helpers/utils";
 import {
   normalizeIndianContactDigits,
   optionalIndianContactError,
@@ -70,11 +72,10 @@ const emptyNewHospital = (): NewHospitalDraft => ({
 const PAGE_SIZE = 8;
 
 const AdminDoctors = () => {
-  const [doctors, setDoctors] = useState<AdminDoctorDto[]>([]);
-  const [hospitals, setHospitals] = useState<AdminHospitalDto[]>([]);
-  const [loading, setLoading] = useState(true);
+  const queryClient = useQueryClient();
   const [saving, setSaving] = useState(false);
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
   const [page, setPage] = useState(1);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -86,36 +87,54 @@ const AdminDoctors = () => {
   const [qrUrl, setQrUrl] = useState<string | null>(null);
   const [qrLoading, setQrLoading] = useState(false);
 
-  const load = async () => {
-    setLoading(true);
-    try {
-      const isActive = statusFilter === "all" ? undefined : statusFilter === "active";
-      const [docs, hosps] = await Promise.all([
-        adminApi.getDoctors(search, isActive),
-        adminApi.getHospitals(undefined, true),
-      ]);
-      setDoctors(docs);
-      setHospitals(hosps);
-      setPage(1);
-    } catch (e) {
-      toast.error(getUserFriendlyMessage(e, "Failed to load doctors"));
-    } finally {
-      setLoading(false);
-    }
+  const applySearch = () => {
+    setAppliedSearch(searchInput.trim());
+    setPage(1);
   };
 
-  useEffect(() => {
-    void load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [statusFilter]);
+  const { data, isLoading, isPlaceholderData, isError, error } = useQuery({
+    queryKey: ["admin-doctor-summaries", page, appliedSearch, statusFilter],
+    queryFn: () =>
+      adminApi.getDoctorSummaries({
+        search: appliedSearch,
+        isActive: statusFilter === "all" ? undefined : statusFilter === "active",
+        page,
+        pageSize: PAGE_SIZE,
+      }),
+    placeholderData: keepPreviousData,
+  });
+  const isPageChanging = isPlaceholderData && !isLoading;
 
-  const filtered = useMemo(() => doctors, [doctors]);
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const { data: hospitals = [] } = useQuery({
+    queryKey: ["admin-hospitals-lookup"],
+    queryFn: () => adminApi.getHospitals(undefined, true),
+  });
+
+  const doctors = data?.items ?? [];
+  const totalCount = data?.totalCount ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const safePage = Math.min(Math.max(1, page), totalPages);
-  const pageRows = useMemo(
-    () => filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
-    [filtered, safePage],
-  );
+
+  useEffect(() => {
+    setPage(1);
+  }, [statusFilter, appliedSearch]);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
+  useEffect(() => {
+    if (isError) {
+      toast.error(getUserFriendlyMessage(error, "Failed to load doctors"));
+    }
+  }, [isError, error]);
+
+  const load = async () => {
+    await Promise.all([
+      queryClient.invalidateQueries({ queryKey: ["admin-doctor-summaries"] }),
+      queryClient.invalidateQueries({ queryKey: ["admin-hospitals-lookup"] }),
+    ]);
+  };
 
   const openCreate = () => {
     setEditing(null);
@@ -305,10 +324,10 @@ const AdminDoctors = () => {
             <Input
               className="pl-9"
               placeholder="Search by name, email, or Unique ID…"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
               onKeyDown={(e) => {
-                if (e.key === "Enter") void load();
+                if (e.key === "Enter") applySearch();
               }}
             />
           </div>
@@ -322,23 +341,23 @@ const AdminDoctors = () => {
               <SelectItem value="inactive">Inactive</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="secondary" onClick={() => void load()}>
+          <Button variant="secondary" onClick={applySearch}>
             Search
           </Button>
         </div>
       </Card>
 
       <Card className="overflow-hidden">
-        <PageContentGate loading={loading}>
-        {filtered.length === 0 ? (
+        <PageContentGate loading={isLoading}>
+        {totalCount === 0 ? (
           <div className="flex flex-col items-center justify-center gap-2 py-16 text-muted-foreground">
             <Stethoscope className="h-10 w-10 opacity-40" />
             <p>No doctors yet. Add the first doctor to generate a Unique ID and QR.</p>
           </div>
         ) : (
-          <div>
+          <div className={cn("transition-opacity duration-200", isPageChanging && "opacity-50")}>
             <div className="divide-y">
-            {pageRows.map((d) => (
+            {doctors.map((d) => (
               <div key={d.id} className="flex flex-col gap-3 p-4 md:flex-row md:items-center md:justify-between">
                 <div className="min-w-0 space-y-1">
                   <div className="flex flex-wrap items-center gap-2">
@@ -396,7 +415,7 @@ const AdminDoctors = () => {
               <TablePagination
                 page={safePage}
                 pageSize={PAGE_SIZE}
-                total={filtered.length}
+                total={totalCount}
                 onPageChange={setPage}
                 label="doctors"
               />

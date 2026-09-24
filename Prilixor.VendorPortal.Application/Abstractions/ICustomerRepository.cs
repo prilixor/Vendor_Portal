@@ -144,6 +144,12 @@ public interface ICustomerRepository
     Task<Prilixor.VendorPortal.Domain.Common.Doctor?> FindDoctorByEmailAsync(string email, Guid? excludeDoctorId, CancellationToken cancellationToken);
     Task<List<Prilixor.VendorPortal.Domain.Common.Doctor>> SearchDoctorsAsync(string searchTerm, CancellationToken cancellationToken);
     Task<List<Prilixor.VendorPortal.Domain.Common.Doctor>> ListDoctorsForAdminAsync(string? searchTerm, bool? isActive, CancellationToken cancellationToken);
+    Task<(List<Prilixor.VendorPortal.Domain.Common.Doctor> Items, int TotalCount)> SearchDoctorsForAdminPagedAsync(
+        string? searchTerm,
+        bool? isActive,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken);
     Task AddDoctorAsync(Prilixor.VendorPortal.Domain.Common.Doctor doctor, CancellationToken cancellationToken);
     Task UpdateDoctorAsync(Prilixor.VendorPortal.Domain.Common.Doctor doctor, CancellationToken cancellationToken);
     Task SoftDeleteDoctorAsync(Guid doctorId, Guid? deletedBy, CancellationToken cancellationToken);

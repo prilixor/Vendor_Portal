@@ -1594,6 +1594,51 @@ public sealed class CustomerRepository(
         return await query.OrderByDescending(x => x.CreatedOnUtc).Take(200).ToListAsync(cancellationToken);
     }
 
+    public async Task<(List<Prilixor.VendorPortal.Domain.Common.Doctor> Items, int TotalCount)> SearchDoctorsForAdminPagedAsync(
+        string? searchTerm,
+        bool? isActive,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
+        var filtered = FilterAdminDoctors(commonDb.Doctors.AsNoTracking(), searchTerm, isActive);
+        var totalCount = await filtered.CountAsync(cancellationToken);
+        var items = await filtered
+            .Include(d => d.Hospitals)
+            .ThenInclude(hd => hd.Hospital)
+            .OrderByDescending(x => x.CreatedOnUtc)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        return (items, totalCount);
+    }
+
+    private static IQueryable<Prilixor.VendorPortal.Domain.Common.Doctor> FilterAdminDoctors(
+        IQueryable<Prilixor.VendorPortal.Domain.Common.Doctor> query,
+        string? searchTerm,
+        bool? isActive)
+    {
+        query = query.Where(x => !x.IsDeleted);
+
+        if (isActive.HasValue)
+            query = query.Where(x => x.IsActive == isActive.Value);
+
+        if (string.IsNullOrWhiteSpace(searchTerm))
+            return query;
+
+        var term = $"%{searchTerm.Trim()}%";
+        var code = searchTerm.Trim().ToUpperInvariant();
+        return query.Where(x =>
+            x.UniqueCode == code
+            || EF.Functions.ILike(x.FullName, term)
+            || EF.Functions.ILike(x.Email, term)
+            || EF.Functions.ILike(x.Specialization ?? "", term));
+    }
+
     public async Task AddDoctorAsync(Prilixor.VendorPortal.Domain.Common.Doctor doctor, CancellationToken cancellationToken)
     {
         commonDb.Doctors.Add(doctor);
