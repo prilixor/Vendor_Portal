@@ -92,6 +92,25 @@ public sealed class GetAdminDoctorSummariesEndpoint(IMediator mediator)
     }
 }
 
+public sealed class GetAdminDoctorOptionsEndpoint(IMediator mediator)
+    : EndpointWithoutRequest<Results<Ok<List<AdminLookupOptionDto>>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("doctors/options");
+        Group<AdminApiGroup>();
+        Policies("Perm:catalog.manage");
+    }
+
+    public override async Task<Results<Ok<List<AdminLookupOptionDto>>, ProblemHttpResult>> ExecuteAsync(CancellationToken ct)
+    {
+        var search = Query<string?>("search", false);
+        var isActive = Query<bool?>("isActive", false);
+        var result = await mediator.Send(new ListAdminDoctorOptionsQuery(search, isActive), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
 public sealed class GetAdminDoctorEndpoint(IMediator mediator)
     : EndpointWithoutRequest<Results<Ok<DoctorDto>, ProblemHttpResult>>
 {

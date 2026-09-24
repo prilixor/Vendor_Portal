@@ -86,9 +86,9 @@ const AdminHospitals = () => {
   });
   const isPageChanging = isPlaceholderData && !isLoading;
 
-  const { data: doctors = [] } = useQuery({
-    queryKey: ["admin-doctors-lookup"],
-    queryFn: () => adminApi.getDoctors(undefined, true),
+  const { data: doctorLookups = [] } = useQuery({
+    queryKey: ["admin-doctor-options"],
+    queryFn: () => adminApi.getDoctorOptions({ isActive: true }),
   });
 
   const hospitals = data?.items ?? [];
@@ -113,7 +113,7 @@ const AdminHospitals = () => {
   const load = async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["admin-hospital-summaries"] }),
-      queryClient.invalidateQueries({ queryKey: ["admin-doctors-lookup"] }),
+      queryClient.invalidateQueries({ queryKey: ["admin-doctor-options"] }),
     ]);
   };
 
@@ -142,19 +142,23 @@ const AdminHospitals = () => {
     setDialogOpen(true);
   };
 
-  const doctorOptions = useMemo(
-    () =>
-      doctors.map((d) => ({
-        id: d.id,
-        label: d.fullName,
-        badge: d.uniqueCode || undefined,
-        secondary: d.specialization || undefined,
-        searchText: [d.fullName, d.uniqueCode, d.email, d.specialization, d.contactNumber]
-          .filter(Boolean)
-          .join(" "),
-      })),
-    [doctors],
-  );
+  const doctorOptions = useMemo(() => {
+    const fromLookup = doctorLookups.map((d) => ({
+      id: d.id,
+      label: d.label,
+      badge: d.badge || undefined,
+      secondary: d.secondary || undefined,
+      searchText: [d.label, d.badge, d.secondary].filter(Boolean).join(" "),
+    }));
+    const extras = (editing?.doctorIds ?? [])
+      .map((id, index) => ({
+        id,
+        label: editing?.doctorNames?.[index] || id,
+        searchText: editing?.doctorNames?.[index] || id,
+      }))
+      .filter((d) => !fromLookup.some((o) => o.id === d.id));
+    return [...extras, ...fromLookup];
+  }, [doctorLookups, editing]);
 
   const validate = () => {
     const errors: Record<string, string> = {};

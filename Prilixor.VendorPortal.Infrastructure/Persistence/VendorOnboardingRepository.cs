@@ -1439,6 +1439,17 @@ public sealed class VendorOnboardingRepository(
             .FirstOrDefaultAsync(x => x.VendorProductListingId == listingId && !x.IsDeleted, cancellationToken);
     }
 
+    public async Task<List<VendorInventory>> GetVendorInventoriesByListingIdsAsync(
+        IReadOnlyList<Guid> listingIds,
+        CancellationToken cancellationToken)
+    {
+        if (listingIds.Count == 0) return [];
+        return await dbContext.VendorInventory
+            .AsNoTracking()
+            .Where(x => listingIds.Contains(x.VendorProductListingId) && !x.IsDeleted)
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task UpsertVendorInventoryAsync(VendorInventory inventory, CancellationToken cancellationToken)
     {
         var entry = dbContext.Entry(inventory);
@@ -1491,6 +1502,19 @@ public sealed class VendorOnboardingRepository(
         return dbContext.VendorVariantInventories
             .Include(x => x.ProductVariant)
             .Where(x => x.VendorProductListingId == listingId)
+            .OrderBy(x => x.ProductVariant.SizeValue)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<List<VendorVariantInventory>> GetVariantInventoriesByListingIdsAsync(
+        IReadOnlyList<Guid> listingIds,
+        CancellationToken cancellationToken)
+    {
+        if (listingIds.Count == 0) return [];
+        return await dbContext.VendorVariantInventories
+            .AsNoTracking()
+            .Include(x => x.ProductVariant)
+            .Where(x => listingIds.Contains(x.VendorProductListingId))
             .OrderBy(x => x.ProductVariant.SizeValue)
             .ToListAsync(cancellationToken);
     }

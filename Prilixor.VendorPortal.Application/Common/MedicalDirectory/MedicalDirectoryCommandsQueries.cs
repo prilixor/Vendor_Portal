@@ -7,6 +7,12 @@ using Prilixor.Shared.Models;
 
 namespace Prilixor.VendorPortal.Application.Common.MedicalDirectory;
 
+public sealed record AdminLookupOptionDto(
+    Guid Id,
+    string Label,
+    string? Secondary = null,
+    string? Badge = null);
+
 public sealed record HospitalDto(
     Guid Id,
     string Name,

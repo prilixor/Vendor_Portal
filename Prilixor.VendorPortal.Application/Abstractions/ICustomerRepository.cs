@@ -155,6 +155,10 @@ public interface ICustomerRepository
     Task<Prilixor.VendorPortal.Domain.Common.Doctor?> FindDoctorByEmailAsync(string email, Guid? excludeDoctorId, CancellationToken cancellationToken);
     Task<List<Prilixor.VendorPortal.Domain.Common.Doctor>> SearchDoctorsAsync(string searchTerm, CancellationToken cancellationToken);
     Task<List<Prilixor.VendorPortal.Domain.Common.Doctor>> ListDoctorsForAdminAsync(string? searchTerm, bool? isActive, CancellationToken cancellationToken);
+    Task<List<(Guid Id, string FullName, string UniqueCode, string? Specialization, string Email)>> ListDoctorOptionsForAdminAsync(
+        string? searchTerm,
+        bool? isActive,
+        CancellationToken cancellationToken);
     Task<(List<Prilixor.VendorPortal.Domain.Common.Doctor> Items, int TotalCount)> SearchDoctorsForAdminPagedAsync(
         string? searchTerm,
         bool? isActive,
@@ -170,6 +174,10 @@ public interface ICustomerRepository
 
     Task<Prilixor.VendorPortal.Domain.Common.Hospital?> GetHospitalByIdAsync(Guid hospitalId, CancellationToken cancellationToken);
     Task<List<Prilixor.VendorPortal.Domain.Common.Hospital>> ListHospitalsForAdminAsync(string? searchTerm, bool? isActive, CancellationToken cancellationToken);
+    Task<List<(Guid Id, string Name, string? City, string? State, string? AddressLine1)>> ListHospitalOptionsForAdminAsync(
+        string? searchTerm,
+        bool? isActive,
+        CancellationToken cancellationToken);
     Task<(List<Prilixor.VendorPortal.Domain.Common.Hospital> Items, int TotalCount)> SearchHospitalsForAdminPagedAsync(
         string? searchTerm,
         bool? isActive,

@@ -345,6 +345,25 @@ public sealed class GetAdminVendorByIdEndpoint(IMediator mediator)
     }
 }
 
+public sealed class GetAdminVendorInventorySummariesEndpoint(IMediator mediator)
+    : Endpoint<GetAdminVendorByIdRequest, Results<Ok<List<AdminVendorListingInventoryDto>>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("vendors/{vendorId}/inventory-summaries");
+        Group<AdminApiGroup>();
+        Policies("Perm:vendors.view");
+    }
+
+    public override async Task<Results<Ok<List<AdminVendorListingInventoryDto>>, ProblemHttpResult>> ExecuteAsync(
+        GetAdminVendorByIdRequest req,
+        CancellationToken ct)
+    {
+        var result = await mediator.Send(new GetAdminVendorInventorySummariesQuery(req.VendorId), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
 public sealed class GetAdminVendorSummariesRequest
 {
     public string? Search { get; set; }

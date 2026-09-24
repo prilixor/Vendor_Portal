@@ -1618,6 +1618,20 @@ public sealed class CustomerRepository(
         return await query.OrderByDescending(x => x.CreatedOnUtc).Take(200).ToListAsync(cancellationToken);
     }
 
+    public async Task<List<(Guid Id, string FullName, string UniqueCode, string? Specialization, string Email)>> ListDoctorOptionsForAdminAsync(
+        string? searchTerm,
+        bool? isActive,
+        CancellationToken cancellationToken)
+    {
+        var query = FilterAdminDoctors(commonDb.Doctors.AsNoTracking(), searchTerm, isActive);
+        var rows = await query
+            .OrderBy(x => x.FullName)
+            .Take(2000)
+            .Select(x => new { x.Id, x.FullName, x.UniqueCode, x.Specialization, x.Email })
+            .ToListAsync(cancellationToken);
+        return rows.Select(x => (x.Id, x.FullName, x.UniqueCode, x.Specialization, x.Email)).ToList();
+    }
+
     public async Task<(List<Prilixor.VendorPortal.Domain.Common.Doctor> Items, int TotalCount)> SearchDoctorsForAdminPagedAsync(
         string? searchTerm,
         bool? isActive,
@@ -1755,6 +1769,20 @@ public sealed class CustomerRepository(
         }
 
         return await query.OrderBy(x => x.Name).Take(200).ToListAsync(cancellationToken);
+    }
+
+    public async Task<List<(Guid Id, string Name, string? City, string? State, string? AddressLine1)>> ListHospitalOptionsForAdminAsync(
+        string? searchTerm,
+        bool? isActive,
+        CancellationToken cancellationToken)
+    {
+        var query = FilterAdminHospitals(commonDb.Hospitals.AsNoTracking(), searchTerm, isActive);
+        var rows = await query
+            .OrderBy(x => x.Name)
+            .Take(2000)
+            .Select(x => new { x.Id, x.Name, x.City, x.State, x.AddressLine1 })
+            .ToListAsync(cancellationToken);
+        return rows.Select(x => (x.Id, x.Name, x.City, x.State, x.AddressLine1)).ToList();
     }
 
     public async Task<(List<Prilixor.VendorPortal.Domain.Common.Hospital> Items, int TotalCount)> SearchHospitalsForAdminPagedAsync(

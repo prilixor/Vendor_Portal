@@ -105,9 +105,9 @@ const AdminDoctors = () => {
   });
   const isPageChanging = isPlaceholderData && !isLoading;
 
-  const { data: hospitals = [] } = useQuery({
-    queryKey: ["admin-hospitals-lookup"],
-    queryFn: () => adminApi.getHospitals(undefined, true),
+  const { data: hospitalLookups = [] } = useQuery({
+    queryKey: ["admin-hospital-options"],
+    queryFn: () => adminApi.getHospitalOptions({ isActive: true }),
   });
 
   const doctors = data?.items ?? [];
@@ -132,7 +132,7 @@ const AdminDoctors = () => {
   const load = async () => {
     await Promise.all([
       queryClient.invalidateQueries({ queryKey: ["admin-doctor-summaries"] }),
-      queryClient.invalidateQueries({ queryKey: ["admin-hospitals-lookup"] }),
+      queryClient.invalidateQueries({ queryKey: ["admin-hospital-options"] }),
     ]);
   };
 
@@ -160,16 +160,23 @@ const AdminDoctors = () => {
     setDialogOpen(true);
   };
 
-  const hospitalOptions = useMemo(
-    () =>
-      hospitals.map((h) => ({
+  const hospitalOptions = useMemo(() => {
+    const fromLookup = hospitalLookups.map((h) => ({
+      id: h.id,
+      label: h.label,
+      secondary: h.secondary || undefined,
+      searchText: [h.label, h.secondary].filter(Boolean).join(" "),
+    }));
+    const extras = (editing?.hospitals ?? [])
+      .filter((h) => !fromLookup.some((o) => o.id === h.id))
+      .map((h) => ({
         id: h.id,
         label: h.name,
         secondary: [h.city, h.state].filter(Boolean).join(", ") || h.addressLine1 || undefined,
-        searchText: [h.name, h.city, h.state, h.addressLine1, h.postalCode].filter(Boolean).join(" "),
-      })),
-    [hospitals],
-  );
+        searchText: [h.name, h.city, h.state, h.addressLine1].filter(Boolean).join(" "),
+      }));
+    return [...extras, ...fromLookup];
+  }, [hospitalLookups, editing]);
 
   const validate = () => {
     const errors: Record<string, string> = {};

@@ -66,6 +66,24 @@ internal sealed class GetAdminHospitalListQueryHandler(ICustomerRepository repos
     }
 }
 
+public sealed record ListAdminHospitalOptionsQuery(string? Search, bool? IsActive) : IQuery<List<AdminLookupOptionDto>>;
+
+internal sealed class ListAdminHospitalOptionsQueryHandler(ICustomerRepository repository)
+    : IQueryHandler<ListAdminHospitalOptionsQuery, List<AdminLookupOptionDto>>
+{
+    public async Task<Result<List<AdminLookupOptionDto>>> Handle(
+        ListAdminHospitalOptionsQuery request,
+        CancellationToken cancellationToken)
+    {
+        var rows = await repository.ListHospitalOptionsForAdminAsync(request.Search, request.IsActive, cancellationToken);
+        return Result.Success(rows.Select(h => new AdminLookupOptionDto(
+            h.Id,
+            h.Name,
+            string.Join(", ", new[] { h.City, h.State }.Where(s => !string.IsNullOrWhiteSpace(s)))
+                is { Length: > 0 } loc ? loc : h.AddressLine1)).ToList());
+    }
+}
+
 public sealed record ListAdminHospitalsQuery(string? Search, bool? IsActive) : IQuery<List<HospitalDto>>;
 
 internal sealed class ListAdminHospitalsQueryHandler(ICustomerRepository repository)

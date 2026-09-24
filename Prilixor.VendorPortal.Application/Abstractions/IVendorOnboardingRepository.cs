@@ -104,9 +104,11 @@ public interface IVendorOnboardingRepository
     Task<List<VendorProductDocument>> GetVendorProductDocumentsAsync(Guid listingId, CancellationToken cancellationToken);
 
     Task<VendorInventory?> GetVendorInventoryByListingIdAsync(Guid listingId, CancellationToken cancellationToken);
+    Task<List<VendorInventory>> GetVendorInventoriesByListingIdsAsync(IReadOnlyList<Guid> listingIds, CancellationToken cancellationToken);
     Task UpsertVendorInventoryAsync(VendorInventory inventory, CancellationToken cancellationToken);
 
     Task<List<VendorVariantInventory>> GetVariantInventoryByListingIdAsync(Guid listingId, CancellationToken cancellationToken);
+    Task<List<VendorVariantInventory>> GetVariantInventoriesByListingIdsAsync(IReadOnlyList<Guid> listingIds, CancellationToken cancellationToken);
     Task UpsertVariantInventoryAsync(VendorVariantInventory item, CancellationToken cancellationToken);
     /// <summary>Marks tracked ProductVariant entities Unchanged so stock saves never UPDATE catalog rows.</summary>
     void DiscardTrackedProductVariantChanges();

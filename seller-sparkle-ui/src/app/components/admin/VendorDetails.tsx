@@ -554,9 +554,6 @@ const VendorDetails = () => {
         setProductMap({});
       }
 
-      // Fetch inventory for each listing.
-      // Chemicals: packaging-size (variant) stock is authoritative — same as Vendor Inventory.
-      // Equipment: flat VendorInventory.
       const inventoryData: Record<string, {
         totalQuantity: number;
         availableQuantity: number;
@@ -564,51 +561,20 @@ const VendorDetails = () => {
         sizes?: { label: string; sku: string; total: number; available: number }[];
         source: "variant" | "flat";
       }> = {};
-      await Promise.all(
-        sortedListings.map(async (l) => {
-          try {
-            const catalogProduct = productsById[l.productId];
-            const isChemical = !!(
-              l.isChemical ||
-              catalogProduct?.baseUnit ||
-              catalogProduct?.casNumber ||
-              catalogProduct?.chemicalFormula ||
-              (catalogProduct?.variants && catalogProduct.variants.length > 0)
-            );
-
-            if (isChemical) {
-              const variantRows = await vendorOnboardingApi.getVariantInventory(id, l.id).catch(() => []);
-              if (variantRows.length > 0) {
-                inventoryData[l.id] = {
-                  totalQuantity: variantRows.reduce((sum, r) => sum + (r.totalQuantity || 0), 0),
-                  availableQuantity: variantRows.reduce((sum, r) => sum + (r.availableQuantity || 0), 0),
-                  reservedQuantity: variantRows.reduce((sum, r) => sum + (r.reservedQuantity || 0), 0),
-                  sizes: variantRows.map((r) => ({
-                    label: `${r.sizeValue} ${r.sizeUnit}`,
-                    sku: r.sku,
-                    total: r.totalQuantity || 0,
-                    available: r.availableQuantity || 0,
-                  })),
-                  source: "variant",
-                };
-                return;
-              }
-            }
-
-            const inv = await vendorOnboardingApi.getVendorInventory(id, l.id);
-            if (inv) {
-              inventoryData[l.id] = {
-                totalQuantity: inv.totalQuantity,
-                availableQuantity: inv.availableQuantity,
-                reservedQuantity: inv.reservedQuantity,
-                source: "flat",
-              };
-            }
-          } catch {
-            // ignore if no inventory
-          }
-        })
-      );
+      try {
+        const summaries = await adminApi.getVendorInventorySummaries(id);
+        summaries.forEach((row) => {
+          inventoryData[row.listingId] = {
+            totalQuantity: row.totalQuantity,
+            availableQuantity: row.availableQuantity,
+            reservedQuantity: row.reservedQuantity,
+            sizes: row.sizes ?? undefined,
+            source: row.source,
+          };
+        });
+      } catch {
+        // ignore if no inventory
+      }
       setInventoryMap(inventoryData);
 
     } catch (error) {

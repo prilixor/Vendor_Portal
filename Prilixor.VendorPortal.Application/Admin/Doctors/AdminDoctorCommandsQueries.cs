@@ -146,6 +146,24 @@ internal sealed class GetAdminDoctorListQueryHandler(ICustomerRepository reposit
     }
 }
 
+public sealed record ListAdminDoctorOptionsQuery(string? Search, bool? IsActive) : IQuery<List<AdminLookupOptionDto>>;
+
+internal sealed class ListAdminDoctorOptionsQueryHandler(ICustomerRepository repository)
+    : IQueryHandler<ListAdminDoctorOptionsQuery, List<AdminLookupOptionDto>>
+{
+    public async Task<Result<List<AdminLookupOptionDto>>> Handle(
+        ListAdminDoctorOptionsQuery request,
+        CancellationToken cancellationToken)
+    {
+        var rows = await repository.ListDoctorOptionsForAdminAsync(request.Search, request.IsActive, cancellationToken);
+        return Result.Success(rows.Select(d => new AdminLookupOptionDto(
+            d.Id,
+            d.FullName,
+            d.Specialization,
+            d.UniqueCode)).ToList());
+    }
+}
+
 public sealed record ListAdminDoctorsQuery(string? Search, bool? IsActive) : IQuery<List<DoctorDto>>;
 
 internal sealed class ListAdminDoctorsQueryHandler(ICustomerRepository repository, IConfiguration configuration)

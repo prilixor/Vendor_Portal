@@ -746,6 +746,22 @@ export interface AdminHospitalListResult {
   pageSize: number;
 }
 
+export interface AdminLookupOptionDto {
+  id: string;
+  label: string;
+  secondary?: string | null;
+  badge?: string | null;
+}
+
+export interface AdminVendorListingInventoryDto {
+  listingId: string;
+  totalQuantity: number;
+  availableQuantity: number;
+  reservedQuantity: number;
+  source: "variant" | "flat";
+  sizes?: { label: string; sku: string; total: number; available: number }[] | null;
+}
+
 export interface AdminHospitalInput {
   name: string;
   addressLine1?: string;
@@ -1053,6 +1069,12 @@ export const adminApi = {
 
   async getVendorProductListings(vendorId: string): Promise<VendorProductListingDto[]> {
     return apiClient.get<VendorProductListingDto[]>(`/vendors/${vendorId}/listings`);
+  },
+
+  async getVendorInventorySummaries(vendorId: string): Promise<AdminVendorListingInventoryDto[]> {
+    return apiClient.get<AdminVendorListingInventoryDto[]>(
+      `/admin/vendors/${encodeURIComponent(vendorId)}/inventory-summaries`,
+    );
   },
 
   // Admin Users
@@ -1634,6 +1656,18 @@ export const adminApi = {
     return apiClient.get<AdminDoctorListResult>(`/admin/doctors/summaries?${qs.toString()}`, options);
   },
 
+  async getDoctorOptions(params: {
+    search?: string;
+    isActive?: boolean;
+  } = {}, options?: ApiClientOptions): Promise<AdminLookupOptionDto[]> {
+    const qs = new URLSearchParams();
+    const search = params.search?.trim();
+    if (search) qs.set("search", search);
+    if (typeof params.isActive === "boolean") qs.set("isActive", String(params.isActive));
+    const q = qs.toString();
+    return apiClient.get<AdminLookupOptionDto[]>(`/admin/doctors/options${q ? `?${q}` : ""}`, options);
+  },
+
   async getDoctor(id: string): Promise<AdminDoctorDto> {
     return apiClient.get<AdminDoctorDto>(`/admin/doctors/${id}`);
   },
@@ -1688,6 +1722,18 @@ export const adminApi = {
     qs.set("page", String(params.page && params.page > 0 ? params.page : 1));
     qs.set("pageSize", String(params.pageSize && params.pageSize > 0 ? params.pageSize : 8));
     return apiClient.get<AdminHospitalListResult>(`/admin/hospitals/summaries?${qs.toString()}`, options);
+  },
+
+  async getHospitalOptions(params: {
+    search?: string;
+    isActive?: boolean;
+  } = {}, options?: ApiClientOptions): Promise<AdminLookupOptionDto[]> {
+    const qs = new URLSearchParams();
+    const search = params.search?.trim();
+    if (search) qs.set("search", search);
+    if (typeof params.isActive === "boolean") qs.set("isActive", String(params.isActive));
+    const q = qs.toString();
+    return apiClient.get<AdminLookupOptionDto[]>(`/admin/hospitals/options${q ? `?${q}` : ""}`, options);
   },
 
   async createHospital(data: CreateAdminHospitalRequest): Promise<AdminHospitalDto> {
