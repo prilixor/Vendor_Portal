@@ -942,6 +942,25 @@ export interface AdminExpirationListResult {
   pageSize: number;
 }
 
+export interface AdminPendingContinuationDto {
+  extensionId: string;
+  orderId: string;
+  orderNumber: string;
+  customerName: string;
+  vendorName: string;
+  listingTitle: string;
+  totalAmount: number;
+  createdOnUtc: string;
+  type: "extension" | "buyout" | string;
+}
+
+export interface AdminPendingContinuationListResult {
+  items: AdminPendingContinuationDto[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
+
 export interface UpdateAdminOrderStatusRequest {
   adminUserId: string;
   orderId: string;
@@ -1473,6 +1492,19 @@ export const adminApi = {
 
   async getAdminAllPendingContinuations(): Promise<any[]> {
     return apiClient.get<any[]>(`/admin/orders/continuations/pending`);
+  },
+
+  async getAdminPendingContinuationSummaries(params: {
+    page?: number;
+    pageSize?: number;
+  } = {}, options?: ApiClientOptions): Promise<AdminPendingContinuationListResult> {
+    const qs = new URLSearchParams();
+    qs.set("page", String(params.page && params.page > 0 ? params.page : 1));
+    qs.set("pageSize", String(params.pageSize && params.pageSize > 0 ? params.pageSize : 8));
+    return apiClient.get<AdminPendingContinuationListResult>(
+      `/admin/orders/continuations/pending/summaries?${qs.toString()}`,
+      options,
+    );
   },
 
   async approveAdminExtension(orderId: string, extensionId: string, adminUserId: string, overrides?: any): Promise<void> {

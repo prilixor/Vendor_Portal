@@ -46,6 +46,10 @@ public interface ICustomerRepository
     Task<List<CustomerRentalOrderBuyout>> GetPendingCustomerRentalOrderBuyoutsAsync(Guid orderId, CancellationToken cancellationToken);
     
     Task<List<PendingContinuationAggregate>> GetAllPendingContinuationsForAdminAsync(CancellationToken cancellationToken);
+    Task<(List<PendingContinuationAggregate> Items, int TotalCount)> SearchPendingContinuationsForAdminPagedAsync(
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken);
     
     Task AddCustomerRentalOrderAssetAsync(CustomerRentalOrderAsset asset, CancellationToken cancellationToken);
     Task<List<CustomerRentalOrderAsset>> GetCustomerRentalOrderAssetsAsync(Guid customerOrderId, CancellationToken cancellationToken);

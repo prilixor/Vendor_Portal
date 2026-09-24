@@ -1651,3 +1651,55 @@ internal sealed class GetAdminAllPendingContinuationsQueryHandler(
         return Result.Success(list);
     }
 }
+
+public sealed class AdminPendingContinuationListResult
+{
+    public List<AdminPendingContinuationDto> Items { get; init; } = [];
+    public int TotalCount { get; init; }
+    public int Page { get; init; }
+    public int PageSize { get; init; }
+}
+
+public sealed record GetAdminPendingContinuationListQuery(
+    int Page = 1,
+    int PageSize = 8) : IQuery<AdminPendingContinuationListResult>;
+
+public sealed class GetAdminPendingContinuationListQueryValidator : AbstractValidator<GetAdminPendingContinuationListQuery>
+{
+    public GetAdminPendingContinuationListQueryValidator()
+    {
+        RuleFor(x => x.Page).GreaterThan(0);
+        RuleFor(x => x.PageSize).InclusiveBetween(1, 100);
+    }
+}
+
+internal sealed class GetAdminPendingContinuationListQueryHandler(ICustomerRepository customers)
+    : IQueryHandler<GetAdminPendingContinuationListQuery, AdminPendingContinuationListResult>
+{
+    public async Task<Result<AdminPendingContinuationListResult>> Handle(
+        GetAdminPendingContinuationListQuery request,
+        CancellationToken cancellationToken)
+    {
+        var page = Math.Max(1, request.Page);
+        var pageSize = Math.Clamp(request.PageSize, 1, 100);
+        var (items, totalCount) = await customers.SearchPendingContinuationsForAdminPagedAsync(
+            page, pageSize, cancellationToken);
+
+        return Result.Success(new AdminPendingContinuationListResult
+        {
+            Items = items.Select(c => new AdminPendingContinuationDto(
+                c.Id,
+                c.CustomerRentalOrderId,
+                c.OrderNumber,
+                c.CustomerName,
+                c.VendorName,
+                c.ListingTitle,
+                c.TotalAmount,
+                c.CreatedOnUtc.UtcDateTime,
+                c.Type)).ToList(),
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize,
+        });
+    }
+}

@@ -103,12 +103,17 @@ export const AdminNotifications = () => {
   });
   const isFeedPageChanging = isPlaceholderData && !isLoadingFeed && activeTab !== "chats" && activeTab !== "support";
 
-  // Fetch all pending continuations (extensions & buyouts) globally
-  const { data: pendingContinuations = [], isLoading: isLoadingContinuations, refetch: refetchContinuations, isFetching: isFetchingContinuations } = useQuery({
-    queryKey: ["admin-all-pending-continuations"],
-    queryFn: () => adminApi.getAdminAllPendingContinuations(),
+  const { data: continuationPage, isLoading: isLoadingContinuations, refetch: refetchContinuations, isFetching: isFetchingContinuations } = useQuery({
+    queryKey: ["admin-pending-continuation-summaries", 1, PAGE_SIZE],
+    queryFn: () => adminApi.getAdminPendingContinuationSummaries({
+      page: 1,
+      pageSize: PAGE_SIZE,
+    }, { quiet: true }),
+    placeholderData: keepPreviousData,
     refetchInterval: 30000,
   });
+  const pendingContinuations = continuationPage?.items ?? [];
+  const pendingContinuationCount = continuationPage?.totalCount ?? 0;
 
   const { data: chatSessions = [], isLoading: isLoadingChats, refetch: refetchChats, isFetching: isFetchingChats } = useQuery({
     queryKey: ["admin-customer-chat-sessions"],
@@ -276,14 +281,14 @@ export const AdminNotifications = () => {
   }, [criticalOrders, pendingVendors, listingAlerts, chatAlerts, supportAlerts, page]);
 
   const counts = useMemo(() => ({
-    all: (feed?.counts.all ?? 0) + continuationAlerts.length + chatAlerts.length + supportAlerts.length,
-    orders: (feed?.counts.orders ?? 0) + continuationAlerts.length,
+    all: (feed?.counts.all ?? 0) + pendingContinuationCount + chatAlerts.length + supportAlerts.length,
+    orders: (feed?.counts.orders ?? 0) + pendingContinuationCount,
     vendors: feed?.counts.vendors ?? 0,
     listings: feed?.counts.listings ?? 0,
     chats: chatAlerts.length,
     support: supportAlerts.length,
     logs: feed?.counts.logs ?? 0,
-  }), [feed, continuationAlerts, chatAlerts, supportAlerts]);
+  }), [feed, pendingContinuationCount, chatAlerts, supportAlerts]);
 
   // Helper to format audit log timeline icons
   const getLogIcon = (action: string) => {

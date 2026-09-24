@@ -3099,6 +3099,124 @@ public sealed class CustomerRepository(
         return result.OrderByDescending(x => x.CreatedOnUtc).ToList();
     }
 
+    public async Task<(List<PendingContinuationAggregate> Items, int TotalCount)> SearchPendingContinuationsForAdminPagedAsync(
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
+        var extensionKeys = await customerDb.CustomerRentalOrderExtensions
+            .AsNoTracking()
+            .Where(x => !x.IsDeleted && x.Status == "pending_approval")
+            .Select(x => new { x.Id, x.CreatedOnUtc, Type = "extension" })
+            .ToListAsync(cancellationToken);
+
+        var buyoutKeys = await customerDb.CustomerRentalOrderBuyouts
+            .AsNoTracking()
+            .Where(x => !x.IsDeleted && x.Status == "pending_approval")
+            .Select(x => new { x.Id, x.CreatedOnUtc, Type = "buyout" })
+            .ToListAsync(cancellationToken);
+
+        var keys = extensionKeys
+            .Concat(buyoutKeys)
+            .OrderByDescending(x => x.CreatedOnUtc)
+            .ToList();
+        var totalCount = keys.Count;
+        var pageKeys = keys
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToList();
+
+        var extensionIds = pageKeys.Where(x => x.Type == "extension").Select(x => x.Id).ToList();
+        var buyoutIds = pageKeys.Where(x => x.Type == "buyout").Select(x => x.Id).ToList();
+
+        var extensions = extensionIds.Count == 0
+            ? []
+            : await customerDb.CustomerRentalOrderExtensions
+                .AsNoTracking()
+                .Include(x => x.CustomerRentalOrder)
+                    .ThenInclude(o => o.Customer)
+                .Where(x => extensionIds.Contains(x.Id))
+                .ToListAsync(cancellationToken);
+
+        var buyouts = buyoutIds.Count == 0
+            ? []
+            : await customerDb.CustomerRentalOrderBuyouts
+                .AsNoTracking()
+                .Include(x => x.CustomerRentalOrder)
+                    .ThenInclude(o => o.Customer)
+                .Where(x => buyoutIds.Contains(x.Id))
+                .ToListAsync(cancellationToken);
+
+        var listingIds = extensions.Select(x => x.CustomerRentalOrder.VendorProductListingId)
+            .Union(buyouts.Select(x => x.CustomerRentalOrder.VendorProductListingId))
+            .Distinct()
+            .ToList();
+        var map = await LoadListingsWithVendorAsync(listingIds, cancellationToken);
+
+        var variantIds = extensions.Select(x => x.CustomerRentalOrder.ProductVariantId)
+            .Concat(buyouts.Select(x => x.CustomerRentalOrder.ProductVariantId))
+            .Where(id => id.HasValue)
+            .Select(id => id!.Value)
+            .Distinct()
+            .ToList();
+        var variants = variantIds.Count > 0
+            ? await commonDb.Set<ProductVariant>()
+                .AsNoTracking()
+                .Where(v => variantIds.Contains(v.Id))
+                .ToDictionaryAsync(v => v.Id, cancellationToken)
+            : new Dictionary<Guid, ProductVariant>();
+
+        string ComposeTitle(VendorProductListing? listing, CustomerRentalOrder order)
+        {
+            var title = listing?.ListingTitle ?? "Deleted Product";
+            if (order.ProductVariantId.HasValue && variants.TryGetValue(order.ProductVariantId.Value, out var variant))
+                title += $" ({Prilixor.VendorPortal.Application.Common.SizeFormatting.Format(variant.SizeValue, variant.SizeUnit)})";
+            return title;
+        }
+
+        var byId = new Dictionary<(string Type, Guid Id), PendingContinuationAggregate>();
+        foreach (var e in extensions)
+        {
+            var listing = map.GetValueOrDefault(e.CustomerRentalOrder.VendorProductListingId);
+            byId[("extension", e.Id)] = new PendingContinuationAggregate(
+                e.Id,
+                e.CustomerRentalOrderId,
+                e.CustomerRentalOrder.OrderNumber,
+                e.CustomerRentalOrder.Customer?.FullName ?? "Customer",
+                listing?.Vendor?.Profile?.BusinessName ?? listing?.Vendor?.Email ?? "Vendor",
+                ComposeTitle(listing, e.CustomerRentalOrder),
+                e.TotalAmount,
+                e.CreatedOnUtc,
+                "extension");
+        }
+
+        foreach (var b in buyouts)
+        {
+            var listing = map.GetValueOrDefault(b.CustomerRentalOrder.VendorProductListingId);
+            byId[("buyout", b.Id)] = new PendingContinuationAggregate(
+                b.Id,
+                b.CustomerRentalOrderId,
+                b.CustomerRentalOrder.OrderNumber,
+                b.CustomerRentalOrder.Customer?.FullName ?? "Customer",
+                listing?.Vendor?.Profile?.BusinessName ?? listing?.Vendor?.Email ?? "Vendor",
+                ComposeTitle(listing, b.CustomerRentalOrder),
+                b.TotalAmount,
+                b.CreatedOnUtc,
+                "buyout");
+        }
+
+        var items = pageKeys
+            .Select(key => byId.GetValueOrDefault((key.Type, key.Id)))
+            .Where(x => x is not null)
+            .Select(x => x!)
+            .ToList();
+
+        return (items, totalCount);
+    }
+
     private async Task<List<CustomerRentalOrderWithListing>> AttachMedicalReferencesAsync(List<CustomerRentalOrderWithListing> items, CancellationToken cancellationToken)
     {
         var orderIds = items.Select(x => x.Order.Id).ToList();
