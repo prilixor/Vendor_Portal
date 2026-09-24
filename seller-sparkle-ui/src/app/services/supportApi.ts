@@ -1,4 +1,11 @@
-import { apiClient } from "@/app/services/apiClient";
+import { apiClient, type ApiClientOptions } from "@/app/services/apiClient";
+
+export interface AdminSupportTicketListResult {
+  items: SupportTicketDto[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
 
 export interface SupportTicketDto {
   id: string;
@@ -97,6 +104,26 @@ export const supportApi = {
   // Admin
   getAllTickets: (options?: { quiet?: boolean }) => {
     return apiClient.get<SupportTicketDto[]>("/support/admin/tickets", options);
+  },
+  getAdminTicketSummaries: (params: {
+    search?: string;
+    status?: string;
+    page?: number;
+    pageSize?: number;
+  } = {}, options?: ApiClientOptions) => {
+    const qs = new URLSearchParams();
+    const search = params.search?.trim();
+    if (search) qs.set("search", search);
+    if (params.status && params.status !== "all") qs.set("status", params.status);
+    qs.set("page", String(params.page && params.page > 0 ? params.page : 1));
+    qs.set("pageSize", String(params.pageSize && params.pageSize > 0 ? params.pageSize : 8));
+    return apiClient.get<AdminSupportTicketListResult>(
+      `/support/admin/tickets/summaries?${qs.toString()}`,
+      options,
+    );
+  },
+  getAdminTicket: (ticketId: string, options?: ApiClientOptions) => {
+    return apiClient.get<SupportTicketDto>(`/support/admin/tickets/${ticketId}`, options);
   },
   getAdminUnreadCount: () => {
     return apiClient.get<{ count: number }>("/support/admin/unread-count");

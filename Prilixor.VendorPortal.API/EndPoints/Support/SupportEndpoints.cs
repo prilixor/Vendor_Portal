@@ -40,6 +40,12 @@ public static class SupportEndpoints
         group.MapGet("admin/tickets", GetAllTickets)
             .WithName("GetAllSupportTickets");
 
+        group.MapGet("admin/tickets/summaries", GetTicketSummaries)
+            .WithName("GetAdminSupportTicketSummaries");
+
+        group.MapGet("admin/tickets/{ticketId}", GetAdminTicket)
+            .WithName("GetAdminSupportTicket");
+
         group.MapGet("admin/unread-count", GetAdminUnreadCount)
             .WithName("GetAdminSupportUnreadCount");
 
@@ -157,6 +163,34 @@ public static class SupportEndpoints
     {
         var query = new GetAllSupportTicketsQuery();
         var result = await mediator.Send(query, cancellationToken);
+        return result.IsSuccess ? Results.Ok(result.Value) : result.ToErrorResponse();
+    }
+
+    private static async Task<IResult> GetTicketSummaries(
+        [FromServices] IMediator mediator,
+        CancellationToken cancellationToken,
+        [FromQuery] string? search = null,
+        [FromQuery] string? status = null,
+        [FromQuery] int page = 1,
+        [FromQuery] int pageSize = 8)
+    {
+        page = page < 1 ? 1 : page;
+        pageSize = pageSize is < 1 or > 100 ? 8 : pageSize;
+        var result = await mediator.Send(
+            new GetAdminSupportTicketListQuery(search, status, page, pageSize),
+            cancellationToken);
+        return result.IsSuccess ? Results.Ok(result.Value) : result.ToErrorResponse();
+    }
+
+    private static async Task<IResult> GetAdminTicket(
+        string ticketId,
+        [FromServices] IMediator mediator,
+        CancellationToken cancellationToken)
+    {
+        if (!Guid.TryParse(ticketId, out var id))
+            return Results.BadRequest(new { detail = "Invalid ticket id." });
+
+        var result = await mediator.Send(new GetAdminSupportTicketQuery(id), cancellationToken);
         return result.IsSuccess ? Results.Ok(result.Value) : result.ToErrorResponse();
     }
 

@@ -2174,7 +2174,8 @@ public sealed class VendorOnboardingRepository(
     {
         return dbContext.SupportTickets
             .Include(x => x.Messages)
-            .Include(x => x.Vendor)
+            .Include(x => x.Vendor)!
+                .ThenInclude(v => v!.Profile)
             .FirstOrDefaultAsync(x => x.Id == ticketId && !x.IsDeleted, cancellationToken);
     }
 
@@ -2196,6 +2197,76 @@ public sealed class VendorOnboardingRepository(
             .Where(x => !x.IsDeleted)
             .OrderByDescending(x => x.CreatedOnUtc)
             .ToListAsync(cancellationToken);
+    }
+
+    public async Task<(List<SupportTicket> Items, int TotalCount)> SearchSupportTicketsForAdminPagedAsync(
+        string? searchTerm,
+        string? status,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
+        var query = dbContext.SupportTickets.AsNoTracking().Where(t => !t.IsDeleted);
+
+        var statusKey = status?.Trim().ToLowerInvariant();
+        if (statusKey is "open")
+            query = query.Where(t => t.Status.ToLower() == "open");
+        else if (statusKey is "in progress")
+            query = query.Where(t => t.Status.ToLower() == "in progress");
+        else if (statusKey is "done")
+            query = query.Where(t => t.Status.ToLower() == "closed" || t.Status.ToLower() == "resolved");
+
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            var term = $"%{searchTerm.Trim()}%";
+            query = query.Where(t =>
+                EF.Functions.ILike(t.TicketNumber, term)
+                || EF.Functions.ILike(t.Subject, term)
+                || (t.Vendor != null && EF.Functions.ILike(t.Vendor.Email, term))
+                || (t.Vendor != null && t.Vendor.Profile != null && EF.Functions.ILike(t.Vendor.Profile.BusinessName, term)));
+        }
+
+        var totalCount = await query.CountAsync(cancellationToken);
+
+        var pageIds = await query
+            .Select(t => new
+            {
+                t.Id,
+                Unread = t.Status.ToLower() == "closed"
+                    ? 0
+                    : t.Messages.Count(m =>
+                        !m.IsDeleted
+                        && !m.IsRead
+                        && (m.SenderType == "Vendor" || m.SenderType == "AI")),
+                LastAt = t.Messages
+                    .Where(m => !m.IsDeleted)
+                    .Select(m => (DateTime?)m.CreatedOnUtc)
+                    .Max() ?? t.ModifiedOnUtc ?? t.CreatedOnUtc
+            })
+            .OrderByDescending(x => x.Unread > 0)
+            .ThenByDescending(x => x.LastAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(x => x.Id)
+            .ToListAsync(cancellationToken);
+
+        var items = pageIds.Count == 0
+            ? []
+            : await dbContext.SupportTickets
+                .AsNoTracking()
+                .Include(t => t.Vendor)!
+                    .ThenInclude(v => v!.Profile)
+                .Include(t => t.Messages)
+                .Where(t => pageIds.Contains(t.Id))
+                .ToListAsync(cancellationToken);
+
+        var order = pageIds.Select((id, index) => (id, index)).ToDictionary(x => x.id, x => x.index);
+        items = items.OrderBy(t => order.GetValueOrDefault(t.Id, int.MaxValue)).ToList();
+
+        return (items, totalCount);
     }
 
     public async Task UpdateSupportTicketAsync(SupportTicket ticket, CancellationToken cancellationToken)

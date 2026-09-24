@@ -386,6 +386,123 @@ internal sealed class GetAllSupportTicketsQueryHandler(IVendorOnboardingReposito
     }
 }
 
+public sealed class AdminSupportTicketListResult
+{
+    public List<SupportTicketDto> Items { get; init; } = [];
+    public int TotalCount { get; init; }
+    public int Page { get; init; }
+    public int PageSize { get; init; }
+}
+
+public sealed record GetAdminSupportTicketListQuery(
+    string? Search,
+    string? Status,
+    int Page = 1,
+    int PageSize = 8) : IQuery<AdminSupportTicketListResult>;
+
+public sealed class GetAdminSupportTicketListQueryValidator : AbstractValidator<GetAdminSupportTicketListQuery>
+{
+    public GetAdminSupportTicketListQueryValidator()
+    {
+        RuleFor(x => x.Page).GreaterThan(0);
+        RuleFor(x => x.PageSize).InclusiveBetween(1, 100);
+    }
+}
+
+internal sealed class GetAdminSupportTicketListQueryHandler(IVendorOnboardingRepository repository)
+    : IQueryHandler<GetAdminSupportTicketListQuery, AdminSupportTicketListResult>
+{
+    public async Task<Result<AdminSupportTicketListResult>> Handle(
+        GetAdminSupportTicketListQuery request,
+        CancellationToken cancellationToken)
+    {
+        var page = Math.Max(1, request.Page);
+        var pageSize = Math.Clamp(request.PageSize, 1, 100);
+        var (tickets, totalCount) = await repository.SearchSupportTicketsForAdminPagedAsync(
+            request.Search,
+            request.Status,
+            page,
+            pageSize,
+            cancellationToken);
+        return Result.Success(new AdminSupportTicketListResult
+        {
+            Items = tickets.Select(SupportTicketAdminMapping.ToDto).ToList(),
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize,
+        });
+    }
+}
+
+public sealed record GetAdminSupportTicketQuery(Guid TicketId) : IQuery<SupportTicketDto>;
+
+internal sealed class GetAdminSupportTicketQueryHandler(IVendorOnboardingRepository repository)
+    : IQueryHandler<GetAdminSupportTicketQuery, SupportTicketDto>
+{
+    public async Task<Result<SupportTicketDto>> Handle(
+        GetAdminSupportTicketQuery request,
+        CancellationToken cancellationToken)
+    {
+        var ticket = await repository.GetSupportTicketByIdAsync(request.TicketId, cancellationToken);
+        if (ticket is null || ticket.IsDeleted)
+            return Result.Failure<SupportTicketDto>(new Error("support.not_found", "Support ticket not found.", ErrorCategory.NotFound));
+
+        return Result.Success(SupportTicketAdminMapping.ToDto(ticket));
+    }
+}
+
+file static class SupportTicketAdminMapping
+{
+    public static SupportTicketDto ToDto(SupportTicket ticket)
+    {
+        SupportMessageDto? latestMessage = null;
+        var latestMsg = ticket.Messages?
+            .Where(m => !m.IsDeleted)
+            .OrderByDescending(m => m.CreatedOnUtc)
+            .FirstOrDefault();
+        if (latestMsg != null)
+        {
+            List<string>? attachmentUrls = null;
+            if (!string.IsNullOrWhiteSpace(latestMsg.AttachmentUrls))
+            {
+                try { attachmentUrls = JsonSerializer.Deserialize<List<string>>(latestMsg.AttachmentUrls); }
+                catch { /* ignore parse errors */ }
+            }
+            latestMessage = new SupportMessageDto(
+                latestMsg.Id.ToString(),
+                latestMsg.TicketId.ToString(),
+                latestMsg.SenderId.ToString(),
+                latestMsg.SenderType,
+                latestMsg.Message,
+                latestMsg.CreatedOnUtc.ToSafeDateTimeOffset(),
+                attachmentUrls);
+        }
+
+        var unread = string.Equals(ticket.Status, "Closed", StringComparison.OrdinalIgnoreCase)
+            ? 0
+            : ticket.Messages?.Count(m =>
+                !m.IsDeleted
+                && !m.IsRead
+                && (m.SenderType == "Vendor" || m.SenderType == "AI")) ?? 0;
+        var activityAt = latestMsg?.CreatedOnUtc.ToSafeDateTimeOffset()
+            ?? ticket.ModifiedOnUtc.ToSafeDateTimeOffset()
+            ?? ticket.CreatedOnUtc.ToSafeDateTimeOffset();
+
+        return new SupportTicketDto(
+            ticket.Id.ToString(),
+            ticket.TicketNumber,
+            ticket.Category,
+            ticket.Subject,
+            ticket.Status,
+            ticket.Vendor?.Email,
+            ticket.Vendor?.Profile?.BusinessName,
+            ticket.CreatedOnUtc.ToSafeDateTimeOffset(),
+            activityAt,
+            latestMessage,
+            unread);
+    }
+}
+
 public sealed record GetAdminSupportUnreadCountQuery() : IQuery<int>;
 
 internal sealed class GetAdminSupportUnreadCountQueryHandler(IVendorOnboardingRepository repository)

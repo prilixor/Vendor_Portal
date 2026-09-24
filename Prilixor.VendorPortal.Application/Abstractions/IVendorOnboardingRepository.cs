@@ -184,6 +184,12 @@ public interface IVendorOnboardingRepository
     Task<SupportTicket?> GetSupportTicketByIdAsync(Guid ticketId, CancellationToken cancellationToken);
     Task<List<SupportTicket>> GetSupportTicketsByVendorIdAsync(Guid vendorId, CancellationToken cancellationToken);
     Task<List<SupportTicket>> GetSupportTicketsAsync(CancellationToken cancellationToken);
+    Task<(List<SupportTicket> Items, int TotalCount)> SearchSupportTicketsForAdminPagedAsync(
+        string? searchTerm,
+        string? status,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken);
     Task UpdateSupportTicketAsync(SupportTicket ticket, CancellationToken cancellationToken);
 
     Task AddSupportMessageAsync(SupportMessage message, CancellationToken cancellationToken);
