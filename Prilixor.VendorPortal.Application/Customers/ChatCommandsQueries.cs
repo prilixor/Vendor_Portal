@@ -221,7 +221,8 @@ public sealed class AdminChatSessionListResult
 public sealed record GetAdminChatSessionListQuery(
     string? Search,
     int Page = 1,
-    int PageSize = 8) : IQuery<AdminChatSessionListResult>;
+    int PageSize = 8,
+    bool UnreadOnly = false) : IQuery<AdminChatSessionListResult>;
 
 public sealed class GetAdminChatSessionListQueryValidator : AbstractValidator<GetAdminChatSessionListQuery>
 {
@@ -242,7 +243,7 @@ internal sealed class GetAdminChatSessionListQueryHandler(ICustomerRepository cu
         var page = Math.Max(1, request.Page);
         var pageSize = Math.Clamp(request.PageSize, 1, 100);
         var (sessions, totalCount) = await customers.SearchAdminChatSessionsPagedAsync(
-            request.Search, page, pageSize, cancellationToken);
+            request.Search, page, pageSize, cancellationToken, request.UnreadOnly);
         var items = await ChatSessionAdminMapping.MapManyAsync(customers, sessions, cancellationToken);
 
         return Result.Success(new AdminChatSessionListResult

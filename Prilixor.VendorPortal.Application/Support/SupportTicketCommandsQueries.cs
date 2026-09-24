@@ -398,7 +398,8 @@ public sealed record GetAdminSupportTicketListQuery(
     string? Search,
     string? Status,
     int Page = 1,
-    int PageSize = 8) : IQuery<AdminSupportTicketListResult>;
+    int PageSize = 8,
+    bool UnreadOnly = false) : IQuery<AdminSupportTicketListResult>;
 
 public sealed class GetAdminSupportTicketListQueryValidator : AbstractValidator<GetAdminSupportTicketListQuery>
 {
@@ -423,7 +424,8 @@ internal sealed class GetAdminSupportTicketListQueryHandler(IVendorOnboardingRep
             request.Status,
             page,
             pageSize,
-            cancellationToken);
+            cancellationToken,
+            request.UnreadOnly);
         return Result.Success(new AdminSupportTicketListResult
         {
             Items = tickets.Select(SupportTicketAdminMapping.ToDto).ToList(),

@@ -172,12 +172,13 @@ public static class SupportEndpoints
         [FromQuery] string? search = null,
         [FromQuery] string? status = null,
         [FromQuery] int page = 1,
-        [FromQuery] int pageSize = 8)
+        [FromQuery] int pageSize = 8,
+        [FromQuery] bool unreadOnly = false)
     {
         page = page < 1 ? 1 : page;
         pageSize = pageSize is < 1 or > 100 ? 8 : pageSize;
         var result = await mediator.Send(
-            new GetAdminSupportTicketListQuery(search, status, page, pageSize),
+            new GetAdminSupportTicketListQuery(search, status, page, pageSize, unreadOnly),
             cancellationToken);
         return result.IsSuccess ? Results.Ok(result.Value) : result.ToErrorResponse();
     }

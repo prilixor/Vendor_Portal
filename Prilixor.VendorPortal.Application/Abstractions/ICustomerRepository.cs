@@ -111,7 +111,8 @@ public interface ICustomerRepository
         string? searchTerm,
         int page,
         int pageSize,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken,
+        bool unreadOnly = false);
     Task<ChatSession?> GetChatSessionAsync(Guid customerId, Guid vendorId, Guid? orderId, CancellationToken cancellationToken);
     Task<ChatSession?> GetAdminChatSessionForOrderAsync(Guid customerId, Guid orderId, CancellationToken cancellationToken);
     Task<ChatSession?> GetChatSessionByIdAsync(Guid sessionId, CancellationToken cancellationToken);

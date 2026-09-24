@@ -2204,12 +2204,23 @@ public sealed class VendorOnboardingRepository(
         string? status,
         int page,
         int pageSize,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool unreadOnly = false)
     {
         page = Math.Max(1, page);
         pageSize = Math.Clamp(pageSize, 1, 100);
 
         var query = dbContext.SupportTickets.AsNoTracking().Where(t => !t.IsDeleted);
+
+        if (unreadOnly)
+        {
+            query = query.Where(t =>
+                t.Status.ToLower() != "closed"
+                && t.Messages.Any(m =>
+                    !m.IsDeleted
+                    && !m.IsRead
+                    && (m.SenderType == "Vendor" || m.SenderType == "AI")));
+        }
 
         var statusKey = status?.Trim().ToLowerInvariant();
         if (statusKey is "open")

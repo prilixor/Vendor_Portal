@@ -2521,7 +2521,8 @@ public sealed class CustomerRepository(
         string? searchTerm,
         int page,
         int pageSize,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool unreadOnly = false)
     {
         page = Math.Max(1, page);
         pageSize = Math.Clamp(pageSize, 1, 100);
@@ -2529,6 +2530,12 @@ public sealed class CustomerRepository(
         var query = customerDb.ChatSessions
             .AsNoTracking()
             .Where(s => !s.IsDeleted && s.CounterpartyType == ChatCounterpartyTypes.Admin);
+
+        if (unreadOnly)
+        {
+            query = query.Where(s => s.Messages.Any(m =>
+                !m.IsDeleted && !m.IsRead && m.SenderType == "Customer"));
+        }
 
         if (!string.IsNullOrWhiteSpace(searchTerm))
         {

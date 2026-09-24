@@ -189,7 +189,8 @@ public interface IVendorOnboardingRepository
         string? status,
         int page,
         int pageSize,
-        CancellationToken cancellationToken);
+        CancellationToken cancellationToken,
+        bool unreadOnly = false);
     Task UpdateSupportTicketAsync(SupportTicket ticket, CancellationToken cancellationToken);
 
     Task AddSupportMessageAsync(SupportMessage message, CancellationToken cancellationToken);

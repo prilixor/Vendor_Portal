@@ -115,19 +115,56 @@ export const AdminNotifications = () => {
   const pendingContinuations = continuationPage?.items ?? [];
   const pendingContinuationCount = continuationPage?.totalCount ?? 0;
 
-  const { data: chatSessions = [], isLoading: isLoadingChats, refetch: refetchChats, isFetching: isFetchingChats } = useQuery({
-    queryKey: ["admin-customer-chat-sessions"],
-    queryFn: () => chatApi.getAdminSessions(),
+  const chatListPage = activeTab === "chats" ? page : 1;
+  const supportListPage = activeTab === "support" ? page : 1;
+
+  const {
+    data: chatPageData,
+    isLoading: isLoadingChats,
+    refetch: refetchChats,
+    isFetching: isFetchingChats,
+    isPlaceholderData: isChatPlaceholder,
+  } = useQuery({
+    queryKey: ["admin-unread-chat-session-summaries", chatListPage, PAGE_SIZE],
+    queryFn: () =>
+      chatApi.getAdminSessionSummaries({
+        unreadOnly: true,
+        page: chatListPage,
+        pageSize: PAGE_SIZE,
+      }, { quiet: true }),
+    placeholderData: keepPreviousData,
     refetchInterval: 15000,
   });
+  const isChatPageChanging = isChatPlaceholder && !isLoadingChats && activeTab === "chats";
+  const chatSessions = chatPageData?.items ?? [];
+  const unreadChatCount = chatPageData?.totalCount ?? 0;
 
-  const { data: supportTickets = [], isLoading: isLoadingSupport, refetch: refetchSupport, isFetching: isFetchingSupport } = useQuery({
-    queryKey: ["admin-vendor-support-tickets"],
-    queryFn: () => supportApi.getAllTickets({ quiet: true }),
+  const {
+    data: supportPageData,
+    isLoading: isLoadingSupport,
+    refetch: refetchSupport,
+    isFetching: isFetchingSupport,
+    isPlaceholderData: isSupportPlaceholder,
+  } = useQuery({
+    queryKey: ["admin-unread-support-ticket-summaries", supportListPage, PAGE_SIZE],
+    queryFn: () =>
+      supportApi.getAdminTicketSummaries({
+        unreadOnly: true,
+        page: supportListPage,
+        pageSize: PAGE_SIZE,
+      }, { quiet: true }),
+    placeholderData: keepPreviousData,
     refetchInterval: 15000,
   });
+  const isSupportPageChanging = isSupportPlaceholder && !isLoadingSupport && activeTab === "support";
+  const supportTickets = supportPageData?.items ?? [];
+  const unreadSupportCount = supportPageData?.totalCount ?? 0;
 
-  const isLoading = isLoadingFeed || isLoadingContinuations || isLoadingChats || isLoadingSupport;
+  const isLoading =
+    isLoadingFeed
+    || isLoadingContinuations
+    || (activeTab === "chats" && isLoadingChats && !chatPageData)
+    || (activeTab === "support" && isLoadingSupport && !supportPageData);
   const isFetching = isFetchingFeed || isFetchingContinuations || isFetchingChats || isFetchingSupport;
 
   const handleRefreshAll = async () => {
@@ -222,7 +259,6 @@ export const AdminNotifications = () => {
 
   const chatAlerts = useMemo(() => {
     return chatSessions
-      .filter((s) => (s.unreadCount ?? 0) > 0)
       .map((s) => ({
         id: `chat-${s.id}`,
         type: "chat" as const,
@@ -246,7 +282,6 @@ export const AdminNotifications = () => {
 
   const supportAlerts = useMemo(() => {
     return supportTickets
-      .filter((t) => (t.unreadCount ?? 0) > 0)
       .map((t) => {
         const vendorLabel = t.vendorBusinessName || t.vendorEmail || "Vendor";
         const unread = t.unreadCount ?? 0;
@@ -281,14 +316,14 @@ export const AdminNotifications = () => {
   }, [criticalOrders, pendingVendors, listingAlerts, chatAlerts, supportAlerts, page]);
 
   const counts = useMemo(() => ({
-    all: (feed?.counts.all ?? 0) + pendingContinuationCount + chatAlerts.length + supportAlerts.length,
+    all: (feed?.counts.all ?? 0) + pendingContinuationCount + unreadChatCount + unreadSupportCount,
     orders: (feed?.counts.orders ?? 0) + pendingContinuationCount,
     vendors: feed?.counts.vendors ?? 0,
     listings: feed?.counts.listings ?? 0,
-    chats: chatAlerts.length,
-    support: supportAlerts.length,
+    chats: unreadChatCount,
+    support: unreadSupportCount,
     logs: feed?.counts.logs ?? 0,
-  }), [feed, pendingContinuationCount, chatAlerts, supportAlerts]);
+  }), [feed, pendingContinuationCount, unreadChatCount, unreadSupportCount]);
 
   // Helper to format audit log timeline icons
   const getLogIcon = (action: string) => {
@@ -370,7 +405,7 @@ export const AdminNotifications = () => {
       </Tabs>
 
       <PageContentGate loading={isLoading}>
-        <div className={cn("space-y-4 transition-opacity duration-200", isFeedPageChanging && "opacity-50")}>
+        <div className={cn("space-y-4 transition-opacity duration-200", (isFeedPageChanging || isChatPageChanging || isSupportPageChanging) && "opacity-50")}>
           {/* TAB: ALL ALERTS */}
           {activeTab === "all" && (
             counts.all === 0 ? (
@@ -461,7 +496,7 @@ export const AdminNotifications = () => {
 
           {/* TAB: CUSTOMER CHATS */}
           {activeTab === "chats" && (
-            chatAlerts.length === 0 ? (
+            unreadChatCount === 0 ? (
               <Card className="border-border/60 p-12 text-center">
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-950/40">
                   <CheckCircle2 className="h-6 w-6" />
@@ -473,19 +508,19 @@ export const AdminNotifications = () => {
               </Card>
             ) : (
               <div>
-                {chatAlerts.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((alert) => (
+                {chatAlerts.map((alert) => (
                   <div key={alert.id} className="mb-4 last:mb-0">
                     <AlertCard alert={alert} navigate={navigate} />
                   </div>
                 ))}
-                {renderPagination(chatAlerts.length)}
+                {renderPagination(unreadChatCount)}
               </div>
             )
           )}
 
           {/* TAB: VENDOR SUPPORT */}
           {activeTab === "support" && (
-            supportAlerts.length === 0 ? (
+            unreadSupportCount === 0 ? (
               <Card className="border-border/60 p-12 text-center">
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-950/40">
                   <CheckCircle2 className="h-6 w-6" />
@@ -497,12 +532,12 @@ export const AdminNotifications = () => {
               </Card>
             ) : (
               <div>
-                {supportAlerts.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((alert) => (
+                {supportAlerts.map((alert) => (
                   <div key={alert.id} className="mb-4 last:mb-0">
                     <AlertCard alert={alert} navigate={navigate} />
                   </div>
                 ))}
-                {renderPagination(supportAlerts.length)}
+                {renderPagination(unreadSupportCount)}
               </div>
             )
           )}

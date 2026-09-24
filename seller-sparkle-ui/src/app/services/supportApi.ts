@@ -110,6 +110,7 @@ export const supportApi = {
     status?: string;
     page?: number;
     pageSize?: number;
+    unreadOnly?: boolean;
   } = {}, options?: ApiClientOptions) => {
     const qs = new URLSearchParams();
     const search = params.search?.trim();
@@ -117,6 +118,7 @@ export const supportApi = {
     if (params.status && params.status !== "all") qs.set("status", params.status);
     qs.set("page", String(params.page && params.page > 0 ? params.page : 1));
     qs.set("pageSize", String(params.pageSize && params.pageSize > 0 ? params.pageSize : 8));
+    if (params.unreadOnly) qs.set("unreadOnly", "true");
     return apiClient.get<AdminSupportTicketListResult>(
       `/support/admin/tickets/summaries?${qs.toString()}`,
       options,

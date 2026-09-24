@@ -62,12 +62,14 @@ export const chatApi = {
     search?: string;
     page?: number;
     pageSize?: number;
+    unreadOnly?: boolean;
   } = {}, options?: ApiClientOptions): Promise<AdminChatSessionListResult> {
     const qs = new URLSearchParams();
     const search = params.search?.trim();
     if (search) qs.set("search", search);
     qs.set("page", String(params.page && params.page > 0 ? params.page : 1));
     qs.set("pageSize", String(params.pageSize && params.pageSize > 0 ? params.pageSize : 8));
+    if (params.unreadOnly) qs.set("unreadOnly", "true");
     return apiClient.get<AdminChatSessionListResult>(
       `/admin/chats/sessions/summaries?${qs.toString()}`,
       options,
