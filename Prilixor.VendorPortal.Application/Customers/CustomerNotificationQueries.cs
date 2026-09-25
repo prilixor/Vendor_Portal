@@ -14,9 +14,9 @@ public sealed record CustomerNotificationDto(
     DateTimeOffset CreatedAt,
     DateTimeOffset? ReadAt);
 
-internal static class CustomerNotificationMapping
+public static class CustomerNotificationMapping
 {
-    internal static DateTimeOffset ToCreatedAtOffset(DateTime createdOnUtc)
+    public static DateTimeOffset ToCreatedAtOffset(DateTime createdOnUtc)
     {
         var utc = createdOnUtc.Kind == DateTimeKind.Unspecified
             ? DateTime.SpecifyKind(createdOnUtc, DateTimeKind.Utc)
@@ -24,7 +24,7 @@ internal static class CustomerNotificationMapping
         return new DateTimeOffset(utc, TimeSpan.Zero);
     }
 
-    internal static CustomerNotificationDto ToDto(CustomerNotification n) => new(
+    public static CustomerNotificationDto ToDto(CustomerNotification n) => new(
         n.Id,
         n.Title,
         n.Body,

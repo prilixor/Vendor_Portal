@@ -28,6 +28,13 @@ public interface ICustomerRepository
 
     Task AddCustomerRentalOrderAsync(CustomerRentalOrder order, CancellationToken cancellationToken);
     Task<List<CustomerRentalOrderWithListing>> GetCustomerOrdersAsync(Guid customerId, CancellationToken cancellationToken);
+    Task<CustomerOrderListResult> SearchCustomerOrderSummariesAsync(CustomerOrderListQuerySpec spec, CancellationToken cancellationToken);
+    Task<List<CustomerOrderDto>> GetCustomerOrderGroupAsync(Guid customerId, Guid orderId, CancellationToken cancellationToken);
+    Task<CustomerNotificationListResult> SearchCustomerNotificationSummariesAsync(Guid customerId, int page, int pageSize, CancellationToken cancellationToken);
+    Task<int> CountUnreadCustomerNotificationsAsync(Guid customerId, CancellationToken cancellationToken);
+    Task<HashSet<Guid>> GetExistingExpiringNotificationOrderIdsAsync(Guid customerId, IReadOnlyCollection<Guid> orderIds, CancellationToken cancellationToken);
+    Task<CustomerDashboardSummaryDto> GetCustomerDashboardSummaryAsync(Guid customerId, CancellationToken cancellationToken);
+    Task<CustomerExpirationListResult> SearchCustomerExpirationSummariesAsync(Guid customerId, int withinDays, int page, int pageSize, CancellationToken cancellationToken);
     Task<CustomerRentalOrderWithListing?> GetCustomerOrderAsync(Guid customerId, Guid orderId, CancellationToken cancellationToken);
     Task<CustomerRentalOrderWithListing?> GetCustomerOrderByNumberAsync(Guid customerId, string orderNumber, CancellationToken cancellationToken);
     Task<List<CustomerRentalOrderWithListing>> GetVendorOrdersAsync(Guid vendorId, string? status, CancellationToken cancellationToken);

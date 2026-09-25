@@ -1736,7 +1736,7 @@ internal sealed class GetCustomerOrderDetailQueryHandler(
     }
 }
 
-internal static class CustomerOrderStatusMapper
+public static class CustomerOrderStatusMapper
 {
     public static string ToDisplay(string status) => status.ToLowerInvariant() switch
     {

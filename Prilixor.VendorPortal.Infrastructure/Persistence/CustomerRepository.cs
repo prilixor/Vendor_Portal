@@ -1018,7 +1018,339 @@ public sealed class CustomerRepository(
         return await AttachVariantDescriptionsAsync(withMedical, cancellationToken);
     }
 
+    public async Task<CustomerOrderListResult> SearchCustomerOrderSummariesAsync(
+        CustomerOrderListQuerySpec spec,
+        CancellationToken cancellationToken)
+    {
+        var page = Math.Max(1, spec.Page);
+        var pageSize = Math.Clamp(spec.PageSize, 1, 50);
+        var search = spec.Search?.Trim() ?? string.Empty;
+        var status = string.IsNullOrWhiteSpace(spec.Status) ? "All" : spec.Status.Trim();
 
+        var orders = await customerDb.CustomerRentalOrders
+            .AsNoTracking()
+            .Where(o => o.CustomerId == spec.CustomerId && !o.IsDeleted)
+            .OrderByDescending(o => o.CreatedOnUtc)
+            .ToListAsync(cancellationToken);
+
+        var hints = await LoadAdminOrderListingHintsAsync(
+            orders.Select(o => o.VendorProductListingId),
+            cancellationToken);
+
+        IEnumerable<CustomerRentalOrder> filtered = orders;
+        if (!string.IsNullOrEmpty(search))
+        {
+            filtered = filtered.Where(o =>
+                o.OrderNumber.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                o.Id.ToString().Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                (hints.TryGetValue(o.VendorProductListingId, out var hint) &&
+                 hint.ListingTitle.Contains(search, StringComparison.OrdinalIgnoreCase)));
+        }
+
+        var searchable = filtered.ToList();
+        var statusCounts = BuildCustomerStatusCounts(searchable);
+        if (!string.Equals(status, "All", StringComparison.OrdinalIgnoreCase))
+        {
+            searchable = searchable.Where(o => MatchesCustomerStatusFilter(o.Status, status)).ToList();
+        }
+
+        var totalCount = searchable.Count;
+        var pageOrders = searchable.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+        var items = await MapCustomerOrderSummaryDtosAsync(pageOrders, hints, cancellationToken);
+
+        return new CustomerOrderListResult
+        {
+            Items = items,
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize,
+            StatusCounts = statusCounts,
+        };
+    }
+
+    public async Task<List<CustomerOrderDto>> GetCustomerOrderGroupAsync(
+        Guid customerId,
+        Guid orderId,
+        CancellationToken cancellationToken)
+    {
+        var current = await customerDb.CustomerRentalOrders
+            .AsNoTracking()
+            .FirstOrDefaultAsync(o => o.Id == orderId && o.CustomerId == customerId && !o.IsDeleted, cancellationToken);
+        if (current is null)
+            return [];
+
+        var baseNumber = CustomerOrderBaseNumber(current.OrderNumber);
+        var orders = await customerDb.CustomerRentalOrders
+            .AsNoTracking()
+            .Where(o => o.CustomerId == customerId && !o.IsDeleted)
+            .OrderByDescending(o => o.CreatedOnUtc)
+            .ToListAsync(cancellationToken);
+        var siblings = orders.Where(o => CustomerOrderBaseNumber(o.OrderNumber) == baseNumber).ToList();
+        var hints = await LoadAdminOrderListingHintsAsync(
+            siblings.Select(o => o.VendorProductListingId),
+            cancellationToken);
+        return await MapCustomerOrderSummaryDtosAsync(siblings, hints, cancellationToken);
+    }
+
+    public async Task<CustomerNotificationListResult> SearchCustomerNotificationSummariesAsync(
+        Guid customerId,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 50);
+        var query = customerDb.CustomerNotifications
+            .AsNoTracking()
+            .Where(n => n.CustomerId == customerId && !n.IsDeleted);
+
+        var totalCount = await query.CountAsync(cancellationToken);
+        var unreadCount = await query.CountAsync(n => n.ReadAt == null, cancellationToken);
+        var rows = await query
+            .OrderByDescending(n => n.CreatedOnUtc)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        return new CustomerNotificationListResult
+        {
+            Items = rows.ConvertAll(CustomerNotificationMapping.ToDto),
+            TotalCount = totalCount,
+            UnreadCount = unreadCount,
+            Page = page,
+            PageSize = pageSize,
+        };
+    }
+
+    public Task<int> CountUnreadCustomerNotificationsAsync(Guid customerId, CancellationToken cancellationToken) =>
+        customerDb.CustomerNotifications
+            .AsNoTracking()
+            .CountAsync(n => n.CustomerId == customerId && !n.IsDeleted && n.ReadAt == null, cancellationToken);
+
+    public async Task<HashSet<Guid>> GetExistingExpiringNotificationOrderIdsAsync(
+        Guid customerId,
+        IReadOnlyCollection<Guid> orderIds,
+        CancellationToken cancellationToken)
+    {
+        if (orderIds.Count == 0)
+            return [];
+
+        var rows = await customerDb.CustomerNotifications
+            .AsNoTracking()
+            .Where(n =>
+                n.CustomerId == customerId &&
+                !n.IsDeleted &&
+                n.NotificationType == CustomerNotificationTypes.OrderExpiringSoon &&
+                n.RelatedOrderId.HasValue &&
+                orderIds.Contains(n.RelatedOrderId.Value))
+            .Select(n => n.RelatedOrderId!.Value)
+            .ToListAsync(cancellationToken);
+        return rows.ToHashSet();
+    }
+
+    public async Task<CustomerDashboardSummaryDto> GetCustomerDashboardSummaryAsync(
+        Guid customerId,
+        CancellationToken cancellationToken)
+    {
+        var live = customerDb.CustomerRentalOrders
+            .AsNoTracking()
+            .Where(o => o.CustomerId == customerId && !o.IsDeleted);
+
+        var activeRentals = await live.CountAsync(o => o.Status.ToLower() == "active", cancellationToken);
+        var activeTotal = await live
+            .Where(o => o.Status.ToLower() == "active")
+            .SumAsync(o => (decimal?)o.TotalAmount, cancellationToken) ?? 0;
+        var upcomingDeliveries = await live.CountAsync(
+            o =>
+                o.Status.ToLower() == "pending" ||
+                o.Status.ToLower() == "awaiting_vendor_acceptance" ||
+                o.Status.ToLower() == "confirmed" ||
+                o.Status.ToLower() == "in_transit",
+            cancellationToken);
+
+        var recent = await live
+            .OrderByDescending(o => o.CreatedOnUtc)
+            .Take(5)
+            .Select(o => new { o.Status, o.OrderNumber, o.VendorProductListingId })
+            .ToListAsync(cancellationToken);
+        var hints = await LoadAdminOrderListingHintsAsync(
+            recent.Select(o => o.VendorProductListingId),
+            cancellationToken);
+        var activity = recent.Select(o => new CustomerDashboardActivityDto
+        {
+            Status = CustomerOrderStatusMapper.ToDisplay(o.Status),
+            OrderNumber = o.OrderNumber,
+            ListingTitle = hints.TryGetValue(o.VendorProductListingId, out var hint)
+                ? hint.ListingTitle
+                : "Listing",
+        }).ToList();
+
+        var inStock = await SearchPublicCatalogListingSummariesAsync(
+            new CustomerCatalogListingSummaryQuerySpec { Page = 1, PageSize = 1, Stock = "all" },
+            cancellationToken);
+        var outOfStock = await SearchPublicCatalogListingSummariesAsync(
+            new CustomerCatalogListingSummaryQuerySpec { Page = 1, PageSize = 1, Stock = "out_of_stock" },
+            cancellationToken);
+
+        return new CustomerDashboardSummaryDto
+        {
+            ActiveRentals = activeRentals,
+            ActiveTotal = activeTotal,
+            UpcomingDeliveries = upcomingDeliveries,
+            InStockListings = Math.Max(0, inStock.AllCount - outOfStock.TotalCount),
+            OutOfStockListings = outOfStock.TotalCount,
+            RecentActivity = activity,
+        };
+    }
+
+    public async Task<CustomerExpirationListResult> SearchCustomerExpirationSummariesAsync(
+        Guid customerId,
+        int withinDays,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 50);
+        var days = Math.Clamp(withinDays, 1, 60);
+        var fromDate = DateOnly.FromDateTime(DateTime.UtcNow.Date);
+        var toDate = fromDate.AddDays(days);
+        var rows = await GetExpiringOrdersForCustomerAsync(customerId, fromDate, toDate, cancellationToken);
+        var dtos = rows.Select(r => ExpiringOrderMap(r, fromDate)).ToList();
+
+        var groups = new List<CustomerExpirationGroupDto>();
+        foreach (var row in dtos)
+        {
+            var baseNumber = CustomerOrderBaseNumber(row.OrderNumber);
+            var group = groups.Find(g => g.BaseOrderNumber == baseNumber);
+            if (group is null)
+            {
+                group = new CustomerExpirationGroupDto { BaseOrderNumber = baseNumber, Items = [] };
+                groups.Add(group);
+            }
+
+            group.Items.Add(row);
+        }
+
+        var totalCount = groups.Count;
+        var pageGroups = groups.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+        return new CustomerExpirationListResult
+        {
+            Items = pageGroups,
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize,
+        };
+    }
+
+    private static ExpiringOrderDto ExpiringOrderMap(ExpiringOrderAggregate row, DateOnly fromDate) =>
+        new(
+            row.OrderId,
+            row.OrderNumber,
+            row.CustomerName,
+            row.VendorName,
+            row.ListingTitle,
+            row.Status,
+            row.OrderType,
+            row.EndDate,
+            Math.Max(0, row.EndDate.DayNumber - fromDate.DayNumber),
+            row.ListingPrimaryImageUrl);
+
+    private static string CustomerOrderBaseNumber(string orderNumber)
+    {
+        var parts = orderNumber.Split('-', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length <= 3 ? orderNumber : string.Join("-", parts.Take(3));
+    }
+
+    private static Dictionary<string, int> BuildCustomerStatusCounts(IReadOnlyList<CustomerRentalOrder> orders)
+    {
+        var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["All"] = orders.Count,
+            ["Pending"] = 0,
+            ["Confirmed"] = 0,
+            ["In transit"] = 0,
+            ["Active"] = 0,
+            ["Returned"] = 0,
+            ["Cancelled"] = 0,
+            ["Bought Out"] = 0,
+        };
+        foreach (var order in orders)
+        {
+            if (MatchesCustomerStatusFilter(order.Status, "Pending")) counts["Pending"]++;
+            if (MatchesCustomerStatusFilter(order.Status, "Confirmed")) counts["Confirmed"]++;
+            if (MatchesCustomerStatusFilter(order.Status, "In transit")) counts["In transit"]++;
+            if (MatchesCustomerStatusFilter(order.Status, "Active")) counts["Active"]++;
+            if (MatchesCustomerStatusFilter(order.Status, "Returned")) counts["Returned"]++;
+            if (MatchesCustomerStatusFilter(order.Status, "Cancelled")) counts["Cancelled"]++;
+            if (MatchesCustomerStatusFilter(order.Status, "Bought Out")) counts["Bought Out"]++;
+        }
+
+        return counts;
+    }
+
+    private static bool MatchesCustomerStatusFilter(string storedStatus, string filter)
+    {
+        var display = CustomerOrderStatusMapper.ToDisplay(storedStatus).Trim().ToLowerInvariant().Replace('_', ' ');
+        return filter switch
+        {
+            "Pending" => display is "pending" or "awaiting vendor acceptance",
+            "In transit" => display.Contains("transit"),
+            "Cancelled" => display is "cancelled" or "canceled" or "dispatch failed",
+            "Bought Out" => display is "bought out",
+            _ => display == filter.Trim().ToLowerInvariant(),
+        };
+    }
+
+    private async Task<List<CustomerOrderDto>> MapCustomerOrderSummaryDtosAsync(
+        List<CustomerRentalOrder> orders,
+        Dictionary<Guid, (string ListingTitle, string VendorName)> hints,
+        CancellationToken cancellationToken)
+    {
+        if (orders.Count == 0)
+            return [];
+
+        var map = await LoadListingsWithVendorAsync(orders.ConvertAll(o => o.VendorProductListingId), cancellationToken);
+        var productMap = await LoadProductsWithImagesAsync(map.Values.Select(l => l.ProductId), cancellationToken);
+        var items = new List<CustomerOrderDto>(orders.Count);
+        foreach (var o in orders)
+        {
+            hints.TryGetValue(o.VendorProductListingId, out var hint);
+            var listing = map.GetValueOrDefault(o.VendorProductListingId);
+            var image = ResolveOrderPrimaryImageUrl(listing, productMap);
+            items.Add(new CustomerOrderDto(
+                o.Id,
+                o.OrderNumber,
+                o.VendorProductListingId,
+                string.IsNullOrWhiteSpace(hint.ListingTitle) ? "Listing" : hint.ListingTitle,
+                string.IsNullOrWhiteSpace(hint.VendorName) ? "Vendor" : hint.VendorName,
+                listing?.VendorId ?? Guid.Empty,
+                CustomerOrderStatusMapper.ToDisplay(o.Status),
+                o.StartDate,
+                o.EndDate,
+                o.TotalAmount,
+                o.DepositAmount,
+                o.ServiceFeeAmount,
+                o.DistanceFeeAmount,
+                o.ExpressFeeAmount,
+                o.GstAmount,
+                o.OrderType,
+                o.Quantity,
+                o.RentalDays,
+                o.RentalPeriodUnit,
+                image,
+                ProductVariantId: o.ProductVariantId,
+                RentalPricingPlanId: o.RentalPricingPlanId,
+                RentalDurationLabel: o.RentalDurationLabel,
+                RentalDurationDays: o.RentalDurationDays,
+                RentalNormalPrice: o.RentalNormalPrice,
+                RentalDiscountType: o.RentalDiscountType,
+                RentalDiscountValue: o.RentalDiscountValue,
+                RentalFinalPrice: o.RentalFinalPrice));
+        }
+
+        return items;
+    }
 
     public async Task<CustomerRentalOrderWithListing?> GetCustomerOrderAsync(Guid customerId, Guid orderId, CancellationToken cancellationToken)
 

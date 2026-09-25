@@ -6,14 +6,10 @@ import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import { PageContentGate } from "@/app/components/shared/PageLoader";
 import { useAuth } from "@/app/guards/AuthContext";
-import { customerApi, type CustomerCatalogListingApi, type CustomerOrderApi } from "@/app/services/customerApi";
+import { customerApi } from "@/app/services/customerApi";
 
 function currencyInr(n: number): string {
   return `₹${n.toFixed(0)}`;
-}
-
-function norm(s: string): string {
-  return s.trim().toLowerCase();
 }
 
 function StatCard({ label, value, hint, to }: { label: string; value: number; hint: string; to?: string }) {
@@ -46,26 +42,17 @@ const CustomerDashboard = () => {
   const { user } = useAuth();
   const displayName = user?.name?.trim() || user?.email?.split("@")[0] || "Customer";
 
-  const { data: orders, isLoading, error } = useQuery({
-    queryKey: ["customer-orders"],
-    queryFn: () => customerApi.getOrders(),
-  });
-  const { data: catalog = [], isLoading: catalogLoading } = useQuery({
-    queryKey: ["customer-catalog-stock-dashboard"],
-    queryFn: () => customerApi.getCatalogListings(),
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["customer-dashboard-summary"],
+    queryFn: () => customerApi.getDashboardSummary(),
   });
 
-  const list = orders ?? [];
-  const activeRentals = list.filter((o) => norm(o.status) === "active").length;
-  const activeTotal = list.filter((o) => norm(o.status) === "active").reduce((s, o) => s + o.totalAmount, 0);
-  const upcomingDeliveries = list.filter((o) => {
-    const n = norm(o.status);
-    return n === "confirmed" || n === "in transit" || n === "pending";
-  }).length;
-
-  const activityRows = buildActivityRows(list);
-  const inStockListings = countListingsByAvailability(catalog, (s) => s === "available" || s === "low_stock");
-  const outOfStockListings = countListingsByAvailability(catalog, (s) => s === "out_of_stock");
+  const activeRentals = data?.activeRentals ?? 0;
+  const activeTotal = data?.activeTotal ?? 0;
+  const upcomingDeliveries = data?.upcomingDeliveries ?? 0;
+  const inStockListings = data?.inStockListings ?? 0;
+  const outOfStockListings = data?.outOfStockListings ?? 0;
+  const activityRows = buildActivityRows(data?.recentActivity ?? []);
 
   return (
     <div className="space-y-6">
@@ -90,7 +77,7 @@ const CustomerDashboard = () => {
         <p className="text-sm text-destructive">{error instanceof Error ? error.message : "Could not load orders."}</p>
       )}
 
-      <PageContentGate loading={isLoading || catalogLoading}>
+      <PageContentGate loading={isLoading}>
         <>
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
           <StatCard 
@@ -152,23 +139,15 @@ const CustomerDashboard = () => {
   );
 };
 
-function buildActivityRows(orders: CustomerOrderApi[]): { icon: typeof Package; title: string; at: string }[] {
+function buildActivityRows(
+  rows: { status: string; orderNumber: string; listingTitle: string }[],
+): { icon: typeof Package; title: string; at: string }[] {
   const icons = [Truck, Package, Clock, LifeBuoy];
-  return orders.slice(0, 5).map((o, i) => ({
+  return rows.slice(0, 5).map((o, i) => ({
     icon: icons[i % icons.length]!,
     title: `${o.status}: ${o.orderNumber} · ${o.listingTitle}`,
     at: "Recently",
   }));
-}
-
-function countListingsByAvailability(
-  rows: CustomerCatalogListingApi[],
-  predicate: (status: string) => boolean,
-): number {
-  return rows.reduce((count, row) => {
-    const status = row.availabilityStatus.trim().toLowerCase();
-    return count + (predicate(status) ? 1 : 0);
-  }, 0);
 }
 
 export default CustomerDashboard;

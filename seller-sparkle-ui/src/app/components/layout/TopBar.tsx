@@ -45,15 +45,12 @@ export const TopBar = ({ onMenuClick, variant = "vendor" }: TopBarProps) => {
   }, [lines]);
 
   // 2. Get Unread Customer Notifications (for Customer top bar)
-  const { data: customerNotifications = [] } = useQuery({
-    queryKey: ["customer-notifications"],
-    queryFn: () => customerApi.getNotifications({ quiet: true }),
+  const { data: unreadCustomerCount = 0 } = useQuery({
+    queryKey: ["customer-notifications-unread-count"],
+    queryFn: () => customerApi.getUnreadNotificationCount({ quiet: true }),
     enabled: variant === "customer" && !!user,
-    refetchInterval: 30000, // every 30 seconds
+    refetchInterval: 30000,
   });
-  const unreadCustomerCount = useMemo(() => {
-    return customerNotifications.filter((n) => !n.readAt).length;
-  }, [customerNotifications]);
 
   const { data: adminAlertSummary } = useQuery({
     queryKey: ["admin-alert-summary"],

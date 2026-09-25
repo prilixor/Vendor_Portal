@@ -64,7 +64,9 @@ export function isQuietPortalGet(endpoint: string): boolean {
 
   // Order list/detail live sync (15–30s polling) — inline loaders only, never the shell overlay.
   if (path === "/customers/me/orders") return true;
+  if (path === "/customers/me/orders/summaries") return true;
   if (/^\/customers\/me\/orders\/[^/]+$/.test(path)) return true;
+  if (/^\/customers\/me\/orders\/[^/]+\/group$/.test(path)) return true;
   if (/^\/customers\/me\/orders\/[^/]+\/image-request$/.test(path)) return true;
   if (/^\/vendors\/[^/]+\/orders$/.test(path)) return true;
   if (/^\/vendors\/[^/]+\/orders\/[^/]+$/.test(path)) return true;

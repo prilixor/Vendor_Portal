@@ -42,16 +42,12 @@ export function CustomerStoreHeader() {
   const { lines } = useCart();
   const cartCount = useMemo(() => lines.reduce((acc, l) => acc + l.quantity, 0), [lines]);
 
-  const { data: customerNotifications = [] } = useQuery({
-    queryKey: ["customer-notifications"],
-    queryFn: () => customerApi.getNotifications({ quiet: true }),
+  const { data: unreadCustomerCount = 0 } = useQuery({
+    queryKey: ["customer-notifications-unread-count"],
+    queryFn: () => customerApi.getUnreadNotificationCount({ quiet: true }),
     enabled: !!signedIn,
     refetchInterval: 30000,
   });
-  const unreadCustomerCount = useMemo(
-    () => customerNotifications.filter((n) => !n.readAt).length,
-    [customerNotifications],
-  );
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
