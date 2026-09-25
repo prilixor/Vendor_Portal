@@ -95,6 +95,68 @@ public sealed class GetCustomerCatalogEndpoint(IMediator mediator)
     }
 }
 
+public sealed class GetCustomerCatalogListingSummariesRequest
+{
+    [QueryParam]
+    public string? Search { get; set; }
+
+    [QueryParam]
+    public string? Category { get; set; }
+
+    [QueryParam]
+    public bool? IsChemical { get; set; }
+
+    [QueryParam]
+    public string? Stock { get; set; }
+
+    [QueryParam]
+    public bool FavoritesOnly { get; set; }
+
+    [QueryParam]
+    public int Page { get; set; } = 1;
+
+    [QueryParam]
+    public int PageSize { get; set; } = 8;
+}
+
+public sealed class GetCustomerCatalogListingSummariesEndpoint(IMediator mediator)
+    : Endpoint<GetCustomerCatalogListingSummariesRequest, Results<Ok<CustomerCatalogListingSummariesResult>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("catalog/listings/summaries");
+        AllowAnonymous();
+        Group<CustomersRouteGroup>();
+        DontAutoTag();
+        Options(x => x.WithTags("Customers"));
+    }
+
+    public override async Task<Results<Ok<CustomerCatalogListingSummariesResult>, ProblemHttpResult>> ExecuteAsync(
+        GetCustomerCatalogListingSummariesRequest req,
+        CancellationToken ct)
+    {
+        Guid? customerId = null;
+        var subject = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (Guid.TryParse(subject, out var parsedCustomerId))
+        {
+            customerId = parsedCustomerId;
+        }
+
+        var page = req.Page < 1 ? 1 : req.Page;
+        var pageSize = req.PageSize is < 1 or > 50 ? 8 : req.PageSize;
+        var result = await mediator.Send(new GetCustomerCatalogListingSummariesQuery(
+            req.Search,
+            req.Category,
+            req.IsChemical,
+            req.Stock,
+            req.FavoritesOnly,
+            customerId,
+            page,
+            pageSize), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
 public sealed class GetCustomerRelatedProductsRequest
 {
     public Guid ProductId { get; set; }
@@ -255,7 +317,7 @@ public sealed class GetCustomerListingDetailEndpoint(ICustomerRepository custome
 {
     public override void Configure()
     {
-        Get("catalog/listings/{ListingId}");
+        Get("catalog/listings/{ListingId:guid}");
         AllowAnonymous();
         Group<CustomersRouteGroup>();
         DontAutoTag();

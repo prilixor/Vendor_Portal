@@ -395,6 +395,378 @@ public sealed class CustomerRepository(
 
     }
 
+    public async Task<CustomerCatalogListingSummariesResult> SearchPublicCatalogListingSummariesAsync(
+        CustomerCatalogListingSummaryQuerySpec spec,
+        CancellationToken cancellationToken)
+    {
+        var page = Math.Max(1, spec.Page);
+        var pageSize = Math.Clamp(spec.PageSize, 1, 50);
+        var empty = new CustomerCatalogListingSummariesResult
+        {
+            Items = [],
+            TotalCount = 0,
+            Page = page,
+            PageSize = pageSize,
+            AllCount = 0,
+            CategoryCounts = [],
+        };
+
+        HashSet<Guid>? favoriteListingIds = null;
+        CustomerAddress? sortingAddress = null;
+        if (spec.CustomerId.HasValue)
+        {
+            if (spec.FavoritesOnly)
+            {
+                var favoriteIds = await customerDb.CustomerFavorites
+                    .AsNoTracking()
+                    .Where(f => f.CustomerId == spec.CustomerId.Value)
+                    .Select(f => f.VendorProductListingId)
+                    .ToListAsync(cancellationToken);
+                favoriteListingIds = favoriteIds.ToHashSet();
+                if (favoriteListingIds.Count == 0)
+                    return empty;
+            }
+
+            sortingAddress = await customerDb.CustomerAddresses
+                .AsNoTracking()
+                .Where(a =>
+                    a.CustomerId == spec.CustomerId.Value &&
+                    !a.IsDeleted &&
+                    a.Latitude.HasValue &&
+                    a.Longitude.HasValue)
+                .OrderByDescending(a => a.IsDefault)
+                .ThenByDescending(a => a.CreatedOnUtc)
+                .FirstOrDefaultAsync(cancellationToken);
+        }
+        else if (spec.FavoritesOnly)
+        {
+            return empty;
+        }
+
+        var productQuery = commonDb.Products
+            .AsNoTracking()
+            .Where(p =>
+                !p.IsDeleted &&
+                p.IsActive &&
+                p.Category != null &&
+                !p.Category.IsDeleted &&
+                p.Category.IsActive);
+
+        if (spec.IsChemical.HasValue)
+        {
+            var isChemical = spec.IsChemical.Value;
+            productQuery = productQuery.Where(p => p.Category!.IsChemical == isChemical);
+        }
+
+        if (!string.IsNullOrWhiteSpace(spec.Search))
+        {
+            var s = spec.Search.Trim();
+            productQuery = productQuery.Where(p =>
+                EF.Functions.ILike(p.ProductName, $"%{s}%") ||
+                (p.BrandName != null && EF.Functions.ILike(p.BrandName, $"%{s}%")) ||
+                (p.ModelName != null && EF.Functions.ILike(p.ModelName, $"%{s}%")) ||
+                (p.Category != null && EF.Functions.ILike(p.Category.CategoryName, $"%{s}%")));
+        }
+
+        var products = await productQuery
+            .Select(p => new CatalogProductSummaryRow(
+                p.Id,
+                p.ProductName,
+                p.DailyRent,
+                p.WeeklyRent,
+                p.MonthlyRent,
+                p.SecurityDeposit,
+                p.BuyPrice,
+                p.IsRentEnabled,
+                p.IsBuyEnabled,
+                p.Category!.CategoryName,
+                p.Category.IsChemical,
+                p.Category.DepositRequired,
+                p.ChemicalProperty != null ? p.ChemicalProperty.BaseUnit : null))
+            .ToListAsync(cancellationToken);
+
+        if (products.Count == 0)
+            return empty;
+
+        var productMap = products.ToDictionary(p => p.Id);
+        var productIds = productMap.Keys.ToList();
+
+        var listingQuery = vendorDb.VendorProductListings
+            .AsNoTracking()
+            .Where(l =>
+                !l.IsDeleted &&
+                productIds.Contains(l.ProductId) &&
+                (EF.Functions.ILike(l.ListingStatus, "active") ||
+                 EF.Functions.ILike(l.ListingStatus, "approved")) &&
+                !l.Vendor.IsDeleted &&
+                EF.Functions.ILike(l.Vendor.AccountStatus, "active"));
+
+        if (favoriteListingIds is not null)
+        {
+            listingQuery = listingQuery.Where(l => favoriteListingIds.Contains(l.Id));
+        }
+
+        var listingRows = await listingQuery
+            .Select(l => new CatalogListingSummaryRow(
+                l.Id,
+                l.ProductId,
+                l.ListingTitle,
+                l.ListingStatus,
+                l.CreatedOnUtc,
+                l.Inventory != null ? l.Inventory.AvailableQuantity : l.AvailableQuantity,
+                l.Vendor.Profile != null ? l.Vendor.Profile.Latitude : null,
+                l.Vendor.Profile != null ? l.Vendor.Profile.Longitude : null))
+            .ToListAsync(cancellationToken);
+
+        if (listingRows.Count == 0)
+            return empty;
+
+        var variantAvailableSums = await GetVariantAvailableSumsAsync(
+            listingRows.Select(r => r.Id).Distinct().ToList(),
+            cancellationToken);
+
+        int Qty(CatalogListingSummaryRow listing)
+        {
+            var product = productMap.GetValueOrDefault(listing.ProductId);
+            var isChemical = product?.IsChemical == true || !string.IsNullOrWhiteSpace(product?.BaseUnit);
+            int? variantSum = variantAvailableSums.TryGetValue(listing.Id, out var sum) ? sum : null;
+            return CatalogListingAvailability.ResolveAvailableQuantity(isChemical, listing.AvailableQuantity, variantSum);
+        }
+
+        var productAvailability = listingRows
+            .GroupBy(r => r.ProductId)
+            .ToDictionary(g => g.Key, g => g.Sum(Qty));
+
+        var representatives = listingRows
+            .GroupBy(r => r.ProductId)
+            .Select(g =>
+            {
+                IOrderedEnumerable<CatalogListingSummaryRow> ordered = sortingAddress is not null
+                    ? g
+                        .OrderBy(r =>
+                        {
+                            if (r.VendorLatitude is not decimal vendorLat || r.VendorLongitude is not decimal vendorLng)
+                                return decimal.MaxValue;
+                            return CalculateDistanceKm(
+                                sortingAddress.Latitude!.Value,
+                                sortingAddress.Longitude!.Value,
+                                vendorLat,
+                                vendorLng);
+                        })
+                        .ThenByDescending(Qty)
+                        .ThenByDescending(r => r.CreatedOnUtc)
+                    : g
+                        .OrderByDescending(Qty)
+                        .ThenByDescending(r => r.CreatedOnUtc);
+
+                return ordered.First();
+            })
+            .ToList();
+
+        var stock = spec.Stock?.Trim().ToLowerInvariant();
+        if (stock is "low_stock" or "out_of_stock")
+        {
+            representatives = representatives
+                .Where(r => CatalogListingAvailability.ToStatus(productAvailability.GetValueOrDefault(r.ProductId)) == stock)
+                .ToList();
+        }
+
+        var categoryCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var row in representatives)
+        {
+            var name = productMap.GetValueOrDefault(row.ProductId)?.CategoryName?.Trim();
+            if (string.IsNullOrWhiteSpace(name))
+                continue;
+            categoryCounts[name] = categoryCounts.GetValueOrDefault(name) + 1;
+        }
+
+        var allCount = representatives.Count;
+        if (!string.IsNullOrWhiteSpace(spec.Category))
+        {
+            var categoryName = spec.Category.Trim();
+            representatives = representatives
+                .Where(r =>
+                {
+                    var name = productMap.GetValueOrDefault(r.ProductId)?.CategoryName;
+                    return !string.IsNullOrWhiteSpace(name) &&
+                           string.Equals(name, categoryName, StringComparison.OrdinalIgnoreCase);
+                })
+                .ToList();
+        }
+
+        IEnumerable<CatalogListingSummaryRow> sorted = representatives;
+        if (sortingAddress is not null)
+        {
+            sorted = representatives
+                .OrderBy(r => Qty(r) > 0 ? 0 : 1)
+                .ThenBy(r =>
+                {
+                    if (r.VendorLatitude is not decimal vendorLat || r.VendorLongitude is not decimal vendorLng)
+                        return decimal.MaxValue;
+                    return CalculateDistanceKm(
+                        sortingAddress.Latitude!.Value,
+                        sortingAddress.Longitude!.Value,
+                        vendorLat,
+                        vendorLng);
+                })
+                .ThenBy(r => productMap.GetValueOrDefault(r.ProductId)?.CategoryName ?? "")
+                .ThenBy(r => productMap.GetValueOrDefault(r.ProductId)?.ProductName ?? r.ListingTitle);
+        }
+        else
+        {
+            sorted = representatives
+                .OrderBy(r => productMap.GetValueOrDefault(r.ProductId)?.CategoryName ?? "")
+                .ThenBy(r => productMap.GetValueOrDefault(r.ProductId)?.ProductName ?? r.ListingTitle);
+        }
+
+        var orderedRows = sorted.ToList();
+        var totalCount = orderedRows.Count;
+        var pageRows = orderedRows.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+        if (pageRows.Count == 0)
+        {
+            return new CustomerCatalogListingSummariesResult
+            {
+                Items = [],
+                TotalCount = totalCount,
+                Page = page,
+                PageSize = pageSize,
+                AllCount = allCount,
+                CategoryCounts = categoryCounts,
+            };
+        }
+
+        var pageProductIds = pageRows.Select(r => r.ProductId).Distinct().ToList();
+        var pageListingIds = pageRows.Select(r => r.Id).ToList();
+
+        var variantPrices = await commonDb.Set<ProductVariant>()
+            .AsNoTracking()
+            .Where(v => pageProductIds.Contains(v.ProductId) && v.IsActive && v.BuyPrice > 0)
+            .Select(v => new { v.ProductId, v.BuyPrice })
+            .ToListAsync(cancellationToken);
+        var variantPriceLookup = variantPrices
+            .GroupBy(v => v.ProductId)
+            .ToDictionary(
+                g => g.Key,
+                g =>
+                {
+                    var min = g.Min(x => x.BuyPrice);
+                    var max = g.Max(x => x.BuyPrice);
+                    return (Min: min, Max: max > min ? max : (decimal?)null);
+                });
+
+        var listingImages = await vendorDb.VendorProductImages
+            .AsNoTracking()
+            .Where(i => pageListingIds.Contains(i.VendorProductListingId) && !i.IsDeleted)
+            .Select(i => new CatalogImageRow(i.VendorProductListingId, i.ImageUrl, i.ThumbnailUrl, i.IsPrimary, i.DisplayOrder))
+            .ToListAsync(cancellationToken);
+        var listingImageLookup = listingImages
+            .GroupBy(i => i.OwnerId)
+            .ToDictionary(g => g.Key, g => PickPrimaryImageUrl(g));
+
+        var productImages = await commonDb.ProductImages
+            .AsNoTracking()
+            .Where(i => pageProductIds.Contains(i.ProductId) && !i.IsDeleted)
+            .Select(i => new CatalogImageRow(i.ProductId, i.ImageUrl, i.ThumbnailUrl, i.IsPrimary, i.DisplayOrder))
+            .ToListAsync(cancellationToken);
+        var productImageLookup = productImages
+            .GroupBy(i => i.OwnerId)
+            .ToDictionary(g => g.Key, g => PickPrimaryImageUrl(g));
+
+        var items = pageRows.Select(row =>
+        {
+            var product = productMap[row.ProductId];
+            var availableQuantity = Qty(row);
+            var productTotal = productAvailability.GetValueOrDefault(row.ProductId, availableQuantity);
+            decimal? buyPrice = product.BuyPrice;
+            decimal? maxBuyPrice = null;
+            if (variantPriceLookup.TryGetValue(row.ProductId, out var prices))
+            {
+                buyPrice = prices.Min;
+                maxBuyPrice = prices.Max;
+            }
+
+            return new CustomerCatalogListingDto(
+                row.Id,
+                string.IsNullOrWhiteSpace(product.ProductName) ? row.ListingTitle : product.ProductName,
+                "Vendor",
+                0m,
+                string.Empty,
+                product.CategoryName,
+                product.DailyRent,
+                product.WeeklyRent,
+                product.MonthlyRent,
+                product.SecurityDeposit,
+                false,
+                product.DepositRequired,
+                row.ListingStatus,
+                availableQuantity,
+                productTotal,
+                CatalogListingAvailability.ToStatus(productTotal),
+                listingImageLookup.GetValueOrDefault(row.Id) ?? productImageLookup.GetValueOrDefault(row.ProductId),
+                buyPrice,
+                product.IsRentEnabled,
+                product.IsBuyEnabled,
+                null,
+                null,
+                null,
+                null,
+                product.BaseUnit,
+                product.IsChemical,
+                maxBuyPrice);
+        }).ToList();
+
+        return new CustomerCatalogListingSummariesResult
+        {
+            Items = items,
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize,
+            AllCount = allCount,
+            CategoryCounts = categoryCounts,
+        };
+    }
+
+    private sealed record CatalogProductSummaryRow(
+        Guid Id,
+        string ProductName,
+        decimal DailyRent,
+        decimal WeeklyRent,
+        decimal MonthlyRent,
+        decimal SecurityDeposit,
+        decimal? BuyPrice,
+        bool IsRentEnabled,
+        bool IsBuyEnabled,
+        string CategoryName,
+        bool IsChemical,
+        bool DepositRequired,
+        string? BaseUnit);
+
+    private sealed record CatalogListingSummaryRow(
+        Guid Id,
+        Guid ProductId,
+        string ListingTitle,
+        string ListingStatus,
+        DateTimeOffset CreatedOnUtc,
+        int AvailableQuantity,
+        decimal? VendorLatitude,
+        decimal? VendorLongitude);
+
+    private sealed record CatalogImageRow(
+        Guid OwnerId,
+        string ImageUrl,
+        string? ThumbnailUrl,
+        bool IsPrimary,
+        int DisplayOrder);
+
+    private string? PickPrimaryImageUrl(IEnumerable<CatalogImageRow> images)
+    {
+        var primary = images
+            .OrderByDescending(i => i.IsPrimary)
+            .ThenBy(i => i.DisplayOrder)
+            .FirstOrDefault();
+        return primary is null ? null : ResolveStoredImageUrl(primary.ImageUrl, primary.ThumbnailUrl);
+    }
+
     public async Task<List<CustomerCatalogListingDto>> GetRelatedCatalogListingsAsync(
         Guid listingId,
         int limit,

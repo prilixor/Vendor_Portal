@@ -47,6 +47,25 @@ export interface ProductVariantDto {
   availableQuantity?: number;
 }
 
+export interface CustomerCatalogListingSummariesResult {
+  items: CustomerCatalogListingApi[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  allCount: number;
+  categoryCounts: Record<string, number>;
+}
+
+export interface CustomerCatalogListingSummariesParams {
+  search?: string;
+  category?: string;
+  isChemical?: boolean;
+  stock?: "all" | "low_stock" | "out_of_stock";
+  favoritesOnly?: boolean;
+  page?: number;
+  pageSize?: number;
+}
+
 export interface CustomerCatalogCategoryApi {
   id: string;
   categoryName: string;
@@ -394,6 +413,19 @@ export const customerApi = {
 
   getCatalogListings(category?: string, search?: string): Promise<CustomerCatalogListingApi[]> {
     return apiClient.get<CustomerCatalogListingApi[]>(`/customers/catalog/listings${catalogQuery(category, search)}`);
+  },
+
+  getCatalogListingSummaries(params: CustomerCatalogListingSummariesParams = {}): Promise<CustomerCatalogListingSummariesResult> {
+    const qs = new URLSearchParams();
+    const search = params.search?.trim();
+    if (search) qs.set("search", search);
+    if (params.category?.trim()) qs.set("category", params.category.trim());
+    if (params.isChemical != null) qs.set("isChemical", String(params.isChemical));
+    if (params.stock && params.stock !== "all") qs.set("stock", params.stock);
+    if (params.favoritesOnly) qs.set("favoritesOnly", "true");
+    qs.set("page", String(params.page && params.page > 0 ? params.page : 1));
+    qs.set("pageSize", String(params.pageSize && params.pageSize > 0 ? params.pageSize : 8));
+    return apiClient.get<CustomerCatalogListingSummariesResult>(`/customers/catalog/listings/summaries?${qs.toString()}`);
   },
 
   getListingDetail(listingId: string): Promise<CustomerListingDetailApi> {

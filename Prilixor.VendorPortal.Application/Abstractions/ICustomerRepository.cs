@@ -17,6 +17,9 @@ public interface ICustomerRepository
     Task UpdateCustomerAddressAsync(CustomerAddress address, CancellationToken cancellationToken);
 
     Task<List<CustomerCatalogListingDto>> GetPublicCatalogListingsAsync(string? categoryFilter, string? search, Guid? customerId, CancellationToken cancellationToken);
+    Task<CustomerCatalogListingSummariesResult> SearchPublicCatalogListingSummariesAsync(
+        CustomerCatalogListingSummaryQuerySpec spec,
+        CancellationToken cancellationToken);
     Task<List<CustomerCatalogListingDto>> GetRelatedCatalogListingsAsync(Guid listingId, int limit, Guid? customerId, CancellationToken cancellationToken);
     Task<VendorProductListingAggregate?> GetListingForCustomerAsync(Guid listingId, CancellationToken cancellationToken);
     Task<List<VendorProductListingAggregate>> GetCandidateListingsByProductIdAsync(Guid productId, CancellationToken cancellationToken);
