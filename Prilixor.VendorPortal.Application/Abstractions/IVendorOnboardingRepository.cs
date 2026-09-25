@@ -131,6 +131,10 @@ public interface IVendorOnboardingRepository
     Task UpdateVendorNotificationAsync(VendorNotification notification, CancellationToken cancellationToken);
     Task<List<VendorNotification>> GetVendorNotificationsAsync(Guid vendorId, CancellationToken cancellationToken);
     Task<int> GetUnreadNotificationCountAsync(Guid vendorId, CancellationToken cancellationToken);
+    Task<VendorNotificationListResult> SearchVendorNotificationSummariesAsync(Guid vendorId, bool unreadOnly, int page, int pageSize, CancellationToken cancellationToken);
+    Task<HashSet<string>> GetExistingVendorExpiringNotificationTitlesAsync(Guid vendorId, IReadOnlyCollection<string> titles, CancellationToken cancellationToken);
+    Task<VendorDashboardSummaryDto> GetVendorDashboardCatalogAsync(Guid vendorId, CancellationToken cancellationToken);
+    Task<VendorListingListResult> SearchVendorListingSummariesAsync(Guid vendorId, string? search, string? status, bool? isChemical, int page, int pageSize, CancellationToken cancellationToken);
 
     Task<VendorPushSubscription?> GetVendorPushSubscriptionAsync(Guid vendorId, CancellationToken cancellationToken);
     Task UpsertVendorPushSubscriptionAsync(VendorPushSubscription subscription, CancellationToken cancellationToken);

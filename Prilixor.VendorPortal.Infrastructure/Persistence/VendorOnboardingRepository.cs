@@ -1677,6 +1677,342 @@ public sealed class VendorOnboardingRepository(
             .CountAsync(x => x.VendorId == vendorId && !x.IsDeleted && x.ReadAt == null, cancellationToken);
     }
 
+    public async Task<VendorNotificationListResult> SearchVendorNotificationSummariesAsync(
+        Guid vendorId,
+        bool unreadOnly,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 50);
+        var query = dbContext.VendorNotifications
+            .AsNoTracking()
+            .Where(x => x.VendorId == vendorId && !x.IsDeleted);
+        var unreadCount = await query.CountAsync(x => x.ReadAt == null, cancellationToken);
+        if (unreadOnly)
+            query = query.Where(x => x.ReadAt == null);
+
+        var totalCount = await query.CountAsync(cancellationToken);
+        var rows = await query
+            .OrderByDescending(x => x.SentAt)
+            .ThenByDescending(x => x.CreatedOnUtc)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        return new VendorNotificationListResult
+        {
+            Items = rows.ConvertAll(x => new VendorNotificationDto(
+                x.Id.ToString(),
+                x.VendorId.ToString(),
+                x.NotificationType,
+                x.Title,
+                x.Message,
+                x.Channel,
+                x.Status,
+                x.SentAt,
+                x.ReadAt)),
+            TotalCount = totalCount,
+            UnreadCount = unreadCount,
+            Page = page,
+            PageSize = pageSize,
+        };
+    }
+
+    public async Task<HashSet<string>> GetExistingVendorExpiringNotificationTitlesAsync(
+        Guid vendorId,
+        IReadOnlyCollection<string> titles,
+        CancellationToken cancellationToken)
+    {
+        if (titles.Count == 0)
+            return [];
+
+        var existing = await dbContext.VendorNotifications
+            .AsNoTracking()
+            .Where(x =>
+                x.VendorId == vendorId &&
+                !x.IsDeleted &&
+                x.NotificationType == "order_expiring_soon" &&
+                titles.Contains(x.Title))
+            .Select(x => x.Title)
+            .ToListAsync(cancellationToken);
+        return existing.ToHashSet(StringComparer.Ordinal);
+    }
+
+    public async Task<VendorDashboardSummaryDto> GetVendorDashboardCatalogAsync(
+        Guid vendorId,
+        CancellationToken cancellationToken)
+    {
+        var profile = await GetVendorProfileAsync(vendorId, cancellationToken);
+        var docs = await GetVendorDocumentsAsync(vendorId, cancellationToken);
+        var banks = await GetVendorBankAccountsAsync(vendorId, cancellationToken);
+        var listings = await GetVendorProductListingsAsync(vendorId, cancellationToken);
+        var listingIds = listings.ConvertAll(l => l.Id);
+        var inventories = await GetVendorInventoriesByListingIdsAsync(listingIds, cancellationToken);
+        var unread = await GetUnreadNotificationCountAsync(vendorId, cancellationToken);
+        var recent = await dbContext.VendorNotifications
+            .AsNoTracking()
+            .Where(x => x.VendorId == vendorId && !x.IsDeleted)
+            .OrderByDescending(x => x.SentAt)
+            .ThenByDescending(x => x.CreatedOnUtc)
+            .Take(5)
+            .ToListAsync(cancellationToken);
+
+        var approvedDocs = docs.Count(d => string.Equals(d.VerificationStatus, "approved", StringComparison.OrdinalIgnoreCase));
+        var rejectedDocs = docs.Count(d => string.Equals(d.VerificationStatus, "rejected", StringComparison.OrdinalIgnoreCase));
+        var approvedBanks = banks.Count(b => string.Equals(b.VerificationStatus, "approved", StringComparison.OrdinalIgnoreCase));
+        var rejectedBanks = banks.Count(b => string.Equals(b.VerificationStatus, "rejected", StringComparison.OrdinalIgnoreCase));
+        var verified = docs.Count > 0 && approvedDocs == docs.Count && approvedBanks > 0;
+        var verificationMessage = verified
+            ? "All documents and bank details have been approved."
+            : rejectedDocs > 0 || rejectedBanks > 0
+                ? "Some verifications were rejected. Please review and resubmit from onboarding."
+                : $"Approved documents: {approvedDocs}/{docs.Count}. Approved bank accounts: {approvedBanks}/{banks.Count}.";
+
+        var inventoryByListing = inventories
+            .GroupBy(i => i.VendorProductListingId)
+            .ToDictionary(g => g.Key, g => g.First());
+        var productIds = listings.Select(l => l.ProductId).Distinct().ToList();
+        var products = await commonDbContext.Products
+            .AsNoTracking()
+            .Where(p => productIds.Contains(p.Id) && !p.IsDeleted)
+            .ToListAsync(cancellationToken);
+        if (products.Count == 0 && productIds.Count > 0)
+        {
+            products = await dbContext.Products
+                .AsNoTracking()
+                .Where(p => productIds.Contains(p.Id) && !p.IsDeleted)
+                .ToListAsync(cancellationToken);
+        }
+
+        var categoryIds = products.Select(p => p.CategoryId).Distinct().ToList();
+        var categories = await commonDbContext.ProductCategories
+            .AsNoTracking()
+            .Where(c => categoryIds.Contains(c.Id) && !c.IsDeleted)
+            .ToListAsync(cancellationToken);
+        if (categories.Count == 0 && categoryIds.Count > 0)
+        {
+            categories = await dbContext.ProductCategories
+                .AsNoTracking()
+                .Where(c => categoryIds.Contains(c.Id) && !c.IsDeleted)
+                .ToListAsync(cancellationToken);
+        }
+
+        var productMap = products.ToDictionary(p => p.Id);
+        var categoryMap = categories.ToDictionary(c => c.Id);
+        var topListings = listings
+            .Select(l =>
+            {
+                var stock = inventoryByListing.TryGetValue(l.Id, out var inv)
+                    ? inv.TotalQuantity
+                    : l.AvailableQuantity;
+                productMap.TryGetValue(l.ProductId, out var product);
+                var categoryName = product != null && categoryMap.TryGetValue(product.CategoryId, out var cat)
+                    ? cat.CategoryName
+                    : "N/A";
+                return new VendorDashboardListingDto
+                {
+                    Id = l.Id.ToString(),
+                    Title = l.ListingTitle,
+                    Category = categoryName,
+                    DailyRent = product?.DailyRent ?? l.DailyRent,
+                    Stock = stock,
+                    Status = l.ListingStatus,
+                };
+            })
+            .OrderByDescending(x => x.Stock)
+            .Take(4)
+            .ToList();
+
+        return new VendorDashboardSummaryDto
+        {
+            OwnerName = profile?.OwnerName ?? string.Empty,
+            BusinessName = profile?.BusinessName ?? string.Empty,
+            IsVerified = verified,
+            VerificationMessage = verificationMessage,
+            TotalListings = listings.Count,
+            ActiveListings = listings.Count(l =>
+            {
+                var s = l.ListingStatus.Trim().ToLowerInvariant();
+                return s is "approved" or "active";
+            }),
+            InventoryUnits = inventories.Sum(i => i.TotalQuantity),
+            UnreadNotifications = unread,
+            RecentActivity = recent.ConvertAll(n => new VendorDashboardActivityDto
+            {
+                Id = n.Id.ToString(),
+                Title = n.Title,
+                Message = n.Message,
+                Timestamp = (n.SentAt ?? n.CreatedOnUtc).ToString("O"),
+                NotificationType = n.NotificationType,
+                Read = n.ReadAt != null || string.Equals(n.Status, "read", StringComparison.OrdinalIgnoreCase),
+            }),
+            TopListings = topListings,
+        };
+    }
+
+    public async Task<VendorListingListResult> SearchVendorListingSummariesAsync(
+        Guid vendorId,
+        string? search,
+        string? status,
+        bool? isChemical,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 50);
+        var listings = await GetVendorProductListingsAsync(vendorId, cancellationToken);
+        var productIds = listings.Select(l => l.ProductId).Distinct().ToList();
+        var products = await commonDbContext.Products
+            .AsNoTracking()
+            .Where(p => productIds.Contains(p.Id) && !p.IsDeleted)
+            .ToListAsync(cancellationToken);
+        if (products.Count == 0 && productIds.Count > 0)
+        {
+            products = await dbContext.Products
+                .AsNoTracking()
+                .Where(p => productIds.Contains(p.Id) && !p.IsDeleted)
+                .ToListAsync(cancellationToken);
+        }
+
+        var categoryIds = products.Select(p => p.CategoryId).Distinct().ToList();
+        var categories = await commonDbContext.ProductCategories
+            .AsNoTracking()
+            .Where(c => categoryIds.Contains(c.Id) && !c.IsDeleted)
+            .ToListAsync(cancellationToken);
+        if (categories.Count == 0 && categoryIds.Count > 0)
+        {
+            categories = await dbContext.ProductCategories
+                .AsNoTracking()
+                .Where(c => categoryIds.Contains(c.Id) && !c.IsDeleted)
+                .ToListAsync(cancellationToken);
+        }
+
+        var chemicalIds = await GetChemicalProductIdsAsync(productIds, cancellationToken);
+        var productMap = products.ToDictionary(p => p.Id);
+        var categoryMap = categories.ToDictionary(c => c.Id);
+
+        IEnumerable<VendorProductListing> filtered = listings;
+        var q = search?.Trim() ?? string.Empty;
+        if (!string.IsNullOrEmpty(q))
+        {
+            filtered = filtered.Where(l =>
+            {
+                productMap.TryGetValue(l.ProductId, out var product);
+                var categoryName = product != null && categoryMap.TryGetValue(product.CategoryId, out var cat)
+                    ? cat.CategoryName
+                    : "";
+                return l.ListingTitle.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                       (product?.ProductName ?? "").Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                       categoryName.Contains(q, StringComparison.OrdinalIgnoreCase);
+            });
+        }
+
+        if (!string.IsNullOrWhiteSpace(status) &&
+            !string.Equals(status, "all", StringComparison.OrdinalIgnoreCase))
+        {
+            var wanted = NormalizeListingStatus(status);
+            filtered = filtered.Where(l => NormalizeListingStatus(l.ListingStatus) == wanted);
+        }
+
+        var afterSearchAndStatus = filtered.ToList();
+        var equipmentCount = afterSearchAndStatus.Count(l => !chemicalIds.Contains(l.ProductId));
+        var chemicalCount = afterSearchAndStatus.Count(l => chemicalIds.Contains(l.ProductId));
+
+        var list = isChemical is null
+            ? afterSearchAndStatus
+            : afterSearchAndStatus.Where(l => chemicalIds.Contains(l.ProductId) == isChemical.Value).ToList();
+        var allIds = list.ConvertAll(l => l.Id);
+        var allInventories = await GetVendorInventoriesByListingIdsAsync(allIds, cancellationToken);
+        var pageRows = list.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+        var pageIds = pageRows.ConvertAll(l => l.Id);
+        var inventories = allInventories.Where(i => pageIds.Contains(i.VendorProductListingId)).ToList();
+        var inventoryByListing = inventories
+            .GroupBy(i => i.VendorProductListingId)
+            .ToDictionary(g => g.Key, g => g.First());
+        var variantRows = await GetVariantInventoriesByListingIdsAsync(pageIds, cancellationToken);
+        var variantByListing = variantRows
+            .GroupBy(v => v.VendorProductListingId)
+            .ToDictionary(g => g.Key, g => g.ToList());
+        var listingImages = await GetVendorProductImagesByListingIdsAsync(pageIds, cancellationToken);
+        var imagesByListing = listingImages
+            .GroupBy(i => i.VendorProductListingId)
+            .ToDictionary(g => g.Key, g => g.ToList());
+        var pageProductIds = pageRows.Select(l => l.ProductId).Distinct().ToList();
+        var productImages = await GetProductImagesByProductIdsAsync(pageProductIds, cancellationToken);
+        var imagesByProduct = productImages
+            .GroupBy(i => i.ProductId)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        var items = pageRows.ConvertAll(l =>
+        {
+            productMap.TryGetValue(l.ProductId, out var product);
+            var categoryName = product != null && categoryMap.TryGetValue(product.CategoryId, out var cat)
+                ? cat.CategoryName
+                : "";
+            var isChem = chemicalIds.Contains(l.ProductId);
+            var inv = inventoryByListing.GetValueOrDefault(l.Id);
+            var variants = variantByListing.GetValueOrDefault(l.Id);
+            var total = isChem && variants is { Count: > 0 }
+                ? variants.Sum(v => v.TotalQuantity)
+                : inv?.TotalQuantity ?? l.AvailableQuantity;
+            var available = isChem && variants is { Count: > 0 }
+                ? variants.Sum(v => v.AvailableQuantity)
+                : inv?.AvailableQuantity ?? l.AvailableQuantity;
+            var listingImage = imagesByListing.GetValueOrDefault(l.Id)?.FirstOrDefault();
+            var productImage = imagesByProduct.GetValueOrDefault(l.ProductId)?.FirstOrDefault();
+            return new VendorListingSummaryDto
+            {
+                Id = l.Id.ToString(),
+                ProductId = l.ProductId.ToString(),
+                ListingTitle = l.ListingTitle,
+                ProductName = product?.ProductName ?? l.ListingTitle,
+                CategoryName = string.IsNullOrWhiteSpace(categoryName) ? "N/A" : categoryName,
+                DailyRent = product?.DailyRent ?? l.DailyRent,
+                WeeklyRent = product?.WeeklyRent ?? l.WeeklyRent,
+                MonthlyRent = product?.MonthlyRent ?? l.MonthlyRent,
+                SecurityDeposit = product?.SecurityDeposit ?? l.SecurityDeposit,
+                AvailableQuantity = available,
+                TotalQuantity = total,
+                ReservedQuantity = inv?.ReservedQuantity ?? 0,
+                RentedQuantity = inv?.RentedQuantity ?? 0,
+                BlockedQuantity = inv?.BlockedQuantity ?? 0,
+                ListingStatus = l.ListingStatus,
+                IsChemical = isChem,
+                PrimaryImageUrl = listingImage?.ImageUrl ?? productImage?.ImageUrl,
+                PrimaryThumbnailUrl = listingImage?.ThumbnailUrl ?? productImage?.ThumbnailUrl,
+                BrandName = product?.BrandName,
+                ModelName = product?.ModelName,
+            };
+        });
+
+        return new VendorListingListResult
+        {
+            Items = items,
+            TotalCount = list.Count,
+            Page = page,
+            PageSize = pageSize,
+            TotalUnits = allInventories.Sum(i => i.TotalQuantity),
+            AvailableUnits = allInventories.Sum(i => i.AvailableQuantity),
+            ReservedUnits = allInventories.Sum(i => i.ReservedQuantity),
+            RentedUnits = allInventories.Sum(i => i.RentedQuantity),
+            BlockedUnits = allInventories.Sum(i => i.BlockedQuantity),
+            EquipmentCount = equipmentCount,
+            ChemicalCount = chemicalCount,
+        };
+    }
+
+    private static string NormalizeListingStatus(string status)
+    {
+        var normalized = status.Trim().ToLowerInvariant();
+        if (normalized is "approved" or "active") return "active";
+        if (normalized is "inactive" or "blocked" or "rejected") return "inactive";
+        if (normalized is "draft" or "pending" or "under_review" or "submitted") return "draft";
+        return normalized;
+    }
+
     public Task<VendorPushSubscription?> GetVendorPushSubscriptionAsync(Guid vendorId, CancellationToken cancellationToken)
     {
         return dbContext.VendorPushSubscriptions

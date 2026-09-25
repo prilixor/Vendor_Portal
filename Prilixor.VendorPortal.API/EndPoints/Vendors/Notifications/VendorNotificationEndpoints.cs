@@ -92,6 +92,35 @@ public sealed class CreateVendorNotificationEndpoint(IMediator mediator)
     }
 }
 
+public sealed class GetVendorNotificationSummariesRequest : VendorIdRequest
+{
+    public bool UnreadOnly { get; set; }
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 15;
+}
+
+public sealed class GetVendorNotificationSummariesEndpoint(IMediator mediator)
+    : Endpoint<GetVendorNotificationSummariesRequest, Results<Ok<VendorNotificationListResult>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("{vendorId}/notifications/summaries");
+        Group<VendorOnboardingGroup>();
+    }
+
+    public override async Task<Results<Ok<VendorNotificationListResult>, ProblemHttpResult>> ExecuteAsync(
+        GetVendorNotificationSummariesRequest req,
+        CancellationToken ct)
+    {
+        var page = req.Page < 1 ? 1 : req.Page;
+        var pageSize = req.PageSize is < 1 or > 50 ? 15 : req.PageSize;
+        var result = await mediator.Send(
+            new GetVendorNotificationListQuery(req.VendorId, req.UnreadOnly, page, pageSize),
+            ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
 public sealed class GetVendorNotificationsEndpoint(IMediator mediator)
     : Endpoint<VendorIdRequest, Results<Ok<List<VendorNotificationDto>>, ProblemHttpResult>>
 {

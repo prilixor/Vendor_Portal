@@ -1473,6 +1473,370 @@ public sealed class CustomerRepository(
         return await AttachVariantDescriptionsAsync(withMedical, cancellationToken);
     }
 
+    public async Task<VendorOrderListResult> SearchVendorOrderSummariesAsync(
+        VendorOrderListQuerySpec spec,
+        CancellationToken cancellationToken)
+    {
+        var page = Math.Max(1, spec.Page);
+        var pageSize = Math.Clamp(spec.PageSize, 1, 50);
+        var search = spec.Search?.Trim() ?? string.Empty;
+        var status = string.IsNullOrWhiteSpace(spec.Status) ? "all" : spec.Status.Trim();
+        var visible = await LoadVendorVisibleOrdersAsync(spec.VendorId, cancellationToken);
+
+        IEnumerable<CustomerRentalOrderWithListing> filtered = visible;
+        if (!string.IsNullOrEmpty(search))
+        {
+            filtered = filtered.Where(row =>
+                row.Order.OrderNumber.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                row.Order.Id.ToString().Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                (row.Listing?.ListingTitle ?? "").Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                (row.Order.Customer?.FullName ?? "").Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                (row.Order.CustomerAddress?.City ?? "").Contains(search, StringComparison.OrdinalIgnoreCase));
+        }
+
+        var searchable = filtered.ToList();
+        var statusCounts = BuildVendorStatusCounts(searchable);
+        if (!string.Equals(status, "all", StringComparison.OrdinalIgnoreCase))
+        {
+            searchable = searchable.Where(row => MatchesVendorStatusFilter(row.Order.Status, status)).ToList();
+        }
+
+        var totalCount = searchable.Count;
+        var pageRows = searchable.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+        var orderIds = pageRows.ConvertAll(r => r.Order.Id);
+        var assetTags = await GetCustomerOrderAssetTagsByOrderIdsAsync(orderIds, cancellationToken);
+        var items = pageRows
+            .Select(r => VendorOrderMapper.ToVendorOrderDto(
+                r,
+                assetTags.TryGetValue(r.Order.Id, out var tags) ? tags : null))
+            .ToList();
+
+        return new VendorOrderListResult
+        {
+            Items = items,
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize,
+            StatusCounts = statusCounts,
+        };
+    }
+
+    public async Task<List<VendorOrderDto>> GetVendorOrderGroupAsync(
+        Guid vendorId,
+        Guid orderId,
+        CancellationToken cancellationToken)
+    {
+        var visible = await LoadVendorVisibleOrdersAsync(vendorId, cancellationToken);
+        var current = visible.FirstOrDefault(r => r.Order.Id == orderId);
+        if (current is null)
+            return [];
+
+        var baseNumber = CustomerOrderBaseNumber(current.Order.OrderNumber);
+        var siblings = visible.Where(r => CustomerOrderBaseNumber(r.Order.OrderNumber) == baseNumber).ToList();
+        var assetTags = await GetCustomerOrderAssetTagsByOrderIdsAsync(
+            siblings.ConvertAll(r => r.Order.Id),
+            cancellationToken);
+        return siblings
+            .Select(r => VendorOrderMapper.ToVendorOrderDto(
+                r,
+                assetTags.TryGetValue(r.Order.Id, out var tags) ? tags : null))
+            .ToList();
+    }
+
+    public async Task<VendorExpirationListResult> SearchVendorExpirationSummariesAsync(
+        Guid vendorId,
+        int withinDays,
+        string? search,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 50);
+        var days = Math.Clamp(withinDays, 1, 60);
+        var fromDate = DateOnly.FromDateTime(DateTime.UtcNow.Date);
+        var toDate = fromDate.AddDays(days);
+        var rows = await GetExpiringOrdersForVendorAsync(vendorId, fromDate, toDate, cancellationToken);
+        var dtos = rows.Select(r => ExpiringOrderMap(r, fromDate)).ToList();
+        var q = search?.Trim() ?? string.Empty;
+        if (!string.IsNullOrEmpty(q))
+        {
+            dtos = dtos.Where(row =>
+                row.OrderNumber.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                CustomerOrderBaseNumber(row.OrderNumber).Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                row.ListingTitle.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                row.CustomerName.Contains(q, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+
+        var groups = new List<VendorExpirationGroupDto>();
+        foreach (var row in dtos)
+        {
+            var baseNumber = CustomerOrderBaseNumber(row.OrderNumber);
+            var group = groups.Find(g => g.BaseOrderNumber == baseNumber);
+            if (group is null)
+            {
+                group = new VendorExpirationGroupDto { BaseOrderNumber = baseNumber, Items = [] };
+                groups.Add(group);
+            }
+
+            group.Items.Add(row);
+        }
+
+        return new VendorExpirationListResult
+        {
+            Items = groups.Skip((page - 1) * pageSize).Take(pageSize).ToList(),
+            TotalCount = groups.Count,
+            Page = page,
+            PageSize = pageSize,
+        };
+    }
+
+    public async Task<VendorDispatchOfferListResult> SearchVendorDispatchOfferSummariesAsync(
+        Guid vendorId,
+        string? search,
+        string? orderType,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 50);
+        var offers = await GetPendingVendorOffersAsync(vendorId, cancellationToken);
+        var pendingCount = offers.Count(o =>
+            string.Equals(o.Status, "pending", StringComparison.OrdinalIgnoreCase));
+        if (offers.Count == 0)
+        {
+            return new VendorDispatchOfferListResult
+            {
+                Items = [],
+                TotalCount = 0,
+                PendingCount = 0,
+                Page = page,
+                PageSize = pageSize,
+                TypeCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["all"] = 0,
+                    ["rent"] = 0,
+                    ["buy"] = 0,
+                },
+            };
+        }
+
+        var orderIds = offers.Select(o => o.CustomerRentalOrderId).Distinct().ToList();
+        var orders = await customerDb.CustomerRentalOrders
+            .AsNoTracking()
+            .Where(o => orderIds.Contains(o.Id) && !o.IsDeleted)
+            .ToListAsync(cancellationToken);
+        var orderMap = orders.ToDictionary(o => o.Id);
+        var listingIds = offers.Select(o => o.VendorProductListingId).Distinct().ToList();
+        var listings = await LoadListingsWithVendorAsync(listingIds, cancellationToken);
+        var productMap = await LoadProductsWithImagesAsync(listings.Values.Select(l => l.ProductId), cancellationToken);
+
+        var joined = offers
+            .Select(o => orderMap.TryGetValue(o.CustomerRentalOrderId, out var order) ? (Offer: o, Order: order) : default)
+            .Where(x => x.Order is not null)
+            .ToList();
+
+        var q = search?.Trim() ?? string.Empty;
+        if (!string.IsNullOrEmpty(q))
+        {
+            joined = joined.Where(x =>
+                x.Order.OrderNumber.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                (listings.GetValueOrDefault(x.Offer.VendorProductListingId)?.ListingTitle ?? "")
+                    .Contains(q, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+
+        var typeCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["all"] = joined.Count(x => string.Equals(x.Offer.Status, "pending", StringComparison.OrdinalIgnoreCase)),
+            ["rent"] = joined.Count(x =>
+                string.Equals(x.Offer.Status, "pending", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(x.Order.OrderType, "rent", StringComparison.OrdinalIgnoreCase)),
+            ["buy"] = joined.Count(x =>
+                string.Equals(x.Offer.Status, "pending", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(x.Order.OrderType, "buy", StringComparison.OrdinalIgnoreCase)),
+        };
+
+        if (!string.IsNullOrWhiteSpace(orderType) &&
+            !string.Equals(orderType, "all", StringComparison.OrdinalIgnoreCase))
+        {
+            var type = orderType.Trim().ToLowerInvariant();
+            joined = joined.Where(x => string.Equals(x.Order.OrderType, type, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+
+        var list = joined;
+        var pageItems = list.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+        var items = pageItems.ConvertAll(x =>
+        {
+            var listing = listings.GetValueOrDefault(x.Offer.VendorProductListingId);
+            return new VendorDispatchOfferDto(
+                x.Offer.Id,
+                x.Order.Id,
+                x.Order.OrderNumber,
+                x.Offer.VendorProductListingId,
+                listing?.ListingTitle ?? "Listing",
+                x.Order.OrderType,
+                x.Order.Quantity,
+                x.Order.RentalDays,
+                x.Offer.ExpiresAt,
+                x.Offer.Status,
+                x.Order.TotalAmount,
+                x.Order.StartDate,
+                x.Order.EndDate,
+                ListingPrimaryImageUrl: ResolveOrderPrimaryImageUrl(listing, productMap),
+                ProductVariantId: x.Order.ProductVariantId,
+                RentalPeriodUnit: x.Order.RentalPeriodUnit,
+                RentalPricingPlanId: x.Order.RentalPricingPlanId,
+                RentalDurationLabel: x.Order.RentalDurationLabel,
+                RentalDurationDays: x.Order.RentalDurationDays,
+                RentalNormalPrice: x.Order.RentalNormalPrice,
+                RentalDiscountType: x.Order.RentalDiscountType,
+                RentalDiscountValue: x.Order.RentalDiscountValue,
+                RentalFinalPrice: x.Order.RentalFinalPrice);
+        });
+
+        return new VendorDispatchOfferListResult
+        {
+            Items = items,
+            TotalCount = list.Count,
+            PendingCount = pendingCount,
+            Page = page,
+            PageSize = pageSize,
+            TypeCounts = typeCounts,
+        };
+    }
+
+    public Task<int> CountPendingVendorDispatchOffersAsync(Guid vendorId, CancellationToken cancellationToken)
+    {
+        var now = DateTimeOffset.UtcNow;
+        return customerDb.CustomerOrderVendorOffers
+            .AsNoTracking()
+            .CountAsync(x =>
+                x.VendorId == vendorId &&
+                !x.IsDeleted &&
+                x.Status == "pending" &&
+                x.ExpiresAt > now,
+                cancellationToken);
+    }
+
+    public async Task<VendorDashboardOrderStats> GetVendorDashboardOrderStatsAsync(
+        Guid vendorId,
+        CancellationToken cancellationToken)
+    {
+        var fromDate = DateOnly.FromDateTime(DateTime.UtcNow.Date);
+        var toDate = fromDate.AddDays(7);
+        var visible = await LoadVendorVisibleOrdersAsync(vendorId, cancellationToken);
+        var pending = await CountPendingVendorDispatchOffersAsync(vendorId, cancellationToken);
+        var expirations = await GetExpiringOrdersForVendorAsync(vendorId, fromDate, toDate, cancellationToken);
+        return new VendorDashboardOrderStats
+        {
+            PendingRequestsCount = pending,
+            ConfirmedOrdersCount = visible.Count(r => MatchesVendorStatusFilter(r.Order.Status, "confirmed")),
+            InTransitOrdersCount = visible.Count(r => MatchesVendorStatusFilter(r.Order.Status, "in_transit")),
+            DueReturnsCount = expirations.Count,
+        };
+    }
+
+    private async Task<List<CustomerRentalOrderWithListing>> LoadVendorVisibleOrdersAsync(
+        Guid vendorId,
+        CancellationToken cancellationToken)
+    {
+        var listingIds = await vendorDb.VendorProductListings
+            .AsNoTracking()
+            .Where(l => l.VendorId == vendorId && !l.IsDeleted)
+            .Select(l => l.Id)
+            .ToListAsync(cancellationToken);
+
+        var now = DateTimeOffset.UtcNow;
+        var pendingOffers = await customerDb.CustomerOrderVendorOffers
+            .AsNoTracking()
+            .Where(x =>
+                x.VendorId == vendorId &&
+                !x.IsDeleted &&
+                x.Status == "pending" &&
+                x.ExpiresAt > now)
+            .ToListAsync(cancellationToken);
+        var pendingByOrder = pendingOffers
+            .GroupBy(x => x.CustomerRentalOrderId)
+            .ToDictionary(g => g.Key, g => g.First());
+
+        var pendingOrderIds = pendingByOrder.Keys.ToList();
+        var orders = await customerDb.CustomerRentalOrders
+            .AsNoTracking()
+            .Include(o => o.Customer)
+            .Include(o => o.CustomerAddress)
+            .Where(o =>
+                !o.IsDeleted &&
+                (listingIds.Contains(o.VendorProductListingId) || pendingOrderIds.Contains(o.Id)))
+            .OrderByDescending(o => o.CreatedOnUtc)
+            .ToListAsync(cancellationToken);
+
+        var map = await LoadListingsWithVendorAsync(
+            orders.Select(o => o.VendorProductListingId).Concat(pendingOffers.Select(x => x.VendorProductListingId)).ToList(),
+            cancellationToken);
+        var productMap = await LoadProductsWithImagesAsync(map.Values.Select(l => l.ProductId), cancellationToken);
+
+        var results = new List<CustomerRentalOrderWithListing>();
+        foreach (var o in orders)
+        {
+            var isAwaiting = string.Equals(o.Status, "awaiting_vendor_acceptance", StringComparison.OrdinalIgnoreCase);
+            if (isAwaiting)
+            {
+                if (!pendingByOrder.TryGetValue(o.Id, out var pendingOffer))
+                    continue;
+                var pendingListing = map.GetValueOrDefault(pendingOffer.VendorProductListingId)
+                    ?? map.GetValueOrDefault(o.VendorProductListingId);
+                results.Add(new CustomerRentalOrderWithListing(
+                    o, pendingListing, ResolveOrderPrimaryImageUrl(pendingListing, productMap)));
+                continue;
+            }
+
+            var listing = map.GetValueOrDefault(o.VendorProductListingId);
+            if (listing is null || listing.VendorId != vendorId)
+                continue;
+            results.Add(new CustomerRentalOrderWithListing(
+                o, listing, ResolveOrderPrimaryImageUrl(listing, productMap)));
+        }
+
+        return results;
+    }
+
+    private static Dictionary<string, int> BuildVendorStatusCounts(IReadOnlyList<CustomerRentalOrderWithListing> rows)
+    {
+        var keys = new[]
+        {
+            "all", "awaiting_vendor_acceptance", "confirmed", "in_transit", "active",
+            "returned", "cancelled", "dispatch_failed", "bought_out",
+        };
+        var counts = keys.ToDictionary(k => k, _ => 0, StringComparer.OrdinalIgnoreCase);
+        counts["all"] = rows.Count;
+        foreach (var row in rows)
+        {
+            foreach (var key in keys.Skip(1))
+            {
+                if (MatchesVendorStatusFilter(row.Order.Status, key))
+                    counts[key]++;
+            }
+        }
+
+        return counts;
+    }
+
+    private static bool MatchesVendorStatusFilter(string storedStatus, string filter)
+    {
+        var display = CustomerOrderStatusMapper.ToDisplay(storedStatus).Trim().ToLowerInvariant().Replace('_', ' ');
+        return filter.Trim().ToLowerInvariant() switch
+        {
+            "all" => true,
+            "awaiting_vendor_acceptance" => display is "awaiting vendor acceptance",
+            "in_transit" => display.Contains("transit"),
+            "dispatch_failed" => display is "dispatch failed",
+            "bought_out" => display is "bought out",
+            "cancelled" => display is "cancelled" or "canceled",
+            _ => display == filter.Trim().ToLowerInvariant().Replace('_', ' '),
+        };
+    }
+
     public async Task<CustomerRentalOrderWithListing?> GetVendorOrderAsync(Guid vendorId, Guid orderId, CancellationToken cancellationToken)
     {
         var order = await customerDb.CustomerRentalOrders

@@ -69,9 +69,17 @@ export function isQuietPortalGet(endpoint: string): boolean {
   if (/^\/customers\/me\/orders\/[^/]+\/group$/.test(path)) return true;
   if (/^\/customers\/me\/orders\/[^/]+\/image-request$/.test(path)) return true;
   if (/^\/vendors\/[^/]+\/orders$/.test(path)) return true;
+  if (/^\/vendors\/[^/]+\/orders\/summaries$/.test(path)) return true;
+  if (/^\/vendors\/[^/]+\/orders\/expirations\/summaries$/.test(path)) return true;
   if (/^\/vendors\/[^/]+\/orders\/[^/]+$/.test(path)) return true;
+  if (/^\/vendors\/[^/]+\/orders\/[^/]+\/group$/.test(path)) return true;
   if (/^\/vendors\/[^/]+\/orders\/[^/]+\/image-request$/.test(path)) return true;
   if (/^\/vendors\/[^/]+\/dispatch\/offers$/.test(path)) return true;
+  if (/^\/vendors\/[^/]+\/dispatch\/offers\/summaries$/.test(path)) return true;
+  if (/^\/vendors\/[^/]+\/dispatch\/offers\/pending-count$/.test(path)) return true;
+  if (/^\/vendors\/[^/]+\/notifications\/summaries$/.test(path)) return true;
+  if (/^\/vendors\/[^/]+\/listings\/summaries$/.test(path)) return true;
+  if (/^\/vendors\/[^/]+\/dashboard\/summary$/.test(path)) return true;
   if (/^\/vendors\/me\/orders\/[^/]+\/continuations$/.test(path)) return true;
 
   if (

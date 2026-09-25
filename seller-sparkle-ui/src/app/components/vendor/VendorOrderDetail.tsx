@@ -651,9 +651,9 @@ const VendorOrderDetail = () => {
   };
 
   const loadAllOrders = async () => {
-    if (!user) return;
+    if (!user || !currentItemId) return;
     try {
-      const rows = await vendorOnboardingApi.getVendorOrders(user.id);
+      const rows = await vendorOnboardingApi.getVendorOrderGroup(user.id, currentItemId, { quiet: true });
       setAllOrders(rows);
     } catch (error) {
       console.error("Failed to load vendor orders for grouping", error);
@@ -670,7 +670,7 @@ const VendorOrderDetail = () => {
 
   useEffect(() => {
     void loadAllOrders();
-  }, [user?.id]);
+  }, [user?.id, currentItemId]);
 
   const loadImageRequest = useCallback(
     async (itemId?: string | null, options?: { silent?: boolean }) => {

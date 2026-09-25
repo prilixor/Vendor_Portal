@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Button } from "@/app/components/ui/button";
 import { Card } from "@/app/components/ui/card";
@@ -100,9 +101,8 @@ function isPendingOffer(offer: VendorDispatchOfferApiDto): boolean {
 const VendorOrderRequests = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [initialLoading, setInitialLoading] = useState(true);
-  const [refreshing, setRefreshing] = useState(false);
-  const [offers, setOffers] = useState<VendorDispatchOfferApiDto[]>([]);
+  const queryClient = useQueryClient();
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [workingOrderId, setWorkingOrderId] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
   const [searchQuery, setSearchQuery] = useState("");
@@ -113,54 +113,52 @@ const VendorOrderRequests = () => {
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [rejectOffer, setRejectOffer] = useState<VendorDispatchOfferApiDto | null>(null);
 
-  const loadOffers = async (isBackground = false) => {
-    if (!user) return;
-    try {
-      if (!isBackground) setRefreshing(true);
-      const rows = await vendorOnboardingApi.getVendorDispatchOffers(user.id, {
-        quiet: isBackground,
-      });
-      setOffers(rows);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to load order requests.";
-      toast.error(message);
-    } finally {
-      setInitialLoading(false);
-      setRefreshing(false);
-    }
-  };
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedSearch(searchQuery.trim()), 350);
+    return () => window.clearTimeout(t);
+  }, [searchQuery]);
+
+  const { data, isLoading, isPlaceholderData, isFetching, isError, error, refetch } = useQuery({
+    queryKey: ["vendor-dispatch-offer-summaries", user?.id, page, debouncedSearch, typeFilter],
+    queryFn: () =>
+      vendorOnboardingApi.getVendorDispatchOfferSummaries(user!.id, {
+        search: debouncedSearch,
+        orderType: typeFilter,
+        page,
+        pageSize: PAGE_SIZE,
+      }, { quiet: true }),
+    enabled: Boolean(user?.id),
+    placeholderData: keepPreviousData,
+    refetchInterval: 20_000,
+  });
+  const isPageChanging = isPlaceholderData && !isLoading;
 
   useEffect(() => {
-    void loadOffers(false);
-    const timer = window.setInterval(() => void loadOffers(true), 20000);
+    if (isError) {
+      toast.error(error instanceof Error ? error.message : "Failed to load order requests.");
+    }
+  }, [isError, error]);
+
+  useEffect(() => {
     const ticker = window.setInterval(() => setNow(Date.now()), 1000);
-    return () => {
-      window.clearInterval(timer);
-      window.clearInterval(ticker);
-    };
-  }, [user?.id]);
+    return () => window.clearInterval(ticker);
+  }, []);
 
   const pendingOffers = useMemo(
-    () => offers.filter(isPendingOffer),
-    [offers],
+    () => (data?.items ?? []).filter(isPendingOffer),
+    [data?.items],
   );
 
-  const typeCounts = useMemo(
-    () => ({
-      all: pendingOffers.length,
-      rent: pendingOffers.filter((o) => o.orderType.toLowerCase() === "rent").length,
-      buy: pendingOffers.filter((o) => o.orderType.toLowerCase() === "buy").length,
-    }),
-    [pendingOffers],
-  );
+  const typeCounts = {
+    all: data?.typeCounts?.all ?? 0,
+    rent: data?.typeCounts?.rent ?? 0,
+    buy: data?.typeCounts?.buy ?? 0,
+  };
 
   const groups = useMemo(() => {
     const built: OfferGroup[] = [];
-    const q = searchQuery.trim().toLowerCase();
 
     pendingOffers.forEach((offer) => {
-      if (!matchesSearch(offer, q)) return;
-      if (typeFilter !== "all" && offer.orderType.toLowerCase() !== typeFilter) return;
 
       const base = getBaseOrderNumber(offer.orderNumber);
       let group = built.find((g) => g.baseOrderNumber === base);
@@ -177,23 +175,17 @@ const VendorOrderRequests = () => {
     return built.sort(
       (a, b) => new Date(a.expiresAt).getTime() - new Date(b.expiresAt).getTime(),
     );
-  }, [pendingOffers, searchQuery, typeFilter]);
+  }, [pendingOffers]);
 
   useEffect(() => {
     setPage(1);
-  }, [searchQuery, typeFilter]);
+  }, [debouncedSearch, typeFilter]);
 
-  const totalPages = Math.max(1, Math.ceil(groups.length / PAGE_SIZE));
+  const totalCount = data?.totalCount ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
-  const pageGroups = useMemo(
-    () => groups.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
-    [groups, safePage],
-  );
-
-  const totalItems = useMemo(
-    () => groups.reduce((sum, g) => sum + g.items.length, 0),
-    [groups],
-  );
+  const pageGroups = groups;
+  const totalItems = pendingOffers.length;
 
   const totalPayout = useMemo(
     () => groups.reduce((sum, g) => sum + g.items.reduce((n, o) => n + getPayoutAmount(o), 0), 0),
@@ -221,7 +213,7 @@ const VendorOrderRequests = () => {
       }
       await vendorOnboardingApi.rejectVendorDispatchOrder(user.id, orderId);
       toast.success("Order request rejected.");
-      await loadOffers(true);
+      await queryClient.invalidateQueries({ queryKey: ["vendor-dispatch-offer-summaries"] });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to update request.";
       toast.error(message);
@@ -253,10 +245,10 @@ const VendorOrderRequests = () => {
             </Button>
             <Button
               variant="outline"
-              onClick={() => void loadOffers(false)}
-              disabled={initialLoading || refreshing}
+              onClick={() => void refetch()}
+              disabled={isLoading || isFetching}
             >
-              {refreshing ? (
+              {isFetching && !isLoading ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
                 <RefreshCw className="mr-2 h-4 w-4" />
@@ -275,12 +267,12 @@ const VendorOrderRequests = () => {
             </div>
             <div className="min-w-0">
               <p className="text-base font-bold text-foreground sm:text-lg">
-                {groups.length === 0
+                {totalCount === 0
                   ? "Waiting for requests"
-                  : `${groups.length} ${groups.length === 1 ? "request" : "requests"} · ${totalItems} ${totalItems === 1 ? "item" : "items"}`}
+                  : `${totalCount} ${totalCount === 1 ? "request" : "requests"} · ${totalItems} ${totalItems === 1 ? "item" : "items"}`}
               </p>
               <p className="mt-1 text-sm text-muted-foreground">
-                {groups.length === 0
+                {totalCount === 0
                   ? "Accept or reject incoming dispatch offers as they arrive."
                   : `Potential payout ₹${totalPayout.toFixed(0)} across active offers.`}
               </p>
@@ -323,8 +315,9 @@ const VendorOrderRequests = () => {
           </div>
         </div>
 
-      <PageContentGate loading={initialLoading}>
-      {groups.length === 0 ? (
+      <PageContentGate loading={isLoading && !data}>
+      <div className={cn("transition-opacity duration-200", isPageChanging && "opacity-50")}>
+      {pageGroups.length === 0 ? (
         <div className="rounded-xl border border-border/60 bg-muted/20 px-6 py-16 text-center">
           <ClipboardList className="mx-auto h-16 w-16 text-muted-foreground/30" />
           <p className="mt-4 text-base font-semibold text-foreground">
@@ -333,7 +326,7 @@ const VendorOrderRequests = () => {
           <p className="mt-2 text-sm text-muted-foreground">
             New customer dispatch offers will appear here.
           </p>
-          <Button variant="outline" className="mt-6" onClick={() => void loadOffers(false)}>
+          <Button variant="outline" className="mt-6" onClick={() => void refetch()}>
             <RefreshCw className="mr-2 h-4 w-4" />
             Refresh
           </Button>
@@ -529,12 +522,13 @@ const VendorOrderRequests = () => {
           <TablePagination
             page={safePage}
             pageSize={PAGE_SIZE}
-            total={groups.length}
+            total={totalCount}
             onPageChange={setPage}
             label="requests"
           />
         </div>
       )}
+      </div>
       </PageContentGate>      </Card>
 
       <AlertDialog open={rejectOffer != null} onOpenChange={(open) => !open && setRejectOffer(null)}>

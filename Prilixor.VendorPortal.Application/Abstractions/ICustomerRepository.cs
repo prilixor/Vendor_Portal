@@ -1,6 +1,7 @@
 using Prilixor.VendorPortal.Domain.Customers;
 using Prilixor.VendorPortal.Domain.Vendors;
 using Prilixor.VendorPortal.Application.Customers;
+using Prilixor.VendorPortal.Application.Onboarding;
 
 namespace Prilixor.VendorPortal.Application.Abstractions;
 
@@ -38,6 +39,12 @@ public interface ICustomerRepository
     Task<CustomerRentalOrderWithListing?> GetCustomerOrderAsync(Guid customerId, Guid orderId, CancellationToken cancellationToken);
     Task<CustomerRentalOrderWithListing?> GetCustomerOrderByNumberAsync(Guid customerId, string orderNumber, CancellationToken cancellationToken);
     Task<List<CustomerRentalOrderWithListing>> GetVendorOrdersAsync(Guid vendorId, string? status, CancellationToken cancellationToken);
+    Task<VendorOrderListResult> SearchVendorOrderSummariesAsync(VendorOrderListQuerySpec spec, CancellationToken cancellationToken);
+    Task<List<VendorOrderDto>> GetVendorOrderGroupAsync(Guid vendorId, Guid orderId, CancellationToken cancellationToken);
+    Task<VendorExpirationListResult> SearchVendorExpirationSummariesAsync(Guid vendorId, int withinDays, string? search, int page, int pageSize, CancellationToken cancellationToken);
+    Task<VendorDispatchOfferListResult> SearchVendorDispatchOfferSummariesAsync(Guid vendorId, string? search, string? orderType, int page, int pageSize, CancellationToken cancellationToken);
+    Task<int> CountPendingVendorDispatchOffersAsync(Guid vendorId, CancellationToken cancellationToken);
+    Task<VendorDashboardOrderStats> GetVendorDashboardOrderStatsAsync(Guid vendorId, CancellationToken cancellationToken);
     Task<CustomerRentalOrderWithListing?> GetVendorOrderAsync(Guid vendorId, Guid orderId, CancellationToken cancellationToken);
     Task<CustomerRentalOrderWithListing?> GetCustomerOrderByIdAsync(Guid orderId, CancellationToken cancellationToken);
     Task<CustomerRentalOrder?> GetCustomerOrderEntityByIdAsync(Guid orderId, CancellationToken cancellationToken);
