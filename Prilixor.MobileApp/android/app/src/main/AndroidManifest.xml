@@ -5,7 +5,7 @@
     <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
     <application
         android:label="BlinksMed"
-        android:usesCleartextTraffic="true"
+        android:usesCleartextTraffic="false"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity

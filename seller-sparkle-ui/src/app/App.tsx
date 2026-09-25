@@ -25,6 +25,7 @@ import LegalDocumentPage from "@/app/components/legal/LegalDocumentPage";
 import AboutPage from "@/app/components/landing/AboutPage";
 import FAQPage from "@/app/components/landing/FAQPage";
 import ContactPage from "@/app/components/landing/ContactPage";
+import DeleteAccountPage from "@/app/components/legal/DeleteAccountPage";
 
 import VendorDashboard from "@/app/components/vendor/Dashboard";
 import Onboarding from "@/app/components/vendor/Onboarding";
@@ -117,6 +118,7 @@ const App = () => (
             <Route path="/verify-email" element={<VerifyEmail />} />
             <Route path="/terms-and-conditions" element={<LegalDocumentPage slug="terms-of-use" />} />
             <Route path="/privacy-policy" element={<LegalDocumentPage slug="privacy-policy" />} />
+            <Route path="/delete-account" element={<DeleteAccountPage />} />
             <Route path="/vendor-seller-policy" element={<LegalDocumentPage slug="vendor-seller-policy" />} />
             <Route path="/rental-and-purchase-policy" element={<LegalDocumentPage slug="rental-and-purchase-policy" />} />
             <Route path="/cancellation-refund-policy" element={<LegalDocumentPage slug="cancellation-refund-policy" />} />

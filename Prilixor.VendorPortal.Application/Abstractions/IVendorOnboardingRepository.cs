@@ -181,6 +181,7 @@ public interface IVendorOnboardingRepository
     Task<RefreshToken?> GetRefreshTokenAsync(string token, CancellationToken cancellationToken);
     Task AddRefreshTokenAsync(RefreshToken token, CancellationToken cancellationToken);
     Task UpdateRefreshTokenAsync(RefreshToken token, CancellationToken cancellationToken);
+    Task RevokeRefreshTokensForUserAsync(string userId, CancellationToken cancellationToken);
 
     Task AddSupportTicketAsync(SupportTicket ticket, CancellationToken cancellationToken);
     Task<SupportTicket?> GetSupportTicketByIdAsync(Guid ticketId, CancellationToken cancellationToken);

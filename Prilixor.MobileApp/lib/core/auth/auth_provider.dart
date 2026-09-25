@@ -354,4 +354,38 @@ class AuthProvider extends ChangeNotifier {
     notifyListeners();
     return false;
   }
+
+  Future<bool> deleteAccount(String password) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final response = await _apiClient.dio.post(
+        '/auth/delete-account',
+        data: {'password': password},
+      );
+      if (response.statusCode == 200) {
+        await logout();
+        _isLoading = false;
+        notifyListeners();
+        return true;
+      }
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      if (data is Map) {
+        _errorMessage = data['detail']?.toString() ??
+            data['message']?.toString() ??
+            'Could not delete this account.';
+      } else {
+        _errorMessage = 'Could not delete this account.';
+      }
+    } catch (_) {
+      _errorMessage = 'Could not delete this account.';
+    }
+
+    _isLoading = false;
+    notifyListeners();
+    return false;
+  }
 }

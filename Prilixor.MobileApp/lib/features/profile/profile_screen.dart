@@ -11,6 +11,7 @@ import '../auth/login_screen.dart';
 import 'addresses_screen.dart';
 import '../chat/chat_sessions_screen.dart';
 import '../orders/expirations_screen.dart';
+import 'delete_account_screen.dart';
 import 'edit_profile_screen.dart';
 import 'notification_preferences_screen.dart';
 import 'support_screen.dart';
@@ -204,6 +205,13 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               icon: Icons.shield_outlined,
                               title: 'Privacy & Security',
                               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const UpdatePasswordScreen())),
+                            ),
+                            Divider(color: colors.border, height: 1),
+                            _buildMenuItem(
+                              context,
+                              icon: Icons.delete_outline,
+                              title: 'Delete account',
+                              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DeleteAccountScreen())),
                             ),
                           ],
                         ),

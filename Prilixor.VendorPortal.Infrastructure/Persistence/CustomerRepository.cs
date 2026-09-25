@@ -58,6 +58,47 @@ public sealed class CustomerRepository(
 
     }
 
+    public Task<int> CountOpenOrdersForCustomerAsync(Guid customerId, CancellationToken cancellationToken) =>
+        customerDb.CustomerRentalOrders.CountAsync(
+            o => o.CustomerId == customerId && !o.IsDeleted &&
+                 o.Status.ToLower() != "cancelled" &&
+                 o.Status.ToLower() != "canceled" &&
+                 o.Status.ToLower() != "returned" &&
+                 o.Status.ToLower() != "bought_out" &&
+                 o.Status.ToLower() != "completed",
+            cancellationToken);
+
+    public async Task<int> CountOpenOrdersForVendorAsync(Guid vendorId, CancellationToken cancellationToken)
+    {
+        var listingIds = await vendorDb.VendorProductListings
+            .AsNoTracking()
+            .Where(l => l.VendorId == vendorId && !l.IsDeleted)
+            .Select(l => l.Id)
+            .ToListAsync(cancellationToken);
+
+        var openOrders = listingIds.Count == 0
+            ? 0
+            : await customerDb.CustomerRentalOrders.CountAsync(
+                o => !o.IsDeleted &&
+                     listingIds.Contains(o.VendorProductListingId) &&
+                     o.Status.ToLower() != "cancelled" &&
+                     o.Status.ToLower() != "canceled" &&
+                     o.Status.ToLower() != "returned" &&
+                     o.Status.ToLower() != "bought_out" &&
+                     o.Status.ToLower() != "completed",
+                cancellationToken);
+
+        var now = DateTimeOffset.UtcNow;
+        var pendingOffers = await customerDb.CustomerOrderVendorOffers.CountAsync(
+            x => x.VendorId == vendorId &&
+                 !x.IsDeleted &&
+                 (x.Status == "pending" || x.Status == "queued") &&
+                 x.ExpiresAt > now,
+            cancellationToken);
+
+        return openOrders + pendingOffers;
+    }
+
 
 
     public Task<List<CustomerAddress>> GetCustomerAddressesAsync(Guid customerId, CancellationToken cancellationToken) =>

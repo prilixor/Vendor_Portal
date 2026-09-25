@@ -2189,6 +2189,15 @@ public sealed class VendorOnboardingRepository(
         return Task.CompletedTask;
     }
 
+    public async Task RevokeRefreshTokensForUserAsync(string userId, CancellationToken cancellationToken)
+    {
+        var tokens = await adminDbContext.RefreshTokens
+            .Where(x => x.UserId == userId && !x.IsRevoked)
+            .ToListAsync(cancellationToken);
+        foreach (var token in tokens)
+            token.IsRevoked = true;
+    }
+
     public async Task AddSupportTicketAsync(SupportTicket ticket, CancellationToken cancellationToken)
     {
         await dbContext.SupportTickets.AddAsync(ticket, cancellationToken);

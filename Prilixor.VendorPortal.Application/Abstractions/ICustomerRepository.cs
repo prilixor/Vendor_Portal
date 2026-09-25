@@ -10,6 +10,8 @@ public interface ICustomerRepository
     Task<Customer?> GetCustomerByEmailAsync(string email, CancellationToken cancellationToken);
     Task AddCustomerAsync(Customer customer, CancellationToken cancellationToken);
     Task UpdateCustomerAsync(Customer customer, CancellationToken cancellationToken);
+    Task<int> CountOpenOrdersForCustomerAsync(Guid customerId, CancellationToken cancellationToken);
+    Task<int> CountOpenOrdersForVendorAsync(Guid vendorId, CancellationToken cancellationToken);
 
     Task<List<CustomerAddress>> GetCustomerAddressesAsync(Guid customerId, CancellationToken cancellationToken);
     Task<CustomerAddress?> GetCustomerAddressByIdAsync(Guid customerId, Guid addressId, CancellationToken cancellationToken);

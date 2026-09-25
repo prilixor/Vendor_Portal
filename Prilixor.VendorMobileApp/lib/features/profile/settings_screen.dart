@@ -11,6 +11,7 @@ import '../../shared/widgets/custom_text_field.dart';
 import '../../shared/widgets/indian_mobile_field.dart';
 import '../../shared/widgets/required_field_ux.dart';
 import '../../shared/widgets/legal_policy_links.dart';
+import 'delete_account_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -206,6 +207,21 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       MaterialPageRoute(
                         builder: (_) => const UpdatePasswordScreen(),
                       ),
+                    );
+                  },
+                ),
+                const SizedBox(height: 8),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                  title: const Text(
+                    'Delete account',
+                    style: TextStyle(color: Colors.redAccent),
+                  ),
+                  trailing: Icon(Icons.chevron_right, color: colors.textMuted),
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const DeleteAccountScreen()),
                     );
                   },
                 ),
