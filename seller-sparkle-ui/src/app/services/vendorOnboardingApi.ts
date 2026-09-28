@@ -821,6 +821,10 @@ export const vendorOnboardingApi = {
     return apiClient.get<ProductApiDto[]>(`/vendors/catalog/products${query}`);
   },
 
+  getProduct(productId: string) {
+    return apiClient.get<ProductApiDto>(`/vendors/catalog/products/${encodeURIComponent(productId)}`);
+  },
+
   createVendorProductListing(vendorId: string, payload: UpsertVendorProductListingPayload) {
     return apiClient.post<VendorProductListingApiDto>(`/vendors/${vendorId}/listings`, payload);
   },

@@ -87,16 +87,17 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       if (vendorId == null) return;
       final provider = Provider.of<VendorOrderProvider>(context, listen: false);
       await Future.wait([
-        provider.fetchOrders(vendorId, silent: true),
+        provider.fetchOrderGroup(vendorId, _selectedOrderId),
         provider.fetchOrderDetail(vendorId, _selectedOrderId, silent: silent),
       ]);
       if (!mounted) return;
       final selected = provider.selectedOrder;
       if (selected == null) return;
-      final groupIds = orderGroupItems(
-        anchor: selected,
-        allOrders: provider.orders,
-      ).map((o) => o.orderId).toList();
+      final groupIds = (provider.orderGroup.isNotEmpty
+              ? provider.orderGroup
+              : orderGroupItems(anchor: selected, allOrders: provider.orders))
+          .map((o) => o.orderId)
+          .toList();
       await provider.fetchGroupPhotoRequestMeta(
         vendorId,
         groupIds,
@@ -452,7 +453,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     final continuations = provider.continuations;
     final groupItems = order == null
         ? const <VendorOrder>[]
-        : orderGroupItems(anchor: order, allOrders: provider.orders);
+        : orderGroupItems(
+            anchor: order,
+            allOrders: provider.orderGroup.isNotEmpty
+                ? provider.orderGroup
+                : provider.orders,
+          );
     final activeItem = order == null
         ? null
         : groupItems.firstWhere(
@@ -1839,14 +1845,12 @@ class _PrescriptionFileTile extends StatelessWidget {
   final String fileUrl;
   final bool isImage;
   final VoidCallback onOpen;
-  final Widget? trailing;
 
   const _PrescriptionFileTile({
     required this.fileName,
     required this.fileUrl,
     required this.isImage,
     required this.onOpen,
-    this.trailing,
   });
 
   @override
@@ -1897,7 +1901,6 @@ class _PrescriptionFileTile extends StatelessWidget {
                   ),
                 ),
               ),
-              if (trailing != null) trailing!,
             ],
           ),
         ),

@@ -113,8 +113,8 @@ class _VendorDashboardState extends State<VendorDashboard>
 
       // Critical path for nav badges + pending banner status (3 calls).
       await Future.wait([
-        orders.fetchOffers(vendorId, silent: silent),
-        alerts.fetchNotifications(vendorId, silent: silent),
+        orders.fetchPendingOfferCount(vendorId),
+        alerts.fetchUnreadCount(vendorId),
         profile.fetchStatus(vendorId, silent: silent),
       ]);
 
@@ -194,7 +194,7 @@ class _VendorDashboardState extends State<VendorDashboard>
   @override
   Widget build(BuildContext context) {
     final pendingCount =
-        Provider.of<VendorOrderProvider>(context).pendingOffers.length;
+        Provider.of<VendorOrderProvider>(context).pendingOfferCount;
     final unread =
         Provider.of<VendorNotificationProvider>(context).unreadCount;
     final supportUnread =

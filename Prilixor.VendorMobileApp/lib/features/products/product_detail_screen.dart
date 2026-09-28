@@ -24,6 +24,21 @@ class ProductDetailScreen extends StatefulWidget {
 }
 
 class _ProductDetailScreenState extends State<ProductDetailScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _hydrateCatalog());
+  }
+
+  Future<void> _hydrateCatalog() async {
+    final provider =
+        Provider.of<VendorCatalogProvider>(context, listen: false);
+    final row = provider.rowForListing(widget.listingId);
+    final productId = row?.listing.productId ?? '';
+    if (productId.isEmpty) return;
+    await provider.fetchProduct(productId);
+  }
+
   Future<void> _toggleStatus(VendorListingRow row, bool active) async {
     final vendorId =
         Provider.of<AuthProvider>(context, listen: false).vendorId;

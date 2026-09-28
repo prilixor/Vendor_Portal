@@ -1,5 +1,3 @@
-import 'dart:async';
-
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
@@ -94,19 +92,10 @@ class _HomeScreenState extends State<HomeScreen> {
         Provider.of<AuthProvider>(context, listen: false).vendorId;
     if (vendorId == null) return;
     final home = Provider.of<VendorHomeProvider>(context, listen: false);
-    final orders = Provider.of<VendorOrderProvider>(context, listen: false);
-    final alerts =
-        Provider.of<VendorNotificationProvider>(context, listen: false);
     final onboarding =
         Provider.of<VendorOnboardingProvider>(context, listen: false);
 
-    // Home critical path only — shell already refreshes offers/alerts for badges.
-    // Pull-to-refresh still revalidates badges without blocking first paint.
     await home.loadDashboard(vendorId);
-    unawaited(Future.wait([
-      orders.fetchOffers(vendorId, silent: true),
-      alerts.fetchNotifications(vendorId, silent: true),
-    ]));
     if (!mounted) return;
     // Verification banner prefers shell onboarding data when available.
     if (onboarding.documents.isNotEmpty || onboarding.primaryBank != null) {
@@ -145,9 +134,13 @@ class _HomeScreenState extends State<HomeScreen> {
     final orders = Provider.of<VendorOrderProvider>(context);
     final alerts = Provider.of<VendorNotificationProvider>(context);
     final onboarding = Provider.of<VendorOnboardingProvider>(context);
-    final unreadAlerts = alerts.unreadCount;
-    final pendingRequests = orders.pendingOffers.length;
-    final recentActivity = alerts.notifications.take(5).toList();
+    final unreadAlerts = home.unreadNotifications > 0
+        ? home.unreadNotifications
+        : alerts.unreadCount;
+    final pendingRequests = home.pendingRequests > 0
+        ? home.pendingRequests
+        : orders.pendingOfferCount;
+    final recentActivity = home.recentActivity;
     final isVerified = onboarding.documents.isNotEmpty ||
             onboarding.primaryBank != null
         ? onboarding.isVerified

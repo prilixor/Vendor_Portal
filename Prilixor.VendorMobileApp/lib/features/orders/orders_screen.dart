@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/auth/auth_provider.dart';
-import '../../core/models/vendor_order_model.dart';
 import '../../core/providers/vendor_order_provider.dart';
 import '../../core/theme.dart';
+import '../../core/utils/debouncer.dart';
 import 'expirations_screen.dart';
 import 'order_detail_screen.dart';
 import 'order_group_utils.dart';
@@ -21,6 +21,7 @@ class OrdersScreen extends StatefulWidget {
 
 class _OrdersScreenState extends State<OrdersScreen> {
   final _searchController = TextEditingController();
+  final Debouncer _searchDebouncer = Debouncer(duration: catalogSearchDebounce);
   String _searchQuery = '';
   late String _statusFilter;
 
@@ -49,11 +50,13 @@ class _OrdersScreenState extends State<OrdersScreen> {
     final next = widget.initialStatusFilter;
     if (next != null && next != oldWidget.initialStatusFilter) {
       setState(() => _statusFilter = next);
+      _load();
     }
   }
 
   @override
   void dispose() {
+    _searchDebouncer.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -61,49 +64,27 @@ class _OrdersScreenState extends State<OrdersScreen> {
   Future<void> _load({bool silent = false}) async {
     final vendorId = Provider.of<AuthProvider>(context, listen: false).vendorId;
     if (vendorId == null || vendorId.isEmpty) return;
-    await Provider.of<VendorOrderProvider>(context, listen: false)
-        .fetchOrders(vendorId, silent: silent);
+    await Provider.of<VendorOrderProvider>(context, listen: false).fetchOrders(
+      vendorId,
+      silent: silent,
+      search: _searchQuery,
+      status: _statusFilter,
+      reset: true,
+    );
   }
 
-  bool _matchesStatus(VendorOrder order, String tabId) {
-    if (tabId == 'all') return true;
-    final s = order.normalizedStatus;
-    if (tabId == 'awaiting_vendor_acceptance') {
-      return s == 'awaiting vendor acceptance';
+  void _maybeLoadMore(ScrollNotification notification) {
+    if (notification.metrics.pixels < notification.metrics.maxScrollExtent - 480) {
+      return;
     }
-    if (tabId == 'in_transit') return s.contains('transit');
-    if (tabId == 'dispatch_failed') return s == 'dispatch failed';
-    if (tabId == 'bought_out') return s == 'bought out';
-    if (tabId == 'cancelled') return s == 'cancelled' || s == 'canceled';
-    return s == tabId.replaceAll('_', ' ');
-  }
-
-  bool _matchesSearch(VendorOrder order, String q) {
-    if (q.isEmpty) return true;
-    return order.orderNumber.toLowerCase().contains(q) ||
-        order.listingTitle.toLowerCase().contains(q) ||
-        order.customerName.toLowerCase().contains(q) ||
-        (order.customerCity?.toLowerCase().contains(q) ?? false) ||
-        order.orderId.toLowerCase().contains(q);
-  }
-
-  List<VendorOrder> _filtered(List<VendorOrder> orders) {
-    final q = _searchQuery.trim().toLowerCase();
-    return orders
-        .where((o) => _matchesSearch(o, q) && _matchesStatus(o, _statusFilter))
-        .toList();
-  }
-
-  Map<String, int> _counts(List<VendorOrder> orders) {
-    final q = _searchQuery.trim().toLowerCase();
-    final searchable = orders.where((o) => _matchesSearch(o, q)).toList();
-    final map = <String, int>{};
-    for (final (id, _) in _statusFilters) {
-      map[id] = id == 'all'
-          ? searchable.length
-          : searchable.where((o) => _matchesStatus(o, id)).length;
-    }
-    return map;
+    final vendorId = Provider.of<AuthProvider>(context, listen: false).vendorId;
+    if (vendorId == null || vendorId.isEmpty) return;
+    Provider.of<VendorOrderProvider>(context, listen: false).fetchOrders(
+      vendorId,
+      search: _searchQuery,
+      status: _statusFilter,
+      reset: false,
+    );
   }
 
   String _labelFor(String id) =>
@@ -249,6 +230,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
     if (applied == true && mounted) {
       setState(() => _statusFilter = draft);
+      _load();
     }
   }
 
@@ -284,7 +266,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
               TextField(
                 controller: _searchController,
                 style: TextStyle(color: colors.textPrimary, fontSize: 14),
-                onChanged: (v) => setState(() => _searchQuery = v),
+                onChanged: (v) {
+                  setState(() => _searchQuery = v);
+                  _searchDebouncer.run(_load);
+                },
                 decoration: InputDecoration(
                   hintText: 'Search orders',
                   hintStyle: TextStyle(
@@ -348,7 +333,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
               alignment: Alignment.centerLeft,
               child: InputChip(
                 label: Text('${_labelFor(_statusFilter)} (${counts[_statusFilter] ?? 0})'),
-                onDeleted: () => setState(() => _statusFilter = 'all'),
+                onDeleted: () {
+                  setState(() => _statusFilter = 'all');
+                  _load();
+                },
                 deleteIconColor: colors.textSecondary,
                 backgroundColor: AppTheme.accent.withValues(alpha: 0.25),
                 labelStyle: TextStyle(color: colors.textPrimary),
@@ -364,15 +352,26 @@ class _OrdersScreenState extends State<OrdersScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<VendorOrderProvider>(context);
-    final counts = _counts(provider.orders);
-    final filtered = _filtered(provider.orders);
-    final groups = buildOrderGroups(filtered);
-    final totalItems = filtered.length;
+    final counts = {
+      for (final (id, _) in _statusFilters) id: provider.orderStatusCounts[id] ?? 0,
+    };
+    if ((counts['all'] ?? 0) == 0 && provider.orderTotalCount > 0) {
+      counts['all'] = provider.orderTotalCount;
+    }
+    final groups = buildOrderGroups(provider.orders);
+    final totalItems = provider.orderTotalCount > 0
+        ? provider.orderTotalCount
+        : provider.orders.length;
 
     return RefreshIndicator(
       color: AppTheme.accent,
       onRefresh: () => _load(),
-      child: CustomScrollView(
+      child: NotificationListener<ScrollNotification>(
+        onNotification: (notification) {
+          _maybeLoadMore(notification);
+          return false;
+        },
+        child: CustomScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
           SliverToBoxAdapter(
@@ -438,6 +437,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
               ),
             ),
         ],
+      ),
       ),
     );
   }

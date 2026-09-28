@@ -21,6 +21,11 @@ public sealed class GetProductsRequest
     public string? CategoryId { get; set; }
 }
 
+public sealed class GetVendorCatalogProductRequest
+{
+    public string Id { get; set; } = string.Empty;
+}
+
 public sealed class CreateProductRequest
 {
     public string CategoryId { get; set; } = string.Empty;
@@ -172,6 +177,25 @@ public sealed class GetProductsEndpoint(IMediator mediator)
     public override async Task<Results<Ok<List<ProductDto>>, ProblemHttpResult>> ExecuteAsync(GetProductsRequest req, CancellationToken ct)
     {
         var result = await mediator.Send(new GetProductsQuery(req.CategoryId), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class GetVendorCatalogProductByIdEndpoint(IMediator mediator)
+    : Endpoint<GetVendorCatalogProductRequest, Results<Ok<ProductDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("catalog/products/{id}");
+        Group<VendorOnboardingGroup>();
+    }
+
+    public override async Task<Results<Ok<ProductDto>, ProblemHttpResult>> ExecuteAsync(
+        GetVendorCatalogProductRequest req,
+        CancellationToken ct)
+    {
+        req.Id = Route<string>("id") ?? req.Id;
+        var result = await mediator.Send(new GetProductQuery(req.Id), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }

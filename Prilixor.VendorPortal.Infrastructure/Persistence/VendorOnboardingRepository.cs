@@ -13,7 +13,8 @@ namespace Prilixor.VendorPortal.Infrastructure.Persistence;
 public sealed class VendorOnboardingRepository(
     ApplicationDbContext dbContext,
     AdminPortalDbContext adminDbContext,
-    CommonPortalDbContext commonDbContext)
+    CommonPortalDbContext commonDbContext,
+    IVendorFileUrlResolver fileUrlResolver)
     : IVendorOnboardingRepository, IScopedService
 {
     public Task<Vendor?> GetVendorByIdAsync(Guid vendorId, CancellationToken cancellationToken)
@@ -1961,8 +1962,33 @@ public sealed class VendorOnboardingRepository(
             var available = isChem && variants is { Count: > 0 }
                 ? variants.Sum(v => v.AvailableQuantity)
                 : inv?.AvailableQuantity ?? l.AvailableQuantity;
-            var listingImage = imagesByListing.GetValueOrDefault(l.Id)?.FirstOrDefault();
-            var productImage = imagesByProduct.GetValueOrDefault(l.ProductId)?.FirstOrDefault();
+            var listingImage = imagesByListing.GetValueOrDefault(l.Id)?
+                .FirstOrDefault(i =>
+                    !string.IsNullOrWhiteSpace(i.ImageUrl) ||
+                    !string.IsNullOrWhiteSpace(i.ThumbnailUrl));
+            var productImage = listingImage is null
+                ? imagesByProduct.GetValueOrDefault(l.ProductId)?
+                    .FirstOrDefault(i =>
+                        !string.IsNullOrWhiteSpace(i.ImageUrl) ||
+                        !string.IsNullOrWhiteSpace(i.ThumbnailUrl))
+                : null;
+            string? primaryImageUrl;
+            string? primaryThumbnailUrl;
+            if (listingImage is not null)
+            {
+                primaryImageUrl = listingImage.ImageUrl;
+                primaryThumbnailUrl = listingImage.ThumbnailUrl;
+            }
+            else if (productImage is not null)
+            {
+                primaryImageUrl = productImage.ImageUrl;
+                primaryThumbnailUrl = productImage.ThumbnailUrl;
+            }
+            else
+            {
+                primaryImageUrl = null;
+                primaryThumbnailUrl = null;
+            }
             return new VendorListingSummaryDto
             {
                 Id = l.Id.ToString(),
@@ -1981,8 +2007,8 @@ public sealed class VendorOnboardingRepository(
                 BlockedQuantity = inv?.BlockedQuantity ?? 0,
                 ListingStatus = l.ListingStatus,
                 IsChemical = isChem,
-                PrimaryImageUrl = listingImage?.ImageUrl ?? productImage?.ImageUrl,
-                PrimaryThumbnailUrl = listingImage?.ThumbnailUrl ?? productImage?.ThumbnailUrl,
+                PrimaryImageUrl = ResolveStoredFileUrl(primaryImageUrl),
+                PrimaryThumbnailUrl = ResolveStoredFileUrl(primaryThumbnailUrl),
                 BrandName = product?.BrandName,
                 ModelName = product?.ModelName,
             };
@@ -2002,6 +2028,12 @@ public sealed class VendorOnboardingRepository(
             EquipmentCount = equipmentCount,
             ChemicalCount = chemicalCount,
         };
+    }
+
+    private string? ResolveStoredFileUrl(string? storedFileReference)
+    {
+        if (string.IsNullOrWhiteSpace(storedFileReference)) return null;
+        return fileUrlResolver.Resolve(storedFileReference);
     }
 
     private static string NormalizeListingStatus(string status)

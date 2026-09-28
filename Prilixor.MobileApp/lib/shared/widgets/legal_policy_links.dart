@@ -105,17 +105,17 @@ class OrderConfirmPolicyLinks extends StatelessWidget {
   }
 }
 
-class ProfileSettingsPolicyLinks extends StatelessWidget {
-  const ProfileSettingsPolicyLinks({super.key});
+class PrivacySecurityPolicyLinks extends StatelessWidget {
+  const PrivacySecurityPolicyLinks({super.key});
 
   @override
   Widget build(BuildContext context) {
-    return const _CmsLegalPolicyLinks(
+    return const _CmsLegalPolicyMenu(
       screen: 'profile_settings',
-      prefix: 'Policies: ',
       fallback: [
         (label: 'Terms of Use', path: AppUrls.termsPath),
         (label: 'Privacy Policy', path: AppUrls.privacyPath),
+        (label: 'Grievance Redressal Policy', path: AppUrls.grievancePath),
       ],
     );
   }
@@ -244,6 +244,69 @@ class _CmsLegalPolicyLinksState extends State<_CmsLegalPolicyLinks> {
     return LegalPolicyLinkRow(
       prefix: widget.prefix,
       links: _links ?? widget.fallback,
+    );
+  }
+}
+
+class _CmsLegalPolicyMenu extends StatefulWidget {
+  final String screen;
+  final List<({String label, String path})> fallback;
+
+  const _CmsLegalPolicyMenu({
+    required this.screen,
+    required this.fallback,
+  });
+
+  @override
+  State<_CmsLegalPolicyMenu> createState() => _CmsLegalPolicyMenuState();
+}
+
+class _CmsLegalPolicyMenuState extends State<_CmsLegalPolicyMenu> {
+  List<({String label, String path})>? _links;
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  Future<void> _load() async {
+    final parsed = await _fetchLegalDocs(widget.screen);
+    if (!mounted || parsed.isEmpty) return;
+    setState(() => _links = parsed);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+    final links = _links ?? widget.fallback;
+    return Material(
+      color: colors.surface,
+      borderRadius: BorderRadius.circular(16),
+      clipBehavior: Clip.antiAlias,
+      child: Column(
+        children: [
+          for (var i = 0; i < links.length; i++) ...[
+            if (i > 0) Divider(color: colors.border, height: 1),
+            ListTile(
+              leading: const Icon(
+                Icons.description_outlined,
+                color: Color(0xFF6C63FF),
+              ),
+              title: Text(
+                links[i].label,
+                style: TextStyle(color: colors.textPrimary, fontSize: 16),
+              ),
+              trailing: Icon(Icons.chevron_right, color: colors.textMuted),
+              onTap: () => openLegalPolicy(
+                context,
+                links[i].path,
+                title: links[i].label,
+              ),
+            ),
+          ],
+        ],
+      ),
     );
   }
 }
