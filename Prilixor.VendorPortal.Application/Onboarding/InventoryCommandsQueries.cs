@@ -287,7 +287,7 @@ internal sealed class GetVendorInventoryMovementsQueryHandler(IVendorOnboardingR
         var inventory = await repository.GetVendorInventoryByListingIdAsync(listingId, cancellationToken);
         if (inventory is null)
         {
-            return Result.Failure<List<VendorInventoryMovementDto>>(new Error("vendors.inventory.not_found", "Vendor inventory not found.", ErrorCategory.NotFound));
+            return Result.Success(new List<VendorInventoryMovementDto>());
         }
 
         var rows = await repository.GetVendorInventoryMovementsAsync(inventory.Id, cancellationToken);

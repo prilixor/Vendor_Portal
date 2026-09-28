@@ -895,8 +895,8 @@ export const vendorOnboardingApi = {
     return apiClient.post<VendorInventoryMovementApiDto>(`/vendors/${vendorId}/listings/${listingId}/inventory/movements`, payload);
   },
 
-  getVendorInventoryMovements(vendorId: string, listingId: string) {
-    return apiClient.get<VendorInventoryMovementApiDto[]>(`/vendors/${vendorId}/listings/${listingId}/inventory/movements`);
+  getVendorInventoryMovements(vendorId: string, listingId: string, options?: ApiClientOptions) {
+    return apiClient.get<VendorInventoryMovementApiDto[]>(`/vendors/${vendorId}/listings/${listingId}/inventory/movements`, options);
   },
 
   getVendorProductAssets(vendorId: string, listingId: string) {

@@ -234,7 +234,7 @@ const Inventory = () => {
     const movementRows = await Promise.all(
       listings.map(async (listing) => {
         try {
-          const m = await vendorOnboardingApi.getVendorInventoryMovements(user.id, listing.id);
+          const m = await vendorOnboardingApi.getVendorInventoryMovements(user.id, listing.id, { quiet: true });
           return m.map((x) => ({
             id: x.id,
             productName: `${listing.listingTitle}${listing.productName && listing.productName !== listing.listingTitle ? ` (${listing.productName})` : ""}`,
@@ -265,7 +265,7 @@ const Inventory = () => {
         const movementRows = await Promise.all(
           listings.map(async (listing) => {
             try {
-              const m = await vendorOnboardingApi.getVendorInventoryMovements(user.id, listing.id);
+              const m = await vendorOnboardingApi.getVendorInventoryMovements(user.id, listing.id, { quiet: true });
               return m.map((x) => ({
                 id: x.id,
                 productName: `${listing.listingTitle}${listing.productName && listing.productName !== listing.listingTitle ? ` (${listing.productName})` : ""}`,
