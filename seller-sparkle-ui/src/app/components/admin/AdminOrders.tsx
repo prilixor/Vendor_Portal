@@ -226,7 +226,7 @@ export const AdminOrders = () => {
         <Card className="border-border/60 bg-card/60 backdrop-blur-md">
           <CardContent className="p-4 sm:p-5">
             <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-emerald-500/10 text-emerald-500 p-2.5">
+              <div className="rounded-lg bg-emerald-50 p-2.5 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
                 <TrendingUp className="h-5 w-5" />
               </div>
               <div className="min-w-0 flex-1">
@@ -240,7 +240,7 @@ export const AdminOrders = () => {
         <Card className="border-border/60 bg-card/60 backdrop-blur-md">
           <CardContent className="p-4 sm:p-5">
             <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-indigo-500/10 text-indigo-500 p-2.5">
+              <div className="rounded-lg bg-indigo-50 p-2.5 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300">
                 <Truck className="h-5 w-5" />
               </div>
               <div className="min-w-0 flex-1">

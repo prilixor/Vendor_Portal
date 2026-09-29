@@ -374,9 +374,12 @@ const Notifications = () => {
                             comment={adminComment}
                           />
                         )}
-                        <p className="mt-1 text-xs text-muted-foreground">
+                        <time
+                          dateTime={n.timestamp}
+                          className="mt-1.5 block text-xs font-medium tabular-nums text-foreground/75 dark:text-foreground/70"
+                        >
                           {formatDistanceToNow(new Date(n.timestamp), { addSuffix: true })}
-                        </p>
+                        </time>
                       </div>
                     </div>
                     <Button

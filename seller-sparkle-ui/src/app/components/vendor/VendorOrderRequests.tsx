@@ -52,9 +52,9 @@ type TypeFilter = "all" | "rent" | "buy";
 function orderTypeBadgeClass(orderType: string): string {
   const t = orderType.toLowerCase().trim();
   if (t === "buy") {
-    return "bg-indigo-500/15 text-indigo-300 border-indigo-500/35";
+    return "border-indigo-200 bg-indigo-50 text-indigo-700 dark:border-indigo-500/40 dark:bg-indigo-500/15 dark:text-indigo-300";
   }
-  return "bg-emerald-500/15 text-emerald-300 border-emerald-500/35";
+  return "border-emerald-200 bg-emerald-50 text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/15 dark:text-emerald-300";
 }
 
 function getBaseOrderNumber(orderNumber: string): string {

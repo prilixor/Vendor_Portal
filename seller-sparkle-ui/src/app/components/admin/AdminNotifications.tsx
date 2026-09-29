@@ -329,13 +329,13 @@ export const AdminNotifications = () => {
   const getLogIcon = (action: string) => {
     const a = action.toLowerCase();
     if (a.includes("approve") || a.includes("verify") || a.includes("active")) {
-      return <UserCheck className="h-4 w-4 text-emerald-500" />;
+      return <UserCheck className="h-4 w-4 text-emerald-700 dark:text-emerald-300" />;
     }
     if (a.includes("reject") || a.includes("ban") || a.includes("suspend") || a.includes("failed")) {
       return <ShieldAlert className="h-4 w-4 text-destructive" />;
     }
     if (a.includes("catalog") || a.includes("product") || a.includes("category") || a.includes("listing")) {
-      return <Package className="h-4 w-4 text-indigo-500" />;
+      return <Package className="h-4 w-4 text-indigo-700 dark:text-indigo-300" />;
     }
     return <Settings className="h-4 w-4 text-muted-foreground" />;
   };
@@ -631,11 +631,11 @@ const AlertCard = ({
         <div className={cn(
           "rounded-lg p-2.5 shrink-0 mt-0.5",
           alert.type === "order" ? "bg-destructive/10 text-destructive" 
-          : alert.type === "extension" ? "bg-blue-500/10 text-blue-500"
-          : alert.type === "buyout" ? "bg-fuchsia-500/10 text-fuchsia-500"
-          : alert.type === "listing" ? "bg-indigo-500/10 text-indigo-500"
+          : alert.type === "extension" ? "bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300"
+          : alert.type === "buyout" ? "bg-fuchsia-50 text-fuchsia-700 dark:bg-fuchsia-500/15 dark:text-fuchsia-300"
+          : alert.type === "listing" ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300"
           : alert.type === "chat" || alert.type === "support" ? "bg-primary/10 text-primary"
-          : "bg-amber-500/10 text-amber-500"
+          : "bg-amber-50 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300"
         )}>
           {alert.type === "order" ? <AlertTriangle className="h-5 w-5" /> 
            : alert.type === "extension" ? <Clock className="h-5 w-5" />
@@ -658,7 +658,7 @@ const AlertCard = ({
                 ? "bg-indigo-100 text-indigo-800 border-indigo-500/20 dark:bg-indigo-900/30 dark:text-indigo-300"
                 : alert.type === "chat" || alert.type === "support"
                 ? "bg-primary/15 text-primary border-primary/20"
-                : "bg-amber-100 text-amber-950 border-amber-500/20"
+                : "bg-amber-100 text-amber-950 border-amber-500/20 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-500/30"
             )}>
               {alert.status.replace("_", " ").toUpperCase()}
             </Badge>
