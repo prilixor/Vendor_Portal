@@ -1911,17 +1911,27 @@ public sealed class VendorOnboardingRepository(
             });
         }
 
+        var afterSearch = filtered.ToList();
+        var equipmentRows = afterSearch.Where(l => !chemicalIds.Contains(l.ProductId)).ToList();
+        var chemicalRows = afterSearch.Where(l => chemicalIds.Contains(l.ProductId)).ToList();
+        var equipmentCount = equipmentRows.Count;
+        var chemicalCount = chemicalRows.Count;
+        var scoped = isChemical is null
+            ? afterSearch
+            : isChemical.Value ? chemicalRows : equipmentRows;
+        var activeCount = scoped.Count(l => NormalizeListingStatus(l.ListingStatus) == "active");
+        var inactiveCount = scoped.Count(l => NormalizeListingStatus(l.ListingStatus) == "inactive");
+        var draftCount = scoped.Count(l => NormalizeListingStatus(l.ListingStatus) == "draft");
+
+        IEnumerable<VendorProductListing> statusFiltered = afterSearch;
         if (!string.IsNullOrWhiteSpace(status) &&
             !string.Equals(status, "all", StringComparison.OrdinalIgnoreCase))
         {
             var wanted = NormalizeListingStatus(status);
-            filtered = filtered.Where(l => NormalizeListingStatus(l.ListingStatus) == wanted);
+            statusFiltered = afterSearch.Where(l => NormalizeListingStatus(l.ListingStatus) == wanted);
         }
 
-        var afterSearchAndStatus = filtered.ToList();
-        var equipmentCount = afterSearchAndStatus.Count(l => !chemicalIds.Contains(l.ProductId));
-        var chemicalCount = afterSearchAndStatus.Count(l => chemicalIds.Contains(l.ProductId));
-
+        var afterSearchAndStatus = statusFiltered.ToList();
         var list = isChemical is null
             ? afterSearchAndStatus
             : afterSearchAndStatus.Where(l => chemicalIds.Contains(l.ProductId) == isChemical.Value).ToList();
@@ -2027,6 +2037,9 @@ public sealed class VendorOnboardingRepository(
             BlockedUnits = allInventories.Sum(i => i.BlockedQuantity),
             EquipmentCount = equipmentCount,
             ChemicalCount = chemicalCount,
+            ActiveCount = activeCount,
+            InactiveCount = inactiveCount,
+            DraftCount = draftCount,
         };
     }
 

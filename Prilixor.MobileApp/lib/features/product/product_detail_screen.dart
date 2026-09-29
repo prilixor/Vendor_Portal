@@ -391,6 +391,14 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     }
 
     final colors = context.appColors;
+    // Scaffold.bottomSheet is anchored to the keyboard inset and strips
+    // bottom padding, so SafeArea inside it adds nothing. On Android 15+
+    // the 3-button nav is drawn over that bar. Use the route's view padding
+    // while the keyboard is closed; the scaffold already lifts the sheet
+    // when the keyboard is open.
+    final navBarInset = MediaQuery.viewInsetsOf(context).bottom > 0
+        ? 0.0
+        : MediaQuery.viewPaddingOf(context).bottom;
 
     return Scaffold(
       backgroundColor: colors.background,
@@ -1586,7 +1594,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                     ),
                                   ),
                                 ],
-                                const SizedBox(height: 100),
+                                SizedBox(height: 100 + navBarInset),
                               ],
                             ),
                           ),
@@ -1605,10 +1613,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     (actualOrderType == 'rent' &&
                         (!detail.hasActiveRentalPlans || selectedPlan == null));
 
-                return SafeArea(
-                  top: false,
-                  child: Container(
-                    padding: const EdgeInsets.fromLTRB(20, 10, 20, 12),
+                return Container(
+                    padding: EdgeInsets.fromLTRB(20, 10, 20, 12 + navBarInset),
                     decoration: BoxDecoration(
                       color: colors.surface,
                       border: Border(top: BorderSide(color: colors.border)),
@@ -1765,8 +1771,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     ),
                       ],
                     ),
-                  ),
-                );
+                  );
               },
             )
           : null,

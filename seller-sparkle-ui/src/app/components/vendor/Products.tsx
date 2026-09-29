@@ -390,7 +390,11 @@ const Products = () => {
     equipment: listingPage?.equipmentCount ?? 0,
     chemical: listingPage?.chemicalCount ?? 0,
   };
-  const catalogCount = tabCounts.equipment + tabCounts.chemical;
+  const statusCounts = {
+    all: activeTab === "chemical" ? tabCounts.chemical : tabCounts.equipment,
+    active: listingPage?.activeCount ?? 0,
+    inactive: listingPage?.inactiveCount ?? 0,
+  };
 
   const toggleListingStatus = async (listing: LocalListing) => {
     if (!user) return;
@@ -784,12 +788,12 @@ const Products = () => {
             <TabsTrigger value="equipment" className="text-xs sm:text-sm">
               <Package className="mr-1 sm:mr-2 h-4 w-4 shrink-0" />
               <span className="truncate">Equipment</span>
-              <span className="hidden sm:inline ml-1">({tabCounts.equipment})</span>
+              <span className="ml-1 tabular-nums">({tabCounts.equipment})</span>
             </TabsTrigger>
             <TabsTrigger value="chemical" className="text-xs sm:text-sm">
               <FlaskConical className="mr-1 sm:mr-2 h-4 w-4 shrink-0" />
               <span className="truncate">Chemicals</span>
-              <span className="hidden sm:inline ml-1">({tabCounts.chemical})</span>
+              <span className="ml-1 tabular-nums">({tabCounts.chemical})</span>
             </TabsTrigger>
           </TabsList>
         </Tabs>
@@ -808,9 +812,9 @@ const Products = () => {
             </div>
             <Tabs value={filter} onValueChange={handleFilterChange}>
               <TabsList className="w-full sm:w-auto">
-                <TabsTrigger value="all" className="flex-1 sm:flex-none">All <span className="ml-1.5 text-xs text-muted-foreground">({catalogCount})</span></TabsTrigger>
-                <TabsTrigger value="active" className="flex-1 sm:flex-none">Active</TabsTrigger>
-                <TabsTrigger value="inactive" className="flex-1 sm:flex-none">Inactive</TabsTrigger>
+                <TabsTrigger value="all" className="flex-1 sm:flex-none">All <span className="ml-1 text-xs text-muted-foreground tabular-nums">({statusCounts.all})</span></TabsTrigger>
+                <TabsTrigger value="active" className="flex-1 sm:flex-none">Active <span className="ml-1 text-xs text-muted-foreground tabular-nums">({statusCounts.active})</span></TabsTrigger>
+                <TabsTrigger value="inactive" className="flex-1 sm:flex-none">Inactive <span className="ml-1 text-xs text-muted-foreground tabular-nums">({statusCounts.inactive})</span></TabsTrigger>
               </TabsList>
             </Tabs>
           </div>
@@ -943,7 +947,7 @@ const Products = () => {
               {(hasLoaded || listingPage) && filteredCount === 0 && (
                 <tr>
                   <td colSpan={7} className="px-3 py-8 text-center text-sm text-muted-foreground sm:px-4">
-                    {catalogCount === 0
+                    {statusCounts.all === 0 && !debouncedSearch && filter === "all"
                       ? "No listings created yet."
                       : "No listings match your current search/filter."}
                   </td>
@@ -1034,7 +1038,7 @@ const Products = () => {
           })}
           {(hasLoaded || listingPage) && filteredCount === 0 && (
             <div className="rounded-lg border border-border px-3 py-8 text-center text-sm text-muted-foreground">
-              {catalogCount === 0
+              {statusCounts.all === 0 && !debouncedSearch && filter === "all"
                 ? "No listings created yet."
                 : "No listings match your current search/filter."}
             </div>

@@ -678,6 +678,9 @@ export interface VendorListingListResult {
   blockedUnits: number;
   equipmentCount: number;
   chemicalCount: number;
+  activeCount: number;
+  inactiveCount: number;
+  draftCount: number;
 }
 
 export interface VendorExpiringOrderApiDto {

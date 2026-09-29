@@ -1601,9 +1601,11 @@ public sealed class CustomerRepository(
     {
         page = Math.Max(1, page);
         pageSize = Math.Clamp(pageSize, 1, 50);
-        var offers = await GetPendingVendorOffersAsync(vendorId, cancellationToken);
-        var pendingCount = offers.Count(o =>
-            string.Equals(o.Status, "pending", StringComparison.OrdinalIgnoreCase));
+        var now = DateTimeOffset.UtcNow;
+        var offers = (await GetPendingVendorOffersAsync(vendorId, cancellationToken))
+            .Where(o => IsOpenDispatchOffer(o, now))
+            .ToList();
+        var pendingCount = offers.Count;
         if (offers.Count == 0)
         {
             return new VendorDispatchOfferListResult
@@ -2342,6 +2344,14 @@ public sealed class CustomerRepository(
                 x.VendorId == vendorId &&
                 !x.IsDeleted,
                 cancellationToken);
+
+    private static bool IsOpenDispatchOffer(CustomerOrderVendorOffer offer, DateTimeOffset now)
+    {
+        var status = offer.Status?.Trim() ?? string.Empty;
+        var open = status.Equals("pending", StringComparison.OrdinalIgnoreCase)
+            || status.Contains("awaiting", StringComparison.OrdinalIgnoreCase);
+        return open && offer.ExpiresAt > now;
+    }
 
     public Task<List<CustomerOrderVendorOffer>> GetPendingVendorOffersAsync(Guid vendorId, CancellationToken cancellationToken)
     {

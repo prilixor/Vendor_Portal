@@ -231,13 +231,14 @@ class _ProductsScreenState extends State<ProductsScreen>
     final pending = Provider.of<VendorProfileProvider>(context).isPending;
     final isChemicalTab = _tabController.index == 1;
     final filtered = _filtered(provider.listingRows);
+    final catalogTotal =
+        isChemicalTab ? provider.chemicalCount : provider.equipmentCount;
     final counts = {
-      for (final (id, _) in _statusFilters) id: 0,
+      'all': catalogTotal,
+      'active': provider.activeCount,
+      'inactive': provider.inactiveCount,
+      'draft': provider.draftCount,
     };
-    counts['all'] = isChemicalTab ? provider.chemicalCount : provider.equipmentCount;
-    if (_statusFilter != 'all') {
-      counts[_statusFilter] = provider.listingTotalCount;
-    }
     final statusLabel =
         _statusFilters.firstWhere((e) => e.$1 == _statusFilter).$2;
 
@@ -308,7 +309,7 @@ class _ProductsScreenState extends State<ProductsScreen>
                     child: OutlinedButton.icon(
                       onPressed: () => _openStatusFilter(counts),
                       icon: Icon(Icons.filter_list, size: 18, color: context.appColors.textSecondary),
-                      label: Text('Status: $statusLabel'),
+                      label: Text('Status: $statusLabel (${counts[_statusFilter] ?? 0})'),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: context.appColors.textSecondary,
                         side: BorderSide(color: context.appColors.border),

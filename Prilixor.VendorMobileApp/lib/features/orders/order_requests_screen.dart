@@ -314,13 +314,16 @@ class _OrderRequestsScreenState extends State<OrderRequestsScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<VendorOrderProvider>(context);
-    final groups = _buildGroups(provider.offers);
+    // Summaries also include recently expired, missed, and rejected rows.
+    // This page lists only offers that are still open and not past their deadline.
+    final actionable = provider.pendingOffers;
+    final groups = _buildGroups(actionable);
     final totalItems = groups.fold<int>(0, (n, g) => n + g.items.length);
     final totalPayout = groups.fold<double>(0, (n, g) => n + _groupPayout(g));
     final rentCount = provider.offerTypeCounts['rent'] ??
-        provider.offers.where((o) => o.orderType.toLowerCase() == 'rent').length;
+        actionable.where((o) => o.orderType.toLowerCase() == 'rent').length;
     final buyCount = provider.offerTypeCounts['buy'] ??
-        provider.offers.where((o) => o.orderType.toLowerCase() == 'buy').length;
+        actionable.where((o) => o.orderType.toLowerCase() == 'buy').length;
     final totalOffers = provider.offerTypeCounts['all'] ??
         provider.pendingOfferCount;
 

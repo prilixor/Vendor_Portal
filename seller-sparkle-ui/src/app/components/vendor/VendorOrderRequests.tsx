@@ -98,6 +98,12 @@ function isPendingOffer(offer: VendorDispatchOfferApiDto): boolean {
   return s === "pending" || s.includes("awaiting");
 }
 
+function isOpenOffer(offer: VendorDispatchOfferApiDto, now: number): boolean {
+  if (!isPendingOffer(offer)) return false;
+  const expires = new Date(offer.expiresAt).getTime();
+  return Number.isFinite(expires) && expires > now;
+}
+
 const VendorOrderRequests = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
@@ -145,8 +151,8 @@ const VendorOrderRequests = () => {
   }, []);
 
   const pendingOffers = useMemo(
-    () => (data?.items ?? []).filter(isPendingOffer),
-    [data?.items],
+    () => (data?.items ?? []).filter((offer) => isOpenOffer(offer, now)),
+    [data?.items, now],
   );
 
   const typeCounts = {

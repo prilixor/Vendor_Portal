@@ -118,9 +118,11 @@ class VendorOrderProvider extends ChangeNotifier {
   String? _lastExpirationSearch;
 
   List<VendorDispatchOffer> get pendingOffers {
+    final now = DateTime.now();
     return _offers.where((o) {
       final s = o.status.trim().toLowerCase();
-      return s.isEmpty || s == 'pending' || s.contains('awaiting');
+      final open = s == 'pending' || s.contains('awaiting');
+      return open && o.expiresAt.isAfter(now);
     }).toList()
       ..sort((a, b) => b.expiresAt.compareTo(a.expiresAt));
   }

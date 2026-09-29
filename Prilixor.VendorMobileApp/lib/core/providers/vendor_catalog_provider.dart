@@ -45,8 +45,14 @@ class VendorCatalogProvider extends ChangeNotifier {
 
   int _equipmentCount = 0;
   int _chemicalCount = 0;
+  int _activeCount = 0;
+  int _inactiveCount = 0;
+  int _draftCount = 0;
   int get equipmentCount => _equipmentCount;
   int get chemicalCount => _chemicalCount;
+  int get activeCount => _activeCount;
+  int get inactiveCount => _inactiveCount;
+  int get draftCount => _draftCount;
 
   InventoryTotals _summaryTotals = const InventoryTotals(
     total: 0,
@@ -226,6 +232,9 @@ class VendorCatalogProvider extends ChangeNotifier {
         _listingTotalCount = asJsonInt(body?['totalCount'], rows.length);
         _equipmentCount = asJsonInt(body?['equipmentCount']);
         _chemicalCount = asJsonInt(body?['chemicalCount']);
+        _activeCount = asJsonInt(body?['activeCount']);
+        _inactiveCount = asJsonInt(body?['inactiveCount']);
+        _draftCount = asJsonInt(body?['draftCount']);
         _summaryTotals = InventoryTotals(
           total: asJsonInt(body?['totalUnits']),
           available: asJsonInt(body?['availableUnits']),

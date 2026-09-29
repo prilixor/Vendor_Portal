@@ -388,6 +388,9 @@ public sealed class VendorListingListResult
     public int BlockedUnits { get; init; }
     public int EquipmentCount { get; init; }
     public int ChemicalCount { get; init; }
+    public int ActiveCount { get; init; }
+    public int InactiveCount { get; init; }
+    public int DraftCount { get; init; }
 }
 
 public sealed record GetVendorListingListQuery(
