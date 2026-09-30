@@ -1,11 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Badge } from "@/app/components/ui/badge";
-import { adminApi, AdminCustomerDetailDto, AdminCustomerListItemDto } from "@/app/services/adminApi";
+import { adminApi, AdminCustomerDetailDto } from "@/app/services/adminApi";
 import { AdminPlaceCustomerOrderDialog } from "@/app/components/admin/AdminPlaceCustomerOrderDialog";
 import { PageContentGate } from "@/app/components/shared/PageLoader";
 import { TablePagination } from "@/app/components/shared/TablePagination";
@@ -66,34 +67,42 @@ function orderStatusBadgeClass(status: string): string {
 }
 
 export const AdminCustomers = () => {
-  const [rows, setRows] = useState<AdminCustomerListItemDto[]>([]);
-  const [search, setSearch] = useState("");
-  const [loading, setLoading] = useState(true);
+  const [searchInput, setSearchInput] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [page, setPage] = useState(1);
   const { hasPermission } = useAuth();
 
-  const load = async (q?: string) => {
-    setLoading(true);
-    try {
-      setRows(await adminApi.getAdminCustomers(q));
-      setPage(1);
-    } catch (e) {
-      toast.error(e instanceof Error ? e.message : "Failed to load customers");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const totalPages = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
-  const safePage = Math.min(page, totalPages);
-  const pageRows = useMemo(
-    () => rows.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
-    [rows, safePage],
-  );
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedSearch(searchInput.trim()), 350);
+    return () => window.clearTimeout(t);
+  }, [searchInput]);
 
   useEffect(() => {
-    load();
-  }, []);
+    setPage(1);
+  }, [debouncedSearch]);
+
+  const { data, isLoading, isPlaceholderData } = useQuery({
+    queryKey: ["admin-customer-summaries", page, debouncedSearch],
+    queryFn: () =>
+      adminApi.getAdminCustomerSummaries({
+        search: debouncedSearch,
+        page,
+        pageSize: PAGE_SIZE,
+      }),
+    placeholderData: keepPreviousData,
+  });
+  const isPageChanging = isPlaceholderData && !isLoading;
+
+  const pageRows = data?.items ?? [];
+  const totalCount = data?.totalCount ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
+  const applySearch = () => setDebouncedSearch(searchInput.trim());
 
   return (
     <div className="space-y-6">
@@ -110,20 +119,20 @@ export const AdminCustomers = () => {
         <div className="flex gap-2">
           <Input
             className="pl-9"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
             placeholder="Search email, name, phone"
             onKeyDown={(e) => {
-              if (e.key === "Enter") load(search);
+              if (e.key === "Enter") applySearch();
             }}
           />
-          <Button onClick={() => load(search)} variant="secondary" className="shrink-0">
+          <Button onClick={applySearch} variant="secondary" className="shrink-0">
             Search
           </Button>
         </div>
       </div>
-      <PageContentGate loading={loading} className="min-h-[8rem] py-0">
-        <div className="space-y-2">
+      <PageContentGate loading={isLoading} className="min-h-[8rem] py-0">
+        <div className={cn("space-y-2 transition-opacity duration-200", isPageChanging && "opacity-50")}>
           {pageRows.map((c) => {
             const initials = c.fullName
               .split(/\s+/)
@@ -178,7 +187,7 @@ export const AdminCustomers = () => {
               </Card>
             );
           })}
-          {rows.length === 0 && (
+          {totalCount === 0 && (
             <div className="space-y-2 rounded-xl border border-dashed py-14 text-center">
               <UserRound className="mx-auto h-8 w-8 text-muted-foreground/50" />
               <p className="text-sm font-medium text-foreground">No customers found</p>
@@ -188,7 +197,7 @@ export const AdminCustomers = () => {
           <TablePagination
             page={safePage}
             pageSize={PAGE_SIZE}
-            total={rows.length}
+            total={totalCount}
             onPageChange={setPage}
             label="customers"
           />

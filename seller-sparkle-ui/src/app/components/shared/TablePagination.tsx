@@ -7,6 +7,7 @@ import {
   PaginationNext,
   PaginationPrevious,
 } from "@/app/components/ui/pagination";
+import { cn } from "@/app/helpers/utils";
 
 type TablePaginationProps = {
   page: number;
@@ -15,6 +16,10 @@ type TablePaginationProps = {
   onPageChange: (page: number) => void;
   label?: string;
   ariaLabel?: string;
+  /** Hide the footer when every row already fits on page 1 (shop / storefront). */
+  hideWhenSinglePage?: boolean;
+  /** Admin tables show "Showing 1 to 8 of 24". Shops already show the count above the grid. */
+  showSummary?: boolean;
 };
 
 export type PaginationItemValue = number | "ellipsis";
@@ -66,10 +71,13 @@ export function TablePagination({
   onPageChange,
   label = "items",
   ariaLabel,
+  hideWhenSinglePage = false,
+  showSummary = true,
 }: TablePaginationProps) {
   const totalPages = Math.max(1, Math.ceil(total / pageSize));
   const safePage = Math.min(Math.max(1, page), totalPages);
   if (total === 0) return null;
+  if (hideWhenSinglePage && totalPages <= 1) return null;
 
   const from = (safePage - 1) * pageSize + 1;
   const to = Math.min(safePage * pageSize, total);
@@ -83,7 +91,7 @@ export function TablePagination({
   };
 
   return (
-    <div className="mt-4 border-t border-border pt-4 [overflow-anchor:none]">
+    <div className={cn("mt-4 [overflow-anchor:none]", showSummary && "border-t border-border pt-4")}>
       <div className="flex items-center justify-between gap-3 sm:hidden">
         <PaginationPrevious
           onClick={goPrev}
@@ -94,9 +102,11 @@ export function TablePagination({
           <p className="text-sm font-medium tabular-nums">
             Page {safePage} of {totalPages}
           </p>
-          <p className="text-[11px] text-muted-foreground tabular-nums">
-            {from}–{to} of {total}
-          </p>
+          {showSummary ? (
+            <p className="text-[11px] text-muted-foreground tabular-nums">
+              {from}–{to} of {total}
+            </p>
+          ) : null}
         </div>
         <PaginationNext
           onClick={goNext}
@@ -105,10 +115,17 @@ export function TablePagination({
         />
       </div>
 
-      <div className="hidden sm:flex sm:items-center sm:justify-between sm:gap-4">
-        <p className="text-sm text-muted-foreground whitespace-nowrap">
-          Showing {from} to {to} of {total} {label}
-        </p>
+      <div
+        className={cn(
+          "hidden sm:flex sm:items-center sm:gap-4",
+          showSummary ? "sm:justify-between" : "sm:justify-center",
+        )}
+      >
+        {showSummary ? (
+          <p className="text-sm text-muted-foreground whitespace-nowrap">
+            Showing {from} to {to} of {total} {label}
+          </p>
+        ) : null}
         <Pagination className="mx-0 w-auto" aria-label={ariaLabel ?? `${label} pagination`}>
           <PaginationContent className="flex-nowrap">
             <PaginationItem>

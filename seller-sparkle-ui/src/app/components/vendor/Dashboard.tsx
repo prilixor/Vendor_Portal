@@ -93,107 +93,45 @@ const Dashboard = () => {
       setLoading(true);
 
       try {
-        const [profileRes, docsRes, banksRes, listingsRes, notificationsRes, productsRes, categoriesRes, offersRes, confirmedRes, inTransitRes, expirationsRes] = await Promise.allSettled([
-          vendorOnboardingApi.getVendorProfile(user.id),
-          vendorOnboardingApi.getVendorDocuments(user.id),
-          vendorOnboardingApi.getVendorBankAccounts(user.id),
-          vendorOnboardingApi.getVendorProductListings(user.id),
-          vendorOnboardingApi.getVendorNotifications(user.id),
-          vendorOnboardingApi.getProducts(),
-          vendorOnboardingApi.getProductCategories(),
-          vendorOnboardingApi.getVendorDispatchOffers(user.id),
-          vendorOnboardingApi.getVendorOrders(user.id, "confirmed"),
-          vendorOnboardingApi.getVendorOrders(user.id, "in_transit"),
-          vendorOnboardingApi.getVendorOrderExpirations(user.id, 7),
-        ]);
-
-        if (profileRes.status === "fulfilled") {
-          setOwnerName(profileRes.value.ownerName || user.name);
-          setBusinessName(profileRes.value.businessName || user.name);
-        } else {
-          setOwnerName(user.name);
-          setBusinessName(user.name);
-        }
-
-        const docs = docsRes.status === "fulfilled" ? docsRes.value : [];
-        const banks = banksRes.status === "fulfilled" ? banksRes.value : [];
-        const listings = listingsRes.status === "fulfilled" ? listingsRes.value : [];
-        const notifications = notificationsRes.status === "fulfilled" ? notificationsRes.value : [];
-        const products = productsRes.status === "fulfilled" ? productsRes.value : [];
-        const categories = categoriesRes.status === "fulfilled" ? categoriesRes.value : [];
-
-        const approvedDocs = docs.filter((d) => normalizeVerificationStatus(d.verificationStatus) === "approved").length;
-        const rejectedDocs = docs.filter((d) => normalizeVerificationStatus(d.verificationStatus) === "rejected").length;
-        const approvedBanks = banks.filter((b) => normalizeVerificationStatus(b.verificationStatus) === "approved").length;
-        const rejectedBanks = banks.filter((b) => normalizeVerificationStatus(b.verificationStatus) === "rejected").length;
-
-        const verified = docs.length > 0 && approvedDocs === docs.length && approvedBanks > 0;
-        setIsVerified(verified);
-        if (verified) {
-          setVerificationMessage("All documents and bank details have been approved.");
-        } else if (rejectedDocs > 0 || rejectedBanks > 0) {
-          setVerificationMessage("Some verifications were rejected. Please review and resubmit from onboarding.");
-        } else {
-          setVerificationMessage(`Approved documents: ${approvedDocs}/${docs.length}. Approved bank accounts: ${approvedBanks}/${banks.length}.`);
-        }
-
-        const active = listings.filter((l) => normalizeListingStatus(l.listingStatus) === "approved").length;
-        setTotalListings(listings.length);
-        setActiveListings(active);
-
-        const mappedNotifications = notifications
-          .map<DashboardNotification>((n) => ({
+        const summary = await vendorOnboardingApi.getVendorDashboardSummary(user.id);
+        setOwnerName(summary.ownerName || user.name);
+        setBusinessName(summary.businessName || user.name);
+        setIsVerified(summary.isVerified);
+        setVerificationMessage(summary.verificationMessage);
+        setTotalListings(summary.totalListings);
+        setActiveListings(summary.activeListings);
+        setInventoryUnits(summary.inventoryUnits);
+        setUnreadNotifications(summary.unreadNotifications);
+        setPendingRequestsCount(summary.pendingRequestsCount);
+        setConfirmedOrdersCount(summary.confirmedOrdersCount);
+        setInTransitOrdersCount(summary.inTransitOrdersCount);
+        setDueReturnsCount(summary.dueReturnsCount);
+        setRecentActivity(
+          (summary.recentActivity ?? []).map((n) => ({
             id: n.id,
             title: n.title,
             message: n.message,
-            timestamp: n.sentAt ?? n.readAt ?? new Date().toISOString(),
+            timestamp: n.timestamp,
             type: mapNotificationType(n.notificationType),
-            read: n.status.trim().toLowerCase() === "read" || !!n.readAt,
+            read: n.read,
             notificationType: n.notificationType,
-          }))
-          .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-        setUnreadNotifications(mappedNotifications.filter((n) => !n.read).length);
-        setRecentActivity(mappedNotifications.slice(0, 5));
-
-        setPendingRequestsCount(offersRes.status === "fulfilled" ? offersRes.value.length : 0);
-        setConfirmedOrdersCount(confirmedRes.status === "fulfilled" ? confirmedRes.value.length : 0);
-        setInTransitOrdersCount(inTransitRes.status === "fulfilled" ? inTransitRes.value.length : 0);
-        setDueReturnsCount(expirationsRes.status === "fulfilled" ? expirationsRes.value.length : 0);
-
-        const inventoryResponses = await Promise.allSettled(
-          listings.map((l) => vendorOnboardingApi.getVendorInventory(user.id, l.id))
+          })),
         );
-        const inventorySum = inventoryResponses.reduce((sum, r, idx) => {
-          if (r.status === "fulfilled") {
-            return sum + r.value.totalQuantity;
-          }
-          return sum + listings[idx].availableQuantity;
-        }, 0);
-        setInventoryUnits(inventorySum);
-
-        const productsById = new Map(products.map((p) => [p.id, p]));
-        const categoriesById = new Map(categories.map((c) => [c.id, c.categoryName]));
-
-        const top = listings
-          .map<TopListingRow>((l) => {
-            const product = productsById.get(l.productId);
-            const categoryName = product ? (categoriesById.get(product.categoryId) ?? "N/A") : "N/A";
-            return {
-              id: l.id,
-              title: l.listingTitle,
-              category: categoryName,
-              dailyRent: product?.dailyRent ?? l.dailyRent ?? 0,
-              stock: l.availableQuantity,
-              status: normalizeListingStatus(l.listingStatus),
-            };
-          })
-          .sort((a, b) => b.stock - a.stock)
-          .slice(0, 4);
-
-        setTopListings(top);
+        setTopListings(
+          (summary.topListings ?? []).map((l) => ({
+            id: l.id,
+            title: l.title,
+            category: l.category,
+            dailyRent: l.dailyRent,
+            stock: l.stock,
+            status: normalizeListingStatus(l.status),
+          })),
+        );
       } catch (error) {
         const message = error instanceof Error ? error.message : "Failed to load dashboard.";
         toast.error(message);
+        setOwnerName(user.name);
+        setBusinessName(user.name);
       } finally {
         setLoading(false);
       }

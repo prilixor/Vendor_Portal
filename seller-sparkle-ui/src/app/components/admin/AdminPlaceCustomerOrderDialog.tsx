@@ -176,8 +176,8 @@ function ListingThumb({ src, isChemical }: { src?: string | null; isChemical?: b
       <div className={cn(
         "h-full w-full flex items-center justify-center",
         isChemical
-          ? "bg-violet-50 text-violet-400 dark:bg-violet-500/10 dark:text-violet-300"
-          : "bg-teal-50 text-teal-400 dark:bg-teal-500/10 dark:text-teal-300",
+          ? "bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-300"
+          : "bg-teal-50 text-teal-700 dark:bg-teal-500/10 dark:text-teal-300",
       )}>
         {isChemical ? <FlaskConical className="h-5 w-5" /> : <Package className="h-5 w-5" />}
       </div>
@@ -1049,8 +1049,8 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
               ) : visibleResults.length === 0 ? (
                 <div className="rounded-lg border border-dashed py-12 text-center space-y-2">
                   {browseMode === "chemicals"
-                    ? <FlaskConical className="h-8 w-8 mx-auto text-violet-300" />
-                    : <Package className="h-8 w-8 mx-auto text-teal-300" />}
+                    ? <FlaskConical className="h-8 w-8 mx-auto text-violet-600 dark:text-violet-300" />
+                    : <Package className="h-8 w-8 mx-auto text-teal-600 dark:text-teal-300" />}
                   <p className="text-sm font-medium">
                     No {browseMode === "chemicals" ? "chemicals" : "equipment"} found
                   </p>

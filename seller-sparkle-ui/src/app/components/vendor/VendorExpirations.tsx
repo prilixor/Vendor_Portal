@@ -1,5 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Search } from "lucide-react";
 import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card } from "@/app/components/ui/card";
@@ -12,6 +13,7 @@ import { useAuth } from "@/app/guards/AuthContext";
 import { vendorOnboardingApi, type VendorExpiringOrderApiDto } from "@/app/services/vendorOnboardingApi";
 import { toast } from "sonner";
 import { formatOrderTypeLabel } from "@/app/helpers/orderStatus";
+import { cn } from "@/app/helpers/utils";
 
 const PAGE_SIZE = 8;
 
@@ -44,30 +46,10 @@ function matchesSearch(row: VendorExpiringOrderApiDto, query: string): boolean {
 const VendorExpirations = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(false);
   const [withinDays, setWithinDays] = useState(7);
-  const [rows, setRows] = useState<VendorExpiringOrderApiDto[]>([]);
   const [searchInput, setSearchInput] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [page, setPage] = useState(1);
-
-  const loadExpirations = async () => {
-    if (!user) return;
-    try {
-      setLoading(true);
-      const data = await vendorOnboardingApi.getVendorOrderExpirations(user.id, withinDays);
-      setRows(data);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to load expirations.";
-      toast.error(message);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-    void loadExpirations();
-  }, [user?.id, withinDays]);
 
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedSearch(searchInput.trim()), 350);
@@ -78,34 +60,30 @@ const VendorExpirations = () => {
     setPage(1);
   }, [debouncedSearch, withinDays]);
 
-  const filteredRows = useMemo(() => {
-    const q = debouncedSearch.toLowerCase();
-    if (!q) return rows;
-    return rows.filter((row) => matchesSearch(row, q));
-  }, [rows, debouncedSearch]);
+  const { data, isLoading, isPlaceholderData, isError, error } = useQuery({
+    queryKey: ["vendor-expiration-summaries", user?.id, page, withinDays, debouncedSearch],
+    queryFn: () =>
+      vendorOnboardingApi.getVendorExpirationSummaries(user!.id, {
+        withinDays,
+        search: debouncedSearch,
+        page,
+        pageSize: PAGE_SIZE,
+      }, { quiet: true }),
+    enabled: Boolean(user?.id),
+    placeholderData: keepPreviousData,
+  });
+  const isPageChanging = isPlaceholderData && !isLoading;
 
-  const groups = useMemo(() => {
-    const next: { baseOrderNumber: string; items: VendorExpiringOrderApiDto[] }[] = [];
-    filteredRows.forEach((row) => {
-      const baseNum = getBaseOrderNumber(row.orderNumber);
-      let group = next.find((g) => g.baseOrderNumber === baseNum);
-      if (!group) {
-        group = { baseOrderNumber: baseNum, items: [] };
-        next.push(group);
-      }
-      group.items.push(row);
-    });
-    return next;
-  }, [filteredRows]);
+  useEffect(() => {
+    if (isError) {
+      toast.error(error instanceof Error ? error.message : "Failed to load expirations.");
+    }
+  }, [isError, error]);
 
-  const totalPages = Math.max(1, Math.ceil(groups.length / PAGE_SIZE));
+  const pageGroups = data?.items ?? [];
+  const groupCount = data?.totalCount ?? 0;
+  const totalPages = Math.max(1, Math.ceil(groupCount / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
-  const pageGroups = useMemo(
-    () => groups.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
-    [groups, safePage],
-  );
-
-  const groupCount = groups.length;
 
   return (
     <div>
@@ -135,9 +113,11 @@ const VendorExpirations = () => {
           </div>
         </div>
 
-        <PageContentGate loading={loading}>{rows.length === 0 ? (
+        <PageContentGate loading={isLoading && !data}>
+        <div className={cn("transition-opacity duration-200", isPageChanging && "opacity-50")}>
+        {groupCount === 0 && !debouncedSearch ? (
           <p className="py-8 text-center text-sm text-muted-foreground">No expiring orders in selected window.</p>
-        ) : groups.length === 0 ? (
+        ) : pageGroups.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">
             No expirations match “{debouncedSearch}”.
           </p>
@@ -193,7 +173,9 @@ const VendorExpirations = () => {
               label="orders"
             />
           </div>
-        )}</PageContentGate>
+        )}
+        </div>
+        </PageContentGate>
       </Card>
     </div>
   );

@@ -37,8 +37,7 @@ export const VendorDispatchOffersProvider = ({
   const refreshPendingCount = useCallback(async () => {
     if (!vendorId) return;
     try {
-      const offers = await vendorOnboardingApi.getVendorDispatchOffers(vendorId, { quiet: true });
-      const count = offers.filter((o) => isPendingDispatchOffer(o.status)).length;
+      const count = await vendorOnboardingApi.getVendorPendingDispatchOfferCount(vendorId, { quiet: true });
       setPendingCount(count);
     } catch (error) {
       console.error("Failed to refresh pending order requests:", error);

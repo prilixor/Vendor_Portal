@@ -22,6 +22,21 @@ class _EditListingScreenState extends State<EditListingScreen> {
   ListingUiStatus _status = ListingUiStatus.inactive;
   bool _initialized = false;
 
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _hydrateCatalog());
+  }
+
+  Future<void> _hydrateCatalog() async {
+    final provider =
+        Provider.of<VendorCatalogProvider>(context, listen: false);
+    final row = provider.rowForListing(widget.listingId);
+    final productId = row?.listing.productId ?? '';
+    if (productId.isEmpty) return;
+    await provider.fetchProduct(productId);
+  }
+
   void _initFromRow(VendorListingRow row) {
     if (_initialized) return;
     _status = row.status;

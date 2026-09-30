@@ -37,15 +37,12 @@ export const Sidebar = ({ variant = "vendor", sections, brandLabel, brandHeading
   }, [lines]);
 
   // 2. Get Unread Customer Notifications (for Customer variant)
-  const { data: customerNotifications = [] } = useQuery({
-    queryKey: ["customer-notifications"],
-    queryFn: () => customerApi.getNotifications({ quiet: true }),
+  const { data: unreadCustomerCount = 0 } = useQuery({
+    queryKey: ["customer-notifications-unread-count"],
+    queryFn: () => customerApi.getUnreadNotificationCount({ quiet: true }),
     enabled: variant === "customer" && !!user,
-    refetchInterval: 30000, // refresh every 30 seconds
+    refetchInterval: 30000,
   });
-  const unreadCustomerCount = useMemo(() => {
-    return customerNotifications.filter((n) => !n.readAt).length;
-  }, [customerNotifications]);
 
   // 3. Get Unread Vendor Notifications (for Vendor variant)
   const { unreadCount: unreadVendorCount } = useNotificationContext();

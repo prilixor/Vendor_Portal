@@ -59,6 +59,39 @@ public sealed class ListAdminLegalAcceptancesEndpoint(IMediator mediator)
     }
 }
 
+public sealed class GetAdminLegalAcceptanceSummariesRequest
+{
+    public string? Search { get; set; }
+    public string? ActorType { get; set; }
+    public Guid? DocumentId { get; set; }
+    public string? Screen { get; set; }
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 8;
+}
+
+public sealed class GetAdminLegalAcceptanceSummariesEndpoint(IMediator mediator)
+    : Endpoint<GetAdminLegalAcceptanceSummariesRequest, Results<Ok<AdminLegalAcceptanceListResult>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("legal-documents/acceptances/summaries");
+        Group<AdminApiGroup>();
+        Policies("Perm:catalog.manage");
+    }
+
+    public override async Task<Results<Ok<AdminLegalAcceptanceListResult>, ProblemHttpResult>> ExecuteAsync(
+        GetAdminLegalAcceptanceSummariesRequest req,
+        CancellationToken ct)
+    {
+        var page = req.Page < 1 ? 1 : req.Page;
+        var pageSize = req.PageSize is < 1 or > 100 ? 8 : req.PageSize;
+        var result = await mediator.Send(
+            new GetAdminLegalAcceptanceListQuery(req.Search, req.ActorType, req.DocumentId, req.Screen, page, pageSize),
+            ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
 public sealed class ListAdminLegalDocumentsEndpoint(IMediator mediator)
     : EndpointWithoutRequest<Results<Ok<List<LegalDocumentListItemDto>>, ProblemHttpResult>>
 {

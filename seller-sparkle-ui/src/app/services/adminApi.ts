@@ -46,6 +46,83 @@ export interface AdminVerificationListResult {
   pageSize: number;
 }
 
+export interface AdminAlertSummaryDto {
+  criticalOrderCount: number;
+  pendingVendorCount: number;
+  listingPricingAlertCount: number;
+}
+
+export interface AdminAlertFeedCounts {
+  all: number;
+  orders: number;
+  vendors: number;
+  listings: number;
+  logs: number;
+}
+
+export interface AdminAlertFeedItem {
+  id: string;
+  type: "order" | "vendor" | "listing" | "log";
+  title: string;
+  description: string;
+  status: string;
+  timestamp: string;
+  link: string;
+  orderId?: string | null;
+  orderNumber?: string | null;
+  listingTitle?: string | null;
+  customerName?: string | null;
+  vendorName?: string | null;
+  amount?: number | null;
+  vendorId?: string | null;
+  company?: string | null;
+  ownerName?: string | null;
+  email?: string | null;
+  kind?: string | null;
+  notes?: string | null;
+  actionType?: string | null;
+  entityType?: string | null;
+  adminId?: string | null;
+  adminName?: string | null;
+  adminEmail?: string | null;
+  oldValue?: string | null;
+  newValue?: string | null;
+}
+
+export interface AdminAlertFeedResult {
+  items: AdminAlertFeedItem[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  counts: AdminAlertFeedCounts;
+}
+
+export interface AdminDashboardPendingVendorRow {
+  id: string;
+  email: string;
+  registrationStage: string;
+  isEmailVerified: boolean;
+}
+
+export interface AdminDashboardAuditLogRow {
+  id: string;
+  actionType: string;
+  adminName?: string | null;
+  adminEmail?: string | null;
+  adminId: string;
+  entityType: string;
+}
+
+export interface AdminDashboardSummaryDto {
+  totalVendorCount: number;
+  pendingVendorCount: number;
+  activeVendorCount: number;
+  auditEventCountLast7Days: number;
+  dueReturnsCount: number;
+  pendingVendors: AdminDashboardPendingVendorRow[];
+  recentAuditLogs: AdminDashboardAuditLogRow[];
+}
+
 export interface VendorProfileDto {
   id: string;
   vendorId: string;
@@ -137,6 +214,14 @@ export interface AdminUserDto {
   mustChangePassword?: boolean;
 }
 
+export interface AdminUserListResult {
+  items: AdminUserDto[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  superAdminCount: number;
+}
+
 export interface RegisterAdminUserRequest {
   email: string;
   password: string;
@@ -173,6 +258,13 @@ export interface AdminCustomerListItemDto {
   lastLoginAt?: string;
   createdAt: string;
   orderCount: number;
+}
+
+export interface AdminCustomerListResult {
+  items: AdminCustomerListItemDto[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
 }
 
 export interface AdminCustomerDetailDto {
@@ -256,6 +348,30 @@ export interface AdminAuditLogDto {
   newValue?: string;
   notes?: string;
   createdAt: string;
+}
+
+export interface AdminAuditLogActorOption {
+  id: string;
+  label: string;
+}
+
+export interface AdminAuditLogListRow {
+  id: string;
+  actionType: string;
+  entityType: string;
+  adminId: string;
+  adminName?: string | null;
+  adminEmail?: string | null;
+  oldValue?: string | null;
+  newValue?: string | null;
+}
+
+export interface AdminAuditLogListResult {
+  items: AdminAuditLogListRow[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  actors: AdminAuditLogActorOption[];
 }
 
 export interface AddAdminAuditLogRequest {
@@ -488,6 +604,13 @@ export interface UpdateRentalDurationIconRequest extends CreateRentalDurationIco
   id: string;
 }
 
+export interface PagedResult<T> {
+  items: T[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
+
 export interface ProductDto {
   id: string;
   categoryId: string;
@@ -594,6 +717,13 @@ export interface AdminDoctorDto {
   hospitals?: AdminHospitalDto[] | null;
 }
 
+export interface AdminDoctorListResult {
+  items: AdminDoctorDto[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
+
 export interface AdminHospitalDto {
   id: string;
   name: string;
@@ -607,6 +737,29 @@ export interface AdminHospitalDto {
   isActive: boolean;
   doctorIds?: string[] | null;
   doctorNames?: string[] | null;
+}
+
+export interface AdminHospitalListResult {
+  items: AdminHospitalDto[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface AdminLookupOptionDto {
+  id: string;
+  label: string;
+  secondary?: string | null;
+  badge?: string | null;
+}
+
+export interface AdminVendorListingInventoryDto {
+  listingId: string;
+  totalQuantity: number;
+  availableQuantity: number;
+  reservedQuantity: number;
+  source: "variant" | "flat";
+  sizes?: { label: string; sku: string; total: number; available: number }[] | null;
 }
 
 export interface AdminHospitalInput {
@@ -732,6 +885,10 @@ export interface ExcelUploadResponseDto {
   productsCreated: number;
 }
 
+export interface AdminOrderDetailResult {
+  items: AdminOrderDto[];
+}
+
 export interface AdminOrderDto {
   orderId: string;
   orderNumber: string;
@@ -794,6 +951,32 @@ export interface AdminExpiringOrderDto {
   listingPrimaryImageUrl?: string | null;
 }
 
+export interface AdminExpirationListResult {
+  items: AdminExpiringOrderDto[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface AdminPendingContinuationDto {
+  extensionId: string;
+  orderId: string;
+  orderNumber: string;
+  customerName: string;
+  vendorName: string;
+  listingTitle: string;
+  totalAmount: number;
+  createdOnUtc: string;
+  type: "extension" | "buyout" | string;
+}
+
+export interface AdminPendingContinuationListResult {
+  items: AdminPendingContinuationDto[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
+
 export interface UpdateAdminOrderStatusRequest {
   adminUserId: string;
   orderId: string;
@@ -821,6 +1004,10 @@ export const adminApi = {
     return apiClient.get<VendorDto[]>('/admin/vendors', options);
   },
 
+  async getVendor(vendorId: string, options?: ApiClientOptions): Promise<VendorDto> {
+    return apiClient.get<VendorDto>(`/admin/vendors/${encodeURIComponent(vendorId)}`, options);
+  },
+
   async getVendorSummaries(params: {
     search?: string;
     status?: string;
@@ -832,7 +1019,7 @@ export const adminApi = {
     if (search) qs.set("search", search);
     if (params.status && params.status !== "all") qs.set("status", params.status);
     qs.set("page", String(params.page && params.page > 0 ? params.page : 1));
-    qs.set("pageSize", String(params.pageSize && params.pageSize > 0 ? params.pageSize : 9));
+    qs.set("pageSize", String(params.pageSize && params.pageSize > 0 ? params.pageSize : 8));
     return apiClient.get<AdminVendorListResult>(`/admin/vendors/summaries?${qs.toString()}`, options);
   },
 
@@ -884,9 +1071,28 @@ export const adminApi = {
     return apiClient.get<VendorProductListingDto[]>(`/vendors/${vendorId}/listings`);
   },
 
+  async getVendorInventorySummaries(vendorId: string): Promise<AdminVendorListingInventoryDto[]> {
+    return apiClient.get<AdminVendorListingInventoryDto[]>(
+      `/admin/vendors/${encodeURIComponent(vendorId)}/inventory-summaries`,
+    );
+  },
+
   // Admin Users
   async getAdminUsers(): Promise<AdminUserDto[]> {
     return apiClient.get<AdminUserDto[]>('/admin/users');
+  },
+
+  async getAdminUserSummaries(params: {
+    search?: string;
+    page?: number;
+    pageSize?: number;
+  } = {}, options?: ApiClientOptions): Promise<AdminUserListResult> {
+    const qs = new URLSearchParams();
+    const search = params.search?.trim();
+    if (search) qs.set("search", search);
+    qs.set("page", String(params.page && params.page > 0 ? params.page : 1));
+    qs.set("pageSize", String(params.pageSize && params.pageSize > 0 ? params.pageSize : 8));
+    return apiClient.get<AdminUserListResult>(`/admin/users/summaries?${qs.toString()}`, options);
   },
 
   async registerAdminUser(data: RegisterAdminUserRequest): Promise<AdminUserDto> {
@@ -930,6 +1136,21 @@ export const adminApi = {
   async getAuditLogs(adminUserId?: string, options?: ApiClientOptions): Promise<AdminAuditLogDto[]> {
     const url = adminUserId ? `/admin/audit-logs?adminUserId=${adminUserId}` : '/admin/audit-logs';
     return apiClient.get<AdminAuditLogDto[]>(url, options);
+  },
+
+  async getAdminAuditLogSummaries(params: {
+    search?: string;
+    adminUserId?: string;
+    page?: number;
+    pageSize?: number;
+  } = {}, options?: ApiClientOptions): Promise<AdminAuditLogListResult> {
+    const qs = new URLSearchParams();
+    const search = params.search?.trim();
+    if (search) qs.set("search", search);
+    if (params.adminUserId && params.adminUserId !== "all") qs.set("adminUserId", params.adminUserId);
+    qs.set("page", String(params.page && params.page > 0 ? params.page : 1));
+    qs.set("pageSize", String(params.pageSize && params.pageSize > 0 ? params.pageSize : 8));
+    return apiClient.get<AdminAuditLogListResult>(`/admin/audit-logs/summaries?${qs.toString()}`, options);
   },
 
   async addAuditLog(data: AddAdminAuditLogRequest): Promise<AdminAuditLogDto> {
@@ -1050,6 +1271,53 @@ export const adminApi = {
     return apiClient.get<ProductDto[]>(url);
   },
 
+  async getProductSummaries(params: {
+    search?: string;
+    categoryId?: string;
+    status?: "all" | "active" | "inactive";
+    favoritesOnly?: boolean;
+    isChemical?: boolean;
+    ids?: string[];
+    page?: number;
+    pageSize?: number;
+  } = {}): Promise<PagedResult<ProductDto>> {
+    const qs = new URLSearchParams();
+    const search = params.search?.trim();
+    if (search) qs.set("search", search);
+    if (params.categoryId) qs.set("categoryId", params.categoryId);
+    if (params.status && params.status !== "all") qs.set("status", params.status);
+    if (params.favoritesOnly) qs.set("favoritesOnly", "true");
+    if (typeof params.isChemical === "boolean") qs.set("isChemical", String(params.isChemical));
+    const ids = params.ids?.map((id) => id.trim()).filter(Boolean) ?? [];
+    if (ids.length > 0) qs.set("ids", ids.join(","));
+    qs.set("page", String(params.page && params.page > 0 ? params.page : 1));
+    qs.set("pageSize", String(params.pageSize && params.pageSize > 0 ? params.pageSize : 10));
+    return apiClient.get<PagedResult<ProductDto>>(`/admin/catalog/product-summaries?${qs.toString()}`);
+  },
+
+  async getProduct(id: string): Promise<ProductDto> {
+    return apiClient.get<ProductDto>(`/admin/catalog/products/${id}`);
+  },
+
+  async getAllProductSummaries(params: {
+    search?: string;
+    categoryId?: string;
+    status?: "all" | "active" | "inactive";
+    favoritesOnly?: boolean;
+    isChemical?: boolean;
+    ids?: string[];
+  } = {}): Promise<ProductDto[]> {
+    const pageSize = 100;
+    const first = await this.getProductSummaries({ ...params, page: 1, pageSize });
+    const items = [...first.items];
+    const totalPages = Math.max(1, Math.ceil(first.totalCount / pageSize));
+    for (let page = 2; page <= totalPages; page++) {
+      const next = await this.getProductSummaries({ ...params, page, pageSize });
+      items.push(...next.items);
+    }
+    return items;
+  },
+
   async previewRentalPricing(data: {
     dailyRent: number;
     buyPrice?: number | null;
@@ -1160,8 +1428,32 @@ export const adminApi = {
     return apiClient.downloadBlob(`/admin/catalog/download-excel?isChemical=${isChemical}`, filename);
   },
 
+  async getAdminAlertSummary(options?: ApiClientOptions): Promise<AdminAlertSummaryDto> {
+    return apiClient.get<AdminAlertSummaryDto>('/admin/alerts/summary', options);
+  },
+
+  async getAdminAlertFeed(params: {
+    tab?: string;
+    page?: number;
+    pageSize?: number;
+  } = {}, options?: ApiClientOptions): Promise<AdminAlertFeedResult> {
+    const qs = new URLSearchParams();
+    if (params.tab) qs.set("tab", params.tab);
+    qs.set("page", String(params.page && params.page > 0 ? params.page : 1));
+    qs.set("pageSize", String(params.pageSize && params.pageSize > 0 ? params.pageSize : 15));
+    return apiClient.get<AdminAlertFeedResult>(`/admin/alerts/feed?${qs.toString()}`, options);
+  },
+
+  async getAdminDashboardSummary(options?: ApiClientOptions): Promise<AdminDashboardSummaryDto> {
+    return apiClient.get<AdminDashboardSummaryDto>('/admin/dashboard/summary', options);
+  },
+
   async getAdminOrders(options?: ApiClientOptions): Promise<AdminOrderDto[]> {
     return apiClient.get<AdminOrderDto[]>('/admin/orders', options);
+  },
+
+  async getAdminOrderDetail(orderId: string, options?: ApiClientOptions): Promise<AdminOrderDetailResult> {
+    return apiClient.get<AdminOrderDetailResult>(`/admin/orders/${encodeURIComponent(orderId)}`, options);
   },
 
   async getAdminOrderSummaries(params: {
@@ -1189,6 +1481,21 @@ export const adminApi = {
     return apiClient.get<AdminExpiringOrderDto[]>(`/admin/orders/expirations?withinDays=${withinDays}`);
   },
 
+  async getAdminExpirationSummaries(params: {
+    withinDays?: number;
+    search?: string;
+    page?: number;
+    pageSize?: number;
+  } = {}, options?: ApiClientOptions): Promise<AdminExpirationListResult> {
+    const qs = new URLSearchParams();
+    qs.set("withinDays", String(params.withinDays && params.withinDays > 0 ? params.withinDays : 7));
+    const search = params.search?.trim();
+    if (search) qs.set("search", search);
+    qs.set("page", String(params.page && params.page > 0 ? params.page : 1));
+    qs.set("pageSize", String(params.pageSize && params.pageSize > 0 ? params.pageSize : 8));
+    return apiClient.get<AdminExpirationListResult>(`/admin/orders/expirations/summaries?${qs.toString()}`, options);
+  },
+
   async updateAdminOrderStatus(data: UpdateAdminOrderStatusRequest): Promise<AdminOrderDto> {
     return apiClient.patch<AdminOrderDto>(`/admin/orders/${data.orderId}/status`, data);
   },
@@ -1211,6 +1518,19 @@ export const adminApi = {
 
   async getAdminAllPendingContinuations(): Promise<any[]> {
     return apiClient.get<any[]>(`/admin/orders/continuations/pending`);
+  },
+
+  async getAdminPendingContinuationSummaries(params: {
+    page?: number;
+    pageSize?: number;
+  } = {}, options?: ApiClientOptions): Promise<AdminPendingContinuationListResult> {
+    const qs = new URLSearchParams();
+    qs.set("page", String(params.page && params.page > 0 ? params.page : 1));
+    qs.set("pageSize", String(params.pageSize && params.pageSize > 0 ? params.pageSize : 8));
+    return apiClient.get<AdminPendingContinuationListResult>(
+      `/admin/orders/continuations/pending/summaries?${qs.toString()}`,
+      options,
+    );
   },
 
   async approveAdminExtension(orderId: string, extensionId: string, adminUserId: string, overrides?: any): Promise<void> {
@@ -1250,6 +1570,19 @@ export const adminApi = {
   async getAdminCustomers(search?: string): Promise<AdminCustomerListItemDto[]> {
     const q = search ? `?search=${encodeURIComponent(search)}` : "";
     return apiClient.get<AdminCustomerListItemDto[]>(`/admin/customers${q}`);
+  },
+
+  async getAdminCustomerSummaries(params: {
+    search?: string;
+    page?: number;
+    pageSize?: number;
+  } = {}, options?: ApiClientOptions): Promise<AdminCustomerListResult> {
+    const qs = new URLSearchParams();
+    const search = params.search?.trim();
+    if (search) qs.set("search", search);
+    qs.set("page", String(params.page && params.page > 0 ? params.page : 1));
+    qs.set("pageSize", String(params.pageSize && params.pageSize > 0 ? params.pageSize : 8));
+    return apiClient.get<AdminCustomerListResult>(`/admin/customers/summaries?${qs.toString()}`, options);
   },
 
   async getAdminCustomer(
@@ -1312,6 +1645,33 @@ export const adminApi = {
     return apiClient.get<AdminDoctorDto[]>(`/admin/doctors${q ? `?${q}` : ""}`);
   },
 
+  async getDoctorSummaries(params: {
+    search?: string;
+    isActive?: boolean;
+    page?: number;
+    pageSize?: number;
+  } = {}, options?: ApiClientOptions): Promise<AdminDoctorListResult> {
+    const qs = new URLSearchParams();
+    const search = params.search?.trim();
+    if (search) qs.set("search", search);
+    if (typeof params.isActive === "boolean") qs.set("isActive", String(params.isActive));
+    qs.set("page", String(params.page && params.page > 0 ? params.page : 1));
+    qs.set("pageSize", String(params.pageSize && params.pageSize > 0 ? params.pageSize : 8));
+    return apiClient.get<AdminDoctorListResult>(`/admin/doctors/summaries?${qs.toString()}`, options);
+  },
+
+  async getDoctorOptions(params: {
+    search?: string;
+    isActive?: boolean;
+  } = {}, options?: ApiClientOptions): Promise<AdminLookupOptionDto[]> {
+    const qs = new URLSearchParams();
+    const search = params.search?.trim();
+    if (search) qs.set("search", search);
+    if (typeof params.isActive === "boolean") qs.set("isActive", String(params.isActive));
+    const q = qs.toString();
+    return apiClient.get<AdminLookupOptionDto[]>(`/admin/doctors/options${q ? `?${q}` : ""}`, options);
+  },
+
   async getDoctor(id: string): Promise<AdminDoctorDto> {
     return apiClient.get<AdminDoctorDto>(`/admin/doctors/${id}`);
   },
@@ -1351,6 +1711,33 @@ export const adminApi = {
     if (typeof isActive === "boolean") qs.set("isActive", String(isActive));
     const q = qs.toString();
     return apiClient.get<AdminHospitalDto[]>(`/admin/hospitals${q ? `?${q}` : ""}`);
+  },
+
+  async getHospitalSummaries(params: {
+    search?: string;
+    isActive?: boolean;
+    page?: number;
+    pageSize?: number;
+  } = {}, options?: ApiClientOptions): Promise<AdminHospitalListResult> {
+    const qs = new URLSearchParams();
+    const search = params.search?.trim();
+    if (search) qs.set("search", search);
+    if (typeof params.isActive === "boolean") qs.set("isActive", String(params.isActive));
+    qs.set("page", String(params.page && params.page > 0 ? params.page : 1));
+    qs.set("pageSize", String(params.pageSize && params.pageSize > 0 ? params.pageSize : 8));
+    return apiClient.get<AdminHospitalListResult>(`/admin/hospitals/summaries?${qs.toString()}`, options);
+  },
+
+  async getHospitalOptions(params: {
+    search?: string;
+    isActive?: boolean;
+  } = {}, options?: ApiClientOptions): Promise<AdminLookupOptionDto[]> {
+    const qs = new URLSearchParams();
+    const search = params.search?.trim();
+    if (search) qs.set("search", search);
+    if (typeof params.isActive === "boolean") qs.set("isActive", String(params.isActive));
+    const q = qs.toString();
+    return apiClient.get<AdminLookupOptionDto[]>(`/admin/hospitals/options${q ? `?${q}` : ""}`, options);
   },
 
   async createHospital(data: CreateAdminHospitalRequest): Promise<AdminHospitalDto> {

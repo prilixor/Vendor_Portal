@@ -11,11 +11,11 @@ import '../auth/login_screen.dart';
 import 'addresses_screen.dart';
 import '../chat/chat_sessions_screen.dart';
 import '../orders/expirations_screen.dart';
+import 'delete_account_screen.dart';
 import 'edit_profile_screen.dart';
 import 'notification_preferences_screen.dart';
 import 'support_screen.dart';
 import 'update_password_screen.dart';
-import '../../shared/widgets/legal_policy_links.dart';
 
 class ProfileScreen extends StatefulWidget {
   const ProfileScreen({super.key});
@@ -212,13 +212,15 @@ class _ProfileScreenState extends State<ProfileScreen> {
                               title: 'Privacy & Security',
                               onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const UpdatePasswordScreen())),
                             ),
+                            Divider(color: colors.border, height: 1),
+                            _buildMenuItem(
+                              context,
+                              icon: Icons.delete_outline,
+                              title: 'Delete account',
+                              onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const DeleteAccountScreen())),
+                            ),
                           ],
                         ),
-                      ),
-                      const SizedBox(height: 16),
-                      const Align(
-                        alignment: Alignment.centerLeft,
-                        child: ProfileSettingsPolicyLinks(),
                       ),
                       const SizedBox(height: 24),
                       SizedBox(

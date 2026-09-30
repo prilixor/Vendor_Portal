@@ -6,6 +6,7 @@ import '../../core/models/vendor_catalog_model.dart';
 import '../../core/providers/vendor_catalog_provider.dart';
 import '../../core/providers/vendor_profile_provider.dart';
 import '../../core/theme.dart';
+import '../../core/utils/debouncer.dart';
 import '../../shared/widgets/brand_page_loader.dart';
 import '../../shared/widgets/listing_thumb.dart';
 import 'listing_type_picker_screen.dart';
@@ -30,6 +31,7 @@ class _ProductsScreenState extends State<ProductsScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
   final _searchController = TextEditingController();
+  final Debouncer _searchDebouncer = Debouncer(duration: catalogSearchDebounce);
   String _searchQuery = '';
   late String _statusFilter;
   bool _favoritesOnly = false;
@@ -50,12 +52,17 @@ class _ProductsScreenState extends State<ProductsScreen>
       vsync: this,
       initialIndex: widget.initialChemicalTab == true ? 1 : 0,
     );
+    _tabController.addListener(() {
+      if (_tabController.indexIsChanging) return;
+      _load();
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
   }
 
   @override
   void dispose() {
     _tabController.dispose();
+    _searchDebouncer.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -65,54 +72,33 @@ class _ProductsScreenState extends State<ProductsScreen>
         Provider.of<AuthProvider>(context, listen: false).vendorId;
     if (vendorId == null || vendorId.isEmpty) return;
     await Provider.of<VendorCatalogProvider>(context, listen: false)
-        .fetchCatalog(vendorId, silent: silent);
+        .fetchListingSummaries(
+      vendorId,
+      silent: silent,
+      search: _searchQuery,
+      status: _statusFilter,
+      isChemical: _tabController.index == 1,
+      reset: true,
+    );
   }
 
-  List<VendorListingRow> _filtered(List<VendorListingRow> rows, bool chemicals) {
-    final q = _searchQuery.trim().toLowerCase();
-    return rows.where((row) {
-      if (row.isChemical != chemicals) return false;
-      if (_favoritesOnly && row.listing.favoriteCount <= 0) return false;
-      if (_statusFilter != 'all') {
-        final statusId = switch (row.status) {
-          ListingUiStatus.active => 'active',
-          ListingUiStatus.inactive => 'inactive',
-          ListingUiStatus.draft => 'draft',
-        };
-        if (statusId != _statusFilter) return false;
-      }
-      if (q.isEmpty) return true;
-      return row.listing.listingTitle.toLowerCase().contains(q) ||
-          row.categoryName.toLowerCase().contains(q) ||
-          row.productName.toLowerCase().contains(q);
-    }).toList()
-      ..sort((a, b) => a.listing.listingTitle.compareTo(b.listing.listingTitle));
+  void _maybeLoadMore() {
+    final vendorId =
+        Provider.of<AuthProvider>(context, listen: false).vendorId;
+    if (vendorId == null || vendorId.isEmpty) return;
+    Provider.of<VendorCatalogProvider>(context, listen: false)
+        .fetchListingSummaries(
+      vendorId,
+      search: _searchQuery,
+      status: _statusFilter,
+      isChemical: _tabController.index == 1,
+      reset: false,
+    );
   }
 
-  Map<String, int> _statusCounts(List<VendorListingRow> rows, bool chemicals) {
-    final base = rows.where((r) => r.isChemical == chemicals).toList();
-    final q = _searchQuery.trim().toLowerCase();
-    final searchable = base.where((row) {
-      if (_favoritesOnly && row.listing.favoriteCount <= 0) return false;
-      if (q.isEmpty) return true;
-      return row.listing.listingTitle.toLowerCase().contains(q) ||
-          row.categoryName.toLowerCase().contains(q) ||
-          row.productName.toLowerCase().contains(q);
-    }).toList();
-
-    return {
-      for (final (id, _) in _statusFilters)
-        id: id == 'all'
-            ? searchable.length
-            : searchable.where((row) {
-                final statusId = switch (row.status) {
-                  ListingUiStatus.active => 'active',
-                  ListingUiStatus.inactive => 'inactive',
-                  ListingUiStatus.draft => 'draft',
-                };
-                return statusId == id;
-              }).length,
-    };
+  List<VendorListingRow> _filtered(List<VendorListingRow> rows) {
+    if (!_favoritesOnly) return rows;
+    return rows.where((row) => row.listing.favoriteCount > 0).toList();
   }
 
   Future<void> _openStatusFilter(Map<String, int> counts) async {
@@ -182,6 +168,7 @@ class _ProductsScreenState extends State<ProductsScreen>
                       onPressed: () {
                         setState(() => _statusFilter = draft);
                         Navigator.pop(ctx);
+                        _load();
                       },
                       style: ElevatedButton.styleFrom(
                         backgroundColor: AppTheme.accent,
@@ -243,8 +230,15 @@ class _ProductsScreenState extends State<ProductsScreen>
     final provider = Provider.of<VendorCatalogProvider>(context);
     final pending = Provider.of<VendorProfileProvider>(context).isPending;
     final isChemicalTab = _tabController.index == 1;
-    final filtered = _filtered(provider.listingRows, isChemicalTab);
-    final counts = _statusCounts(provider.listingRows, isChemicalTab);
+    final filtered = _filtered(provider.listingRows);
+    final catalogTotal =
+        isChemicalTab ? provider.chemicalCount : provider.equipmentCount;
+    final counts = {
+      'all': catalogTotal,
+      'active': provider.activeCount,
+      'inactive': provider.inactiveCount,
+      'draft': provider.draftCount,
+    };
     final statusLabel =
         _statusFilters.firstWhere((e) => e.$1 == _statusFilter).$2;
 
@@ -265,12 +259,10 @@ class _ProductsScreenState extends State<ProductsScreen>
           onTap: (_) => setState(() {}),
           tabs: [
             Tab(
-              text:
-                  'Equipment (${provider.listingRows.where((r) => !r.isChemical).length})',
+              text: 'Equipment (${provider.equipmentCount})',
             ),
             Tab(
-              text:
-                  'Chemicals (${provider.listingRows.where((r) => r.isChemical).length})',
+              text: 'Chemicals (${provider.chemicalCount})',
             ),
           ],
         ),
@@ -303,7 +295,10 @@ class _ProductsScreenState extends State<ProductsScreen>
                   ),
                   contentPadding: const EdgeInsets.symmetric(vertical: 0),
                 ),
-                onChanged: (v) => setState(() => _searchQuery = v),
+                onChanged: (v) {
+                  setState(() => _searchQuery = v);
+                  _searchDebouncer.run(_load);
+                },
               ),
             ),
             Padding(
@@ -314,7 +309,7 @@ class _ProductsScreenState extends State<ProductsScreen>
                     child: OutlinedButton.icon(
                       onPressed: () => _openStatusFilter(counts),
                       icon: Icon(Icons.filter_list, size: 18, color: context.appColors.textSecondary),
-                      label: Text('Status: $statusLabel'),
+                      label: Text('Status: $statusLabel (${counts[_statusFilter] ?? 0})'),
                       style: OutlinedButton.styleFrom(
                         foregroundColor: context.appColors.textSecondary,
                         side: BorderSide(color: context.appColors.border),
@@ -369,7 +364,15 @@ class _ProductsScreenState extends State<ProductsScreen>
                                 ),
                               ],
                             )
-                          : ListView.separated(
+                          : NotificationListener<ScrollNotification>(
+                              onNotification: (notification) {
+                                if (notification.metrics.pixels >=
+                                    notification.metrics.maxScrollExtent - 400) {
+                                  _maybeLoadMore();
+                                }
+                                return false;
+                              },
+                              child: ListView.separated(
                               physics: const AlwaysScrollableScrollPhysics(),
                               padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
                               itemCount: filtered.length,
@@ -390,6 +393,7 @@ class _ProductsScreenState extends State<ProductsScreen>
                                   },
                                 );
                               },
+                            ),
                             ),
             ),
           ],

@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { adminApi, type AdminOrderDto } from "@/app/services/adminApi";
 import { useSearchParams, useNavigate, useLocation } from "react-router-dom";
 import { PageHeader } from "@/app/components/shared/PageHeader";
@@ -103,7 +103,7 @@ export const AdminOrders = () => {
   }, [urlTab]);
   const [page, setPage] = useState(1);
 
-  const { data, isLoading, refetch, isFetching } = useQuery({
+  const { data, isLoading, refetch, isFetching, isPlaceholderData } = useQuery({
     queryKey: ["admin-order-summaries", page, debouncedSearch, activeTab],
     queryFn: () =>
       adminApi.getAdminOrderSummaries({
@@ -112,7 +112,9 @@ export const AdminOrders = () => {
         page,
         pageSize: PAGE_SIZE,
       }, { quiet: true }),
+    placeholderData: keepPreviousData,
   });
+  const isPageChanging = isPlaceholderData && !isLoading;
 
   const orders = data?.items ?? [];
   const stats = data?.stats ?? { totalCount: 0, revenue: 0, active: 0, returned: 0, failed: 0 };
@@ -224,7 +226,7 @@ export const AdminOrders = () => {
         <Card className="border-border/60 bg-card/60 backdrop-blur-md">
           <CardContent className="p-4 sm:p-5">
             <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-emerald-500/10 text-emerald-500 p-2.5">
+              <div className="rounded-lg bg-emerald-50 p-2.5 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
                 <TrendingUp className="h-5 w-5" />
               </div>
               <div className="min-w-0 flex-1">
@@ -238,7 +240,7 @@ export const AdminOrders = () => {
         <Card className="border-border/60 bg-card/60 backdrop-blur-md">
           <CardContent className="p-4 sm:p-5">
             <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-indigo-500/10 text-indigo-500 p-2.5">
+              <div className="rounded-lg bg-indigo-50 p-2.5 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300">
                 <Truck className="h-5 w-5" />
               </div>
               <div className="min-w-0 flex-1">
@@ -327,7 +329,7 @@ export const AdminOrders = () => {
         <PageContentGate loading={isLoading}>{groupedOrders.length === 0 ? (
           <p className="py-12 text-center text-sm text-muted-foreground">No customer orders found matching current criteria.</p>
         ) : (
-          <div className="space-y-4">
+          <div className={cn("space-y-4 transition-opacity duration-200", isPageChanging && "opacity-50")}>
             {groupedOrders.map((group) => (
               <div key={group.baseOrderNumber} className="min-w-0 overflow-hidden rounded-xl border border-border/80 bg-card p-4 shadow-sm transition-all hover:border-border/100 sm:p-6">
                 {/* Transaction Group Header */}

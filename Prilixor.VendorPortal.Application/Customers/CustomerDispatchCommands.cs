@@ -587,7 +587,7 @@ internal sealed class AssignVendorOrderAssetsCommandHandler(
     }
 }
 
-internal static class VendorOrderMapper
+public static class VendorOrderMapper
 {
     public static VendorOrderDto ToVendorOrderDto(CustomerRentalOrderWithListing row, IReadOnlyList<string>? assignedAssetTags = null)
     {

@@ -248,6 +248,8 @@ const CustomerCheckout = () => {
       if (placedCount > 0) {
         clear();
         queryClient.invalidateQueries({ queryKey: ["customer-orders"] });
+        queryClient.invalidateQueries({ queryKey: ["customer-order-summaries"] });
+        queryClient.invalidateQueries({ queryKey: ["customer-dashboard-summary"] });
         navigate("/customer/orders");
       }
     },

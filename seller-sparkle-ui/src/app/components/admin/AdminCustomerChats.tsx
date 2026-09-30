@@ -1,8 +1,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { TablePagination } from "@/app/components/shared/TablePagination";
 import { formatDistanceToNow } from "date-fns";
 import {
-  ArrowLeft,
   ChevronLeft,
   Hash,
   MessageSquare,
@@ -25,6 +25,7 @@ import { cn } from "@/app/helpers/utils";
 
 const SESSIONS_POLL_MS = 10000;
 const MESSAGES_POLL_MS = 5000;
+const PAGE_SIZE = 8;
 
 export default function AdminCustomerChats() {
   const queryClient = useQueryClient();
@@ -32,18 +33,50 @@ export default function AdminCustomerChats() {
   const sessionFromUrl = searchParams.get("sessionId");
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(sessionFromUrl);
   const [search, setSearch] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
+  const [page, setPage] = useState(1);
   const [replyText, setReplyText] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      setAppliedSearch(search.trim());
+      setPage(1);
+    }, 350);
+    return () => window.clearTimeout(t);
+  }, [search]);
+
   const {
-    data: sessions = [],
+    data: sessionPage,
     isLoading: loadingSessions,
     refetch: refetchSessions,
     isFetching: fetchingSessions,
+    isPlaceholderData,
   } = useQuery({
-    queryKey: ["admin-customer-chat-sessions"],
-    queryFn: () => chatApi.getAdminSessions(),
+    queryKey: ["admin-customer-chat-session-summaries", page, appliedSearch],
+    queryFn: () =>
+      chatApi.getAdminSessionSummaries({
+        search: appliedSearch,
+        page,
+        pageSize: PAGE_SIZE,
+      }, { quiet: true }),
+    placeholderData: keepPreviousData,
     refetchInterval: SESSIONS_POLL_MS,
+  });
+  const isPageChanging = isPlaceholderData && !loadingSessions;
+  const sessions = sessionPage?.items ?? [];
+  const totalCount = sessionPage?.totalCount ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const safePage = Math.min(Math.max(1, page), totalPages);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
+  const { data: fetchedSession } = useQuery({
+    queryKey: ["admin-customer-chat-session", selectedSessionId],
+    queryFn: () => chatApi.getAdminSession(selectedSessionId!, { quiet: true }),
+    enabled: !!selectedSessionId,
   });
 
   useEffect(() => {
@@ -63,8 +96,8 @@ export default function AdminCustomerChats() {
   };
 
   const activeSession = useMemo(() => {
-    return sessions.find((s) => s.id === selectedSessionId) ?? null;
-  }, [sessions, selectedSessionId]);
+    return sessions.find((s) => s.id === selectedSessionId) ?? fetchedSession ?? null;
+  }, [sessions, selectedSessionId, fetchedSession]);
 
   const { data: messages = [], isLoading: loadingMessages } = useQuery({
     queryKey: ["admin-customer-chat-messages", selectedSessionId],
@@ -80,7 +113,8 @@ export default function AdminCustomerChats() {
   // Opening a thread marks customer messages read — refresh badges.
   useEffect(() => {
     if (!selectedSessionId || loadingMessages) return;
-    void queryClient.invalidateQueries({ queryKey: ["admin-customer-chat-sessions"] });
+    void queryClient.invalidateQueries({ queryKey: ["admin-customer-chat-session-summaries"] });
+    void queryClient.invalidateQueries({ queryKey: ["admin-customer-chat-session", selectedSessionId] });
     void queryClient.invalidateQueries({ queryKey: ["admin-customer-chat-unread"] });
   }, [selectedSessionId, loadingMessages, messages.length, queryClient]);
 
@@ -91,31 +125,14 @@ export default function AdminCustomerChats() {
       queryClient.invalidateQueries({
         queryKey: ["admin-customer-chat-messages", selectedSessionId],
       });
-      queryClient.invalidateQueries({ queryKey: ["admin-customer-chat-sessions"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-customer-chat-session-summaries"] });
+      queryClient.invalidateQueries({ queryKey: ["admin-customer-chat-session", selectedSessionId] });
       queryClient.invalidateQueries({ queryKey: ["admin-customer-chat-unread"] });
     },
     onError: (err: Error) => toast.error(err.message || "Failed to send message."),
   });
 
-  const filteredSessions = useMemo(() => {
-    const term = search.trim().toLowerCase();
-    const list = !term
-      ? [...sessions]
-      : sessions.filter(
-          (s) =>
-            s.customerName.toLowerCase().includes(term) ||
-            (s.subject && s.subject.toLowerCase().includes(term)) ||
-            (s.orderNumber && s.orderNumber.toLowerCase().includes(term)) ||
-            (s.vendorName && s.vendorName.toLowerCase().includes(term)),
-        );
-
-    return list.sort((a, b) => {
-      const unreadA = (a.unreadCount ?? 0) > 0 ? 1 : 0;
-      const unreadB = (b.unreadCount ?? 0) > 0 ? 1 : 0;
-      if (unreadA !== unreadB) return unreadB - unreadA;
-      return new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime();
-    });
-  }, [sessions, search]);
+  const filteredSessions = sessions;
 
   const showListOnMobile = !selectedSessionId;
   const showChatOnMobile = !!selectedSessionId;
@@ -164,7 +181,7 @@ export default function AdminCustomerChats() {
             <div className="flex items-center justify-between gap-2">
               <p className="text-sm font-semibold text-foreground">Conversations</p>
               <span className="text-xs tabular-nums text-muted-foreground">
-                {filteredSessions.length}
+                {totalCount}
               </span>
             </div>
             <div className="relative">
@@ -178,7 +195,7 @@ export default function AdminCustomerChats() {
             </div>
           </CardHeader>
           <ScrollArea className="min-h-0 flex-1">
-            <div className="space-y-2 p-3">
+            <div className={cn("space-y-2 p-3 transition-opacity duration-200", isPageChanging && "opacity-50")}>
               {loadingSessions ? (
                 <div className="min-h-[8rem]" aria-busy="true" aria-label="Loading conversations" />
               ) : filteredSessions.length === 0 ? (
@@ -269,6 +286,17 @@ export default function AdminCustomerChats() {
                 })
               )}
             </div>
+            {totalCount > 0 ? (
+              <div className="border-t border-border/70 px-3 py-2">
+                <TablePagination
+                  page={safePage}
+                  pageSize={PAGE_SIZE}
+                  total={totalCount}
+                  onPageChange={setPage}
+                  label="conversations"
+                />
+              </div>
+            ) : null}
           </ScrollArea>
         </Card>
 

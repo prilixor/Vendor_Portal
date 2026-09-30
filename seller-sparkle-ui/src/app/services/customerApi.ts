@@ -47,6 +47,25 @@ export interface ProductVariantDto {
   availableQuantity?: number;
 }
 
+export interface CustomerCatalogListingSummariesResult {
+  items: CustomerCatalogListingApi[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  allCount: number;
+  categoryCounts: Record<string, number>;
+}
+
+export interface CustomerCatalogListingSummariesParams {
+  search?: string;
+  category?: string;
+  isChemical?: boolean;
+  stock?: "all" | "low_stock" | "out_of_stock";
+  favoritesOnly?: boolean;
+  page?: number;
+  pageSize?: number;
+}
+
 export interface CustomerCatalogCategoryApi {
   id: string;
   categoryName: string;
@@ -370,6 +389,50 @@ export interface ExpiringOrderApi {
   orderType: string;
   endDate: string;
   daysLeft: number;
+  listingPrimaryImageUrl?: string | null;
+}
+
+export interface CustomerOrderListResult {
+  items: CustomerOrderApi[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  statusCounts: Record<string, number>;
+}
+
+export interface CustomerNotificationListResult {
+  items: CustomerNotificationApi[];
+  totalCount: number;
+  unreadCount: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface CustomerDashboardActivityApi {
+  status: string;
+  orderNumber: string;
+  listingTitle: string;
+}
+
+export interface CustomerDashboardSummaryApi {
+  activeRentals: number;
+  activeTotal: number;
+  upcomingDeliveries: number;
+  inStockListings: number;
+  outOfStockListings: number;
+  recentActivity: CustomerDashboardActivityApi[];
+}
+
+export interface CustomerExpirationGroupApi {
+  baseOrderNumber: string;
+  items: ExpiringOrderApi[];
+}
+
+export interface CustomerExpirationListResult {
+  items: CustomerExpirationGroupApi[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
 }
 
 export interface IndianStateLookupApi {
@@ -396,6 +459,19 @@ export const customerApi = {
 
   getCatalogListings(category?: string, search?: string): Promise<CustomerCatalogListingApi[]> {
     return apiClient.get<CustomerCatalogListingApi[]>(`/customers/catalog/listings${catalogQuery(category, search)}`);
+  },
+
+  getCatalogListingSummaries(params: CustomerCatalogListingSummariesParams = {}): Promise<CustomerCatalogListingSummariesResult> {
+    const qs = new URLSearchParams();
+    const search = params.search?.trim();
+    if (search) qs.set("search", search);
+    if (params.category?.trim()) qs.set("category", params.category.trim());
+    if (params.isChemical != null) qs.set("isChemical", String(params.isChemical));
+    if (params.stock && params.stock !== "all") qs.set("stock", params.stock);
+    if (params.favoritesOnly) qs.set("favoritesOnly", "true");
+    qs.set("page", String(params.page && params.page > 0 ? params.page : 1));
+    qs.set("pageSize", String(params.pageSize && params.pageSize > 0 ? params.pageSize : 8));
+    return apiClient.get<CustomerCatalogListingSummariesResult>(`/customers/catalog/listings/summaries?${qs.toString()}`);
   },
 
   getListingDetail(listingId: string): Promise<CustomerListingDetailApi> {
@@ -467,8 +543,34 @@ export const customerApi = {
     return apiClient.get<CustomerOrderApi[]>("/customers/me/orders");
   },
 
+  getOrderSummaries(params: {
+    search?: string;
+    status?: string;
+    page?: number;
+    pageSize?: number;
+  } = {}, options?: ApiClientOptions): Promise<CustomerOrderListResult> {
+    const qs = new URLSearchParams();
+    const search = params.search?.trim();
+    if (search) qs.set("search", search);
+    if (params.status && params.status !== "All") qs.set("status", params.status);
+    qs.set("page", String(params.page && params.page > 0 ? params.page : 1));
+    qs.set("pageSize", String(params.pageSize && params.pageSize > 0 ? params.pageSize : 8));
+    return apiClient.get<CustomerOrderListResult>(`/customers/me/orders/summaries?${qs.toString()}`, options);
+  },
+
   getOrder(orderId: string): Promise<CustomerOrderApi> {
     return apiClient.get<CustomerOrderApi>(`/customers/me/orders/${encodeURIComponent(orderId)}`);
+  },
+
+  getOrderGroup(orderId: string, options?: ApiClientOptions): Promise<CustomerOrderApi[]> {
+    return apiClient.get<CustomerOrderApi[]>(
+      `/customers/me/orders/${encodeURIComponent(orderId)}/group`,
+      options,
+    );
+  },
+
+  getDashboardSummary(options?: ApiClientOptions): Promise<CustomerDashboardSummaryApi> {
+    return apiClient.get<CustomerDashboardSummaryApi>("/customers/me/dashboard/summary", options);
   },
 
   placeOrders(payload: {
@@ -571,8 +673,39 @@ export const customerApi = {
     return apiClient.get<CustomerNotificationApi[]>("/customers/me/notifications", options);
   },
 
+  getNotificationSummaries(
+    params: { page?: number; pageSize?: number } = {},
+    options?: ApiClientOptions,
+  ): Promise<CustomerNotificationListResult> {
+    const qs = new URLSearchParams();
+    qs.set("page", String(params.page && params.page > 0 ? params.page : 1));
+    qs.set("pageSize", String(params.pageSize && params.pageSize > 0 ? params.pageSize : 15));
+    return apiClient.get<CustomerNotificationListResult>(
+      `/customers/me/notifications/summaries?${qs.toString()}`,
+      options,
+    );
+  },
+
+  getUnreadNotificationCount(options?: ApiClientOptions): Promise<number> {
+    return apiClient.get<number>("/customers/me/notifications/unread-count", options);
+  },
+
   getOrderExpirations(withinDays = 7): Promise<ExpiringOrderApi[]> {
     return apiClient.get<ExpiringOrderApi[]>(`/customers/me/orders/expirations?withinDays=${withinDays}`);
+  },
+
+  getExpirationSummaries(
+    params: { withinDays?: number; page?: number; pageSize?: number } = {},
+    options?: ApiClientOptions,
+  ): Promise<CustomerExpirationListResult> {
+    const qs = new URLSearchParams();
+    qs.set("withinDays", String(params.withinDays && params.withinDays > 0 ? params.withinDays : 30));
+    qs.set("page", String(params.page && params.page > 0 ? params.page : 1));
+    qs.set("pageSize", String(params.pageSize && params.pageSize > 0 ? params.pageSize : 8));
+    return apiClient.get<CustomerExpirationListResult>(
+      `/customers/me/orders/expirations/summaries?${qs.toString()}`,
+      options,
+    );
   },
 
   markNotificationRead(notificationId: string): Promise<CustomerNotificationApi> {

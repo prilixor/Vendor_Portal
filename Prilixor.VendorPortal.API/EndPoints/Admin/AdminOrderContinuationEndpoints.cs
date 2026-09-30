@@ -194,3 +194,34 @@ public sealed class GetAdminAllPendingContinuationsEndpoint(IMediator mediator)
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }
+
+public sealed class GetAdminPendingContinuationSummariesRequest
+{
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 8;
+}
+
+public sealed class GetAdminPendingContinuationSummariesEndpoint(IMediator mediator)
+    : Endpoint<GetAdminPendingContinuationSummariesRequest, Results<Ok<Prilixor.VendorPortal.Application.Onboarding.AdminPendingContinuationListResult>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("orders/continuations/pending/summaries");
+        Group<Prilixor.VendorPortal.API.EndPoints.Vendors.AdminApiGroup>();
+        Policies("Perm:orders.manage");
+        DontAutoTag();
+        Options(x => x.WithTags("Admin Orders"));
+    }
+
+    public override async Task<Results<Ok<Prilixor.VendorPortal.Application.Onboarding.AdminPendingContinuationListResult>, ProblemHttpResult>> ExecuteAsync(
+        GetAdminPendingContinuationSummariesRequest req,
+        CancellationToken ct)
+    {
+        var page = req.Page < 1 ? 1 : req.Page;
+        var pageSize = req.PageSize is < 1 or > 100 ? 8 : req.PageSize;
+        var result = await mediator.Send(
+            new Prilixor.VendorPortal.Application.Onboarding.GetAdminPendingContinuationListQuery(page, pageSize),
+            ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}

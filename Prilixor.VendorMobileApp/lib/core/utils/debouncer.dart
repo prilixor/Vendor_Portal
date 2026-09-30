@@ -22,8 +22,8 @@ class Debouncer {
   void dispose() => cancel();
 }
 
-/// Vendor listing/inventory lists filter locally on each keystroke.
-/// Use [catalogSearchDebounce] when a screen calls the API on search text.
+/// Vendor listing/order/request search — matches Vendor Web debounce (350ms).
+const catalogSearchDebounce = Duration(milliseconds: 350);
 
 /// Address / map place search — avoid hammering geocoders while typing.
 const placeSearchDebounce = Duration(milliseconds: 500);

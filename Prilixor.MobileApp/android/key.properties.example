@@ -1,0 +1,6 @@
+# Copy this file to android/key.properties. That file is gitignored.
+# Point storeFile at the customer upload keystore. Do not commit passwords.
+storePassword=CHANGE_ME
+keyPassword=CHANGE_ME
+keyAlias=upload
+storeFile=D:\\Prilixor\\Vendor_Portal\\android-upload-keys\\blinksmed-customer-upload.jks

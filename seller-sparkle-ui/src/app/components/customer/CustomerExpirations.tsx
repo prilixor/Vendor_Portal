@@ -1,8 +1,8 @@
 import { Link } from "react-router-dom";
-import { useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useEffect, useState } from "react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { ChevronRight } from "lucide-react";
-import { customerApi, type ExpiringOrderApi } from "@/app/services/customerApi";
+import { customerApi } from "@/app/services/customerApi";
 import { Badge } from "@/app/components/ui/badge";
 import { Button } from "@/app/components/ui/button";
 import { Card, CardContent } from "@/app/components/ui/card";
@@ -15,10 +15,6 @@ function formatEndDate(value: string): string {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return value;
   return parsed.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
-}
-
-function getBaseOrderNumber(orderNumber: string): string {
-  return orderNumber.split("-").slice(0, 3).join("-");
 }
 
 function urgencyLabel(daysLeft: number): string {
@@ -44,34 +40,31 @@ function endDateClass(daysLeft: number): string {
 }
 
 const PAGE_SIZE = 8;
+const DAY_WINDOWS = [7, 15, 30] as const;
 
 const CustomerExpirations = () => {
   const [page, setPage] = useState(1);
-  const { data, isLoading, error } = useQuery({
-    queryKey: ["customer-order-expirations"],
-    queryFn: () => customerApi.getOrderExpirations(30),
+  const [withinDays, setWithinDays] = useState<(typeof DAY_WINDOWS)[number]>(7);
+  const { data, isLoading, isPlaceholderData, error } = useQuery({
+    queryKey: ["customer-expiration-summaries", page, withinDays],
+    queryFn: () =>
+      customerApi.getExpirationSummaries({
+        withinDays,
+        page,
+        pageSize: PAGE_SIZE,
+      }),
+    placeholderData: keepPreviousData,
   });
+  const isPageChanging = isPlaceholderData && !isLoading;
 
-  const groups = useMemo(() => {
-    const next: { baseOrderNumber: string; items: ExpiringOrderApi[] }[] = [];
-    (data ?? []).forEach((row) => {
-      const baseNum = getBaseOrderNumber(row.orderNumber);
-      let group = next.find((g) => g.baseOrderNumber === baseNum);
-      if (!group) {
-        group = { baseOrderNumber: baseNum, items: [] };
-        next.push(group);
-      }
-      group.items.push(row);
-    });
-    return next;
-  }, [data]);
+  useEffect(() => {
+    setPage(1);
+  }, [withinDays]);
 
-  const totalPages = Math.max(1, Math.ceil(groups.length / PAGE_SIZE));
+  const pageGroups = data?.items ?? [];
+  const totalCount = data?.totalCount ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
-  const pageGroups = useMemo(
-    () => groups.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
-    [groups, safePage],
-  );
 
   if (error) {
     return (
@@ -82,14 +75,30 @@ const CustomerExpirations = () => {
   }
 
   return (
-    <PageContentGate loading={isLoading}>
+    <PageContentGate loading={isLoading && !data}>
     <div className="space-y-4 sm:space-y-6">
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Rental expirations</h1>
-        <p className="mt-1 text-sm text-muted-foreground">Track rental end dates for the next 30 days.</p>
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Rental expirations</h1>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Track rental end dates for the next {withinDays} days.
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {DAY_WINDOWS.map((days) => (
+            <Button
+              key={days}
+              variant={withinDays === days ? "default" : "outline"}
+              onClick={() => setWithinDays(days)}
+            >
+              {days} days
+            </Button>
+          ))}
+        </div>
       </div>
 
-      {!data?.length ? (
+      <div className={cn("transition-opacity duration-200", isPageChanging && "opacity-50")}>
+      {totalCount === 0 ? (
         <Card className="border-dashed">
           <CardContent className="py-10 text-center text-sm text-muted-foreground">
             No upcoming rental end dates in the selected window.
@@ -155,12 +164,13 @@ const CustomerExpirations = () => {
           <TablePagination
             page={safePage}
             pageSize={PAGE_SIZE}
-            total={groups.length}
+            total={totalCount}
             onPageChange={setPage}
             label="orders"
           />
         </div>
       )}
+      </div>
     </div>
     </PageContentGate>
   );

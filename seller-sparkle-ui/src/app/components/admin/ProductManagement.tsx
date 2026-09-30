@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useMemo } from "react";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useQueryTab } from "@/app/helpers/queryTab";
 import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card } from "@/app/components/ui/card";
@@ -16,9 +17,9 @@ import { TablePagination } from "@/app/components/shared/TablePagination";
 import { FileUploadZone } from "@/app/components/shared/FileUploadZone";
 import { PageContentGate } from "@/app/components/shared/PageLoader";
 import { Textarea } from "@/app/components/ui/textarea";
-import { adminApi, ProductCategoryDto, ProductDto, ProductImageDto, CreateProductCategoryRequest, UpdateProductCategoryRequest, CreateProductRequest, UpdateProductRequest, ExcelUploadErrorDto, ProductRentalPricingPlanDto, RentalDurationMasterDto, RentalDurationIconDto } from "@/app/services/adminApi";
+import { adminApi, ProductCategoryDto, ProductDto, ProductImageDto, CreateProductCategoryRequest, UpdateProductCategoryRequest, CreateProductRequest, UpdateProductRequest, ExcelUploadErrorDto, ProductRentalPricingPlanDto, RentalDurationMasterDto, RentalDurationIconDto, type PagedResult } from "@/app/services/adminApi";
 import { ListingThumb } from "@/app/components/shared/ListingThumb";
-import { resolveCatalogProductImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
+import { cn, resolveCatalogProductImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
 import { Plus, Search, Pencil, Trash2, Upload, Package, FolderTree, Loader2, Download, FileDown, Database, ChevronDown, FlaskConical } from "lucide-react";
 import { toast } from "sonner";
 import * as XLSX from "xlsx";
@@ -53,13 +54,14 @@ function toRentalPlanSaveDto(plan: ProductRentalPricingPlanDto, index: number): 
 }
 
 const ProductManagement = () => {
+  const queryClient = useQueryClient();
   const [categories, setCategories] = useState<ProductCategoryDto[]>([]);
-  const [products, setProducts] = useState<ProductDto[]>([]);
   const [rentalDurationMasters, setRentalDurationMasters] = useState<RentalDurationMasterDto[]>([]);
   const [rentalDurationIcons, setRentalDurationIcons] = useState<RentalDurationIconDto[]>([]);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(false);
   const [activeTab, setActiveTab] = useQueryTab(PRODUCT_TABS, "equipment");
   const [search, setSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<"all" | "active" | "inactive">("all");
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [categoryPage, setCategoryPage] = useState(1);
@@ -139,22 +141,43 @@ const ProductManagement = () => {
   const isChemical = false; // Add this line to fix the ReferenceError
 
   useEffect(() => {
-    loadData();
+    void loadLookups();
   }, []);
 
-  const loadData = async () => {
-    setLoading(true);
+  const loadLookups = async () => {
     try {
-      const [categoriesRes, productsRes, durationsRes, iconsRes] = await Promise.all([
+      const [categoriesRes, durationsRes, iconsRes] = await Promise.all([
         adminApi.getProductCategories(),
-        adminApi.getProducts(),
         adminApi.getRentalDurationMasters(false),
         adminApi.getRentalDurationIcons(false),
       ]);
       setCategories(categoriesRes);
-      setProducts(productsRes);
       setRentalDurationMasters(durationsRes);
       setRentalDurationIcons(iconsRes);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to load catalog data.";
+      toast.error(message);
+    }
+  };
+
+  const loadProducts = async () => {
+    await queryClient.invalidateQueries({ queryKey: ["admin-product-summaries", "equipment"] });
+  };
+
+  const patchListedProduct = (productId: string, patch: (row: ProductDto) => ProductDto) => {
+    queryClient.setQueriesData<PagedResult<ProductDto>>(
+      { queryKey: ["admin-product-summaries", "equipment"] },
+      (current) =>
+        current
+          ? { ...current, items: current.items.map((row) => (row.id === productId ? patch(row) : row)) }
+          : current,
+    );
+  };
+
+  const refreshPage = async () => {
+    setLoading(true);
+    try {
+      await Promise.all([loadLookups(), loadProducts()]);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to load catalog data.";
       toast.error(message);
@@ -172,29 +195,40 @@ const ProductManagement = () => {
     return matchesSearch && matchesStatus;
   });
 
-  const chemicalCategoryIds = new Set(categories.filter((c) => c.isChemical).map((c) => c.id));
-  const isChemicalProduct = (p: ProductDto) =>
-    chemicalCategoryIds.has(p.categoryId) ||
-    !!p.baseUnit ||
-    !!p.casNumber ||
-    !!p.chemicalFormula;
-
-  const filteredProducts = products.filter((p) => {
-    if (isChemicalProduct(p)) return false; // Hide chemicals in Equipment tab
-
-    const matchesSearch = !search || 
-      p.productName.toLowerCase().includes(search.toLowerCase()) ||
-      p.brandName?.toLowerCase().includes(search.toLowerCase()) ||
-      p.modelName?.toLowerCase().includes(search.toLowerCase());
-    const matchesStatus = statusFilter === "all" || (statusFilter === "active" ? p.isActive : !p.isActive);
-    const matchesFavorites = !showFavoritesOnly || p.favoriteCount > 0;
-    return matchesSearch && matchesStatus && matchesFavorites;
-  });
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedSearch(search.trim()), 300);
+    return () => window.clearTimeout(t);
+  }, [search]);
 
   useEffect(() => {
     setCategoryPage(1);
+  }, [search, statusFilter, activeTab]);
+
+  useEffect(() => {
     setProductPage(1);
-  }, [search, statusFilter, showFavoritesOnly, activeTab]);
+  }, [debouncedSearch, statusFilter, showFavoritesOnly, activeTab]);
+
+  const { data, isLoading: productsLoading, isPlaceholderData } = useQuery({
+    queryKey: ["admin-product-summaries", "equipment", productPage, debouncedSearch, statusFilter, showFavoritesOnly],
+    queryFn: () =>
+      adminApi.getProductSummaries({
+        search: debouncedSearch || undefined,
+        status: statusFilter,
+        favoritesOnly: showFavoritesOnly,
+        isChemical: false,
+        page: productPage,
+        pageSize: PAGE_SIZE,
+      }),
+    placeholderData: keepPreviousData,
+  });
+  const isPageChanging = isPlaceholderData && !productsLoading;
+  const products = data?.items ?? [];
+  const productTotalCount = data?.totalCount ?? 0;
+  const productTotalPages = Math.max(1, Math.ceil(productTotalCount / PAGE_SIZE));
+
+  useEffect(() => {
+    if (productPage > productTotalPages) setProductPage(productTotalPages);
+  }, [productPage, productTotalPages]);
 
   useEffect(() => {
     if (!productDialogOpen) return;
@@ -255,11 +289,6 @@ const ProductManagement = () => {
     const start = (categoryPage - 1) * PAGE_SIZE;
     return filteredCategories.slice(start, start + PAGE_SIZE);
   }, [filteredCategories, categoryPage]);
-
-  const paginatedProducts = useMemo(() => {
-    const start = (productPage - 1) * PAGE_SIZE;
-    return filteredProducts.slice(start, start + PAGE_SIZE);
-  }, [filteredProducts, productPage]);
 
   const clearFieldError = (key: string) => {
     setFieldErrors((prev) => {
@@ -322,11 +351,9 @@ const ProductManagement = () => {
   };
 
   const confirmStatusChange = async (id: string, action: 'activate' | 'deactivate') => {
-    const product = products.find((p) => p.id === id);
-    if (!product) return;
-
     try {
       setLoading(true);
+      const product = await adminApi.getProduct(id);
       const updated = await adminApi.updateProduct(id, {
         id,
         categoryId: product.categoryId,
@@ -340,14 +367,20 @@ const ProductManagement = () => {
         monthlyRent: product.monthlyRent,
         securityDeposit: product.securityDeposit,
         buyPrice: product.buyPrice,
+        vendorDailyRent: product.vendorDailyRent || 0,
+        vendorWeeklyRent: product.vendorWeeklyRent || 0,
+        vendorMonthlyRent: product.vendorMonthlyRent || 0,
+        vendorSecurityDeposit: product.vendorSecurityDeposit || 0,
+        vendorBuyPrice: product.vendorBuyPrice,
         gstPercent: product.gstPercent,
         isRentEnabled: product.isRentEnabled,
         isBuyEnabled: product.isBuyEnabled,
         isActive: action === 'activate',
         minimumRentalDays: product.minimumRentalDays,
+        rentalPricingPlans: product.rentalPricingPlans,
       });
 
-      setProducts(products.map((p) => (p.id === id ? updated : p)));
+      patchListedProduct(id, (p) => ({ ...p, ...updated, images: p.images, rentalPricingPlans: undefined }));
       toast.success(`Product ${action}d successfully`);
       setStatusConfirmId(null);
       setStatusConfirmAction(null);
@@ -414,7 +447,7 @@ const ProductManagement = () => {
         toast.success("Category created");
       }
       setCategoryDialogOpen(false);
-      await loadData();
+      await refreshPage();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to save category.";
       toast.error(message);
@@ -436,7 +469,7 @@ const ProductManagement = () => {
       setLoading(true);
       await adminApi.deleteProductCategory(id);
       toast.success("Category deleted");
-      await loadData();
+      await refreshPage();
       setCategoryDeleteConfirmId(null);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to delete category.";
@@ -453,7 +486,7 @@ const ProductManagement = () => {
       const images = await adminApi.getProductImages(productId);
       setProductImages(images);
       setNewImageIsPrimary(images.length === 0);
-      setProducts((prev) => prev.map((p) => (p.id === productId ? { ...p, images } : p)));
+      patchListedProduct(productId, (p) => ({ ...p, images }));
     } catch (error) {
       if (!silent) {
         const message = error instanceof Error ? error.message : "Failed to load product images.";
@@ -502,38 +535,48 @@ const ProductManagement = () => {
     return true;
   };
 
-  const openProductDialog = (product?: ProductDto) => {
+  const openProductDialog = async (product?: ProductDto) => {
     setFieldErrors({});
     setProductFormStep(0);
     setPricingPreviewNonce(0);
     setRentalPreviewMeta(null);
     if (product) {
-      setEditingProduct(product);
-      setProductForm({
-        categoryId: product.categoryId,
-        productName: product.productName,
-        brandName: product.brandName,
-        modelName: product.modelName,
-        shortDescription: product.shortDescription,
-        longDescription: product.longDescription,
-        dailyRent: product.dailyRent,
-        weeklyRent: product.weeklyRent ?? 0,
-        monthlyRent: product.monthlyRent,
-        securityDeposit: product.securityDeposit,
-        buyPrice: product.buyPrice,
-        vendorDailyRent: product.vendorDailyRent || 0,
-        vendorWeeklyRent: product.vendorWeeklyRent || 0,
-        vendorMonthlyRent: product.vendorMonthlyRent || 0,
-        vendorSecurityDeposit: product.vendorSecurityDeposit || 0,
-        vendorBuyPrice: product.vendorBuyPrice,
-        gstPercent: product.gstPercent,
-        isRentEnabled: product.isRentEnabled,
-        isBuyEnabled: product.isBuyEnabled,
-        isActive: product.isActive,
-        minimumRentalDays: product.minimumRentalDays ?? undefined,
-        rentalPricingPlans: (product.rentalPricingPlans ?? []).map((p) => ({ ...p })),
-      });
-      void loadProductImages(product.id, { silent: true });
+      setLoading(true);
+      try {
+        const full = await adminApi.getProduct(product.id);
+        setEditingProduct(full);
+        setProductForm({
+          categoryId: full.categoryId,
+          productName: full.productName,
+          brandName: full.brandName,
+          modelName: full.modelName,
+          shortDescription: full.shortDescription,
+          longDescription: full.longDescription,
+          dailyRent: full.dailyRent,
+          weeklyRent: full.weeklyRent ?? 0,
+          monthlyRent: full.monthlyRent,
+          securityDeposit: full.securityDeposit,
+          buyPrice: full.buyPrice,
+          vendorDailyRent: full.vendorDailyRent || 0,
+          vendorWeeklyRent: full.vendorWeeklyRent || 0,
+          vendorMonthlyRent: full.vendorMonthlyRent || 0,
+          vendorSecurityDeposit: full.vendorSecurityDeposit || 0,
+          vendorBuyPrice: full.vendorBuyPrice,
+          gstPercent: full.gstPercent,
+          isRentEnabled: full.isRentEnabled,
+          isBuyEnabled: full.isBuyEnabled,
+          isActive: full.isActive,
+          minimumRentalDays: full.minimumRentalDays ?? undefined,
+          rentalPricingPlans: (full.rentalPricingPlans ?? []).map((p) => ({ ...p })),
+        });
+        void loadProductImages(full.id, { silent: true });
+        setProductDialogOpen(true);
+      } catch (error) {
+        const message = error instanceof Error ? error.message : "Failed to load product.";
+        toast.error(message);
+      } finally {
+        setLoading(false);
+      }
     } else {
       setEditingProduct(null);
       const equipmentCategories = categories.filter((c) => !c.isChemical);
@@ -558,13 +601,14 @@ const ProductManagement = () => {
         isRentEnabled: true,
         isBuyEnabled: true,
         isActive: true,
+        minimumRentalDays: undefined,
         rentalPricingPlans: [],
       });
       setProductImages([]);
       setNewImageUrl("");
       setNewImageIsPrimary(false);
+      setProductDialogOpen(true);
     }
-    setProductDialogOpen(true);
   };
 
   const addProductImageFromValue = async (imageRef: string, thumbnailRef?: string | null) => {
@@ -748,7 +792,7 @@ const ProductManagement = () => {
         toast.success("Product created");
       }
       setProductDialogOpen(false);
-      await loadData();
+      await refreshPage();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to save product.";
       toast.error(message);
@@ -767,7 +811,7 @@ const ProductManagement = () => {
         setLoading(true);
         await adminApi.deleteProduct(id);
         toast.success("Product deleted");
-        await loadData();
+        await refreshPage();
         setDeleteConfirmId(null);
       } catch (error) {
         const message = error instanceof Error ? error.message : "Failed to delete product.";
@@ -786,7 +830,7 @@ const ProductManagement = () => {
       setLoading(true);
       await adminApi.deleteProduct(id);
       toast.success("Product deleted");
-      await loadData();
+      await refreshPage();
       setDeleteConfirmId(null);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to delete product.";
@@ -803,7 +847,7 @@ const ProductManagement = () => {
       const result = await adminApi.uploadCatalogExcel(file, false);
 
       if (result.categoriesCreated > 0 || result.productsCreated > 0) {
-        await loadData();
+        await refreshPage();
       }
 
       if (result.success) {
@@ -883,8 +927,8 @@ const ProductManagement = () => {
   };
 
   const renderProductGrid = () => (
-    <PageContentGate loading={loading}>
-      <>
+    <PageContentGate loading={productsLoading}>
+      <div className={cn("space-y-4 transition-opacity duration-200", isPageChanging && "opacity-50")}>
       <div className="max-w-full overflow-x-auto rounded-lg border border-border">
         <table className="w-full min-w-[700px] sm:min-w-[800px] text-sm">
           <thead className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
@@ -908,7 +952,7 @@ const ProductManagement = () => {
             </tr>
           </thead>
           <tbody className="divide-y divide-border">
-            {paginatedProducts.map((p) => (
+            {products.map((p) => (
               <tr key={p.id} className="hover:bg-muted/20">
                 <td className="px-4 py-3">
                   <div className="flex items-center gap-3">
@@ -965,7 +1009,7 @@ const ProductManagement = () => {
                 </td>
               </tr>
             ))}
-            {filteredProducts.length === 0 && (
+            {products.length === 0 && (
               <tr>
                 <td colSpan={activeTab === "equipment" ? 9 : 8} className="px-4 py-8 text-center text-sm text-muted-foreground">
                   No products found.
@@ -975,16 +1019,14 @@ const ProductManagement = () => {
           </tbody>
         </table>
       </div>
-      {!loading && (
-        <TablePagination
-          page={productPage}
-          pageSize={PAGE_SIZE}
-          total={filteredProducts.length}
-          onPageChange={setProductPage}
-          label="products"
-        />
-      )}
-    </>
+      <TablePagination
+        page={Math.min(productPage, productTotalPages)}
+        pageSize={PAGE_SIZE}
+        total={productTotalCount}
+        onPageChange={setProductPage}
+        label="products"
+      />
+      </div>
     </PageContentGate>
   );
 
@@ -1002,7 +1044,7 @@ const ProductManagement = () => {
               <TabsTrigger value="equipment" className="text-xs sm:text-sm">
                 <Package className="mr-1 sm:mr-2 h-4 w-4 shrink-0" />
                 <span className="truncate">Equipment</span>
-                <span className="hidden sm:inline ml-1">({products.filter((p) => !isChemicalProduct(p)).length})</span>
+                <span className="hidden sm:inline ml-1">({productTotalCount})</span>
               </TabsTrigger>
               <TabsTrigger value="categories" className="text-xs sm:text-sm">
                 <FolderTree className="mr-1 sm:mr-2 h-4 w-4 shrink-0" />
@@ -1357,7 +1399,7 @@ const ProductManagement = () => {
                 <div className="p-3 bg-muted/50 rounded-md">
                   <p className="font-medium text-sm">{category.categoryName}</p>
                   <p className="text-xs text-muted-foreground">
-                    {products.filter(p => p.categoryId === category.id).length} products will be deleted
+                    Products in this category must be removed before it can be deleted.
                   </p>
                 </div>
               </div>

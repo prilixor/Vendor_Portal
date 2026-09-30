@@ -308,6 +308,28 @@ public class LegalAcceptanceRecorderTests
                     && (string.IsNullOrWhiteSpace(screen) || a.SourceScreen == screen))
                 .Take(take)
                 .ToList());
+        public Task<(List<LegalAcceptance> Items, int TotalCount)> SearchAcceptancesForAdminPagedAsync(
+            string? searchTerm,
+            string? actorType,
+            Guid? documentId,
+            string? screen,
+            IReadOnlyCollection<Guid>? matchingActorIds,
+            int page,
+            int pageSize,
+            CancellationToken ct = default)
+        {
+            var filtered = _acceptances.Where(a =>
+                (string.IsNullOrWhiteSpace(actorType) || a.ActorType == actorType)
+                && (!documentId.HasValue || a.DocumentId == documentId)
+                && (string.IsNullOrWhiteSpace(screen) || a.SourceScreen == screen)
+                && (string.IsNullOrWhiteSpace(searchTerm)
+                    || (matchingActorIds?.Contains(a.ActorId) ?? false)
+                    || (a.SignedName ?? "").Contains(searchTerm, StringComparison.OrdinalIgnoreCase)
+                    || (a.IpAddress ?? "").Contains(searchTerm, StringComparison.OrdinalIgnoreCase)
+                    || a.SourceScreen.Contains(searchTerm, StringComparison.OrdinalIgnoreCase))).ToList();
+            var skip = Math.Max(0, (Math.Max(1, page) - 1) * Math.Clamp(pageSize, 1, 100));
+            return Task.FromResult((filtered.Skip(skip).Take(Math.Clamp(pageSize, 1, 100)).ToList(), filtered.Count));
+        }
         public Task SaveChangesAsync(CancellationToken ct = default) => Task.CompletedTask;
 
         private static List<LegalDocument> BuildSeededDocuments()

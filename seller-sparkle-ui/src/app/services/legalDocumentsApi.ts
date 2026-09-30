@@ -1,4 +1,4 @@
-import { apiClient } from "./apiClient";
+import { apiClient, type ApiClientOptions } from "./apiClient";
 
 export interface LegalPlacementDto {
   surface: string;
@@ -132,7 +132,36 @@ export const legalDocumentsApi = {
     const suffix = query.toString() ? `?${query.toString()}` : "";
     return apiClient.get<LegalAcceptanceAdminDto[]>(`/admin/legal-documents/acceptances${suffix}`);
   },
+
+  listAcceptanceSummaries: (params: {
+    search?: string;
+    actorType?: string;
+    documentId?: string;
+    screen?: string;
+    page?: number;
+    pageSize?: number;
+  } = {}, options?: ApiClientOptions) => {
+    const query = new URLSearchParams();
+    const search = params.search?.trim();
+    if (search) query.set("search", search);
+    if (params.actorType && params.actorType !== "all") query.set("actorType", params.actorType);
+    if (params.documentId && params.documentId !== "all") query.set("documentId", params.documentId);
+    if (params.screen && params.screen !== "all") query.set("screen", params.screen);
+    query.set("page", String(params.page && params.page > 0 ? params.page : 1));
+    query.set("pageSize", String(params.pageSize && params.pageSize > 0 ? params.pageSize : 8));
+    return apiClient.get<AdminLegalAcceptanceListResult>(
+      `/admin/legal-documents/acceptances/summaries?${query.toString()}`,
+      options,
+    );
+  },
 };
+
+export interface AdminLegalAcceptanceListResult {
+  items: LegalAcceptanceAdminDto[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
 
 export interface LegalAcceptanceAdminDto {
   id: string;

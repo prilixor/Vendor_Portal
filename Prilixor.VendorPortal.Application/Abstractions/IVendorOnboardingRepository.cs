@@ -58,6 +58,7 @@ public interface IVendorOnboardingRepository
     Task UpdateProductAsync(Product product, CancellationToken cancellationToken);
     Task DeleteProductAsync(Guid productId, CancellationToken cancellationToken);
     Task<List<Product>> GetProductsAsync(Guid? categoryId, CancellationToken cancellationToken);
+    Task<ProductListResult> SearchProductSummariesAsync(ProductListQuerySpec spec, CancellationToken cancellationToken);
     Task AddProductImageAsync(ProductImage image, CancellationToken cancellationToken);
     Task<ProductImage?> GetProductImageByIdAsync(Guid productId, Guid imageId, CancellationToken cancellationToken);
     Task UpdateProductImageAsync(ProductImage image, CancellationToken cancellationToken);
@@ -103,9 +104,11 @@ public interface IVendorOnboardingRepository
     Task<List<VendorProductDocument>> GetVendorProductDocumentsAsync(Guid listingId, CancellationToken cancellationToken);
 
     Task<VendorInventory?> GetVendorInventoryByListingIdAsync(Guid listingId, CancellationToken cancellationToken);
+    Task<List<VendorInventory>> GetVendorInventoriesByListingIdsAsync(IReadOnlyList<Guid> listingIds, CancellationToken cancellationToken);
     Task UpsertVendorInventoryAsync(VendorInventory inventory, CancellationToken cancellationToken);
 
     Task<List<VendorVariantInventory>> GetVariantInventoryByListingIdAsync(Guid listingId, CancellationToken cancellationToken);
+    Task<List<VendorVariantInventory>> GetVariantInventoriesByListingIdsAsync(IReadOnlyList<Guid> listingIds, CancellationToken cancellationToken);
     Task UpsertVariantInventoryAsync(VendorVariantInventory item, CancellationToken cancellationToken);
     /// <summary>Marks tracked ProductVariant entities Unchanged so stock saves never UPDATE catalog rows.</summary>
     void DiscardTrackedProductVariantChanges();
@@ -128,6 +131,10 @@ public interface IVendorOnboardingRepository
     Task UpdateVendorNotificationAsync(VendorNotification notification, CancellationToken cancellationToken);
     Task<List<VendorNotification>> GetVendorNotificationsAsync(Guid vendorId, CancellationToken cancellationToken);
     Task<int> GetUnreadNotificationCountAsync(Guid vendorId, CancellationToken cancellationToken);
+    Task<VendorNotificationListResult> SearchVendorNotificationSummariesAsync(Guid vendorId, bool unreadOnly, int page, int pageSize, CancellationToken cancellationToken);
+    Task<HashSet<string>> GetExistingVendorExpiringNotificationTitlesAsync(Guid vendorId, IReadOnlyCollection<string> titles, CancellationToken cancellationToken);
+    Task<VendorDashboardSummaryDto> GetVendorDashboardCatalogAsync(Guid vendorId, CancellationToken cancellationToken);
+    Task<VendorListingListResult> SearchVendorListingSummariesAsync(Guid vendorId, string? search, string? status, bool? isChemical, int page, int pageSize, CancellationToken cancellationToken);
 
     Task<VendorPushSubscription?> GetVendorPushSubscriptionAsync(Guid vendorId, CancellationToken cancellationToken);
     Task UpsertVendorPushSubscriptionAsync(VendorPushSubscription subscription, CancellationToken cancellationToken);
@@ -139,6 +146,11 @@ public interface IVendorOnboardingRepository
     Task AddAdminUserAsync(AdminUser adminUser, CancellationToken cancellationToken);
     Task UpdateAdminUserAsync(AdminUser adminUser, CancellationToken cancellationToken);
     Task<List<AdminUser>> GetAdminUsersAsync(CancellationToken cancellationToken);
+    Task<(List<AdminUser> Items, int TotalCount)> SearchAdminUsersPagedAsync(
+        string? searchTerm,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken);
     Task<int> CountActiveSuperAdminsAsync(CancellationToken cancellationToken);
     Task<List<string>> GetAdminPermissionCodesAsync(Guid adminUserId, CancellationToken cancellationToken);
     Task<string?> GetAdminRoleCodeAsync(Guid adminUserId, CancellationToken cancellationToken);
@@ -158,6 +170,14 @@ public interface IVendorOnboardingRepository
 
     Task AddAdminAuditLogAsync(AdminAuditLog auditLog, CancellationToken cancellationToken);
     Task<List<AdminAuditLog>> GetAdminAuditLogsAsync(Guid? adminId, CancellationToken cancellationToken);
+    Task<int> CountPendingVendorsAsync(CancellationToken cancellationToken);
+    Task<int> CountListingPricingAlertsAsync(CancellationToken cancellationToken);
+    Task<int> CountAdminAuditLogsAsync(CancellationToken cancellationToken);
+    Task<List<AdminAlertPendingVendorRow>> SearchPendingVendorAlertsAsync(int take, CancellationToken cancellationToken);
+    Task<AdminAlertAuditLogPage> SearchAdminAlertAuditLogsAsync(string kind, int page, int pageSize, CancellationToken cancellationToken);
+    Task<AdminDashboardVendorSnapshot> GetAdminDashboardVendorSnapshotAsync(int pendingTake, CancellationToken cancellationToken);
+    Task<AdminDashboardAuditSnapshot> GetAdminDashboardAuditSnapshotAsync(DateTime sinceUtc, int take, CancellationToken cancellationToken);
+    Task<AdminAuditLogListResult> SearchAdminAuditLogSummariesAsync(AdminAuditLogListQuerySpec spec, CancellationToken cancellationToken);
 
     Task<PasswordResetToken?> GetPasswordResetTokenAsync(string token, CancellationToken cancellationToken);
     Task AddPasswordResetTokenAsync(PasswordResetToken token, CancellationToken cancellationToken);
@@ -166,11 +186,19 @@ public interface IVendorOnboardingRepository
     Task<RefreshToken?> GetRefreshTokenAsync(string token, CancellationToken cancellationToken);
     Task AddRefreshTokenAsync(RefreshToken token, CancellationToken cancellationToken);
     Task UpdateRefreshTokenAsync(RefreshToken token, CancellationToken cancellationToken);
+    Task RevokeRefreshTokensForUserAsync(string userId, CancellationToken cancellationToken);
 
     Task AddSupportTicketAsync(SupportTicket ticket, CancellationToken cancellationToken);
     Task<SupportTicket?> GetSupportTicketByIdAsync(Guid ticketId, CancellationToken cancellationToken);
     Task<List<SupportTicket>> GetSupportTicketsByVendorIdAsync(Guid vendorId, CancellationToken cancellationToken);
     Task<List<SupportTicket>> GetSupportTicketsAsync(CancellationToken cancellationToken);
+    Task<(List<SupportTicket> Items, int TotalCount)> SearchSupportTicketsForAdminPagedAsync(
+        string? searchTerm,
+        string? status,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken,
+        bool unreadOnly = false);
     Task UpdateSupportTicketAsync(SupportTicket ticket, CancellationToken cancellationToken);
 
     Task AddSupportMessageAsync(SupportMessage message, CancellationToken cancellationToken);

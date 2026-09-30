@@ -7,6 +7,7 @@ import '../../core/auth/auth_provider.dart';
 import '../../core/models/dispatch_offer_model.dart';
 import '../../core/providers/vendor_order_provider.dart';
 import '../../core/theme.dart';
+import '../../core/utils/debouncer.dart';
 import '../../shared/widgets/vendor_doctor_lookup_sheet.dart';
 import 'order_detail_screen.dart';
 import 'order_group_utils.dart';
@@ -24,6 +25,7 @@ class OrderRequestsScreen extends StatefulWidget {
 
 class _OrderRequestsScreenState extends State<OrderRequestsScreen> {
   final _searchController = TextEditingController();
+  final Debouncer _searchDebouncer = Debouncer(duration: catalogSearchDebounce);
   String _searchQuery = '';
   String _typeFilter = 'all';
   Timer? _ticker;
@@ -60,6 +62,7 @@ class _OrderRequestsScreenState extends State<OrderRequestsScreen> {
   @override
   void dispose() {
     _ticker?.cancel();
+    _searchDebouncer.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -67,8 +70,27 @@ class _OrderRequestsScreenState extends State<OrderRequestsScreen> {
   Future<void> _load({bool silent = false}) async {
     final vendorId = Provider.of<AuthProvider>(context, listen: false).vendorId;
     if (vendorId == null || vendorId.isEmpty) return;
-    await Provider.of<VendorOrderProvider>(context, listen: false)
-        .fetchOffers(vendorId, silent: silent);
+    await Provider.of<VendorOrderProvider>(context, listen: false).fetchOffers(
+      vendorId,
+      silent: silent,
+      search: _searchQuery,
+      orderType: _typeFilter,
+      reset: true,
+    );
+  }
+
+  void _maybeLoadMore(ScrollNotification notification) {
+    if (notification.metrics.pixels < notification.metrics.maxScrollExtent - 480) {
+      return;
+    }
+    final vendorId = Provider.of<AuthProvider>(context, listen: false).vendorId;
+    if (vendorId == null || vendorId.isEmpty) return;
+    Provider.of<VendorOrderProvider>(context, listen: false).fetchOffers(
+      vendorId,
+      search: _searchQuery,
+      orderType: _typeFilter,
+      reset: false,
+    );
   }
 
   Future<void> _respond(
@@ -144,25 +166,9 @@ class _OrderRequestsScreenState extends State<OrderRequestsScreen> {
     return parts.length >= 3 ? parts.sublist(0, 3).join('-') : num;
   }
 
-  bool _matchesSearch(VendorDispatchOffer offer, String q) {
-    if (q.isEmpty) return true;
-    return offer.orderNumber.toLowerCase().contains(q) ||
-        offer.listingTitle.toLowerCase().contains(q) ||
-        (offer.doctorName?.toLowerCase().contains(q) ?? false) ||
-        (offer.doctorUniqueCode?.toLowerCase().contains(q) ?? false) ||
-        (offer.hospitalName?.toLowerCase().contains(q) ?? false) ||
-        (offer.hospitalCity?.toLowerCase().contains(q) ?? false);
-  }
-
-  bool _matchesType(VendorDispatchOffer offer) {
-    if (_typeFilter == 'all') return true;
-    return offer.orderType.toLowerCase() == _typeFilter;
-  }
-
   List<_OfferGroup> _buildGroups(List<VendorDispatchOffer> offers) {
     final groups = <_OfferGroup>[];
     for (final offer in offers) {
-      if (!_matchesSearch(offer, _searchQuery) || !_matchesType(offer)) continue;
       final base = _baseOrderNumber(offer.orderNumber);
       _OfferGroup? g;
       for (final existing in groups) {
@@ -236,6 +242,7 @@ class _OrderRequestsScreenState extends State<OrderRequestsScreen> {
                       onPressed: () {
                         _searchController.clear();
                         setState(() => _searchQuery = '');
+                        _load();
                       },
                     )
                   : null,
@@ -255,7 +262,10 @@ class _OrderRequestsScreenState extends State<OrderRequestsScreen> {
                 borderSide: BorderSide(color: colors.accent),
               ),
             ),
-            onChanged: (v) => setState(() => _searchQuery = v.trim().toLowerCase()),
+            onChanged: (v) {
+              setState(() => _searchQuery = v.trim().toLowerCase());
+              _searchDebouncer.run(_load);
+            },
           ),
         ),
         Padding(
@@ -268,21 +278,30 @@ class _OrderRequestsScreenState extends State<OrderRequestsScreen> {
                   label: 'All',
                   selected: _typeFilter == 'all',
                   count: totalOffers,
-                  onTap: () => setState(() => _typeFilter = 'all'),
+                  onTap: () {
+                    setState(() => _typeFilter = 'all');
+                    _load();
+                  },
                 ),
                 const SizedBox(width: 8),
                 _TypeChip(
                   label: 'Rent',
                   selected: _typeFilter == 'rent',
                   count: rentCount,
-                  onTap: () => setState(() => _typeFilter = 'rent'),
+                  onTap: () {
+                    setState(() => _typeFilter = 'rent');
+                    _load();
+                  },
                 ),
                 const SizedBox(width: 8),
                 _TypeChip(
                   label: 'Buy',
                   selected: _typeFilter == 'buy',
                   count: buyCount,
-                  onTap: () => setState(() => _typeFilter = 'buy'),
+                  onTap: () {
+                    setState(() => _typeFilter = 'buy');
+                    _load();
+                  },
                 ),
               ],
             ),
@@ -295,20 +314,28 @@ class _OrderRequestsScreenState extends State<OrderRequestsScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<VendorOrderProvider>(context);
-    final groups = _buildGroups(provider.pendingOffers);
+    // Summaries also include recently expired, missed, and rejected rows.
+    // This page lists only offers that are still open and not past their deadline.
+    final actionable = provider.pendingOffers;
+    final groups = _buildGroups(actionable);
     final totalItems = groups.fold<int>(0, (n, g) => n + g.items.length);
     final totalPayout = groups.fold<double>(0, (n, g) => n + _groupPayout(g));
-    final rentCount = provider.pendingOffers
-        .where((o) => o.orderType.toLowerCase() == 'rent')
-        .length;
-    final buyCount = provider.pendingOffers
-        .where((o) => o.orderType.toLowerCase() == 'buy')
-        .length;
+    final rentCount = provider.offerTypeCounts['rent'] ??
+        actionable.where((o) => o.orderType.toLowerCase() == 'rent').length;
+    final buyCount = provider.offerTypeCounts['buy'] ??
+        actionable.where((o) => o.orderType.toLowerCase() == 'buy').length;
+    final totalOffers = provider.offerTypeCounts['all'] ??
+        provider.pendingOfferCount;
 
     return RefreshIndicator(
       color: AppTheme.accent,
       onRefresh: () => _load(),
-      child: CustomScrollView(
+      child: NotificationListener<ScrollNotification>(
+        onNotification: (notification) {
+          _maybeLoadMore(notification);
+          return false;
+        },
+        child: CustomScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
           SliverToBoxAdapter(
@@ -317,7 +344,7 @@ class _OrderRequestsScreenState extends State<OrderRequestsScreen> {
               itemCount: totalItems,
               totalPayout: totalPayout,
               refreshing: provider.offersLoading,
-              totalOffers: provider.pendingOffers.length,
+              totalOffers: totalOffers,
               rentCount: rentCount,
               buyCount: buyCount,
             ),
@@ -418,6 +445,7 @@ class _OrderRequestsScreenState extends State<OrderRequestsScreen> {
               ),
             ),
         ],
+      ),
       ),
     );
   }

@@ -45,28 +45,18 @@ export const TopBar = ({ onMenuClick, variant = "vendor" }: TopBarProps) => {
   }, [lines]);
 
   // 2. Get Unread Customer Notifications (for Customer top bar)
-  const { data: customerNotifications = [] } = useQuery({
-    queryKey: ["customer-notifications"],
-    queryFn: () => customerApi.getNotifications({ quiet: true }),
+  const { data: unreadCustomerCount = 0 } = useQuery({
+    queryKey: ["customer-notifications-unread-count"],
+    queryFn: () => customerApi.getUnreadNotificationCount({ quiet: true }),
     enabled: variant === "customer" && !!user,
-    refetchInterval: 30000, // every 30 seconds
-  });
-  const unreadCustomerCount = useMemo(() => {
-    return customerNotifications.filter((n) => !n.readAt).length;
-  }, [customerNotifications]);
-
-  const { data: adminOrders = [] } = useQuery({
-    queryKey: ["admin-orders"],
-    queryFn: () => adminApi.getAdminOrders({ quiet: true }),
-    enabled: variant === "admin" && !!user,
-    refetchInterval: 30000, // every 30 seconds
+    refetchInterval: 30000,
   });
 
-  const { data: adminVendors = [] } = useQuery({
-    queryKey: ["admin-vendors"],
-    queryFn: () => adminApi.getVendors({ quiet: true }),
+  const { data: adminAlertSummary } = useQuery({
+    queryKey: ["admin-alert-summary"],
+    queryFn: () => adminApi.getAdminAlertSummary({ quiet: true }),
     enabled: variant === "admin" && !!user,
-    refetchInterval: 30000, // every 30 seconds
+    refetchInterval: 30000,
   });
 
   const { data: adminChatUnread } = useQuery({
@@ -84,15 +74,13 @@ export const TopBar = ({ onMenuClick, variant = "vendor" }: TopBarProps) => {
   });
 
   const unreadAdminCount = useMemo(() => {
-    const criticalOrders = adminOrders.filter((o) => {
-      const s = o.status.toLowerCase().replace(/_/g, " ");
-      return s.includes("dispatch failed") || s.includes("cancelled");
-    }).length;
-    const pendingVendors = adminVendors.filter((v) => v.accountStatus === "pending").length;
+    const criticalOrders = adminAlertSummary?.criticalOrderCount ?? 0;
+    const pendingVendors = adminAlertSummary?.pendingVendorCount ?? 0;
+    const listingPricingAlerts = adminAlertSummary?.listingPricingAlertCount ?? 0;
     const chatUnread = adminChatUnread?.count ?? 0;
     const supportUnread = adminSupportUnread?.count ?? 0;
-    return criticalOrders + pendingVendors + chatUnread + supportUnread;
-  }, [adminOrders, adminVendors, adminChatUnread, adminSupportUnread]);
+    return criticalOrders + pendingVendors + listingPricingAlerts + chatUnread + supportUnread;
+  }, [adminAlertSummary, adminChatUnread, adminSupportUnread]);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);

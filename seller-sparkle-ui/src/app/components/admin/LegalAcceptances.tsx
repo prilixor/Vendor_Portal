@@ -1,9 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { format } from "date-fns";
 import { ClipboardList, Search } from "lucide-react";
 import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card } from "@/app/components/ui/card";
+import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import { PageContentGate } from "@/app/components/shared/PageLoader";
@@ -14,11 +16,12 @@ import {
   LEGAL_SURFACES,
   legalDocumentsApi,
   type LegalAcceptanceAdminDto,
-  type LegalDocumentListItemDto,
 } from "@/app/services/legalDocumentsApi";
 import { toast } from "sonner";
+import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
+import { cn } from "@/app/helpers/utils";
 
-const PAGE_SIZE = 10;
+const PAGE_SIZE = 8;
 
 const SCREEN_LABELS = Object.fromEntries(LEGAL_SCREENS.map((s) => [s.id, s.label]));
 const SURFACE_LABELS = Object.fromEntries(LEGAL_SURFACES.map((s) => [s.id, s.label]));
@@ -45,69 +48,56 @@ function actorHref(row: LegalAcceptanceAdminDto) {
 }
 
 export default function LegalAcceptances() {
-  const [loading, setLoading] = useState(true);
-  const [rows, setRows] = useState<LegalAcceptanceAdminDto[]>([]);
-  const [documents, setDocuments] = useState<LegalDocumentListItemDto[]>([]);
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
   const [actorType, setActorType] = useState("all");
   const [documentId, setDocumentId] = useState("all");
   const [screen, setScreen] = useState("all");
   const [page, setPage] = useState(1);
 
-  useEffect(() => {
-    const load = async () => {
-      setLoading(true);
-      try {
-        const [list, docs] = await Promise.all([
-          legalDocumentsApi.listAcceptances(),
-          legalDocumentsApi.list(),
-        ]);
-        setRows(list);
-        setDocuments(docs);
-        setPage(1);
-      } catch (err) {
-        toast.error(err instanceof Error ? err.message : "Could not load legal acceptances.");
-      } finally {
-        setLoading(false);
-      }
-    };
-    void load();
-  }, []);
+  const applySearch = () => {
+    setAppliedSearch(searchInput.trim());
+    setPage(1);
+  };
 
-  const screens = useMemo(() => {
-    const ids = new Set(rows.map((r) => r.sourceScreen).filter(Boolean));
-    return Array.from(ids).sort((a, b) => labelScreen(a).localeCompare(labelScreen(b)));
-  }, [rows]);
+  const { data, isLoading, isPlaceholderData, isError, error } = useQuery({
+    queryKey: ["admin-legal-acceptance-summaries", page, appliedSearch, actorType, documentId, screen],
+    queryFn: () =>
+      legalDocumentsApi.listAcceptanceSummaries({
+        search: appliedSearch,
+        actorType,
+        documentId,
+        screen,
+        page,
+        pageSize: PAGE_SIZE,
+      }),
+    placeholderData: keepPreviousData,
+  });
+  const isPageChanging = isPlaceholderData && !isLoading;
 
-  const filtered = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return rows.filter((row) => {
-      if (actorType !== "all" && row.actorType !== actorType) return false;
-      if (documentId !== "all" && row.documentId !== documentId) return false;
-      if (screen !== "all" && row.sourceScreen !== screen) return false;
-      if (!q) return true;
-      return (
-        row.actorName.toLowerCase().includes(q) ||
-        (row.actorEmail ?? "").toLowerCase().includes(q) ||
-        row.documentTitle.toLowerCase().includes(q) ||
-        row.documentSlug.toLowerCase().includes(q) ||
-        (row.signedName ?? "").toLowerCase().includes(q) ||
-        (row.ipAddress ?? "").toLowerCase().includes(q) ||
-        `v${row.versionNumber}`.includes(q)
-      );
-    });
-  }, [rows, search, actorType, documentId, screen]);
+  const { data: documents = [] } = useQuery({
+    queryKey: ["admin-legal-documents-lookup"],
+    queryFn: () => legalDocumentsApi.list(),
+  });
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const rows = data?.items ?? [];
+  const totalCount = data?.totalCount ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const safePage = Math.min(Math.max(1, page), totalPages);
-  const pageRows = useMemo(
-    () => filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
-    [filtered, safePage],
-  );
 
   useEffect(() => {
     setPage(1);
-  }, [search, actorType, documentId, screen]);
+  }, [appliedSearch, actorType, documentId, screen]);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
+  useEffect(() => {
+    if (isError) {
+      toast.error(getUserFriendlyMessage(error, "Could not load legal acceptances."));
+    }
+  }, [isError, error]);
 
   return (
     <div className="min-w-0 max-w-full space-y-6 overflow-x-hidden pb-12">
@@ -123,14 +113,17 @@ export default function LegalAcceptances() {
       />
 
       <Card className="border-border/60 p-4 sm:p-6 lg:p-8">
-        <PageContentGate loading={loading}>
+        <PageContentGate loading={isLoading}>
           <>
             <div className="flex flex-col gap-3 border-b border-border pb-4 lg:flex-row lg:flex-wrap lg:items-center">
               <div className="relative w-full sm:max-w-xs">
                 <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                 <Input
-                  value={search}
-                  onChange={(e) => setSearch(e.target.value)}
+                  value={searchInput}
+                  onChange={(e) => setSearchInput(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") applySearch();
+                  }}
                   placeholder="Search name, email, policy, e-sign…"
                   className="pl-9"
                 />
@@ -156,20 +149,23 @@ export default function LegalAcceptances() {
                 <SelectTrigger className="w-full sm:w-48"><SelectValue /></SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">All screens</SelectItem>
-                  {screens.map((id) => (
-                    <SelectItem key={id} value={id}>{labelScreen(id)}</SelectItem>
+                  {LEGAL_SCREENS.map((s) => (
+                    <SelectItem key={s.id} value={s.id}>{s.label}</SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+              <Button variant="secondary" onClick={applySearch}>
+                Search
+              </Button>
             </div>
 
-            {filtered.length === 0 ? (
+            {totalCount === 0 ? (
               <div className="flex flex-col items-center gap-2 py-12 text-center">
                 <ClipboardList className="h-8 w-8 text-muted-foreground" />
                 <p className="text-sm text-muted-foreground">No acceptances match your filters.</p>
               </div>
             ) : (
-              <>
+              <div className={cn("transition-opacity duration-200", isPageChanging && "opacity-50")}>
                 <div className="overflow-x-auto rounded-lg border border-border">
                   <table className="w-full min-w-[980px] text-sm">
                     <thead className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
@@ -185,7 +181,7 @@ export default function LegalAcceptances() {
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-border">
-                      {pageRows.map((row) => {
+                      {rows.map((row) => {
                         const href = actorHref(row);
                         return (
                           <tr key={row.id} className="hover:bg-muted/20">
@@ -231,11 +227,11 @@ export default function LegalAcceptances() {
                 <TablePagination
                   page={safePage}
                   pageSize={PAGE_SIZE}
-                  total={filtered.length}
+                  total={totalCount}
                   onPageChange={setPage}
                   label="acceptances"
                 />
-              </>
+              </div>
             )}
           </>
         </PageContentGate>

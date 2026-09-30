@@ -31,9 +31,25 @@ public sealed class GetAdminAuditLogsRequest
     public string? AdminUserId { get; set; }
 }
 
+public sealed class GetAdminAuditLogSummariesRequest
+{
+    public string? Search { get; set; }
+    public string? AdminUserId { get; set; }
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 8;
+}
+
 public sealed class GetAdminOrderExpirationsRequest
 {
     public int WithinDays { get; set; } = 7;
+}
+
+public sealed class GetAdminExpirationSummariesRequest
+{
+    public int WithinDays { get; set; } = 7;
+    public string? Search { get; set; }
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 8;
 }
 
 public sealed class GetAdminOrderSummariesRequest
@@ -280,6 +296,34 @@ public sealed class GetAdminUsersEndpoint(IMediator mediator)
     }
 }
 
+public sealed class GetAdminUserSummariesRequest
+{
+    public string? Search { get; set; }
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 8;
+}
+
+public sealed class GetAdminUserSummariesEndpoint(IMediator mediator)
+    : Endpoint<GetAdminUserSummariesRequest, Results<Ok<AdminUserListResult>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("users/summaries");
+        Group<AdminApiGroup>();
+        Policies("Perm:admins.manage");
+    }
+
+    public override async Task<Results<Ok<AdminUserListResult>, ProblemHttpResult>> ExecuteAsync(
+        GetAdminUserSummariesRequest req,
+        CancellationToken ct)
+    {
+        var page = req.Page < 1 ? 1 : req.Page;
+        var pageSize = req.PageSize is < 1 or > 100 ? 8 : req.PageSize;
+        var result = await mediator.Send(new GetAdminUserListQuery(req.Search, page, pageSize), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
 public sealed class GetVendorsEndpoint(IMediator mediator)
     : EndpointWithoutRequest<Results<Ok<List<VendorDto>>, ProblemHttpResult>>
 {
@@ -297,12 +341,55 @@ public sealed class GetVendorsEndpoint(IMediator mediator)
     }
 }
 
+public sealed class GetAdminVendorByIdRequest
+{
+    public string VendorId { get; set; } = string.Empty;
+}
+
+public sealed class GetAdminVendorByIdEndpoint(IMediator mediator)
+    : Endpoint<GetAdminVendorByIdRequest, Results<Ok<VendorDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("vendors/{vendorId}");
+        Group<AdminApiGroup>();
+        Policies("Perm:vendors.view");
+    }
+
+    public override async Task<Results<Ok<VendorDto>, ProblemHttpResult>> ExecuteAsync(
+        GetAdminVendorByIdRequest req,
+        CancellationToken ct)
+    {
+        var result = await mediator.Send(new GetVendorByIdQuery(req.VendorId), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class GetAdminVendorInventorySummariesEndpoint(IMediator mediator)
+    : Endpoint<GetAdminVendorByIdRequest, Results<Ok<List<AdminVendorListingInventoryDto>>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("vendors/{vendorId}/inventory-summaries");
+        Group<AdminApiGroup>();
+        Policies("Perm:vendors.view");
+    }
+
+    public override async Task<Results<Ok<List<AdminVendorListingInventoryDto>>, ProblemHttpResult>> ExecuteAsync(
+        GetAdminVendorByIdRequest req,
+        CancellationToken ct)
+    {
+        var result = await mediator.Send(new GetAdminVendorInventorySummariesQuery(req.VendorId), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
 public sealed class GetAdminVendorSummariesRequest
 {
     public string? Search { get; set; }
     public string? Status { get; set; }
     public int Page { get; set; } = 1;
-    public int PageSize { get; set; } = 9;
+    public int PageSize { get; set; } = 8;
 }
 
 public sealed class GetAdminVendorSummariesEndpoint(IMediator mediator)
@@ -320,7 +407,7 @@ public sealed class GetAdminVendorSummariesEndpoint(IMediator mediator)
         CancellationToken ct)
     {
         var page = req.Page < 1 ? 1 : req.Page;
-        var pageSize = req.PageSize is < 1 or > 100 ? 9 : req.PageSize;
+        var pageSize = req.PageSize is < 1 or > 100 ? 8 : req.PageSize;
         var result = await mediator.Send(new GetAdminVendorListQuery(req.Search, req.Status, page, pageSize), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
@@ -351,6 +438,66 @@ public sealed class GetAdminVerificationSummariesEndpoint(IMediator mediator)
         var page = req.Page < 1 ? 1 : req.Page;
         var pageSize = req.PageSize is < 1 or > 100 ? 8 : req.PageSize;
         var result = await mediator.Send(new GetAdminVerificationListQuery(req.Search, req.Status, page, pageSize), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class GetAdminAlertSummaryEndpoint(IMediator mediator)
+    : EndpointWithoutRequest<Results<Ok<AdminAlertSummaryDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("alerts/summary");
+        Group<AdminApiGroup>();
+    }
+
+    public override async Task<Results<Ok<AdminAlertSummaryDto>, ProblemHttpResult>> ExecuteAsync(CancellationToken ct)
+    {
+        var result = await mediator.Send(new GetAdminAlertSummaryQuery(), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class GetAdminAlertFeedRequest
+{
+    public string? Tab { get; set; }
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 15;
+}
+
+public sealed class GetAdminAlertFeedEndpoint(IMediator mediator)
+    : Endpoint<GetAdminAlertFeedRequest, Results<Ok<AdminAlertFeedResult>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("alerts/feed");
+        Group<AdminApiGroup>();
+    }
+
+    public override async Task<Results<Ok<AdminAlertFeedResult>, ProblemHttpResult>> ExecuteAsync(
+        GetAdminAlertFeedRequest req,
+        CancellationToken ct)
+    {
+        var page = req.Page < 1 ? 1 : req.Page;
+        var pageSize = req.PageSize is < 1 or > 100 ? 15 : req.PageSize;
+        var result = await mediator.Send(new GetAdminAlertFeedQuery(req.Tab, page, pageSize), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class GetAdminDashboardSummaryEndpoint(IMediator mediator)
+    : EndpointWithoutRequest<Results<Ok<AdminDashboardSummaryDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("dashboard/summary");
+        Group<AdminApiGroup>();
+        Policies("Perm:dashboard.view");
+    }
+
+    public override async Task<Results<Ok<AdminDashboardSummaryDto>, ProblemHttpResult>> ExecuteAsync(CancellationToken ct)
+    {
+        var result = await mediator.Send(new GetAdminDashboardSummaryQuery(), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }
@@ -393,6 +540,27 @@ public sealed class GetAdminAuditLogsEndpoint(IMediator mediator)
     public override async Task<Results<Ok<List<AdminAuditLogDto>>, ProblemHttpResult>> ExecuteAsync(GetAdminAuditLogsRequest req, CancellationToken ct)
     {
         var result = await mediator.Send(new GetAdminAuditLogsQuery(req.AdminUserId), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class GetAdminAuditLogSummariesEndpoint(IMediator mediator)
+    : Endpoint<GetAdminAuditLogSummariesRequest, Results<Ok<AdminAuditLogListResult>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("audit-logs/summaries");
+        Group<AdminApiGroup>();
+        Policies("Perm:audit.view");
+    }
+
+    public override async Task<Results<Ok<AdminAuditLogListResult>, ProblemHttpResult>> ExecuteAsync(
+        GetAdminAuditLogSummariesRequest req,
+        CancellationToken ct)
+    {
+        var page = req.Page < 1 ? 1 : req.Page;
+        var pageSize = req.PageSize is < 1 or > 100 ? 8 : req.PageSize;
+        var result = await mediator.Send(new GetAdminAuditLogListQuery(req.Search, req.AdminUserId, page, pageSize), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }
@@ -634,6 +802,30 @@ public sealed class GetAdminOrderExpirationsEndpoint(IMediator mediator)
     }
 }
 
+public sealed class GetAdminExpirationSummariesEndpoint(IMediator mediator)
+    : Endpoint<GetAdminExpirationSummariesRequest, Results<Ok<AdminExpirationListResult>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("orders/expirations/summaries");
+        Group<AdminApiGroup>();
+        Policies("Perm:orders.view");
+    }
+
+    public override async Task<Results<Ok<AdminExpirationListResult>, ProblemHttpResult>> ExecuteAsync(
+        GetAdminExpirationSummariesRequest req,
+        CancellationToken ct)
+    {
+        var page = req.Page < 1 ? 1 : req.Page;
+        var pageSize = req.PageSize is < 1 or > 100 ? 8 : req.PageSize;
+        var withinDays = req.WithinDays is < 1 or > 60 ? 7 : req.WithinDays;
+        var result = await mediator.Send(
+            new GetAdminExpirationListQuery(withinDays, req.Search, page, pageSize),
+            ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
 public sealed class GetAdminOrdersEndpoint(IMediator mediator)
     : EndpointWithoutRequest<Results<Ok<List<AdminOrderDto>>, ProblemHttpResult>>
 {
@@ -647,6 +839,30 @@ public sealed class GetAdminOrdersEndpoint(IMediator mediator)
     public override async Task<Results<Ok<List<AdminOrderDto>>, ProblemHttpResult>> ExecuteAsync(CancellationToken ct)
     {
         var result = await mediator.Send(new GetAdminAllOrdersQuery(), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class GetAdminOrderDetailRequest
+{
+    public Guid OrderId { get; set; }
+}
+
+public sealed class GetAdminOrderDetailEndpoint(IMediator mediator)
+    : Endpoint<GetAdminOrderDetailRequest, Results<Ok<AdminOrderDetailResult>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("orders/{orderId}");
+        Group<AdminApiGroup>();
+        Policies("Perm:orders.view");
+    }
+
+    public override async Task<Results<Ok<AdminOrderDetailResult>, ProblemHttpResult>> ExecuteAsync(
+        GetAdminOrderDetailRequest req,
+        CancellationToken ct)
+    {
+        var result = await mediator.Send(new GetAdminOrderDetailQuery(req.OrderId), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }

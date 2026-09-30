@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
@@ -106,14 +107,12 @@ const VendorOrders = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
   const initialStatus = searchParams.get("status");
   const isKnownStatus = statusTabs.some((tab) => tab.id === initialStatus);
   const [activeStatus, setActiveStatus] = useState<(typeof statusTabs)[number]["id"]>(
     isKnownStatus ? (initialStatus as (typeof statusTabs)[number]["id"]) : "all",
   );
-  const [orders, setOrders] = useState<VendorOrderApiDto[]>([]);
   const [searchInput, setSearchInput] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -137,85 +136,33 @@ const VendorOrders = () => {
     }
   }, [searchParams]);
 
-  useEffect(() => {
-    setPage(1);
-  }, [activeStatus]);
-
-  const loadOrders = async () => {
-    if (!user) return;
-    try {
-      setLoading(true);
-      const rows = await vendorOnboardingApi.getVendorOrders(user.id);
-      setOrders(rows);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to load orders.";
-      toast.error(message);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data, isLoading, isPlaceholderData, isError, error, refetch } = useQuery({
+    queryKey: ["vendor-order-summaries", user?.id, page, debouncedSearch, activeStatus],
+    queryFn: () =>
+      vendorOnboardingApi.getVendorOrderSummaries(user!.id, {
+        search: debouncedSearch,
+        status: activeStatus,
+        page,
+        pageSize: PAGE_SIZE,
+      }, { quiet: true }),
+    enabled: Boolean(user?.id),
+    placeholderData: keepPreviousData,
+    refetchInterval: 30_000,
+  });
+  const isPageChanging = isPlaceholderData && !isLoading;
 
   useEffect(() => {
-    void loadOrders();
-  }, [user?.id]);
-
-  const filteredOrders = useMemo(() => {
-    let list = orders;
-    const q = debouncedSearch.toLowerCase();
-    if (q) {
-      list = list.filter(
-        (o) =>
-          o.orderNumber.toLowerCase().includes(q) ||
-          o.listingTitle.toLowerCase().includes(q) ||
-          o.customerName.toLowerCase().includes(q) ||
-          (o.customerCity && o.customerCity.toLowerCase().includes(q)) ||
-          o.orderId.toLowerCase().includes(q),
-      );
+    if (isError) {
+      toast.error(error instanceof Error ? error.message : "Failed to load orders.");
     }
-    return list.filter((o) => matchesVendorStatus(o.status, activeStatus));
-  }, [orders, debouncedSearch, activeStatus]);
+  }, [isError, error]);
 
-  const sortedOrders = useMemo(
-    () =>
-      [...filteredOrders].sort((a, b) => {
-        const timeA = new Date(a.createdAtUtc).getTime();
-        const timeB = new Date(b.createdAtUtc).getTime();
-        if (timeA !== timeB) {
-          return timeB - timeA;
-        }
-        return b.orderNumber.localeCompare(a.orderNumber, undefined, { numeric: true });
-      }),
-    [filteredOrders],
-  );
-
-  const orderGroupCount = useMemo(() => countOrderGroups(sortedOrders), [sortedOrders]);
-  const itemCount = sortedOrders.length;
-
-  const totalPages = Math.max(1, Math.ceil(sortedOrders.length / PAGE_SIZE));
+  const pageSlice = data?.items ?? [];
+  const itemCount = data?.totalCount ?? 0;
+  const orderGroupCount = useMemo(() => countOrderGroups(pageSlice), [pageSlice]);
+  const statusCounts = data?.statusCounts ?? {};
+  const totalPages = Math.max(1, Math.ceil(itemCount / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
-  const pageSlice = useMemo(
-    () => sortedOrders.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
-    [sortedOrders, safePage],
-  );
-
-  const statusCounts = useMemo(() => {
-    let searchable = orders;
-    const q = debouncedSearch.toLowerCase();
-    if (q) {
-      searchable = searchable.filter(
-        (o) =>
-          o.orderNumber.toLowerCase().includes(q) ||
-          o.listingTitle.toLowerCase().includes(q) ||
-          o.customerName.toLowerCase().includes(q) ||
-          (o.customerCity && o.customerCity.toLowerCase().includes(q)) ||
-          o.orderId.toLowerCase().includes(q),
-      );
-    }
-    return statusTabs.reduce<Record<(typeof statusTabs)[number]["id"], number>>((acc, tab) => {
-      acc[tab.id] = tab.id === "all" ? searchable.length : searchable.filter((o) => matchesVendorStatus(o.status, tab.id)).length;
-      return acc;
-    }, {} as Record<(typeof statusTabs)[number]["id"], number>);
-  }, [orders, debouncedSearch]);
 
   const setStatusFilter = (nextStatus: (typeof statusTabs)[number]["id"]) => {
     setActiveStatus(nextStatus);
@@ -248,7 +195,7 @@ const VendorOrders = () => {
         title="Orders"
         description="Manage confirmed, in-transit, active and completed orders."
         actions={
-          <Button variant="outline" onClick={() => void loadOrders()} disabled={loading}>
+          <Button variant="outline" onClick={() => void refetch()} disabled={isLoading}>
             <RefreshCw className="mr-2 h-4 w-4" />
             Refresh
           </Button>
@@ -306,7 +253,7 @@ const VendorOrders = () => {
           <span className="font-medium">Dispatch failed</span> means reassignment could not find an eligible vendor.
         </p>
 
-        {!loading && itemCount > 0 ? (
+        {!isLoading && itemCount > 0 ? (
           <div className="mb-4 rounded-xl border border-border/60 bg-muted/30 px-4 py-3">
             <p className="text-sm font-semibold text-foreground">{formatOrderItemSummary(orderGroupCount, itemCount)}</p>
             <p className="mt-1 text-xs text-muted-foreground">
@@ -315,8 +262,9 @@ const VendorOrders = () => {
           </div>
         ) : null}
 
-        <PageContentGate loading={loading}>
-        {sortedOrders.length === 0 ? (
+        <PageContentGate loading={isLoading && !data}>
+        <div className={cn("transition-opacity duration-200", isPageChanging && "opacity-50")}>
+        {pageSlice.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">No orders found for this status.</p>
         ) : (
           <div className="space-y-3">
@@ -413,12 +361,13 @@ const VendorOrders = () => {
             <TablePagination
               page={safePage}
               pageSize={PAGE_SIZE}
-              total={sortedOrders.length}
+              total={itemCount}
               onPageChange={setPage}
               label="order items"
             />
           </div>
         )}
+        </div>
         </PageContentGate>
       </Card>
     </div>

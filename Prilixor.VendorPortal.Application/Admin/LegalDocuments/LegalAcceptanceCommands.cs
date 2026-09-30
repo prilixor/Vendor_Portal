@@ -1,3 +1,4 @@
+using FluentValidation;
 using Prilixor.Shared.Abstractions.CQRS;
 using Prilixor.Shared.Models;
 using Prilixor.VendorPortal.Application.Abstractions;
@@ -136,5 +137,149 @@ internal sealed class ListAdminLegalAcceptancesQueryHandler(
         }).ToList();
 
         return Result.Success<IReadOnlyList<LegalAcceptanceAdminDto>>(list);
+    }
+}
+
+public sealed class AdminLegalAcceptanceListResult
+{
+    public List<LegalAcceptanceAdminDto> Items { get; init; } = [];
+    public int TotalCount { get; init; }
+    public int Page { get; init; }
+    public int PageSize { get; init; }
+}
+
+public sealed record GetAdminLegalAcceptanceListQuery(
+    string? Search,
+    string? ActorType,
+    Guid? DocumentId,
+    string? Screen,
+    int Page = 1,
+    int PageSize = 8) : IQuery<AdminLegalAcceptanceListResult>;
+
+public sealed class GetAdminLegalAcceptanceListQueryValidator : AbstractValidator<GetAdminLegalAcceptanceListQuery>
+{
+    public GetAdminLegalAcceptanceListQueryValidator()
+    {
+        RuleFor(x => x.Page).GreaterThan(0);
+        RuleFor(x => x.PageSize).InclusiveBetween(1, 100);
+    }
+}
+
+internal sealed class GetAdminLegalAcceptanceListQueryHandler(
+    ILegalDocumentRepository repository,
+    ICustomerRepository customers,
+    IVendorOnboardingRepository vendors)
+    : IQueryHandler<GetAdminLegalAcceptanceListQuery, AdminLegalAcceptanceListResult>
+{
+    public async Task<Result<AdminLegalAcceptanceListResult>> Handle(
+        GetAdminLegalAcceptanceListQuery request,
+        CancellationToken cancellationToken)
+    {
+        var page = Math.Max(1, request.Page);
+        var pageSize = Math.Clamp(request.PageSize, 1, 100);
+        var matchingActorIds = new List<Guid>();
+
+        if (!string.IsNullOrWhiteSpace(request.Search))
+        {
+            var foundCustomers = await customers.SearchCustomersForAdminAsync(
+                request.Search, 1, 40, cancellationToken);
+            matchingActorIds.AddRange(
+                foundCustomers
+                    .Select(c => Guid.TryParse(c.Id, out var id) ? id : Guid.Empty)
+                    .Where(id => id != Guid.Empty));
+
+            var vendor = await vendors.GetVendorByEmailAsync(request.Search.Trim(), cancellationToken);
+            if (vendor is not null)
+                matchingActorIds.Add(vendor.Id);
+        }
+
+        var (rows, totalCount) = await repository.SearchAcceptancesForAdminPagedAsync(
+            request.Search,
+            request.ActorType,
+            request.DocumentId,
+            request.Screen,
+            matchingActorIds,
+            page,
+            pageSize,
+            cancellationToken);
+
+        var items = await LegalAcceptanceAdminMapping.MapAsync(
+            rows, customers, vendors, cancellationToken);
+
+        return Result.Success(new AdminLegalAcceptanceListResult
+        {
+            Items = items,
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize,
+        });
+    }
+}
+
+file static class LegalAcceptanceAdminMapping
+{
+    public static async Task<List<LegalAcceptanceAdminDto>> MapAsync(
+        IReadOnlyList<LegalAcceptance> rows,
+        ICustomerRepository customers,
+        IVendorOnboardingRepository vendors,
+        CancellationToken cancellationToken)
+    {
+        var customerIds = rows
+            .Where(r => r.ActorType == LegalCatalog.ActorTypes.Customer)
+            .Select(r => r.ActorId)
+            .Distinct()
+            .ToList();
+        var vendorIds = rows
+            .Where(r => r.ActorType == LegalCatalog.ActorTypes.Vendor)
+            .Select(r => r.ActorId)
+            .Distinct()
+            .ToList();
+
+        var customerNames = new Dictionary<Guid, (string Name, string? Email)>();
+        foreach (var id in customerIds)
+        {
+            var customer = await customers.GetCustomerByIdAsync(id, cancellationToken);
+            if (customer is null)
+                continue;
+            var name = string.IsNullOrWhiteSpace(customer.FullName) ? customer.Email : customer.FullName;
+            customerNames[id] = (name, customer.Email);
+        }
+
+        var vendorNames = new Dictionary<Guid, (string Name, string? Email)>();
+        foreach (var id in vendorIds)
+        {
+            var vendor = await vendors.GetVendorByIdAsync(id, cancellationToken);
+            var profile = await vendors.GetVendorProfileAsync(id, cancellationToken);
+            if (vendor is null && profile is null)
+                continue;
+            vendorNames[id] = (
+                !string.IsNullOrWhiteSpace(profile?.BusinessName) ? profile!.BusinessName : (vendor?.Email ?? id.ToString("D")),
+                vendor?.Email);
+        }
+
+        return rows.Select(row =>
+        {
+            var (name, email) = row.ActorType == LegalCatalog.ActorTypes.Vendor
+                ? vendorNames.GetValueOrDefault(row.ActorId, (row.ActorId.ToString("D"), (string?)null))
+                : customerNames.GetValueOrDefault(row.ActorId, (row.ActorId.ToString("D"), (string?)null));
+            return new LegalAcceptanceAdminDto
+            {
+                Id = row.Id,
+                ActorType = row.ActorType,
+                ActorId = row.ActorId,
+                ActorName = name,
+                ActorEmail = email,
+                DocumentId = row.DocumentId,
+                DocumentTitle = row.Document?.Title ?? row.DocumentId.ToString("D"),
+                DocumentSlug = row.Document?.Slug ?? "",
+                VersionId = row.VersionId,
+                VersionNumber = row.Version?.VersionNumber ?? 0,
+                AcceptedAt = row.AcceptedAt,
+                SourceSurface = row.SourceSurface,
+                SourceScreen = row.SourceScreen,
+                SignedName = row.SignedName,
+                IpAddress = row.IpAddress,
+            };
+        }).ToList();
     }
 }

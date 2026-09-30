@@ -85,6 +85,47 @@ public sealed class CustomerRepository(
 
     }
 
+    public Task<int> CountOpenOrdersForCustomerAsync(Guid customerId, CancellationToken cancellationToken) =>
+        customerDb.CustomerRentalOrders.CountAsync(
+            o => o.CustomerId == customerId && !o.IsDeleted &&
+                 o.Status.ToLower() != "cancelled" &&
+                 o.Status.ToLower() != "canceled" &&
+                 o.Status.ToLower() != "returned" &&
+                 o.Status.ToLower() != "bought_out" &&
+                 o.Status.ToLower() != "completed",
+            cancellationToken);
+
+    public async Task<int> CountOpenOrdersForVendorAsync(Guid vendorId, CancellationToken cancellationToken)
+    {
+        var listingIds = await vendorDb.VendorProductListings
+            .AsNoTracking()
+            .Where(l => l.VendorId == vendorId && !l.IsDeleted)
+            .Select(l => l.Id)
+            .ToListAsync(cancellationToken);
+
+        var openOrders = listingIds.Count == 0
+            ? 0
+            : await customerDb.CustomerRentalOrders.CountAsync(
+                o => !o.IsDeleted &&
+                     listingIds.Contains(o.VendorProductListingId) &&
+                     o.Status.ToLower() != "cancelled" &&
+                     o.Status.ToLower() != "canceled" &&
+                     o.Status.ToLower() != "returned" &&
+                     o.Status.ToLower() != "bought_out" &&
+                     o.Status.ToLower() != "completed",
+                cancellationToken);
+
+        var now = DateTimeOffset.UtcNow;
+        var pendingOffers = await customerDb.CustomerOrderVendorOffers.CountAsync(
+            x => x.VendorId == vendorId &&
+                 !x.IsDeleted &&
+                 (x.Status == "pending" || x.Status == "queued") &&
+                 x.ExpiresAt > now,
+            cancellationToken);
+
+        return openOrders + pendingOffers;
+    }
+
 
 
     public Task<List<CustomerAddress>> GetCustomerAddressesAsync(Guid customerId, CancellationToken cancellationToken) =>
@@ -422,6 +463,378 @@ public sealed class CustomerRepository(
 
     }
 
+    public async Task<CustomerCatalogListingSummariesResult> SearchPublicCatalogListingSummariesAsync(
+        CustomerCatalogListingSummaryQuerySpec spec,
+        CancellationToken cancellationToken)
+    {
+        var page = Math.Max(1, spec.Page);
+        var pageSize = Math.Clamp(spec.PageSize, 1, 50);
+        var empty = new CustomerCatalogListingSummariesResult
+        {
+            Items = [],
+            TotalCount = 0,
+            Page = page,
+            PageSize = pageSize,
+            AllCount = 0,
+            CategoryCounts = [],
+        };
+
+        HashSet<Guid>? favoriteListingIds = null;
+        CustomerAddress? sortingAddress = null;
+        if (spec.CustomerId.HasValue)
+        {
+            if (spec.FavoritesOnly)
+            {
+                var favoriteIds = await customerDb.CustomerFavorites
+                    .AsNoTracking()
+                    .Where(f => f.CustomerId == spec.CustomerId.Value)
+                    .Select(f => f.VendorProductListingId)
+                    .ToListAsync(cancellationToken);
+                favoriteListingIds = favoriteIds.ToHashSet();
+                if (favoriteListingIds.Count == 0)
+                    return empty;
+            }
+
+            sortingAddress = await customerDb.CustomerAddresses
+                .AsNoTracking()
+                .Where(a =>
+                    a.CustomerId == spec.CustomerId.Value &&
+                    !a.IsDeleted &&
+                    a.Latitude.HasValue &&
+                    a.Longitude.HasValue)
+                .OrderByDescending(a => a.IsDefault)
+                .ThenByDescending(a => a.CreatedOnUtc)
+                .FirstOrDefaultAsync(cancellationToken);
+        }
+        else if (spec.FavoritesOnly)
+        {
+            return empty;
+        }
+
+        var productQuery = commonDb.Products
+            .AsNoTracking()
+            .Where(p =>
+                !p.IsDeleted &&
+                p.IsActive &&
+                p.Category != null &&
+                !p.Category.IsDeleted &&
+                p.Category.IsActive);
+
+        if (spec.IsChemical.HasValue)
+        {
+            var isChemical = spec.IsChemical.Value;
+            productQuery = productQuery.Where(p => p.Category!.IsChemical == isChemical);
+        }
+
+        if (!string.IsNullOrWhiteSpace(spec.Search))
+        {
+            var s = spec.Search.Trim();
+            productQuery = productQuery.Where(p =>
+                EF.Functions.ILike(p.ProductName, $"%{s}%") ||
+                (p.BrandName != null && EF.Functions.ILike(p.BrandName, $"%{s}%")) ||
+                (p.ModelName != null && EF.Functions.ILike(p.ModelName, $"%{s}%")) ||
+                (p.Category != null && EF.Functions.ILike(p.Category.CategoryName, $"%{s}%")));
+        }
+
+        var products = await productQuery
+            .Select(p => new CatalogProductSummaryRow(
+                p.Id,
+                p.ProductName,
+                p.DailyRent,
+                p.WeeklyRent,
+                p.MonthlyRent,
+                p.SecurityDeposit,
+                p.BuyPrice,
+                p.IsRentEnabled,
+                p.IsBuyEnabled,
+                p.Category!.CategoryName,
+                p.Category.IsChemical,
+                p.Category.DepositRequired,
+                p.ChemicalProperty != null ? p.ChemicalProperty.BaseUnit : null))
+            .ToListAsync(cancellationToken);
+
+        if (products.Count == 0)
+            return empty;
+
+        var productMap = products.ToDictionary(p => p.Id);
+        var productIds = productMap.Keys.ToList();
+
+        var listingQuery = vendorDb.VendorProductListings
+            .AsNoTracking()
+            .Where(l =>
+                !l.IsDeleted &&
+                productIds.Contains(l.ProductId) &&
+                (EF.Functions.ILike(l.ListingStatus, "active") ||
+                 EF.Functions.ILike(l.ListingStatus, "approved")) &&
+                !l.Vendor.IsDeleted &&
+                EF.Functions.ILike(l.Vendor.AccountStatus, "active"));
+
+        if (favoriteListingIds is not null)
+        {
+            listingQuery = listingQuery.Where(l => favoriteListingIds.Contains(l.Id));
+        }
+
+        var listingRows = await listingQuery
+            .Select(l => new CatalogListingSummaryRow(
+                l.Id,
+                l.ProductId,
+                l.ListingTitle,
+                l.ListingStatus,
+                l.CreatedOnUtc,
+                l.Inventory != null ? l.Inventory.AvailableQuantity : l.AvailableQuantity,
+                l.Vendor.Profile != null ? l.Vendor.Profile.Latitude : null,
+                l.Vendor.Profile != null ? l.Vendor.Profile.Longitude : null))
+            .ToListAsync(cancellationToken);
+
+        if (listingRows.Count == 0)
+            return empty;
+
+        var variantAvailableSums = await GetVariantAvailableSumsAsync(
+            listingRows.Select(r => r.Id).Distinct().ToList(),
+            cancellationToken);
+
+        int Qty(CatalogListingSummaryRow listing)
+        {
+            var product = productMap.GetValueOrDefault(listing.ProductId);
+            var isChemical = product?.IsChemical == true || !string.IsNullOrWhiteSpace(product?.BaseUnit);
+            int? variantSum = variantAvailableSums.TryGetValue(listing.Id, out var sum) ? sum : null;
+            return CatalogListingAvailability.ResolveAvailableQuantity(isChemical, listing.AvailableQuantity, variantSum);
+        }
+
+        var productAvailability = listingRows
+            .GroupBy(r => r.ProductId)
+            .ToDictionary(g => g.Key, g => g.Sum(Qty));
+
+        var representatives = listingRows
+            .GroupBy(r => r.ProductId)
+            .Select(g =>
+            {
+                IOrderedEnumerable<CatalogListingSummaryRow> ordered = sortingAddress is not null
+                    ? g
+                        .OrderBy(r =>
+                        {
+                            if (r.VendorLatitude is not decimal vendorLat || r.VendorLongitude is not decimal vendorLng)
+                                return decimal.MaxValue;
+                            return CalculateDistanceKm(
+                                sortingAddress.Latitude!.Value,
+                                sortingAddress.Longitude!.Value,
+                                vendorLat,
+                                vendorLng);
+                        })
+                        .ThenByDescending(Qty)
+                        .ThenByDescending(r => r.CreatedOnUtc)
+                    : g
+                        .OrderByDescending(Qty)
+                        .ThenByDescending(r => r.CreatedOnUtc);
+
+                return ordered.First();
+            })
+            .ToList();
+
+        var stock = spec.Stock?.Trim().ToLowerInvariant();
+        if (stock is "low_stock" or "out_of_stock")
+        {
+            representatives = representatives
+                .Where(r => CatalogListingAvailability.ToStatus(productAvailability.GetValueOrDefault(r.ProductId)) == stock)
+                .ToList();
+        }
+
+        var categoryCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        foreach (var row in representatives)
+        {
+            var name = productMap.GetValueOrDefault(row.ProductId)?.CategoryName?.Trim();
+            if (string.IsNullOrWhiteSpace(name))
+                continue;
+            categoryCounts[name] = categoryCounts.GetValueOrDefault(name) + 1;
+        }
+
+        var allCount = representatives.Count;
+        if (!string.IsNullOrWhiteSpace(spec.Category))
+        {
+            var categoryName = spec.Category.Trim();
+            representatives = representatives
+                .Where(r =>
+                {
+                    var name = productMap.GetValueOrDefault(r.ProductId)?.CategoryName;
+                    return !string.IsNullOrWhiteSpace(name) &&
+                           string.Equals(name, categoryName, StringComparison.OrdinalIgnoreCase);
+                })
+                .ToList();
+        }
+
+        IEnumerable<CatalogListingSummaryRow> sorted = representatives;
+        if (sortingAddress is not null)
+        {
+            sorted = representatives
+                .OrderBy(r => Qty(r) > 0 ? 0 : 1)
+                .ThenBy(r =>
+                {
+                    if (r.VendorLatitude is not decimal vendorLat || r.VendorLongitude is not decimal vendorLng)
+                        return decimal.MaxValue;
+                    return CalculateDistanceKm(
+                        sortingAddress.Latitude!.Value,
+                        sortingAddress.Longitude!.Value,
+                        vendorLat,
+                        vendorLng);
+                })
+                .ThenBy(r => productMap.GetValueOrDefault(r.ProductId)?.CategoryName ?? "")
+                .ThenBy(r => productMap.GetValueOrDefault(r.ProductId)?.ProductName ?? r.ListingTitle);
+        }
+        else
+        {
+            sorted = representatives
+                .OrderBy(r => productMap.GetValueOrDefault(r.ProductId)?.CategoryName ?? "")
+                .ThenBy(r => productMap.GetValueOrDefault(r.ProductId)?.ProductName ?? r.ListingTitle);
+        }
+
+        var orderedRows = sorted.ToList();
+        var totalCount = orderedRows.Count;
+        var pageRows = orderedRows.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+        if (pageRows.Count == 0)
+        {
+            return new CustomerCatalogListingSummariesResult
+            {
+                Items = [],
+                TotalCount = totalCount,
+                Page = page,
+                PageSize = pageSize,
+                AllCount = allCount,
+                CategoryCounts = categoryCounts,
+            };
+        }
+
+        var pageProductIds = pageRows.Select(r => r.ProductId).Distinct().ToList();
+        var pageListingIds = pageRows.Select(r => r.Id).ToList();
+
+        var variantPrices = await commonDb.Set<ProductVariant>()
+            .AsNoTracking()
+            .Where(v => pageProductIds.Contains(v.ProductId) && v.IsActive && v.BuyPrice > 0)
+            .Select(v => new { v.ProductId, v.BuyPrice })
+            .ToListAsync(cancellationToken);
+        var variantPriceLookup = variantPrices
+            .GroupBy(v => v.ProductId)
+            .ToDictionary(
+                g => g.Key,
+                g =>
+                {
+                    var min = g.Min(x => x.BuyPrice);
+                    var max = g.Max(x => x.BuyPrice);
+                    return (Min: min, Max: max > min ? max : (decimal?)null);
+                });
+
+        var listingImages = await vendorDb.VendorProductImages
+            .AsNoTracking()
+            .Where(i => pageListingIds.Contains(i.VendorProductListingId) && !i.IsDeleted)
+            .Select(i => new CatalogImageRow(i.VendorProductListingId, i.ImageUrl, i.ThumbnailUrl, i.IsPrimary, i.DisplayOrder))
+            .ToListAsync(cancellationToken);
+        var listingImageLookup = listingImages
+            .GroupBy(i => i.OwnerId)
+            .ToDictionary(g => g.Key, g => PickPrimaryImageUrl(g));
+
+        var productImages = await commonDb.ProductImages
+            .AsNoTracking()
+            .Where(i => pageProductIds.Contains(i.ProductId) && !i.IsDeleted)
+            .Select(i => new CatalogImageRow(i.ProductId, i.ImageUrl, i.ThumbnailUrl, i.IsPrimary, i.DisplayOrder))
+            .ToListAsync(cancellationToken);
+        var productImageLookup = productImages
+            .GroupBy(i => i.OwnerId)
+            .ToDictionary(g => g.Key, g => PickPrimaryImageUrl(g));
+
+        var items = pageRows.Select(row =>
+        {
+            var product = productMap[row.ProductId];
+            var availableQuantity = Qty(row);
+            var productTotal = productAvailability.GetValueOrDefault(row.ProductId, availableQuantity);
+            decimal? buyPrice = product.BuyPrice;
+            decimal? maxBuyPrice = null;
+            if (variantPriceLookup.TryGetValue(row.ProductId, out var prices))
+            {
+                buyPrice = prices.Min;
+                maxBuyPrice = prices.Max;
+            }
+
+            return new CustomerCatalogListingDto(
+                row.Id,
+                string.IsNullOrWhiteSpace(product.ProductName) ? row.ListingTitle : product.ProductName,
+                "Vendor",
+                0m,
+                string.Empty,
+                product.CategoryName,
+                product.DailyRent,
+                product.WeeklyRent,
+                product.MonthlyRent,
+                product.SecurityDeposit,
+                false,
+                product.DepositRequired,
+                row.ListingStatus,
+                availableQuantity,
+                productTotal,
+                CatalogListingAvailability.ToStatus(productTotal),
+                listingImageLookup.GetValueOrDefault(row.Id) ?? productImageLookup.GetValueOrDefault(row.ProductId),
+                buyPrice,
+                product.IsRentEnabled,
+                product.IsBuyEnabled,
+                null,
+                null,
+                null,
+                null,
+                product.BaseUnit,
+                product.IsChemical,
+                maxBuyPrice);
+        }).ToList();
+
+        return new CustomerCatalogListingSummariesResult
+        {
+            Items = items,
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize,
+            AllCount = allCount,
+            CategoryCounts = categoryCounts,
+        };
+    }
+
+    private sealed record CatalogProductSummaryRow(
+        Guid Id,
+        string ProductName,
+        decimal DailyRent,
+        decimal WeeklyRent,
+        decimal MonthlyRent,
+        decimal SecurityDeposit,
+        decimal? BuyPrice,
+        bool IsRentEnabled,
+        bool IsBuyEnabled,
+        string CategoryName,
+        bool IsChemical,
+        bool DepositRequired,
+        string? BaseUnit);
+
+    private sealed record CatalogListingSummaryRow(
+        Guid Id,
+        Guid ProductId,
+        string ListingTitle,
+        string ListingStatus,
+        DateTimeOffset CreatedOnUtc,
+        int AvailableQuantity,
+        decimal? VendorLatitude,
+        decimal? VendorLongitude);
+
+    private sealed record CatalogImageRow(
+        Guid OwnerId,
+        string ImageUrl,
+        string? ThumbnailUrl,
+        bool IsPrimary,
+        int DisplayOrder);
+
+    private string? PickPrimaryImageUrl(IEnumerable<CatalogImageRow> images)
+    {
+        var primary = images
+            .OrderByDescending(i => i.IsPrimary)
+            .ThenBy(i => i.DisplayOrder)
+            .FirstOrDefault();
+        return primary is null ? null : ResolveStoredImageUrl(primary.ImageUrl, primary.ThumbnailUrl);
+    }
+
     public async Task<List<CustomerCatalogListingDto>> GetRelatedCatalogListingsAsync(
         Guid listingId,
         int limit,
@@ -632,7 +1045,339 @@ public sealed class CustomerRepository(
         return await AttachVariantDescriptionsAsync(withMedical, cancellationToken);
     }
 
+    public async Task<CustomerOrderListResult> SearchCustomerOrderSummariesAsync(
+        CustomerOrderListQuerySpec spec,
+        CancellationToken cancellationToken)
+    {
+        var page = Math.Max(1, spec.Page);
+        var pageSize = Math.Clamp(spec.PageSize, 1, 50);
+        var search = spec.Search?.Trim() ?? string.Empty;
+        var status = string.IsNullOrWhiteSpace(spec.Status) ? "All" : spec.Status.Trim();
 
+        var orders = await customerDb.CustomerRentalOrders
+            .AsNoTracking()
+            .Where(o => o.CustomerId == spec.CustomerId && !o.IsDeleted)
+            .OrderByDescending(o => o.CreatedOnUtc)
+            .ToListAsync(cancellationToken);
+
+        var hints = await LoadAdminOrderListingHintsAsync(
+            orders.Select(o => o.VendorProductListingId),
+            cancellationToken);
+
+        IEnumerable<CustomerRentalOrder> filtered = orders;
+        if (!string.IsNullOrEmpty(search))
+        {
+            filtered = filtered.Where(o =>
+                o.OrderNumber.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                o.Id.ToString().Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                (hints.TryGetValue(o.VendorProductListingId, out var hint) &&
+                 hint.ListingTitle.Contains(search, StringComparison.OrdinalIgnoreCase)));
+        }
+
+        var searchable = filtered.ToList();
+        var statusCounts = BuildCustomerStatusCounts(searchable);
+        if (!string.Equals(status, "All", StringComparison.OrdinalIgnoreCase))
+        {
+            searchable = searchable.Where(o => MatchesCustomerStatusFilter(o.Status, status)).ToList();
+        }
+
+        var totalCount = searchable.Count;
+        var pageOrders = searchable.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+        var items = await MapCustomerOrderSummaryDtosAsync(pageOrders, hints, cancellationToken);
+
+        return new CustomerOrderListResult
+        {
+            Items = items,
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize,
+            StatusCounts = statusCounts,
+        };
+    }
+
+    public async Task<List<CustomerOrderDto>> GetCustomerOrderGroupAsync(
+        Guid customerId,
+        Guid orderId,
+        CancellationToken cancellationToken)
+    {
+        var current = await customerDb.CustomerRentalOrders
+            .AsNoTracking()
+            .FirstOrDefaultAsync(o => o.Id == orderId && o.CustomerId == customerId && !o.IsDeleted, cancellationToken);
+        if (current is null)
+            return [];
+
+        var baseNumber = CustomerOrderBaseNumber(current.OrderNumber);
+        var orders = await customerDb.CustomerRentalOrders
+            .AsNoTracking()
+            .Where(o => o.CustomerId == customerId && !o.IsDeleted)
+            .OrderByDescending(o => o.CreatedOnUtc)
+            .ToListAsync(cancellationToken);
+        var siblings = orders.Where(o => CustomerOrderBaseNumber(o.OrderNumber) == baseNumber).ToList();
+        var hints = await LoadAdminOrderListingHintsAsync(
+            siblings.Select(o => o.VendorProductListingId),
+            cancellationToken);
+        return await MapCustomerOrderSummaryDtosAsync(siblings, hints, cancellationToken);
+    }
+
+    public async Task<CustomerNotificationListResult> SearchCustomerNotificationSummariesAsync(
+        Guid customerId,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 50);
+        var query = customerDb.CustomerNotifications
+            .AsNoTracking()
+            .Where(n => n.CustomerId == customerId && !n.IsDeleted);
+
+        var totalCount = await query.CountAsync(cancellationToken);
+        var unreadCount = await query.CountAsync(n => n.ReadAt == null, cancellationToken);
+        var rows = await query
+            .OrderByDescending(n => n.CreatedOnUtc)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        return new CustomerNotificationListResult
+        {
+            Items = rows.ConvertAll(CustomerNotificationMapping.ToDto),
+            TotalCount = totalCount,
+            UnreadCount = unreadCount,
+            Page = page,
+            PageSize = pageSize,
+        };
+    }
+
+    public Task<int> CountUnreadCustomerNotificationsAsync(Guid customerId, CancellationToken cancellationToken) =>
+        customerDb.CustomerNotifications
+            .AsNoTracking()
+            .CountAsync(n => n.CustomerId == customerId && !n.IsDeleted && n.ReadAt == null, cancellationToken);
+
+    public async Task<HashSet<Guid>> GetExistingExpiringNotificationOrderIdsAsync(
+        Guid customerId,
+        IReadOnlyCollection<Guid> orderIds,
+        CancellationToken cancellationToken)
+    {
+        if (orderIds.Count == 0)
+            return [];
+
+        var rows = await customerDb.CustomerNotifications
+            .AsNoTracking()
+            .Where(n =>
+                n.CustomerId == customerId &&
+                !n.IsDeleted &&
+                n.NotificationType == CustomerNotificationTypes.OrderExpiringSoon &&
+                n.RelatedOrderId.HasValue &&
+                orderIds.Contains(n.RelatedOrderId.Value))
+            .Select(n => n.RelatedOrderId!.Value)
+            .ToListAsync(cancellationToken);
+        return rows.ToHashSet();
+    }
+
+    public async Task<CustomerDashboardSummaryDto> GetCustomerDashboardSummaryAsync(
+        Guid customerId,
+        CancellationToken cancellationToken)
+    {
+        var live = customerDb.CustomerRentalOrders
+            .AsNoTracking()
+            .Where(o => o.CustomerId == customerId && !o.IsDeleted);
+
+        var activeRentals = await live.CountAsync(o => o.Status.ToLower() == "active", cancellationToken);
+        var activeTotal = await live
+            .Where(o => o.Status.ToLower() == "active")
+            .SumAsync(o => (decimal?)o.TotalAmount, cancellationToken) ?? 0;
+        var upcomingDeliveries = await live.CountAsync(
+            o =>
+                o.Status.ToLower() == "pending" ||
+                o.Status.ToLower() == "awaiting_vendor_acceptance" ||
+                o.Status.ToLower() == "confirmed" ||
+                o.Status.ToLower() == "in_transit",
+            cancellationToken);
+
+        var recent = await live
+            .OrderByDescending(o => o.CreatedOnUtc)
+            .Take(5)
+            .Select(o => new { o.Status, o.OrderNumber, o.VendorProductListingId })
+            .ToListAsync(cancellationToken);
+        var hints = await LoadAdminOrderListingHintsAsync(
+            recent.Select(o => o.VendorProductListingId),
+            cancellationToken);
+        var activity = recent.Select(o => new CustomerDashboardActivityDto
+        {
+            Status = CustomerOrderStatusMapper.ToDisplay(o.Status),
+            OrderNumber = o.OrderNumber,
+            ListingTitle = hints.TryGetValue(o.VendorProductListingId, out var hint)
+                ? hint.ListingTitle
+                : "Listing",
+        }).ToList();
+
+        var inStock = await SearchPublicCatalogListingSummariesAsync(
+            new CustomerCatalogListingSummaryQuerySpec { Page = 1, PageSize = 1, Stock = "all" },
+            cancellationToken);
+        var outOfStock = await SearchPublicCatalogListingSummariesAsync(
+            new CustomerCatalogListingSummaryQuerySpec { Page = 1, PageSize = 1, Stock = "out_of_stock" },
+            cancellationToken);
+
+        return new CustomerDashboardSummaryDto
+        {
+            ActiveRentals = activeRentals,
+            ActiveTotal = activeTotal,
+            UpcomingDeliveries = upcomingDeliveries,
+            InStockListings = Math.Max(0, inStock.AllCount - outOfStock.TotalCount),
+            OutOfStockListings = outOfStock.TotalCount,
+            RecentActivity = activity,
+        };
+    }
+
+    public async Task<CustomerExpirationListResult> SearchCustomerExpirationSummariesAsync(
+        Guid customerId,
+        int withinDays,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 50);
+        var days = Math.Clamp(withinDays, 1, 60);
+        var fromDate = DateOnly.FromDateTime(DateTime.UtcNow.Date);
+        var toDate = fromDate.AddDays(days);
+        var rows = await GetExpiringOrdersForCustomerAsync(customerId, fromDate, toDate, cancellationToken);
+        var dtos = rows.Select(r => ExpiringOrderMap(r, fromDate)).ToList();
+
+        var groups = new List<CustomerExpirationGroupDto>();
+        foreach (var row in dtos)
+        {
+            var baseNumber = CustomerOrderBaseNumber(row.OrderNumber);
+            var group = groups.Find(g => g.BaseOrderNumber == baseNumber);
+            if (group is null)
+            {
+                group = new CustomerExpirationGroupDto { BaseOrderNumber = baseNumber, Items = [] };
+                groups.Add(group);
+            }
+
+            group.Items.Add(row);
+        }
+
+        var totalCount = groups.Count;
+        var pageGroups = groups.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+        return new CustomerExpirationListResult
+        {
+            Items = pageGroups,
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize,
+        };
+    }
+
+    private static ExpiringOrderDto ExpiringOrderMap(ExpiringOrderAggregate row, DateOnly fromDate) =>
+        new(
+            row.OrderId,
+            row.OrderNumber,
+            row.CustomerName,
+            row.VendorName,
+            row.ListingTitle,
+            row.Status,
+            row.OrderType,
+            row.EndDate,
+            Math.Max(0, row.EndDate.DayNumber - fromDate.DayNumber),
+            row.ListingPrimaryImageUrl);
+
+    private static string CustomerOrderBaseNumber(string orderNumber)
+    {
+        var parts = orderNumber.Split('-', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length <= 3 ? orderNumber : string.Join("-", parts.Take(3));
+    }
+
+    private static Dictionary<string, int> BuildCustomerStatusCounts(IReadOnlyList<CustomerRentalOrder> orders)
+    {
+        var counts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["All"] = orders.Count,
+            ["Pending"] = 0,
+            ["Confirmed"] = 0,
+            ["In transit"] = 0,
+            ["Active"] = 0,
+            ["Returned"] = 0,
+            ["Cancelled"] = 0,
+            ["Bought Out"] = 0,
+        };
+        foreach (var order in orders)
+        {
+            if (MatchesCustomerStatusFilter(order.Status, "Pending")) counts["Pending"]++;
+            if (MatchesCustomerStatusFilter(order.Status, "Confirmed")) counts["Confirmed"]++;
+            if (MatchesCustomerStatusFilter(order.Status, "In transit")) counts["In transit"]++;
+            if (MatchesCustomerStatusFilter(order.Status, "Active")) counts["Active"]++;
+            if (MatchesCustomerStatusFilter(order.Status, "Returned")) counts["Returned"]++;
+            if (MatchesCustomerStatusFilter(order.Status, "Cancelled")) counts["Cancelled"]++;
+            if (MatchesCustomerStatusFilter(order.Status, "Bought Out")) counts["Bought Out"]++;
+        }
+
+        return counts;
+    }
+
+    private static bool MatchesCustomerStatusFilter(string storedStatus, string filter)
+    {
+        var display = CustomerOrderStatusMapper.ToDisplay(storedStatus).Trim().ToLowerInvariant().Replace('_', ' ');
+        return filter switch
+        {
+            "Pending" => display is "pending" or "awaiting vendor acceptance",
+            "In transit" => display.Contains("transit"),
+            "Cancelled" => display is "cancelled" or "canceled" or "dispatch failed",
+            "Bought Out" => display is "bought out",
+            _ => display == filter.Trim().ToLowerInvariant(),
+        };
+    }
+
+    private async Task<List<CustomerOrderDto>> MapCustomerOrderSummaryDtosAsync(
+        List<CustomerRentalOrder> orders,
+        Dictionary<Guid, (string ListingTitle, string VendorName)> hints,
+        CancellationToken cancellationToken)
+    {
+        if (orders.Count == 0)
+            return [];
+
+        var map = await LoadListingsWithVendorAsync(orders.ConvertAll(o => o.VendorProductListingId), cancellationToken);
+        var productMap = await LoadProductsWithImagesAsync(map.Values.Select(l => l.ProductId), cancellationToken);
+        var items = new List<CustomerOrderDto>(orders.Count);
+        foreach (var o in orders)
+        {
+            hints.TryGetValue(o.VendorProductListingId, out var hint);
+            var listing = map.GetValueOrDefault(o.VendorProductListingId);
+            var image = ResolveOrderPrimaryImageUrl(listing, productMap);
+            items.Add(new CustomerOrderDto(
+                o.Id,
+                o.OrderNumber,
+                o.VendorProductListingId,
+                string.IsNullOrWhiteSpace(hint.ListingTitle) ? "Listing" : hint.ListingTitle,
+                string.IsNullOrWhiteSpace(hint.VendorName) ? "Vendor" : hint.VendorName,
+                listing?.VendorId ?? Guid.Empty,
+                CustomerOrderStatusMapper.ToDisplay(o.Status),
+                o.StartDate,
+                o.EndDate,
+                o.TotalAmount,
+                o.DepositAmount,
+                o.ServiceFeeAmount,
+                o.DistanceFeeAmount,
+                o.ExpressFeeAmount,
+                o.GstAmount,
+                o.OrderType,
+                o.Quantity,
+                o.RentalDays,
+                o.RentalPeriodUnit,
+                image,
+                ProductVariantId: o.ProductVariantId,
+                RentalPricingPlanId: o.RentalPricingPlanId,
+                RentalDurationLabel: o.RentalDurationLabel,
+                RentalDurationDays: o.RentalDurationDays,
+                RentalNormalPrice: o.RentalNormalPrice,
+                RentalDiscountType: o.RentalDiscountType,
+                RentalDiscountValue: o.RentalDiscountValue,
+                RentalFinalPrice: o.RentalFinalPrice));
+        }
+
+        return items;
+    }
 
     public async Task<CustomerRentalOrderWithListing?> GetCustomerOrderAsync(Guid customerId, Guid orderId, CancellationToken cancellationToken)
 
@@ -755,6 +1500,372 @@ public sealed class CustomerRepository(
         return await AttachVariantDescriptionsAsync(withMedical, cancellationToken);
     }
 
+    public async Task<VendorOrderListResult> SearchVendorOrderSummariesAsync(
+        VendorOrderListQuerySpec spec,
+        CancellationToken cancellationToken)
+    {
+        var page = Math.Max(1, spec.Page);
+        var pageSize = Math.Clamp(spec.PageSize, 1, 50);
+        var search = spec.Search?.Trim() ?? string.Empty;
+        var status = string.IsNullOrWhiteSpace(spec.Status) ? "all" : spec.Status.Trim();
+        var visible = await LoadVendorVisibleOrdersAsync(spec.VendorId, cancellationToken);
+
+        IEnumerable<CustomerRentalOrderWithListing> filtered = visible;
+        if (!string.IsNullOrEmpty(search))
+        {
+            filtered = filtered.Where(row =>
+                row.Order.OrderNumber.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                row.Order.Id.ToString().Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                (row.Listing?.ListingTitle ?? "").Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                (row.Order.Customer?.FullName ?? "").Contains(search, StringComparison.OrdinalIgnoreCase) ||
+                (row.Order.CustomerAddress?.City ?? "").Contains(search, StringComparison.OrdinalIgnoreCase));
+        }
+
+        var searchable = filtered.ToList();
+        var statusCounts = BuildVendorStatusCounts(searchable);
+        if (!string.Equals(status, "all", StringComparison.OrdinalIgnoreCase))
+        {
+            searchable = searchable.Where(row => MatchesVendorStatusFilter(row.Order.Status, status)).ToList();
+        }
+
+        var totalCount = searchable.Count;
+        var pageRows = searchable.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+        var orderIds = pageRows.ConvertAll(r => r.Order.Id);
+        var assetTags = await GetCustomerOrderAssetTagsByOrderIdsAsync(orderIds, cancellationToken);
+        var items = pageRows
+            .Select(r => VendorOrderMapper.ToVendorOrderDto(
+                r,
+                assetTags.TryGetValue(r.Order.Id, out var tags) ? tags : null))
+            .ToList();
+
+        return new VendorOrderListResult
+        {
+            Items = items,
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize,
+            StatusCounts = statusCounts,
+        };
+    }
+
+    public async Task<List<VendorOrderDto>> GetVendorOrderGroupAsync(
+        Guid vendorId,
+        Guid orderId,
+        CancellationToken cancellationToken)
+    {
+        var visible = await LoadVendorVisibleOrdersAsync(vendorId, cancellationToken);
+        var current = visible.FirstOrDefault(r => r.Order.Id == orderId);
+        if (current is null)
+            return [];
+
+        var baseNumber = CustomerOrderBaseNumber(current.Order.OrderNumber);
+        var siblings = visible.Where(r => CustomerOrderBaseNumber(r.Order.OrderNumber) == baseNumber).ToList();
+        var assetTags = await GetCustomerOrderAssetTagsByOrderIdsAsync(
+            siblings.ConvertAll(r => r.Order.Id),
+            cancellationToken);
+        return siblings
+            .Select(r => VendorOrderMapper.ToVendorOrderDto(
+                r,
+                assetTags.TryGetValue(r.Order.Id, out var tags) ? tags : null))
+            .ToList();
+    }
+
+    public async Task<VendorExpirationListResult> SearchVendorExpirationSummariesAsync(
+        Guid vendorId,
+        int withinDays,
+        string? search,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 50);
+        var days = Math.Clamp(withinDays, 1, 60);
+        var fromDate = DateOnly.FromDateTime(DateTime.UtcNow.Date);
+        var toDate = fromDate.AddDays(days);
+        var rows = await GetExpiringOrdersForVendorAsync(vendorId, fromDate, toDate, cancellationToken);
+        var dtos = rows.Select(r => ExpiringOrderMap(r, fromDate)).ToList();
+        var q = search?.Trim() ?? string.Empty;
+        if (!string.IsNullOrEmpty(q))
+        {
+            dtos = dtos.Where(row =>
+                row.OrderNumber.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                CustomerOrderBaseNumber(row.OrderNumber).Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                row.ListingTitle.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                row.CustomerName.Contains(q, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+
+        var groups = new List<VendorExpirationGroupDto>();
+        foreach (var row in dtos)
+        {
+            var baseNumber = CustomerOrderBaseNumber(row.OrderNumber);
+            var group = groups.Find(g => g.BaseOrderNumber == baseNumber);
+            if (group is null)
+            {
+                group = new VendorExpirationGroupDto { BaseOrderNumber = baseNumber, Items = [] };
+                groups.Add(group);
+            }
+
+            group.Items.Add(row);
+        }
+
+        return new VendorExpirationListResult
+        {
+            Items = groups.Skip((page - 1) * pageSize).Take(pageSize).ToList(),
+            TotalCount = groups.Count,
+            Page = page,
+            PageSize = pageSize,
+        };
+    }
+
+    public async Task<VendorDispatchOfferListResult> SearchVendorDispatchOfferSummariesAsync(
+        Guid vendorId,
+        string? search,
+        string? orderType,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 50);
+        var now = DateTimeOffset.UtcNow;
+        var offers = (await GetPendingVendorOffersAsync(vendorId, cancellationToken))
+            .Where(o => IsOpenDispatchOffer(o, now))
+            .ToList();
+        var pendingCount = offers.Count;
+        if (offers.Count == 0)
+        {
+            return new VendorDispatchOfferListResult
+            {
+                Items = [],
+                TotalCount = 0,
+                PendingCount = 0,
+                Page = page,
+                PageSize = pageSize,
+                TypeCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+                {
+                    ["all"] = 0,
+                    ["rent"] = 0,
+                    ["buy"] = 0,
+                },
+            };
+        }
+
+        var orderIds = offers.Select(o => o.CustomerRentalOrderId).Distinct().ToList();
+        var orders = await customerDb.CustomerRentalOrders
+            .AsNoTracking()
+            .Where(o => orderIds.Contains(o.Id) && !o.IsDeleted)
+            .ToListAsync(cancellationToken);
+        var orderMap = orders.ToDictionary(o => o.Id);
+        var listingIds = offers.Select(o => o.VendorProductListingId).Distinct().ToList();
+        var listings = await LoadListingsWithVendorAsync(listingIds, cancellationToken);
+        var productMap = await LoadProductsWithImagesAsync(listings.Values.Select(l => l.ProductId), cancellationToken);
+
+        var joined = offers
+            .Select(o => orderMap.TryGetValue(o.CustomerRentalOrderId, out var order) ? (Offer: o, Order: order) : default)
+            .Where(x => x.Order is not null)
+            .ToList();
+
+        var q = search?.Trim() ?? string.Empty;
+        if (!string.IsNullOrEmpty(q))
+        {
+            joined = joined.Where(x =>
+                x.Order.OrderNumber.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                (listings.GetValueOrDefault(x.Offer.VendorProductListingId)?.ListingTitle ?? "")
+                    .Contains(q, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+
+        var typeCounts = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["all"] = joined.Count(x => string.Equals(x.Offer.Status, "pending", StringComparison.OrdinalIgnoreCase)),
+            ["rent"] = joined.Count(x =>
+                string.Equals(x.Offer.Status, "pending", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(x.Order.OrderType, "rent", StringComparison.OrdinalIgnoreCase)),
+            ["buy"] = joined.Count(x =>
+                string.Equals(x.Offer.Status, "pending", StringComparison.OrdinalIgnoreCase) &&
+                string.Equals(x.Order.OrderType, "buy", StringComparison.OrdinalIgnoreCase)),
+        };
+
+        if (!string.IsNullOrWhiteSpace(orderType) &&
+            !string.Equals(orderType, "all", StringComparison.OrdinalIgnoreCase))
+        {
+            var type = orderType.Trim().ToLowerInvariant();
+            joined = joined.Where(x => string.Equals(x.Order.OrderType, type, StringComparison.OrdinalIgnoreCase)).ToList();
+        }
+
+        var list = joined;
+        var pageItems = list.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+        var items = pageItems.ConvertAll(x =>
+        {
+            var listing = listings.GetValueOrDefault(x.Offer.VendorProductListingId);
+            return new VendorDispatchOfferDto(
+                x.Offer.Id,
+                x.Order.Id,
+                x.Order.OrderNumber,
+                x.Offer.VendorProductListingId,
+                listing?.ListingTitle ?? "Listing",
+                x.Order.OrderType,
+                x.Order.Quantity,
+                x.Order.RentalDays,
+                x.Offer.ExpiresAt,
+                x.Offer.Status,
+                x.Order.TotalAmount,
+                x.Order.StartDate,
+                x.Order.EndDate,
+                ListingPrimaryImageUrl: ResolveOrderPrimaryImageUrl(listing, productMap),
+                ProductVariantId: x.Order.ProductVariantId,
+                RentalPeriodUnit: x.Order.RentalPeriodUnit,
+                RentalPricingPlanId: x.Order.RentalPricingPlanId,
+                RentalDurationLabel: x.Order.RentalDurationLabel,
+                RentalDurationDays: x.Order.RentalDurationDays,
+                RentalNormalPrice: x.Order.RentalNormalPrice,
+                RentalDiscountType: x.Order.RentalDiscountType,
+                RentalDiscountValue: x.Order.RentalDiscountValue,
+                RentalFinalPrice: x.Order.RentalFinalPrice);
+        });
+
+        return new VendorDispatchOfferListResult
+        {
+            Items = items,
+            TotalCount = list.Count,
+            PendingCount = pendingCount,
+            Page = page,
+            PageSize = pageSize,
+            TypeCounts = typeCounts,
+        };
+    }
+
+    public Task<int> CountPendingVendorDispatchOffersAsync(Guid vendorId, CancellationToken cancellationToken)
+    {
+        var now = DateTimeOffset.UtcNow;
+        return customerDb.CustomerOrderVendorOffers
+            .AsNoTracking()
+            .CountAsync(x =>
+                x.VendorId == vendorId &&
+                !x.IsDeleted &&
+                x.Status == "pending" &&
+                x.ExpiresAt > now,
+                cancellationToken);
+    }
+
+    public async Task<VendorDashboardOrderStats> GetVendorDashboardOrderStatsAsync(
+        Guid vendorId,
+        CancellationToken cancellationToken)
+    {
+        var fromDate = DateOnly.FromDateTime(DateTime.UtcNow.Date);
+        var toDate = fromDate.AddDays(7);
+        var visible = await LoadVendorVisibleOrdersAsync(vendorId, cancellationToken);
+        var pending = await CountPendingVendorDispatchOffersAsync(vendorId, cancellationToken);
+        var expirations = await GetExpiringOrdersForVendorAsync(vendorId, fromDate, toDate, cancellationToken);
+        return new VendorDashboardOrderStats
+        {
+            PendingRequestsCount = pending,
+            ConfirmedOrdersCount = visible.Count(r => MatchesVendorStatusFilter(r.Order.Status, "confirmed")),
+            InTransitOrdersCount = visible.Count(r => MatchesVendorStatusFilter(r.Order.Status, "in_transit")),
+            DueReturnsCount = expirations.Count,
+        };
+    }
+
+    private async Task<List<CustomerRentalOrderWithListing>> LoadVendorVisibleOrdersAsync(
+        Guid vendorId,
+        CancellationToken cancellationToken)
+    {
+        var listingIds = await vendorDb.VendorProductListings
+            .AsNoTracking()
+            .Where(l => l.VendorId == vendorId && !l.IsDeleted)
+            .Select(l => l.Id)
+            .ToListAsync(cancellationToken);
+
+        var now = DateTimeOffset.UtcNow;
+        var pendingOffers = await customerDb.CustomerOrderVendorOffers
+            .AsNoTracking()
+            .Where(x =>
+                x.VendorId == vendorId &&
+                !x.IsDeleted &&
+                x.Status == "pending" &&
+                x.ExpiresAt > now)
+            .ToListAsync(cancellationToken);
+        var pendingByOrder = pendingOffers
+            .GroupBy(x => x.CustomerRentalOrderId)
+            .ToDictionary(g => g.Key, g => g.First());
+
+        var pendingOrderIds = pendingByOrder.Keys.ToList();
+        var orders = await customerDb.CustomerRentalOrders
+            .AsNoTracking()
+            .Include(o => o.Customer)
+            .Include(o => o.CustomerAddress)
+            .Where(o =>
+                !o.IsDeleted &&
+                (listingIds.Contains(o.VendorProductListingId) || pendingOrderIds.Contains(o.Id)))
+            .OrderByDescending(o => o.CreatedOnUtc)
+            .ToListAsync(cancellationToken);
+
+        var map = await LoadListingsWithVendorAsync(
+            orders.Select(o => o.VendorProductListingId).Concat(pendingOffers.Select(x => x.VendorProductListingId)).ToList(),
+            cancellationToken);
+        var productMap = await LoadProductsWithImagesAsync(map.Values.Select(l => l.ProductId), cancellationToken);
+
+        var results = new List<CustomerRentalOrderWithListing>();
+        foreach (var o in orders)
+        {
+            var isAwaiting = string.Equals(o.Status, "awaiting_vendor_acceptance", StringComparison.OrdinalIgnoreCase);
+            if (isAwaiting)
+            {
+                if (!pendingByOrder.TryGetValue(o.Id, out var pendingOffer))
+                    continue;
+                var pendingListing = map.GetValueOrDefault(pendingOffer.VendorProductListingId)
+                    ?? map.GetValueOrDefault(o.VendorProductListingId);
+                results.Add(new CustomerRentalOrderWithListing(
+                    o, pendingListing, ResolveOrderPrimaryImageUrl(pendingListing, productMap)));
+                continue;
+            }
+
+            var listing = map.GetValueOrDefault(o.VendorProductListingId);
+            if (listing is null || listing.VendorId != vendorId)
+                continue;
+            results.Add(new CustomerRentalOrderWithListing(
+                o, listing, ResolveOrderPrimaryImageUrl(listing, productMap)));
+        }
+
+        return results;
+    }
+
+    private static Dictionary<string, int> BuildVendorStatusCounts(IReadOnlyList<CustomerRentalOrderWithListing> rows)
+    {
+        var keys = new[]
+        {
+            "all", "awaiting_vendor_acceptance", "confirmed", "in_transit", "active",
+            "returned", "cancelled", "dispatch_failed", "bought_out",
+        };
+        var counts = keys.ToDictionary(k => k, _ => 0, StringComparer.OrdinalIgnoreCase);
+        counts["all"] = rows.Count;
+        foreach (var row in rows)
+        {
+            foreach (var key in keys.Skip(1))
+            {
+                if (MatchesVendorStatusFilter(row.Order.Status, key))
+                    counts[key]++;
+            }
+        }
+
+        return counts;
+    }
+
+    private static bool MatchesVendorStatusFilter(string storedStatus, string filter)
+    {
+        var display = CustomerOrderStatusMapper.ToDisplay(storedStatus).Trim().ToLowerInvariant().Replace('_', ' ');
+        return filter.Trim().ToLowerInvariant() switch
+        {
+            "all" => true,
+            "awaiting_vendor_acceptance" => display is "awaiting vendor acceptance",
+            "in_transit" => display.Contains("transit"),
+            "dispatch_failed" => display is "dispatch failed",
+            "bought_out" => display is "bought out",
+            "cancelled" => display is "cancelled" or "canceled",
+            _ => display == filter.Trim().ToLowerInvariant().Replace('_', ' '),
+        };
+    }
+
     public async Task<CustomerRentalOrderWithListing?> GetVendorOrderAsync(Guid vendorId, Guid orderId, CancellationToken cancellationToken)
     {
         var order = await customerDb.CustomerRentalOrders
@@ -849,12 +1960,50 @@ public sealed class CustomerRepository(
         return await AttachVariantDescriptionsAsync(withMedical, cancellationToken);
     }
 
+    public async Task<List<CustomerRentalOrderWithListing>?> GetCustomerOrderGroupForAdminAsync(
+        Guid orderId,
+        CancellationToken cancellationToken)
+    {
+        var seed = await customerDb.CustomerRentalOrders
+            .AsNoTracking()
+            .FirstOrDefaultAsync(o => o.Id == orderId && !o.IsDeleted, cancellationToken);
+        if (seed is null)
+            return null;
+
+        var parts = seed.OrderNumber.Split('-', StringSplitOptions.RemoveEmptyEntries);
+        var baseNumber = parts.Length >= 3 ? string.Join("-", parts.Take(3)) : seed.OrderNumber;
+        var prefix = baseNumber + "-";
+
+        var orders = await customerDb.CustomerRentalOrders
+            .AsNoTracking()
+            .Include(o => o.Customer)
+            .Where(o => !o.IsDeleted && (o.OrderNumber == baseNumber || o.OrderNumber.StartsWith(prefix)))
+            .OrderBy(o => o.OrderNumber)
+            .ToListAsync(cancellationToken);
+
+        if (orders.Count == 0)
+            return [];
+
+        var listingIds = orders.ConvertAll(o => o.VendorProductListingId);
+        var map = await LoadListingsWithVendorAsync(listingIds, cancellationToken);
+        var productMap = await LoadProductsWithImagesAsync(map.Values.Select(l => l.ProductId), cancellationToken);
+
+        var results = orders.ConvertAll(o =>
+        {
+            var listing = map.GetValueOrDefault(o.VendorProductListingId);
+            var img = ResolveOrderPrimaryImageUrl(listing, productMap);
+            return new CustomerRentalOrderWithListing(o, listing, img);
+        });
+        var withMedical = await AttachMedicalReferencesAsync(results, cancellationToken);
+        return await AttachVariantDescriptionsAsync(withMedical, cancellationToken);
+    }
+
     public async Task<AdminOrderListResult> SearchAdminOrderSummariesAsync(
         AdminOrderListQuerySpec spec,
         CancellationToken cancellationToken)
     {
         var page = Math.Max(1, spec.Page);
-        var pageSize = Math.Clamp(spec.PageSize, 1, 100);
+        var pageSize = Math.Clamp(spec.PageSize, 1, 200);
         var search = spec.Search?.Trim() ?? string.Empty;
         var status = (spec.Status ?? "all").Trim().ToLowerInvariant();
         if (string.IsNullOrWhiteSpace(status)) status = "all";
@@ -930,6 +2079,18 @@ public sealed class CustomerRepository(
             Stats = stats,
             StatusCounts = statusCounts,
         };
+    }
+
+    public Task<int> CountCriticalAdminOrdersAsync(CancellationToken cancellationToken)
+    {
+        return customerDb.CustomerRentalOrders
+            .AsNoTracking()
+            .Where(o => !o.IsDeleted)
+            .Where(o =>
+                o.Status.ToLower().Contains("dispatch_failed") ||
+                o.Status.ToLower().Contains("dispatch failed") ||
+                o.Status.ToLower().Contains("cancelled"))
+            .CountAsync(cancellationToken);
     }
 
     public async Task AddCustomerRentalOrderExtensionAsync(CustomerRentalOrderExtension extension, CancellationToken cancellationToken)
@@ -1211,6 +2372,14 @@ public sealed class CustomerRepository(
                 !x.IsDeleted,
                 cancellationToken);
 
+    private static bool IsOpenDispatchOffer(CustomerOrderVendorOffer offer, DateTimeOffset now)
+    {
+        var status = offer.Status?.Trim() ?? string.Empty;
+        var open = status.Equals("pending", StringComparison.OrdinalIgnoreCase)
+            || status.Contains("awaiting", StringComparison.OrdinalIgnoreCase);
+        return open && offer.ExpiresAt > now;
+    }
+
     public Task<List<CustomerOrderVendorOffer>> GetPendingVendorOffersAsync(Guid vendorId, CancellationToken cancellationToken)
     {
         var recent = DateTime.UtcNow.AddHours(-24);
@@ -1360,7 +2529,103 @@ public sealed class CustomerRepository(
         return await MapExpiringOrdersAsync(orders, cancellationToken);
     }
 
+    public async Task<AdminExpirationListResult> SearchAdminExpirationSummariesAsync(
+        AdminExpirationListQuerySpec spec,
+        CancellationToken cancellationToken)
+    {
+        var page = Math.Max(1, spec.Page);
+        var pageSize = Math.Clamp(spec.PageSize, 1, 100);
+        var days = Math.Clamp(spec.WithinDays, 1, 60);
+        var fromDate = DateOnly.FromDateTime(DateTime.UtcNow.Date);
+        var toDate = fromDate.AddDays(days);
+        var search = spec.Search?.Trim() ?? string.Empty;
 
+        var orders = await customerDb.CustomerRentalOrders
+            .AsNoTracking()
+            .Include(o => o.Customer)
+            .Where(o =>
+                !o.IsDeleted &&
+                o.EndDate.HasValue &&
+                o.EndDate.Value >= fromDate &&
+                o.EndDate.Value <= toDate &&
+                o.OrderType.ToLower() != "buy" &&
+                o.Status == "active")
+            .OrderBy(o => o.EndDate)
+            .ThenBy(o => o.OrderNumber)
+            .ToListAsync(cancellationToken);
+
+        IEnumerable<CustomerRentalOrder> filtered = orders;
+        if (!string.IsNullOrEmpty(search))
+        {
+            var hints = await LoadAdminOrderListingHintsAsync(
+                orders.Select(o => o.VendorProductListingId),
+                cancellationToken);
+            filtered = orders.Where(o => MatchesAdminExpirationSearch(o, hints, search));
+        }
+
+        var groups = new List<List<CustomerRentalOrder>>();
+        var index = new Dictionary<string, List<CustomerRentalOrder>>(StringComparer.OrdinalIgnoreCase);
+        foreach (var order in filtered)
+        {
+            var key = AdminExpirationGroupKey(order.OrderNumber);
+            if (!index.TryGetValue(key, out var bucket))
+            {
+                bucket = [];
+                index[key] = bucket;
+                groups.Add(bucket);
+            }
+            bucket.Add(order);
+        }
+
+        var pageOrders = groups
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .SelectMany(g => g)
+            .ToList();
+        var aggregates = await MapExpiringOrdersAsync(pageOrders, cancellationToken);
+
+        return new AdminExpirationListResult
+        {
+            Items = aggregates.ConvertAll(r => new ExpiringOrderDto(
+                r.OrderId,
+                r.OrderNumber,
+                r.CustomerName,
+                r.VendorName,
+                r.ListingTitle,
+                r.Status,
+                r.OrderType,
+                r.EndDate,
+                Math.Max(0, r.EndDate.DayNumber - fromDate.DayNumber),
+                r.ListingPrimaryImageUrl)),
+            TotalCount = groups.Count,
+            Page = page,
+            PageSize = pageSize,
+        };
+    }
+
+    public async Task<int> CountAdminExpirationGroupsAsync(int withinDays, CancellationToken cancellationToken)
+    {
+        var days = Math.Clamp(withinDays, 1, 60);
+        var fromDate = DateOnly.FromDateTime(DateTime.UtcNow.Date);
+        var toDate = fromDate.AddDays(days);
+
+        var orderNumbers = await customerDb.CustomerRentalOrders
+            .AsNoTracking()
+            .Where(o =>
+                !o.IsDeleted &&
+                o.EndDate.HasValue &&
+                o.EndDate.Value >= fromDate &&
+                o.EndDate.Value <= toDate &&
+                o.OrderType.ToLower() != "buy" &&
+                o.Status == "active")
+            .Select(o => o.OrderNumber)
+            .ToListAsync(cancellationToken);
+
+        return orderNumbers
+            .Select(AdminExpirationGroupKey)
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .Count();
+    }
 
     public Task<List<CustomerNotification>> GetCustomerNotificationsAsync(Guid customerId, CancellationToken cancellationToken) =>
 
@@ -1499,6 +2764,65 @@ public sealed class CustomerRepository(
         return await query.OrderByDescending(x => x.CreatedOnUtc).Take(200).ToListAsync(cancellationToken);
     }
 
+    public async Task<List<(Guid Id, string FullName, string UniqueCode, string? Specialization, string Email)>> ListDoctorOptionsForAdminAsync(
+        string? searchTerm,
+        bool? isActive,
+        CancellationToken cancellationToken)
+    {
+        var query = FilterAdminDoctors(commonDb.Doctors.AsNoTracking(), searchTerm, isActive);
+        var rows = await query
+            .OrderBy(x => x.FullName)
+            .Take(2000)
+            .Select(x => new { x.Id, x.FullName, x.UniqueCode, x.Specialization, x.Email })
+            .ToListAsync(cancellationToken);
+        return rows.Select(x => (x.Id, x.FullName, x.UniqueCode, x.Specialization, x.Email)).ToList();
+    }
+
+    public async Task<(List<Prilixor.VendorPortal.Domain.Common.Doctor> Items, int TotalCount)> SearchDoctorsForAdminPagedAsync(
+        string? searchTerm,
+        bool? isActive,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
+        var filtered = FilterAdminDoctors(commonDb.Doctors.AsNoTracking(), searchTerm, isActive);
+        var totalCount = await filtered.CountAsync(cancellationToken);
+        var items = await filtered
+            .Include(d => d.Hospitals)
+            .ThenInclude(hd => hd.Hospital)
+            .OrderByDescending(x => x.CreatedOnUtc)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        return (items, totalCount);
+    }
+
+    private static IQueryable<Prilixor.VendorPortal.Domain.Common.Doctor> FilterAdminDoctors(
+        IQueryable<Prilixor.VendorPortal.Domain.Common.Doctor> query,
+        string? searchTerm,
+        bool? isActive)
+    {
+        query = query.Where(x => !x.IsDeleted);
+
+        if (isActive.HasValue)
+            query = query.Where(x => x.IsActive == isActive.Value);
+
+        if (string.IsNullOrWhiteSpace(searchTerm))
+            return query;
+
+        var term = $"%{searchTerm.Trim()}%";
+        var code = searchTerm.Trim().ToUpperInvariant();
+        return query.Where(x =>
+            x.UniqueCode == code
+            || EF.Functions.ILike(x.FullName, term)
+            || EF.Functions.ILike(x.Email, term)
+            || EF.Functions.ILike(x.Specialization ?? "", term));
+    }
+
     public async Task AddDoctorAsync(Prilixor.VendorPortal.Domain.Common.Doctor doctor, CancellationToken cancellationToken)
     {
         commonDb.Doctors.Add(doctor);
@@ -1591,6 +2915,63 @@ public sealed class CustomerRepository(
         }
 
         return await query.OrderBy(x => x.Name).Take(200).ToListAsync(cancellationToken);
+    }
+
+    public async Task<List<(Guid Id, string Name, string? City, string? State, string? AddressLine1)>> ListHospitalOptionsForAdminAsync(
+        string? searchTerm,
+        bool? isActive,
+        CancellationToken cancellationToken)
+    {
+        var query = FilterAdminHospitals(commonDb.Hospitals.AsNoTracking(), searchTerm, isActive);
+        var rows = await query
+            .OrderBy(x => x.Name)
+            .Take(2000)
+            .Select(x => new { x.Id, x.Name, x.City, x.State, x.AddressLine1 })
+            .ToListAsync(cancellationToken);
+        return rows.Select(x => (x.Id, x.Name, x.City, x.State, x.AddressLine1)).ToList();
+    }
+
+    public async Task<(List<Prilixor.VendorPortal.Domain.Common.Hospital> Items, int TotalCount)> SearchHospitalsForAdminPagedAsync(
+        string? searchTerm,
+        bool? isActive,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
+        var filtered = FilterAdminHospitals(commonDb.Hospitals.AsNoTracking(), searchTerm, isActive);
+        var totalCount = await filtered.CountAsync(cancellationToken);
+        var items = await filtered
+            .Include(h => h.Doctors)
+            .ThenInclude(hd => hd.Doctor)
+            .OrderBy(x => x.Name)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        return (items, totalCount);
+    }
+
+    private static IQueryable<Prilixor.VendorPortal.Domain.Common.Hospital> FilterAdminHospitals(
+        IQueryable<Prilixor.VendorPortal.Domain.Common.Hospital> query,
+        string? searchTerm,
+        bool? isActive)
+    {
+        query = query.Where(x => !x.IsDeleted);
+
+        if (isActive.HasValue)
+            query = query.Where(x => x.IsActive == isActive.Value);
+
+        if (string.IsNullOrWhiteSpace(searchTerm))
+            return query;
+
+        var term = $"%{searchTerm.Trim()}%";
+        return query.Where(x =>
+            EF.Functions.ILike(x.Name, term)
+            || EF.Functions.ILike(x.City ?? "", term)
+            || EF.Functions.ILike(x.AddressLine1 ?? "", term));
     }
 
     public async Task AddHospitalAsync(Prilixor.VendorPortal.Domain.Common.Hospital hospital, CancellationToken cancellationToken)
@@ -1690,6 +3071,11 @@ public sealed class CustomerRepository(
             "cancelled" => query.Where(o =>
                 o.Status.ToLower() == "cancelled" || o.Status.ToLower() == "canceled"),
             "dispatch_failed" => query.Where(o => o.Status.ToLower() == "dispatch_failed"),
+            "critical" => query.Where(o =>
+                o.Status.ToLower().Contains("dispatch_failed") ||
+                o.Status.ToLower().Contains("dispatch failed") ||
+                o.Status.ToLower().Contains("cancelled") ||
+                o.Status.ToLower().Contains("canceled")),
             _ => query.Where(o => o.Status.ToLower() == status),
         };
     }
@@ -1704,6 +3090,8 @@ public sealed class CustomerRepository(
             "in_transit" => s.Contains("transit", StringComparison.Ordinal),
             "dispatch_failed" => s == "dispatch failed",
             "cancelled" => s is "cancelled" or "canceled",
+            "critical" => s.Contains("dispatch failed", StringComparison.Ordinal) ||
+                          s is "cancelled" or "canceled",
             _ => s == tab.Replace('_', ' '),
         };
     }
@@ -1931,6 +3319,34 @@ public sealed class CustomerRepository(
             return item with { VariantDescription = desc };
         }
         return item;
+    }
+
+    private static string AdminExpirationGroupKey(string orderNumber)
+    {
+        var parts = orderNumber.Split('-', StringSplitOptions.RemoveEmptyEntries);
+        return parts.Length >= 3 ? string.Join("-", parts.Take(3)) : orderNumber;
+    }
+
+    private static bool MatchesAdminExpirationSearch(
+        CustomerRentalOrder order,
+        Dictionary<Guid, (string ListingTitle, string VendorName)> hints,
+        string search)
+    {
+        if (order.OrderNumber.Contains(search, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        var groupKey = AdminExpirationGroupKey(order.OrderNumber);
+        if (groupKey.Contains(search, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if ((order.Customer?.FullName ?? string.Empty).Contains(search, StringComparison.OrdinalIgnoreCase))
+            return true;
+
+        if (!hints.TryGetValue(order.VendorProductListingId, out var hint))
+            return false;
+
+        return hint.ListingTitle.Contains(search, StringComparison.OrdinalIgnoreCase)
+            || hint.VendorName.Contains(search, StringComparison.OrdinalIgnoreCase);
     }
 
     private async Task<List<ExpiringOrderAggregate>> MapExpiringOrdersAsync(
@@ -2275,6 +3691,66 @@ public sealed class CustomerRepository(
             .OrderByDescending(s => s.LastMessageAt)
             .ToListAsync(cancellationToken);
 
+    public async Task<(List<ChatSession> Items, int TotalCount)> SearchAdminChatSessionsPagedAsync(
+        string? searchTerm,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken,
+        bool unreadOnly = false)
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
+        var query = customerDb.ChatSessions
+            .AsNoTracking()
+            .Where(s => !s.IsDeleted && s.CounterpartyType == ChatCounterpartyTypes.Admin);
+
+        if (unreadOnly)
+        {
+            query = query.Where(s => s.Messages.Any(m =>
+                !m.IsDeleted && !m.IsRead && m.SenderType == "Customer"));
+        }
+
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            var term = $"%{searchTerm.Trim()}%";
+            query = query.Where(s =>
+                EF.Functions.ILike(s.Subject, term)
+                || customerDb.Customers.Any(c =>
+                    c.Id == s.CustomerId && !c.IsDeleted && EF.Functions.ILike(c.FullName, term))
+                || (s.OrderId.HasValue && customerDb.CustomerRentalOrders.Any(o =>
+                    o.Id == s.OrderId.Value && !o.IsDeleted && EF.Functions.ILike(o.OrderNumber, term))));
+        }
+
+        var totalCount = await query.CountAsync(cancellationToken);
+        var pageIds = await query
+            .Select(s => new
+            {
+                s.Id,
+                Unread = s.Messages.Count(m =>
+                    !m.IsDeleted && !m.IsRead && m.SenderType == "Customer"),
+                s.LastMessageAt
+            })
+            .OrderByDescending(x => x.Unread > 0)
+            .ThenByDescending(x => x.LastMessageAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(x => x.Id)
+            .ToListAsync(cancellationToken);
+
+        var items = pageIds.Count == 0
+            ? []
+            : await customerDb.ChatSessions
+                .AsNoTracking()
+                .Where(s => pageIds.Contains(s.Id))
+                .ToListAsync(cancellationToken);
+
+        var order = pageIds.Select((id, index) => (id, index)).ToDictionary(x => x.id, x => x.index);
+        items = items.OrderBy(s => order.GetValueOrDefault(s.Id, int.MaxValue)).ToList();
+
+        return (items, totalCount);
+    }
+
     public Task<ChatSession?> GetChatSessionAsync(Guid customerId, Guid vendorId, Guid? orderId, CancellationToken cancellationToken)
     {
         if (orderId.HasValue)
@@ -2454,6 +3930,34 @@ public sealed class CustomerRepository(
         return result;
     }
 
+    public async Task<Dictionary<Guid, int>> GetFavoriteCountsForProductIdsAsync(
+        IReadOnlyCollection<Guid> productIds,
+        CancellationToken cancellationToken)
+    {
+        if (productIds.Count == 0) return [];
+
+        var ids = productIds.Distinct().ToList();
+        var listings = await vendorDb.VendorProductListings
+            .AsNoTracking()
+            .Where(l => ids.Contains(l.ProductId))
+            .Select(l => new { l.Id, l.ProductId })
+            .ToListAsync(cancellationToken);
+
+        if (listings.Count == 0) return [];
+
+        var listingIds = listings.Select(l => l.Id).ToList();
+        var listingCounts = await GetFavoriteCountsByListingsAsync(listingIds, cancellationToken);
+
+        var result = new Dictionary<Guid, int>();
+        foreach (var listing in listings)
+        {
+            if (!listingCounts.TryGetValue(listing.Id, out var count) || count <= 0) continue;
+            result[listing.ProductId] = result.GetValueOrDefault(listing.ProductId) + count;
+        }
+
+        return result;
+    }
+
     public async Task<List<AdminCustomerListItemDto>> SearchCustomersForAdminAsync(string? search, int page, int pageSize, CancellationToken cancellationToken)
     {
         page = Math.Max(1, page);
@@ -2489,6 +3993,18 @@ public sealed class CustomerRepository(
             c.LastLoginAt,
             c.CreatedOnUtc,
             countMap.GetValueOrDefault(c.Id))).ToList();
+    }
+
+    public Task<int> CountCustomersForAdminAsync(string? search, CancellationToken cancellationToken)
+    {
+        var q = customerDb.Customers.AsNoTracking().Where(c => !c.IsDeleted);
+        if (!string.IsNullOrWhiteSpace(search))
+        {
+            var s = search.Trim().ToLowerInvariant();
+            q = q.Where(c => c.Email.Contains(s) || c.FullName.ToLower().Contains(s) || (c.Phone != null && c.Phone.Contains(s)));
+        }
+
+        return q.CountAsync(cancellationToken);
     }
 
     public async Task<AdminCustomerDetailDto?> GetCustomerDetailForAdminAsync(
@@ -2815,6 +4331,124 @@ public sealed class CustomerRepository(
         }
 
         return result.OrderByDescending(x => x.CreatedOnUtc).ToList();
+    }
+
+    public async Task<(List<PendingContinuationAggregate> Items, int TotalCount)> SearchPendingContinuationsForAdminPagedAsync(
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
+        var extensionKeys = await customerDb.CustomerRentalOrderExtensions
+            .AsNoTracking()
+            .Where(x => !x.IsDeleted && x.Status == "pending_approval")
+            .Select(x => new { x.Id, x.CreatedOnUtc, Type = "extension" })
+            .ToListAsync(cancellationToken);
+
+        var buyoutKeys = await customerDb.CustomerRentalOrderBuyouts
+            .AsNoTracking()
+            .Where(x => !x.IsDeleted && x.Status == "pending_approval")
+            .Select(x => new { x.Id, x.CreatedOnUtc, Type = "buyout" })
+            .ToListAsync(cancellationToken);
+
+        var keys = extensionKeys
+            .Concat(buyoutKeys)
+            .OrderByDescending(x => x.CreatedOnUtc)
+            .ToList();
+        var totalCount = keys.Count;
+        var pageKeys = keys
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToList();
+
+        var extensionIds = pageKeys.Where(x => x.Type == "extension").Select(x => x.Id).ToList();
+        var buyoutIds = pageKeys.Where(x => x.Type == "buyout").Select(x => x.Id).ToList();
+
+        var extensions = extensionIds.Count == 0
+            ? []
+            : await customerDb.CustomerRentalOrderExtensions
+                .AsNoTracking()
+                .Include(x => x.CustomerRentalOrder)
+                    .ThenInclude(o => o.Customer)
+                .Where(x => extensionIds.Contains(x.Id))
+                .ToListAsync(cancellationToken);
+
+        var buyouts = buyoutIds.Count == 0
+            ? []
+            : await customerDb.CustomerRentalOrderBuyouts
+                .AsNoTracking()
+                .Include(x => x.CustomerRentalOrder)
+                    .ThenInclude(o => o.Customer)
+                .Where(x => buyoutIds.Contains(x.Id))
+                .ToListAsync(cancellationToken);
+
+        var listingIds = extensions.Select(x => x.CustomerRentalOrder.VendorProductListingId)
+            .Union(buyouts.Select(x => x.CustomerRentalOrder.VendorProductListingId))
+            .Distinct()
+            .ToList();
+        var map = await LoadListingsWithVendorAsync(listingIds, cancellationToken);
+
+        var variantIds = extensions.Select(x => x.CustomerRentalOrder.ProductVariantId)
+            .Concat(buyouts.Select(x => x.CustomerRentalOrder.ProductVariantId))
+            .Where(id => id.HasValue)
+            .Select(id => id!.Value)
+            .Distinct()
+            .ToList();
+        var variants = variantIds.Count > 0
+            ? await commonDb.Set<ProductVariant>()
+                .AsNoTracking()
+                .Where(v => variantIds.Contains(v.Id))
+                .ToDictionaryAsync(v => v.Id, cancellationToken)
+            : new Dictionary<Guid, ProductVariant>();
+
+        string ComposeTitle(VendorProductListing? listing, CustomerRentalOrder order)
+        {
+            var title = listing?.ListingTitle ?? "Deleted Product";
+            if (order.ProductVariantId.HasValue && variants.TryGetValue(order.ProductVariantId.Value, out var variant))
+                title += $" ({Prilixor.VendorPortal.Application.Common.SizeFormatting.Format(variant.SizeValue, variant.SizeUnit)})";
+            return title;
+        }
+
+        var byId = new Dictionary<(string Type, Guid Id), PendingContinuationAggregate>();
+        foreach (var e in extensions)
+        {
+            var listing = map.GetValueOrDefault(e.CustomerRentalOrder.VendorProductListingId);
+            byId[("extension", e.Id)] = new PendingContinuationAggregate(
+                e.Id,
+                e.CustomerRentalOrderId,
+                e.CustomerRentalOrder.OrderNumber,
+                e.CustomerRentalOrder.Customer?.FullName ?? "Customer",
+                listing?.Vendor?.Profile?.BusinessName ?? listing?.Vendor?.Email ?? "Vendor",
+                ComposeTitle(listing, e.CustomerRentalOrder),
+                e.TotalAmount,
+                e.CreatedOnUtc,
+                "extension");
+        }
+
+        foreach (var b in buyouts)
+        {
+            var listing = map.GetValueOrDefault(b.CustomerRentalOrder.VendorProductListingId);
+            byId[("buyout", b.Id)] = new PendingContinuationAggregate(
+                b.Id,
+                b.CustomerRentalOrderId,
+                b.CustomerRentalOrder.OrderNumber,
+                b.CustomerRentalOrder.Customer?.FullName ?? "Customer",
+                listing?.Vendor?.Profile?.BusinessName ?? listing?.Vendor?.Email ?? "Vendor",
+                ComposeTitle(listing, b.CustomerRentalOrder),
+                b.TotalAmount,
+                b.CreatedOnUtc,
+                "buyout");
+        }
+
+        var items = pageKeys
+            .Select(key => byId.GetValueOrDefault((key.Type, key.Id)))
+            .Where(x => x is not null)
+            .Select(x => x!)
+            .ToList();
+
+        return (items, totalCount);
     }
 
     private async Task<List<CustomerRentalOrderWithListing>> AttachMedicalReferencesAsync(List<CustomerRentalOrderWithListing> items, CancellationToken cancellationToken)

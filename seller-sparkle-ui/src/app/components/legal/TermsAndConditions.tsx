@@ -164,7 +164,7 @@ const TermsAndConditions = () => {
                 <p className="text-lg leading-relaxed max-w-2xl">
                   Please review these terms carefully to understand your rights and responsibilities as a vendor on our platform.
                 </p>
-                <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-600 px-3 py-1.5 rounded-lg border border-emerald-500/20 w-fit shrink-0">
+                <div className="flex w-fit shrink-0 items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/15 dark:text-emerald-300">
                   Updated: May 13, 2026
                 </div>
               </div>

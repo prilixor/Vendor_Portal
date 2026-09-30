@@ -59,6 +59,52 @@ internal sealed class GetAdminCustomersQueryHandler(ICustomerRepository customer
     }
 }
 
+public sealed class AdminCustomerListResult
+{
+    public List<AdminCustomerListItemDto> Items { get; init; } = [];
+    public int TotalCount { get; init; }
+    public int Page { get; init; }
+    public int PageSize { get; init; }
+}
+
+public sealed record GetAdminCustomerListQuery(
+    string? Search,
+    int Page = 1,
+    int PageSize = 8) : IQuery<AdminCustomerListResult>;
+
+public sealed class GetAdminCustomerListQueryValidator : AbstractValidator<GetAdminCustomerListQuery>
+{
+    public GetAdminCustomerListQueryValidator()
+    {
+        RuleFor(x => x.Page).GreaterThan(0);
+        RuleFor(x => x.PageSize).InclusiveBetween(1, 100);
+    }
+}
+
+internal sealed class GetAdminCustomerListQueryHandler(ICustomerRepository customers)
+    : IQueryHandler<GetAdminCustomerListQuery, AdminCustomerListResult>
+{
+    public async Task<Result<AdminCustomerListResult>> Handle(
+        GetAdminCustomerListQuery request,
+        CancellationToken cancellationToken)
+    {
+        var page = Math.Max(1, request.Page);
+        var pageSize = Math.Clamp(request.PageSize, 1, 100);
+
+        // Same DbContext — do not run these in parallel.
+        var totalCount = await customers.CountCustomersForAdminAsync(request.Search, cancellationToken);
+        var items = await customers.SearchCustomersForAdminAsync(request.Search, page, pageSize, cancellationToken);
+
+        return Result.Success(new AdminCustomerListResult
+        {
+            Items = items,
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize,
+        });
+    }
+}
+
 public sealed record GetAdminCustomerDetailQuery(Guid CustomerId, int OrdersPage = 1, int OrdersPageSize = 10)
     : IQuery<AdminCustomerDetailDto>;
 

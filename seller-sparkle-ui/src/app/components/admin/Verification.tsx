@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
@@ -21,7 +21,7 @@ import { safeFormatDate } from "@/app/utils/dateUtils";
 import { adminApi, VendorDto, VendorProfileDto, VendorDocumentDto, VendorBankAccountDto, VendorServiceAreaDto, AdminVerificationListRow } from "@/app/services/adminApi";
 import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
-import { retryOriginalOnImageError } from "@/app/helpers/utils";
+import { cn, retryOriginalOnImageError } from "@/app/helpers/utils";
 import { CopyableEmail } from "@/app/components/shared/CopyableEmail";
 import { AdminServiceAreaRadiusDialog } from "@/app/components/admin/AdminServiceAreaRadiusDialog";
 
@@ -214,7 +214,7 @@ const Verification = () => {
     setPage(1);
   }, [debouncedSearch, filter]);
 
-  const { data, isLoading } = useQuery({
+  const { data, isLoading, isPlaceholderData } = useQuery({
     queryKey: ["admin-verification-summaries", page, debouncedSearch, filter],
     queryFn: () =>
       adminApi.getVendorVerificationSummaries({
@@ -223,7 +223,9 @@ const Verification = () => {
         page,
         pageSize: PAGE_SIZE,
       }),
+    placeholderData: keepPreviousData,
   });
+  const isPageChanging = isPlaceholderData && !isLoading;
 
   const pageVendors = data?.items ?? [];
   const totalCount = data?.totalCount ?? 0;
@@ -648,7 +650,7 @@ const Verification = () => {
           </Tabs>
         </div>
         <PageContentGate loading={isLoading}>
-          <>
+          <div className={cn("transition-opacity duration-200", isPageChanging && "opacity-50")}>
           <div className="overflow-x-auto rounded-lg border border-border">
             <table className="w-full min-w-[700px] text-sm">
               <thead className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
@@ -695,7 +697,7 @@ const Verification = () => {
             onPageChange={setPage}
             label="vendors"
           />
-          </>
+          </div>
         </PageContentGate>
       </Card>
 

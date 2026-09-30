@@ -6,6 +6,7 @@ import '../api/api_client.dart';
 import '../utils/media_url.dart';
 import '../utils/multipart_file_util.dart';
 import '../models/vendor_catalog_model.dart';
+import '../utils/paged_json.dart';
 
 class VendorCatalogProvider extends ChangeNotifier {
   final ApiClient _api = ApiClient();
@@ -24,19 +25,53 @@ class VendorCatalogProvider extends ChangeNotifier {
   List<VendorProductListing> _listings = [];
   List<VendorListingRow> _listingRows = [];
   List<InventoryRecord> _inventoryRecords = [];
-  List<InventoryMovement> _movements = [];
 
   List<VendorCategory> get categories => _categories;
   List<CatalogProduct> get products => _products;
   List<VendorProductListing> get listings => _listings;
   List<VendorListingRow> get listingRows => _listingRows;
   List<InventoryRecord> get inventoryRecords => _inventoryRecords;
-  List<InventoryMovement> get movements => _movements;
 
   Map<String, VendorInventorySnapshot> _inventoryByListing = {};
   Map<String, List<VariantInventoryRow>> _variantInventoryByListing = {};
 
+  bool _loadingMore = false;
+  bool get loadingMore => _loadingMore;
+
+  int _listingPage = 1;
+  int _listingTotalCount = 0;
+  int get listingTotalCount => _listingTotalCount;
+  bool get hasMoreListings => _listingRows.length < _listingTotalCount;
+
+  int _equipmentCount = 0;
+  int _chemicalCount = 0;
+  int _activeCount = 0;
+  int _inactiveCount = 0;
+  int _draftCount = 0;
+  int get equipmentCount => _equipmentCount;
+  int get chemicalCount => _chemicalCount;
+  int get activeCount => _activeCount;
+  int get inactiveCount => _inactiveCount;
+  int get draftCount => _draftCount;
+
+  InventoryTotals _summaryTotals = const InventoryTotals(
+    total: 0,
+    available: 0,
+    reserved: 0,
+    rented: 0,
+    blocked: 0,
+  );
+
+  String? _lastListingSearch;
+  String? _lastListingStatus;
+  bool? _lastListingIsChemical;
+
   InventoryTotals get inventoryTotals {
+    if (_summaryTotals.total > 0 ||
+        _summaryTotals.available > 0 ||
+        _inventoryRecords.isEmpty) {
+      return _summaryTotals;
+    }
     var total = 0;
     var available = 0;
     var reserved = 0;
@@ -69,7 +104,6 @@ class VendorCatalogProvider extends ChangeNotifier {
       final results = await Future.wait([
         _api.dio.get('/vendors/catalog/categories'),
         _api.dio.get('/vendors/catalog/products'),
-        _api.dio.get('/vendors/$vendorId/listings'),
       ]);
 
       _categories = _parseList(results[0].data)
@@ -78,106 +112,6 @@ class VendorCatalogProvider extends ChangeNotifier {
       _products = _parseList(results[1].data)
           .map((e) => CatalogProduct.fromJson(e))
           .toList();
-      _listings = _parseList(results[2].data)
-          .map((e) => VendorProductListing.fromJson(e))
-          .toList();
-
-      final productById = {for (final p in _products) p.id: p};
-      final categoryById = {for (final c in _categories) c.id: c};
-
-      _inventoryByListing = {};
-      _variantInventoryByListing = {};
-
-      await Future.wait(_listings.map((listing) async {
-        final isChemical = _isChemicalListing(
-          listing,
-          productById[listing.productId],
-          categoryById[productById[listing.productId]?.categoryId],
-        );
-        if (isChemical) {
-          try {
-            final response = await _api.dio.get(
-              '/vendors/$vendorId/listings/${listing.id}/variant-inventory',
-            );
-            final rows = _parseList(response.data)
-                .map((e) => VariantInventoryRow.fromJson(e))
-                .toList();
-            _variantInventoryByListing[listing.id] = rows;
-          } catch (_) {}
-        }
-        try {
-          final response = await _api.dio.get(
-            '/vendors/$vendorId/listings/${listing.id}/inventory',
-          );
-          if (response.data is Map) {
-            final map = Map<String, dynamic>.from(response.data as Map);
-            _inventoryByListing[listing.id] = VendorInventorySnapshot(
-              listingId: listing.id,
-              total: _toInt(map['totalQuantity']),
-              available: _toInt(map['availableQuantity']),
-              reserved: _toInt(map['reservedQuantity']),
-              rented: _toInt(map['rentedQuantity']),
-              blocked: _toInt(map['blockedQuantity']),
-            );
-          }
-        } catch (_) {}
-      }));
-
-      _listingRows = _listings.map((listing) {
-        final product = productById[listing.productId];
-        final category = product == null
-            ? null
-            : categoryById[product.categoryId];
-        final isChemical = _isChemicalListing(listing, product, category);
-        final variantRows = _variantInventoryByListing[listing.id];
-        final inventory = _inventoryByListing[listing.id];
-        final quantity = isChemical && variantRows != null && variantRows.isNotEmpty
-            ? variantRows.fold<int>(0, (sum, r) => sum + r.totalQuantity)
-            : (inventory?.total ?? listing.availableQuantity);
-
-        double? buyMin;
-        double? buyMax;
-        if (isChemical && product != null && product.variants.isNotEmpty) {
-          final prices = product.variants
-              .where((v) => v.isActive)
-              .map((v) => v.buyPrice)
-              .where((p) => p > 0)
-              .toList();
-          if (prices.isNotEmpty) {
-            buyMin = prices.reduce((a, b) => a < b ? a : b);
-            buyMax = prices.reduce((a, b) => a > b ? a : b);
-          }
-        }
-
-        return VendorListingRow(
-          listing: listing,
-          categoryName: category?.name ?? 'Unknown',
-          productName: product?.productName ?? 'Unknown',
-          categoryId: product?.categoryId ?? '',
-          isChemical: isChemical,
-          quantity: quantity,
-          status: normalizeListingStatus(listing.listingStatus),
-          buyPriceMin: buyMin ?? product?.buyPrice,
-          buyPriceMax: buyMax ?? product?.buyPrice,
-          primaryImageUrl: resolveListingPrimaryImageUrl(
-            listingPrimaryImageUrl: listing.primaryImageUrl,
-            listingPrimaryThumbnailUrl: listing.primaryThumbnailUrl,
-            catalogImages: product?.images,
-          ),
-        );
-      }).toList();
-
-      final imageByListingId = {
-        for (final row in _listingRows) row.listing.id: row.primaryImageUrl,
-      };
-
-      _inventoryRecords = await _buildInventoryRecords(
-        vendorId: vendorId,
-        productById: productById,
-        imageByListingId: imageByListingId,
-      );
-
-      _movements = await _loadAllMovements(vendorId, productById);
     } on DioException catch (e) {
       _error = _dioMessage(e, 'Failed to load catalog.');
     } catch (_) {
@@ -186,6 +120,197 @@ class VendorCatalogProvider extends ChangeNotifier {
       _loading = false;
       notifyListeners();
     }
+  }
+
+  CatalogProduct? productById(String productId) {
+    for (final product in _products) {
+      if (product.id == productId) return product;
+    }
+    return null;
+  }
+
+  void _upsertProduct(CatalogProduct product) {
+    final next = [..._products];
+    final index = next.indexWhere((p) => p.id == product.id);
+    if (index >= 0) {
+      next[index] = product;
+    } else {
+      next.add(product);
+    }
+    _products = next;
+  }
+
+  /// Fetch-one Admin catalog product (GST, photos, documents) — same payload web uses on Edit listing.
+  Future<CatalogProduct?> fetchProduct(String productId) async {
+    if (productId.isEmpty) return null;
+    final cached = productById(productId);
+    if (cached != null &&
+        (cached.images.isNotEmpty ||
+            cached.documents.isNotEmpty ||
+            cached.gstPercent > 0)) {
+      return cached;
+    }
+
+    try {
+      final response = await _api.dio.get('/vendors/catalog/products/$productId');
+      if (response.data is Map) {
+        final product = CatalogProduct.fromJson(
+          Map<String, dynamic>.from(response.data as Map),
+        );
+        _upsertProduct(product);
+        notifyListeners();
+        return product;
+      }
+    } on DioException catch (e) {
+      if (e.response?.statusCode == 404) {
+        await fetchCatalog('');
+        return productById(productId);
+      }
+    } catch (_) {
+      // Fall through to cache / fat catalog.
+    }
+
+    if (cached != null) return cached;
+    await fetchCatalog('');
+    return productById(productId);
+  }
+
+  static const listingPageSize = 8;
+
+  Future<void> fetchListingSummaries(
+    String vendorId, {
+    String? search,
+    String? status,
+    bool? isChemical,
+    bool reset = true,
+    bool silent = false,
+  }) async {
+    if (vendorId.isEmpty) return;
+    if (!reset) {
+      if (_loading || _loadingMore || !hasMoreListings) return;
+      _loadingMore = true;
+      notifyListeners();
+      _listingPage += 1;
+    } else {
+      _listingPage = 1;
+      if (search != null) _lastListingSearch = search;
+      if (status != null) _lastListingStatus = status;
+      if (isChemical != null) _lastListingIsChemical = isChemical;
+      if (!silent || _listingRows.isEmpty) {
+        _loading = true;
+        _error = null;
+        notifyListeners();
+      }
+    }
+
+    try {
+      final query = <String, dynamic>{
+        'page': reset ? 1 : _listingPage,
+        'pageSize': listingPageSize,
+      };
+      final q =
+          (reset ? (search ?? _lastListingSearch) : _lastListingSearch)?.trim();
+      if (q != null && q.isNotEmpty) query['search'] = q;
+      final st = reset ? (status ?? _lastListingStatus) : _lastListingStatus;
+      if (st != null && st.isNotEmpty && st != 'all') query['status'] = st;
+      final chem =
+          reset ? (isChemical ?? _lastListingIsChemical) : _lastListingIsChemical;
+      if (chem != null) query['isChemical'] = chem;
+
+      final response = await _api.dio.get(
+        '/vendors/$vendorId/listings/summaries',
+        queryParameters: query,
+      );
+      if (response.statusCode == 200) {
+        final body = asJsonMap(response.data);
+        final items = asJsonList(body?['items'] ?? response.data)
+            .whereType<Map>()
+            .map((e) => Map<String, dynamic>.from(e))
+            .toList();
+        final rows = items.map((json) => _rowFromSummary(json, vendorId)).toList();
+        final records = items.map(_inventoryFromSummary).toList();
+        _listingTotalCount = asJsonInt(body?['totalCount'], rows.length);
+        _equipmentCount = asJsonInt(body?['equipmentCount']);
+        _chemicalCount = asJsonInt(body?['chemicalCount']);
+        _activeCount = asJsonInt(body?['activeCount']);
+        _inactiveCount = asJsonInt(body?['inactiveCount']);
+        _draftCount = asJsonInt(body?['draftCount']);
+        _summaryTotals = InventoryTotals(
+          total: asJsonInt(body?['totalUnits']),
+          available: asJsonInt(body?['availableUnits']),
+          reserved: asJsonInt(body?['reservedUnits']),
+          rented: asJsonInt(body?['rentedUnits']),
+          blocked: asJsonInt(body?['blockedUnits']),
+        );
+        _listingRows = reset ? rows : [..._listingRows, ...rows];
+        _inventoryRecords = reset ? records : [..._inventoryRecords, ...records];
+        _listings = _listingRows.map((r) => r.listing).toList();
+        _error = null;
+      }
+    } on DioException catch (e) {
+      if (!reset) _listingPage = (_listingPage - 1).clamp(1, 1 << 20);
+      if (_listingRows.isEmpty) {
+        _error = _dioMessage(e, 'Failed to load listings.');
+      }
+    } catch (_) {
+      if (!reset) _listingPage = (_listingPage - 1).clamp(1, 1 << 20);
+      if (_listingRows.isEmpty) {
+        _error = 'Failed to load listings.';
+      }
+    } finally {
+      _loading = false;
+      _loadingMore = false;
+      notifyListeners();
+    }
+  }
+
+  VendorListingRow _rowFromSummary(Map<String, dynamic> json, String vendorId) {
+    final listing = VendorProductListing.fromJson({
+      ...json,
+      'vendorId': vendorId,
+    });
+    final productName = json['productName']?.toString() ?? listing.listingTitle;
+    final categoryName = json['categoryName']?.toString() ?? '';
+    return VendorListingRow(
+      listing: listing,
+      categoryName: categoryName.isEmpty ? 'Unknown' : categoryName,
+      productName: productName,
+      categoryId: '',
+      isChemical: json['isChemical'] == true,
+      quantity: asJsonInt(json['totalQuantity'], listing.availableQuantity),
+      status: normalizeListingStatus(listing.listingStatus),
+      primaryImageUrl: resolveListingPrimaryImageUrl(
+        listingPrimaryImageUrl: listing.primaryImageUrl,
+        listingPrimaryThumbnailUrl: listing.primaryThumbnailUrl,
+      ),
+    );
+  }
+
+  InventoryRecord _inventoryFromSummary(Map<String, dynamic> json) {
+    final title = json['listingTitle']?.toString() ?? '';
+    final productName = json['productName']?.toString() ?? '';
+    final name = productName.isNotEmpty && productName != title
+        ? '$title ($productName)'
+        : (title.isNotEmpty ? title : productName);
+    return InventoryRecord(
+      listingId: json['id']?.toString() ?? '',
+      catalogProductId: json['productId']?.toString(),
+      isChemical: json['isChemical'] == true,
+      productName: name,
+      primaryImageUrl: resolveListingPrimaryImageUrl(
+        listingPrimaryImageUrl: json['primaryImageUrl']?.toString(),
+        listingPrimaryThumbnailUrl: json['primaryThumbnailUrl']?.toString(),
+      ),
+      total: asJsonInt(json['totalQuantity']),
+      available: asJsonInt(json['availableQuantity']),
+      reserved: asJsonInt(json['reservedQuantity']),
+      rented: asJsonInt(json['rentedQuantity']),
+      blocked: asJsonInt(json['blockedQuantity']),
+    );
+  }
+
+  Future<void> _refreshListings(String vendorId) {
+    return fetchListingSummaries(vendorId, reset: true, silent: true);
   }
 
   VendorListingRow? rowForListing(String listingId) {
@@ -344,7 +469,7 @@ class VendorCatalogProvider extends ChangeNotifier {
         );
       }
 
-      await fetchCatalog(vendorId, silent: true);
+      await _refreshListings(vendorId);
       return listingId;
     } on DioException catch (e) {
       _error = _dioMessage(e, 'Failed to create listing.');
@@ -414,7 +539,7 @@ class VendorCatalogProvider extends ChangeNotifier {
         );
       }
 
-      await fetchCatalog(vendorId, silent: true);
+      await _refreshListings(vendorId);
       return true;
     } on DioException catch (e) {
       _error = _dioMessage(e, 'Failed to update chemical stock.');
@@ -450,7 +575,7 @@ class VendorCatalogProvider extends ChangeNotifier {
           'listingStatus': listingStatusToApi(status),
         },
       );
-      await fetchCatalog(vendorId, silent: true);
+      await _refreshListings(vendorId);
       return true;
     } on DioException catch (e) {
       _error = _dioMessage(e, 'Failed to update listing.');
@@ -473,7 +598,7 @@ class VendorCatalogProvider extends ChangeNotifier {
     notifyListeners();
     try {
       await _api.dio.delete('/vendors/$vendorId/listings/$listingId');
-      await fetchCatalog(vendorId, silent: true);
+      await _refreshListings(vendorId);
       return true;
     } on DioException catch (e) {
       _error = _dioMessage(e, 'Failed to delete listing.');
@@ -897,7 +1022,7 @@ class VendorCatalogProvider extends ChangeNotifier {
       }
 
       await Future.wait(movements);
-      await fetchCatalog(vendorId, silent: true);
+      await _refreshListings(vendorId);
       return true;
     } on DioException catch (e) {
       _error = _dioMessage(e, 'Failed to update inventory.');
@@ -1059,7 +1184,7 @@ class VendorCatalogProvider extends ChangeNotifier {
           'listingStatus': listingStatusToApi(newStatus),
         },
       );
-      await fetchCatalog(vendorId, silent: true);
+      await _refreshListings(vendorId);
       return true;
     } on DioException catch (e) {
       _error = _dioMessage(e, 'Failed to update listing status.');
@@ -1148,7 +1273,7 @@ class VendorCatalogProvider extends ChangeNotifier {
         },
       );
 
-      await fetchCatalog(vendorId, silent: true);
+      await _refreshListings(vendorId);
       return true;
     } on DioException catch (e) {
       _error = _dioMessage(e, 'Failed to update stock.');
@@ -1160,139 +1285,6 @@ class VendorCatalogProvider extends ChangeNotifier {
       _saving = false;
       notifyListeners();
     }
-  }
-
-  Future<List<InventoryRecord>> _buildInventoryRecords({
-    required String vendorId,
-    required Map<String, CatalogProduct> productById,
-    required Map<String, String?> imageByListingId,
-  }) async {
-    final rows = <InventoryRecord>[];
-    for (final listing in _listings) {
-      final product = productById[listing.productId];
-      final baseName =
-          '${listing.listingTitle}${product != null ? ' (${product.productName})' : ''}';
-      final isChemical = _listingRows
-          .where((r) => r.listing.id == listing.id)
-          .map((r) => r.isChemical)
-          .firstOrNull ?? false;
-
-      if (isChemical) {
-        final variantRows = _variantInventoryByListing[listing.id] ?? const [];
-        if (variantRows.isNotEmpty) {
-          rows.add(
-            InventoryRecord(
-              listingId: listing.id,
-              catalogProductId: listing.productId,
-              isChemical: true,
-              productName: baseName,
-              primaryImageUrl: imageByListingId[listing.id],
-              total: variantRows.fold(0, (s, r) => s + r.totalQuantity),
-              available:
-                  variantRows.fold(0, (s, r) => s + r.availableQuantity),
-              reserved: variantRows.fold(0, (s, r) => s + r.reservedQuantity),
-              rented: 0,
-              blocked: _inventoryByListing[listing.id]?.blocked ?? 0,
-            ),
-          );
-          continue;
-        }
-      }
-
-      final inv = _inventoryByListing[listing.id];
-      if (inv != null) {
-        rows.add(
-          InventoryRecord(
-            listingId: listing.id,
-            catalogProductId: listing.productId,
-            isChemical: isChemical,
-            productName: baseName,
-            primaryImageUrl: imageByListingId[listing.id],
-            total: inv.total,
-            available: inv.available,
-            reserved: inv.reserved,
-            rented: inv.rented,
-            blocked: inv.blocked,
-          ),
-        );
-        continue;
-      }
-
-      try {
-        final response = await _api.dio.put(
-          '/vendors/$vendorId/listings/${listing.id}/inventory',
-          data: {
-            'vendorId': vendorId,
-            'listingId': listing.id,
-            'totalQuantity': listing.availableQuantity,
-            'availableQuantity': listing.availableQuantity,
-            'reservedQuantity': 0,
-            'rentedQuantity': 0,
-            'blockedQuantity': 0,
-          },
-        );
-        if (response.data is Map) {
-          final map = Map<String, dynamic>.from(response.data as Map);
-          rows.add(
-            InventoryRecord(
-              listingId: listing.id,
-              catalogProductId: listing.productId,
-              isChemical: isChemical,
-              productName: baseName,
-              primaryImageUrl: imageByListingId[listing.id],
-              total: _toInt(map['totalQuantity']),
-              available: _toInt(map['availableQuantity']),
-              reserved: _toInt(map['reservedQuantity']),
-              rented: _toInt(map['rentedQuantity']),
-              blocked: _toInt(map['blockedQuantity']),
-            ),
-          );
-        }
-      } catch (_) {
-        rows.add(
-          InventoryRecord(
-            listingId: listing.id,
-            catalogProductId: listing.productId,
-            isChemical: isChemical,
-            productName: baseName,
-            primaryImageUrl: imageByListingId[listing.id],
-            total: listing.availableQuantity,
-            available: listing.availableQuantity,
-          ),
-        );
-      }
-    }
-    return rows;
-  }
-
-  Future<List<InventoryMovement>> _loadAllMovements(
-    String vendorId,
-    Map<String, CatalogProduct> productById,
-  ) async {
-    final all = <InventoryMovement>[];
-    for (final listing in _listings) {
-      final product = productById[listing.productId];
-      final productName =
-          '${listing.listingTitle}${product != null ? ' (${product.productName})' : ''}';
-      final rows = await fetchMovementsForListing(
-        vendorId,
-        listing.id,
-        productName,
-      );
-      all.addAll(rows);
-    }
-    all.sort((a, b) => b.timestamp.compareTo(a.timestamp));
-    return all;
-  }
-
-  bool _isChemicalListing(
-    VendorProductListing listing,
-    CatalogProduct? product,
-    VendorCategory? category,
-  ) {
-    return listing.isChemical ||
-        category?.isChemical == true ||
-        product?.isChemicalProduct == true;
   }
 
   List<Map<String, dynamic>> _parseList(dynamic data) {

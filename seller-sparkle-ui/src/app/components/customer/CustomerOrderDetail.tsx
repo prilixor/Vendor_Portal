@@ -446,10 +446,10 @@ const CustomerOrderDetail = () => {
     refetchInterval: CUSTOMER_ORDER_POLL_MS,
   });
 
-  // Fetch all orders to group them locally
-  const { data: allOrders } = useQuery({
-    queryKey: ["customer-orders"],
-    queryFn: () => customerApi.getOrders(),
+  const { data: groupOrders } = useQuery({
+    queryKey: ["customer-order-group", orderId],
+    queryFn: () => customerApi.getOrderGroup(orderId!, { quiet: true }),
+    enabled: !!orderId,
     refetchInterval: CUSTOMER_ORDER_POLL_MS,
   });
 
@@ -499,6 +499,8 @@ const CustomerOrderDetail = () => {
       toast.success("Order cancelled.");
       queryClient.invalidateQueries({ queryKey: ["customer-order", variables] });
       queryClient.invalidateQueries({ queryKey: ["customer-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-order-summaries"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-order-group"] });
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -569,6 +571,8 @@ const CustomerOrderDetail = () => {
       setExtensionQuote(null);
       queryClient.invalidateQueries({ queryKey: ["customer-order", activeItem?.id] });
       queryClient.invalidateQueries({ queryKey: ["customer-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-order-summaries"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-order-group"] });
     },
     onError: (err: Error) => toast.error(err.message || "Failed to process extension.")
   });
@@ -587,18 +591,16 @@ const CustomerOrderDetail = () => {
       setBuyoutQuote(null);
       queryClient.invalidateQueries({ queryKey: ["customer-order", activeItem?.id] });
       queryClient.invalidateQueries({ queryKey: ["customer-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-order-summaries"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-order-group"] });
     },
     onError: (err: Error) => toast.error(err.message || "Failed to process buyout.")
   });
 
-  // Find all items belonging to the same order group prefix
   const orderGroupItems = useMemo(() => {
-    if (!data || !allOrders) return data ? [data] : [];
-    const baseNum = data.orderNumber?.split('-').slice(0, 3).join('-') || "";
-    if (!baseNum) return data ? [data] : [];
-    const matches = allOrders.filter((o) => o && o.orderNumber && o.orderNumber.split('-').slice(0, 3).join('-') === baseNum);
-    return matches.length > 0 ? matches : (data ? [data] : []);
-  }, [data, allOrders]);
+    if (groupOrders && groupOrders.length > 0) return groupOrders;
+    return data ? [data] : [];
+  }, [data, groupOrders]);
 
   const groupItemIds = useMemo(() => orderGroupItems.map((item) => item.id), [orderGroupItems]);
 

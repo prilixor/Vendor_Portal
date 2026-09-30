@@ -219,6 +219,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     final needsPrescription = cart.needsPrescription;
     final rxLines = cart.lines.where((l) => l.prescriptionRequired).toList();
     final colors = context.appColors;
+    // Same as product detail: bottomSheet ignores the navigation-bar inset.
+    final navBarInset = MediaQuery.viewInsetsOf(context).bottom > 0
+        ? 0.0
+        : MediaQuery.viewPaddingOf(context).bottom;
 
     return Scaffold(
       backgroundColor: colors.background,
@@ -721,13 +725,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                         ],
                       ),
                     ),
-                  const SizedBox(height: 100),
+                  SizedBox(height: 100 + navBarInset),
                 ],
               ),
             ),
       bottomSheet: quote != null
           ? Container(
-              padding: const EdgeInsets.fromLTRB(20, 12, 20, 20),
+              padding: EdgeInsets.fromLTRB(20, 12, 20, 20 + navBarInset),
               color: colors.surface,
               child: Column(
                 mainAxisSize: MainAxisSize.min,
