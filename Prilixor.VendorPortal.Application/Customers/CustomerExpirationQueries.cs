@@ -209,7 +209,9 @@ public sealed record AdminOrderDto(
     string? HospitalName = null,
     string? HospitalCity = null,
     string? DoctorContactNumber = null,
-    string? DoctorUniqueCode = null);
+    string? DoctorUniqueCode = null,
+    decimal GstAmount = 0,
+    bool VendorPriceSetByAdmin = false);
 
 public sealed record GetAdminAllOrdersQuery() : IQuery<List<AdminOrderDto>>;
 

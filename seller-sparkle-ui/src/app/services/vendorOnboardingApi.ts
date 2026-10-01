@@ -542,6 +542,8 @@ export interface VendorOrderApiDto {
   rentalPeriodUnit?: "day" | "week" | "month";
   totalAmount: number;
   vendorSubtotalAmount: number;
+  depositAmount?: number;
+  gstAmount?: number;
   startDate?: string;
   endDate?: string;
   listingId: string;
@@ -664,6 +666,10 @@ export interface VendorListingSummaryApiDto {
   primaryThumbnailUrl?: string | null;
   brandName?: string | null;
   modelName?: string | null;
+  hasCustomVendorPricing?: boolean;
+  vendorDailyRent?: number;
+  vendorBuyPrice?: number | null;
+  variantPayouts?: { variantId: string; vendorPrice: number }[];
 }
 
 export interface VendorListingListResult {

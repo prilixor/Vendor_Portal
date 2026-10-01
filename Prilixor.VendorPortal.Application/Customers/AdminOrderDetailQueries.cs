@@ -11,7 +11,9 @@ public sealed class AdminOrderDetailResult
 
 public sealed record GetAdminOrderDetailQuery(Guid OrderId) : IQuery<AdminOrderDetailResult>;
 
-internal sealed class GetAdminOrderDetailQueryHandler(ICustomerRepository customers)
+internal sealed class GetAdminOrderDetailQueryHandler(
+    ICustomerRepository customers,
+    IVendorOnboardingRepository vendors)
     : IQueryHandler<GetAdminOrderDetailQuery, AdminOrderDetailResult>
 {
     public async Task<Result<AdminOrderDetailResult>> Handle(
@@ -23,13 +25,20 @@ internal sealed class GetAdminOrderDetailQueryHandler(ICustomerRepository custom
             return Result.Failure<AdminOrderDetailResult>(
                 new Error("customers.order_not_found", "Order not found.", ErrorCategory.NotFound));
 
+        var listingIds = rows
+            .Select(r => r.Order.VendorProductListingId)
+            .Where(id => id != Guid.Empty)
+            .Distinct()
+            .ToList();
+        var customPricedListings = await vendors.GetListingIdsWithCustomVendorPricingAsync(listingIds, cancellationToken);
+
         return Result.Success(new AdminOrderDetailResult
         {
-            Items = rows.Select(ToDto).ToList(),
+            Items = rows.Select(r => ToDto(r, customPricedListings.Contains(r.Order.VendorProductListingId))).ToList(),
         });
     }
 
-    private static AdminOrderDto ToDto(CustomerRentalOrderWithListing r)
+    private static AdminOrderDto ToDto(CustomerRentalOrderWithListing r, bool vendorPriceSetByAdmin)
     {
         var o = r.Order;
         return new AdminOrderDto(
@@ -63,6 +72,8 @@ internal sealed class GetAdminOrderDetailQueryHandler(ICustomerRepository custom
             HospitalName: null,
             HospitalCity: null,
             DoctorContactNumber: r.Doctor?.ContactNumber,
-            DoctorUniqueCode: r.Doctor?.UniqueCode);
+            DoctorUniqueCode: r.Doctor?.UniqueCode,
+            GstAmount: o.GstAmount,
+            VendorPriceSetByAdmin: vendorPriceSetByAdmin);
     }
 }

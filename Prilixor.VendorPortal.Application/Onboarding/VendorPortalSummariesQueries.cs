@@ -373,6 +373,16 @@ public sealed class VendorListingSummaryDto
     public string? PrimaryThumbnailUrl { get; init; }
     public string? BrandName { get; init; }
     public string? ModelName { get; init; }
+    public bool HasCustomVendorPricing { get; init; }
+    public decimal VendorDailyRent { get; init; }
+    public decimal? VendorBuyPrice { get; init; }
+    public List<VendorListingVariantPayoutDto> VariantPayouts { get; init; } = [];
+}
+
+public sealed class VendorListingVariantPayoutDto
+{
+    public string VariantId { get; init; } = string.Empty;
+    public decimal VendorPrice { get; init; }
 }
 
 public sealed class VendorListingListResult

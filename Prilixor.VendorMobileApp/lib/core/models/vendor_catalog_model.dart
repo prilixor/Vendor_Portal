@@ -257,6 +257,10 @@ class VendorProductListing {
   final bool isChemical;
   final String? primaryImageUrl;
   final String? primaryThumbnailUrl;
+  final bool hasCustomVendorPricing;
+  final double vendorDailyRent;
+  final double? vendorBuyPrice;
+  final Map<String, double> variantPayouts;
 
   const VendorProductListing({
     required this.id,
@@ -273,6 +277,10 @@ class VendorProductListing {
     this.isChemical = false,
     this.primaryImageUrl,
     this.primaryThumbnailUrl,
+    this.hasCustomVendorPricing = false,
+    this.vendorDailyRent = 0,
+    this.vendorBuyPrice,
+    this.variantPayouts = const {},
   });
 
   factory VendorProductListing.fromJson(Map<String, dynamic> json) {
@@ -291,6 +299,10 @@ class VendorProductListing {
       isChemical: json['isChemical'] == true,
       primaryImageUrl: json['primaryImageUrl']?.toString(),
       primaryThumbnailUrl: json['primaryThumbnailUrl']?.toString(),
+      hasCustomVendorPricing: json['hasCustomVendorPricing'] == true,
+      vendorDailyRent: _toDouble(json['vendorDailyRent']),
+      vendorBuyPrice: json['vendorBuyPrice'] == null ? null : _toDouble(json['vendorBuyPrice']),
+      variantPayouts: _variantPayouts(json['variantPayouts']),
     );
   }
 }
@@ -653,6 +665,18 @@ class TrackedAsset {
       dueDate: json['dueDate']?.toString(),
     );
   }
+}
+
+Map<String, double> _variantPayouts(dynamic value) {
+  if (value is! List) return const {};
+  final map = <String, double>{};
+  for (final item in value) {
+    if (item is! Map) continue;
+    final id = item['variantId']?.toString() ?? '';
+    if (id.isEmpty) continue;
+    map[id] = _toDouble(item['vendorPrice']);
+  }
+  return map;
 }
 
 double _toDouble(dynamic value) {

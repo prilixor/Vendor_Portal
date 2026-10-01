@@ -1975,6 +1975,8 @@ class _ItemDetailsPanel extends StatelessWidget {
               style: TextStyle(color: context.appColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w600),
             ),
             if (order.rentalFinalPrice != null) ...[
+              const SizedBox(height: 8),
+              _SubsectionLabel('Plan price'),
               const SizedBox(height: 4),
               Wrap(
                 crossAxisAlignment: WrapCrossAlignment.center,
@@ -1987,12 +1989,31 @@ class _ItemDetailsPanel extends StatelessWidget {
                       style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: context.appColors.textMuted),
                     ),
                   Text(
-                    'Plan price ₹${order.rentalFinalPrice!.toStringAsFixed(0)}',
-                    style: TextStyle(color: context.appColors.textMuted, fontSize: 12),
+                    '₹${order.rentalFinalPrice!.toStringAsFixed(0)}',
+                    style: TextStyle(color: context.appColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w600),
                   ),
                 ],
               ),
             ],
+            const SizedBox(height: 8),
+            Text(
+              'Deposit ₹${order.depositAmount.toStringAsFixed(0)} · customer, not your payout',
+              style: TextStyle(color: context.appColors.textMuted, fontSize: 12),
+            ),
+            const SizedBox(height: 2),
+            Text(
+              'GST ₹${order.gstAmount.toStringAsFixed(0)} · customer, not your payout',
+              style: TextStyle(color: context.appColors.textMuted, fontSize: 12),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Your payout ₹${order.payoutAmount.toStringAsFixed(order.payoutAmount == order.payoutAmount.roundToDouble() ? 0 : 2)}',
+              style: TextStyle(
+                color: context.appColors.success,
+                fontSize: 12,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
           ],
           const SizedBox(height: 8),
           _CompactDetailList(rows: [

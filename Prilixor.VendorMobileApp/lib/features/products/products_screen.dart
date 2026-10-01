@@ -444,8 +444,10 @@ class _ProductCard extends StatelessWidget {
         ? row.productName
         : listing.listingTitle;
     final priceLine = row.isChemical
-        ? _chemicalPrice(row)
-        : '₹${listing.dailyRent.toStringAsFixed(0)}/day · Qty ${row.quantity}';
+        ? '${_chemicalPrice(row)}${listing.hasCustomVendorPricing ? ' · your payout is set' : ''}'
+        : '₹${listing.dailyRent.toStringAsFixed(0)}/day'
+            '${listing.hasCustomVendorPricing ? ' · your payout ₹${listing.vendorDailyRent.toStringAsFixed(0)}/day' : ''}'
+            ' · Qty ${row.quantity}';
 
     return Material(
       color: colors.surface,

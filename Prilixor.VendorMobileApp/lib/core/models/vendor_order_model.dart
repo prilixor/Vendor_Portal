@@ -9,6 +9,8 @@ class VendorOrder {
   final int rentalDays;
   final double totalAmount;
   final double vendorSubtotalAmount;
+  final double depositAmount;
+  final double gstAmount;
   final String? startDate;
   final String? endDate;
   final String listingId;
@@ -44,6 +46,8 @@ class VendorOrder {
     required this.rentalDays,
     required this.totalAmount,
     required this.vendorSubtotalAmount,
+    this.depositAmount = 0,
+    this.gstAmount = 0,
     this.startDate,
     this.endDate,
     required this.listingId,
@@ -104,6 +108,8 @@ class VendorOrder {
       totalAmount: (json['totalAmount'] as num?)?.toDouble() ?? 0,
       vendorSubtotalAmount:
           (json['vendorSubtotalAmount'] as num?)?.toDouble() ?? 0,
+      depositAmount: (json['depositAmount'] as num?)?.toDouble() ?? 0,
+      gstAmount: (json['gstAmount'] as num?)?.toDouble() ?? 0,
       startDate: json['startDate']?.toString(),
       endDate: json['endDate']?.toString(),
       listingId: json['listingId']?.toString() ?? '',

@@ -1,6 +1,6 @@
 import { ReactNode, useState, useEffect, useMemo } from "react";
 
-import { Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { PageHeader } from "@/app/components/shared/PageHeader";
 
@@ -378,7 +378,12 @@ const VendorListingCard = ({
         </div>
         <div className="mt-1 min-w-0">{price}</div>
       </div>
-      <div className="shrink-0 text-right">{qty}</div>
+      <div className="flex shrink-0 flex-col items-end gap-2 text-right">
+        {qty}
+        <Button variant="outline" size="sm" className="h-7 px-2 text-xs" asChild>
+          <Link to={`/admin/vendors/${listing.vendorId}/listings/${listing.id}`}>Set price</Link>
+        </Button>
+      </div>
     </div>
   );
 };

@@ -36,6 +36,8 @@ type LocalListing = ProductListing & {
   buyPrice?: number;
   vendorDailyRent?: number;
   vendorBuyPrice?: number;
+  hasCustomVendorPricing?: boolean;
+  variantPayouts?: { variantId: string; vendorPrice: number }[];
   gstPercent?: number;
   isRentEnabled?: boolean;
   isBuyEnabled?: boolean;
@@ -271,6 +273,10 @@ const mapListingSummary = (l: VendorListingSummaryApiDto): LocalListing => ({
   brandName: l.brandName ?? undefined,
   modelName: l.modelName ?? undefined,
   isChemical: l.isChemical,
+  hasCustomVendorPricing: l.hasCustomVendorPricing,
+  vendorDailyRent: l.vendorDailyRent,
+  vendorBuyPrice: l.vendorBuyPrice ?? undefined,
+  variantPayouts: l.variantPayouts,
 });
 
 const Products = () => {
@@ -443,36 +449,40 @@ const Products = () => {
     setFieldErrors({});
     const loaded = catalogProducts.length > 0 ? { products: catalogProducts } : await loadCatalogAndListings();
     const catalog = loaded?.products.find((c) => c.id === p.productId);
+    const payoutByVariant = new Map((p.variantPayouts ?? []).map((row) => [row.variantId, row.vendorPrice]));
+    const variants = (catalog?.variants || p.variants || []).map((variant: any) => {
+      const customPayout = payoutByVariant.get(variant.id);
+      return customPayout == null ? variant : { ...variant, vendorPrice: customPayout };
+    });
     setEditing({
       ...p,
       categoryId: catalog?.categoryId ?? p.categoryId,
-      variants: catalog?.variants || p.variants || [],
+      variants,
       rentalPricingPlans: catalog?.rentalPricingPlans || p.rentalPricingPlans || [],
       buyPrice: catalog?.buyPrice ?? p.buyPrice,
-      vendorDailyRent: catalog?.vendorDailyRent ?? p.vendorDailyRent,
-      vendorBuyPrice: catalog?.vendorBuyPrice ?? p.vendorBuyPrice,
+      vendorDailyRent: p.hasCustomVendorPricing ? p.vendorDailyRent ?? catalog?.vendorDailyRent : catalog?.vendorDailyRent ?? p.vendorDailyRent,
+      vendorBuyPrice: p.hasCustomVendorPricing ? p.vendorBuyPrice ?? catalog?.vendorBuyPrice : catalog?.vendorBuyPrice ?? p.vendorBuyPrice,
       gstPercent: catalog?.gstPercent ?? p.gstPercent,
       isRentEnabled: catalog?.isRentEnabled ?? p.isRentEnabled,
       isBuyEnabled: catalog?.isBuyEnabled ?? p.isBuyEnabled,
     });
     // For chemical listings, pre-load existing per-size (variant) stock and align QTY to that sum.
-    if (activeTab === "chemical" && user && p.variants && p.variants.length > 0) {
+    if (activeTab === "chemical" && user && variants.length > 0) {
       try {
         const stocks = await vendorOnboardingApi.getVariantInventory(user.id, p.id);
         const stockMap: Record<string, number> = {};
         stocks.forEach((s) => { stockMap[s.productVariantId] = s.totalQuantity; });
-        // Ensure every catalog variant has a row (default 0) so save always syncs totals.
-        p.variants.forEach((v: any) => {
+        variants.forEach((v: any) => {
           if (stockMap[v.id] === undefined) stockMap[v.id] = 0;
         });
         const variantTotal = Object.values(stockMap).reduce((sum, n) => sum + (Number(n) || 0), 0);
         setVariantStocks(stockMap);
-        setEditing({ ...p, quantity: variantTotal });
+        setEditing((current) => current ? { ...current, quantity: variantTotal } : current);
       } catch {
         const empty: Record<string, number> = {};
-        p.variants.forEach((v: any) => { empty[v.id] = 0; });
+        variants.forEach((v: any) => { empty[v.id] = 0; });
         setVariantStocks(empty);
-        setEditing({ ...p, quantity: 0 });
+        setEditing((current) => current ? { ...current, quantity: 0 } : current);
       }
     } else {
       setVariantStocks({});
@@ -870,6 +880,11 @@ const Products = () => {
                         ₹{p.dailyRent ?? 0}
                         <span className="text-muted-foreground">/day</span>
                       </div>
+                      {p.hasCustomVendorPricing && (
+                        <div className="text-[11px] text-emerald-700 dark:text-emerald-400">
+                          Your payout ₹{Number(p.vendorDailyRent ?? 0).toLocaleString("en-IN")}/day
+                        </div>
+                      )}
                     </td>
                   )}
                   {activeTab === "chemical" && (
@@ -887,6 +902,7 @@ const Products = () => {
                                   <span className="whitespace-nowrap tabular-nums">{pricing.label}</span>
                                   <span className="font-sans text-[10px] font-normal text-muted-foreground">
                                     {pricing.count} {pricing.count === 1 ? "size" : "sizes"}
+                                    {p.hasCustomVendorPricing ? " · your payout is set" : ""}
                                   </span>
                                 </div>
                               </TooltipTrigger>
@@ -1241,6 +1257,7 @@ const Products = () => {
                     <div className="rounded-xl border border-border bg-muted/20 px-3 py-2.5 space-y-2">
                       <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                         Your payout
+                        {editing.hasCustomVendorPricing ? " · set for you" : ""}
                       </p>
                       <div className="grid grid-cols-2 gap-2">
                         <div>
@@ -1259,7 +1276,7 @@ const Products = () => {
                         </div>
                       </div>
                       <p className="text-[11px] text-muted-foreground">
-                        Rental payout = vendor daily rate Ã— plan days (set by Admin)
+                        Rental payout = vendor daily rate × plan days (set by Admin)
                       </p>
                     </div>
                   </div>

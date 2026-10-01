@@ -436,6 +436,7 @@ public sealed class VendorOnboardingRepository(
     public async Task<Product?> GetProductByIdAsync(Guid productId, CancellationToken cancellationToken)
     {
         var product = await commonDbContext.Products
+            .Include(x => x.Category)
             .Include(x => x.ChemicalProperty)
             .Include(x => x.ProductImages)
             .Include(x => x.ProductDocuments)
@@ -448,6 +449,7 @@ public sealed class VendorOnboardingRepository(
         }
 
         return await dbContext.Products
+            .Include(x => x.Category)
             .Include(x => x.ChemicalProperty)
             .Include(x => x.ProductImages)
             .Include(x => x.ProductDocuments)
@@ -1243,6 +1245,61 @@ public sealed class VendorOnboardingRepository(
             .FirstOrDefaultAsync(x => x.Id == listingId && x.VendorId == vendorId && !x.IsDeleted, cancellationToken);
     }
 
+    public Task<VendorListingPriceOverride?> GetVendorListingPriceOverrideAsync(Guid listingId, CancellationToken cancellationToken)
+    {
+        return dbContext.VendorListingPriceOverrides
+            .AsNoTracking()
+            .Include(x => x.Variants)
+            .FirstOrDefaultAsync(x => x.VendorProductListingId == listingId, cancellationToken);
+    }
+
+    public async Task<HashSet<Guid>> GetListingIdsWithCustomVendorPricingAsync(
+        IReadOnlyCollection<Guid> listingIds,
+        CancellationToken cancellationToken)
+    {
+        if (listingIds.Count == 0)
+            return [];
+
+        var ids = await dbContext.VendorListingPriceOverrides
+            .AsNoTracking()
+            .Where(x => listingIds.Contains(x.VendorProductListingId) && x.IsCustomPricing)
+            .Select(x => x.VendorProductListingId)
+            .ToListAsync(cancellationToken);
+        return ids.ToHashSet();
+    }
+
+    public async Task UpsertVendorListingPriceOverrideAsync(VendorListingPriceOverride row, CancellationToken cancellationToken)
+    {
+        var existing = await dbContext.VendorListingPriceOverrides
+            .Include(x => x.Variants)
+            .FirstOrDefaultAsync(x => x.VendorProductListingId == row.VendorProductListingId, cancellationToken);
+
+        if (existing is null)
+        {
+            foreach (var variant in row.Variants)
+                variant.VendorListingPriceOverrideId = row.Id;
+            await dbContext.VendorListingPriceOverrides.AddAsync(row, cancellationToken);
+            return;
+        }
+
+        existing.IsCustomPricing = row.IsCustomPricing;
+        existing.DailyRent = row.DailyRent;
+        existing.SecurityDeposit = row.SecurityDeposit;
+        existing.BuyPrice = row.BuyPrice;
+        existing.VendorDailyRent = row.VendorDailyRent;
+        existing.VendorBuyPrice = row.VendorBuyPrice;
+        existing.ModifiedOnUtc = DateTime.UtcNow;
+
+        var previous = existing.Variants.ToList();
+        existing.Variants.Clear();
+        dbContext.VendorListingVariantPriceOverrides.RemoveRange(previous);
+        foreach (var variant in row.Variants)
+        {
+            variant.VendorListingPriceOverrideId = existing.Id;
+            existing.Variants.Add(variant);
+        }
+    }
+
     public Task<VendorProductListing?> GetVendorProductListingByVendorProductAsync(Guid vendorId, Guid productId, CancellationToken cancellationToken)
     {
         return dbContext.VendorProductListings
@@ -1951,6 +2008,12 @@ public sealed class VendorOnboardingRepository(
         var imagesByListing = listingImages
             .GroupBy(i => i.VendorProductListingId)
             .ToDictionary(g => g.Key, g => g.ToList());
+        var priceOverrides = await dbContext.VendorListingPriceOverrides
+            .AsNoTracking()
+            .Include(x => x.Variants)
+            .Where(x => pageIds.Contains(x.VendorProductListingId) && x.IsCustomPricing)
+            .ToListAsync(cancellationToken);
+        var priceOverrideByListing = priceOverrides.ToDictionary(x => x.VendorProductListingId);
         var pageProductIds = pageRows.Select(l => l.ProductId).Distinct().ToList();
         var productImages = await GetProductImagesByProductIdsAsync(pageProductIds, cancellationToken);
         var imagesByProduct = productImages
@@ -1999,6 +2062,8 @@ public sealed class VendorOnboardingRepository(
                 primaryImageUrl = null;
                 primaryThumbnailUrl = null;
             }
+            priceOverrideByListing.TryGetValue(l.Id, out var vendorPrice);
+            var hasCustomVendorPrice = vendorPrice is { IsCustomPricing: true };
             return new VendorListingSummaryDto
             {
                 Id = l.Id.ToString(),
@@ -2021,6 +2086,20 @@ public sealed class VendorOnboardingRepository(
                 PrimaryThumbnailUrl = ResolveStoredFileUrl(primaryThumbnailUrl),
                 BrandName = product?.BrandName,
                 ModelName = product?.ModelName,
+                HasCustomVendorPricing = hasCustomVendorPrice,
+                VendorDailyRent = hasCustomVendorPrice && vendorPrice!.VendorDailyRent.HasValue
+                    ? vendorPrice.VendorDailyRent.Value
+                    : product?.VendorDailyRent ?? 0m,
+                VendorBuyPrice = hasCustomVendorPrice && vendorPrice!.VendorBuyPrice.HasValue
+                    ? vendorPrice.VendorBuyPrice
+                    : product?.VendorBuyPrice,
+                VariantPayouts = hasCustomVendorPrice
+                    ? vendorPrice!.Variants.Select(v => new VendorListingVariantPayoutDto
+                    {
+                        VariantId = v.ProductVariantId.ToString(),
+                        VendorPrice = v.VendorPrice,
+                    }).ToList()
+                    : [],
             };
         });
 
@@ -2181,7 +2260,15 @@ public sealed class VendorOnboardingRepository(
 
         if (admin.RoleId is Guid roleId)
         {
-            return await GetPermissionCodesForRoleAsync(roleId, cancellationToken);
+            var roleCodes = await GetPermissionCodesForRoleAsync(roleId, cancellationToken);
+            if (string.Equals(admin.Role, SuperAdminRules.RoleCode, StringComparison.OrdinalIgnoreCase))
+            {
+                return AdminPermissions.AllCodes
+                    .Union(roleCodes, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+            }
+
+            return roleCodes;
         }
 
         // Legacy fallback: map string role via seeded system matrix

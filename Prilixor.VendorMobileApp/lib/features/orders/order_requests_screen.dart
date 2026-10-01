@@ -674,7 +674,7 @@ class _RequestGroupCard extends StatelessWidget {
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            '₹${payoutTotal.toStringAsFixed(0)}',
+                            'Your payout ₹${payoutTotal.toStringAsFixed(0)}',
                             style: TextStyle(
                               color: colors.accent,
                               fontSize: 11,
@@ -854,7 +854,7 @@ class _RequestItemRow extends StatelessWidget {
                     if (type != 'buy')
                       _MetaChip(label: '${offer.rentalDays} days'),
                     _MetaChip(
-                      label: '₹${offer.payoutAmount.toStringAsFixed(0)}',
+                      label: 'Your payout ₹${offer.payoutAmount.toStringAsFixed(0)}',
                       highlight: true,
                     ),
                     Container(

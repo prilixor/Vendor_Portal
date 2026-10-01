@@ -32,6 +32,8 @@ public class ApplicationDbContext : DbContext
     public DbSet<ProductImage> ProductImages => Set<ProductImage>();
     public DbSet<ProductDocument> ProductDocuments => Set<ProductDocument>();
     public DbSet<VendorProductListing> VendorProductListings => Set<VendorProductListing>();
+    public DbSet<VendorListingPriceOverride> VendorListingPriceOverrides => Set<VendorListingPriceOverride>();
+    public DbSet<VendorListingVariantPriceOverride> VendorListingVariantPriceOverrides => Set<VendorListingVariantPriceOverride>();
     public DbSet<VendorProductImage> VendorProductImages => Set<VendorProductImage>();
     public DbSet<VendorProductDocument> VendorProductDocuments => Set<VendorProductDocument>();
     public DbSet<VendorInventory> VendorInventory => Set<VendorInventory>();
@@ -532,6 +534,48 @@ public class ApplicationDbContext : DbContext
             entity.HasOne(x => x.Inventory)
                 .WithOne(x => x.VendorProductListing)
                 .HasForeignKey<VendorInventory>(x => x.VendorProductListingId);
+            entity.HasOne(x => x.PriceOverride)
+                .WithOne(x => x.VendorProductListing)
+                .HasForeignKey<VendorListingPriceOverride>(x => x.VendorProductListingId);
+        });
+
+        modelBuilder.Entity<VendorListingPriceOverride>(entity =>
+        {
+            entity.ToTable("vendor_listing_price_overrides");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.VendorProductListingId).HasColumnName("vendor_product_listing_id");
+            entity.Property(x => x.IsCustomPricing).HasColumnName("is_custom_pricing");
+            entity.Property(x => x.DailyRent).HasColumnName("daily_rent");
+            entity.Property(x => x.SecurityDeposit).HasColumnName("security_deposit");
+            entity.Property(x => x.BuyPrice).HasColumnName("buy_price");
+            entity.Property(x => x.VendorDailyRent).HasColumnName("vendor_daily_rent");
+            entity.Property(x => x.VendorBuyPrice).HasColumnName("vendor_buy_price");
+            entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
+            entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
+            entity.Property(x => x.CreatedBy).HasColumnName("created_by");
+            entity.Property(x => x.ModifiedBy).HasColumnName("updated_by");
+            entity.HasIndex(x => x.VendorProductListingId).IsUnique();
+            entity.HasMany(x => x.Variants)
+                .WithOne(x => x.VendorListingPriceOverride)
+                .HasForeignKey(x => x.VendorListingPriceOverrideId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<VendorListingVariantPriceOverride>(entity =>
+        {
+            entity.ToTable("vendor_listing_variant_price_overrides");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.VendorListingPriceOverrideId).HasColumnName("vendor_listing_price_override_id");
+            entity.Property(x => x.ProductVariantId).HasColumnName("product_variant_id");
+            entity.Property(x => x.BuyPrice).HasColumnName("buy_price");
+            entity.Property(x => x.VendorPrice).HasColumnName("vendor_price");
+            entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
+            entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
+            entity.Property(x => x.CreatedBy).HasColumnName("created_by");
+            entity.Property(x => x.ModifiedBy).HasColumnName("updated_by");
+            entity.HasIndex(x => new { x.VendorListingPriceOverrideId, x.ProductVariantId }).IsUnique();
         });
 
         modelBuilder.Entity<VendorProductImage>(entity =>

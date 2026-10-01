@@ -22,4 +22,5 @@ public class VendorProductListing : AuditableEntity<Guid>, ISoftDelete
     public ICollection<VendorProductImage> Images { get; set; } = [];
     public ICollection<VendorProductDocument> Documents { get; set; } = [];
     public VendorInventory? Inventory { get; set; }
+    public VendorListingPriceOverride? PriceOverride { get; set; }
 }

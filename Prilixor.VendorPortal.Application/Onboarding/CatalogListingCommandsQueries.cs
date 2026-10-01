@@ -889,7 +889,7 @@ internal sealed class UpsertVendorProductListingCommandHandler(
                 EntityType = "vendor_product_listing",
                 EntityId = entity.Id,
                 NewValue = $"{{\"kind\":\"{listingKind}\",\"status\":\"{verb}\",\"productId\":\"{productId}\",\"vendorId\":\"{vendorId}\"}}",
-                Notes = $"{vendor.Email} {verb} {listingKind} listing \"{entity.ListingTitle}\". Review and set catalog pricing if needed."
+                Notes = $"{vendor.Email} {verb} {listingKind} listing \"{entity.ListingTitle}\". Open this vendor's product to set a price if it should differ from the catalog."
             }, cancellationToken);
             await repository.SaveChangesAsync(cancellationToken);
         }

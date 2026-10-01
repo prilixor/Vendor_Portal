@@ -922,6 +922,7 @@ public sealed class CustomerRepository(
             l.ProductId,
             isChemical,
             cancellationToken);
+        var priceOverrides = await LoadListingPriceOverridesAsync([l.Id], cancellationToken);
         return ToAggregate(
             l,
             product,
@@ -929,7 +930,8 @@ public sealed class CustomerRepository(
             liveIcons,
             durationMasters,
             productTotal,
-            marketplaceVariants);
+            marketplaceVariants,
+            priceOverrides.GetValueOrDefault(l.Id));
     }
 
     public async Task<List<VendorProductListingAggregate>> GetCandidateListingsByProductIdAsync(Guid productId, CancellationToken cancellationToken)
@@ -973,12 +975,14 @@ public sealed class CustomerRepository(
         var variantByListing = variantRows
             .GroupBy(vi => vi.VendorProductListingId)
             .ToDictionary(g => g.Key, g => g.ToList());
+        var priceOverrides = await LoadListingPriceOverridesAsync(listingIds, cancellationToken);
         return listings.Select(l => ToAggregate(
             l,
             product,
             variantByListing.GetValueOrDefault(l.Id) ?? [],
             liveIcons,
-            durationMasters)).ToList();
+            durationMasters,
+            priceOverride: priceOverrides.GetValueOrDefault(l.Id))).ToList();
     }
 
 
@@ -1694,7 +1698,8 @@ public sealed class CustomerRepository(
                 RentalNormalPrice: x.Order.RentalNormalPrice,
                 RentalDiscountType: x.Order.RentalDiscountType,
                 RentalDiscountValue: x.Order.RentalDiscountValue,
-                RentalFinalPrice: x.Order.RentalFinalPrice);
+                RentalFinalPrice: x.Order.RentalFinalPrice,
+                VendorSubtotalAmount: x.Order.VendorSubtotalAmount);
         });
 
         return new VendorDispatchOfferListResult
@@ -3422,6 +3427,35 @@ public sealed class CustomerRepository(
         return rows;
     }
 
+    private async Task<Dictionary<Guid, VendorListingPriceSnapshot>> LoadListingPriceOverridesAsync(
+        IReadOnlyCollection<Guid> listingIds,
+        CancellationToken cancellationToken)
+    {
+        if (listingIds.Count == 0)
+            return [];
+
+        var rows = await vendorDb.VendorListingPriceOverrides
+            .AsNoTracking()
+            .Include(x => x.Variants)
+            .Where(x => listingIds.Contains(x.VendorProductListingId) && x.IsCustomPricing)
+            .ToListAsync(cancellationToken);
+
+        return rows.ToDictionary(
+            x => x.VendorProductListingId,
+            x => new VendorListingPriceSnapshot
+            {
+                IsCustomPricing = true,
+                DailyRent = x.DailyRent,
+                SecurityDeposit = x.SecurityDeposit,
+                BuyPrice = x.BuyPrice,
+                VendorDailyRent = x.VendorDailyRent,
+                VendorBuyPrice = x.VendorBuyPrice,
+                Variants = x.Variants.ToDictionary(
+                    v => v.ProductVariantId,
+                    v => new VendorListingVariantPriceSnapshot(v.BuyPrice, v.VendorPrice)),
+            });
+    }
+
     private VendorProductListingAggregate ToAggregate(
         VendorProductListing listing,
         Product product,
@@ -3429,7 +3463,8 @@ public sealed class CustomerRepository(
         IReadOnlyDictionary<Guid, RentalDurationIcon>? liveIcons = null,
         IReadOnlyList<RentalDurationMaster>? durationMasters = null,
         int? productTotalAvailableQuantity = null,
-        List<VariantInventoryItem>? marketplaceVariantInventory = null)
+        List<VariantInventoryItem>? marketplaceVariantInventory = null,
+        VendorListingPriceSnapshot? priceOverride = null)
     {
         var inv = listing.Inventory;
         var resolved = ResolveOrderedDistinctListingImages(listing.Images);
@@ -3444,6 +3479,13 @@ public sealed class CustomerRepository(
             product.Category?.IsChemical == true || product.ChemicalProperty != null,
             inv?.AvailableQuantity ?? listing.AvailableQuantity,
             variantInventory.Count > 0 ? variantInventory.Sum(vi => vi.AvailableQuantity) : null);
+
+        var customVendorPrice = priceOverride?.IsCustomPricing == true;
+        var vendorDailyRent = VendorListingPriceSnapshot.Rate(customVendorPrice, priceOverride?.VendorDailyRent, product.VendorDailyRent);
+        var vendorBuyPrice = VendorListingPriceSnapshot.Money(customVendorPrice, priceOverride?.VendorBuyPrice, product.VendorBuyPrice);
+        var (vendorWeeklyRent, vendorMonthlyRent) = customVendorPrice
+            ? VendorListingPriceSnapshot.ScalePeriodRates(product.VendorDailyRent, product.VendorWeeklyRent, product.VendorMonthlyRent, vendorDailyRent)
+            : (product.VendorWeeklyRent, product.VendorMonthlyRent);
 
         return new VendorProductListingAggregate
         {
@@ -3465,11 +3507,11 @@ public sealed class CustomerRepository(
             MonthlyRent = product.MonthlyRent,
             SecurityDeposit = product.SecurityDeposit,
             BuyPrice = product.BuyPrice,
-            VendorDailyRent = product.VendorDailyRent,
-            VendorWeeklyRent = product.VendorWeeklyRent,
-            VendorMonthlyRent = product.VendorMonthlyRent,
+            VendorDailyRent = vendorDailyRent,
+            VendorWeeklyRent = vendorWeeklyRent,
+            VendorMonthlyRent = vendorMonthlyRent,
             VendorSecurityDeposit = product.VendorSecurityDeposit,
-            VendorBuyPrice = product.VendorBuyPrice,
+            VendorBuyPrice = vendorBuyPrice,
             GstPercent = product.GstPercent,
             IsRentEnabled = product.IsRentEnabled,
             IsBuyEnabled = product.IsBuyEnabled,
@@ -3500,15 +3542,22 @@ public sealed class CustomerRepository(
             SdsDocumentUrl = product.ChemicalProperty?.SdsDocumentUrl,
             CoaDocumentUrl = product.ChemicalProperty?.CoaDocumentUrl,
             Documents = ProductCatalogDocuments.ToDtos(product, fileUrlResolver),
-            Variants = product.Variants?.Select(v => new Prilixor.VendorPortal.Application.Onboarding.ProductVariantDto(
-                v.Id.ToString(),
-                v.ProductId.ToString(),
-                v.Sku,
-                v.SizeValue,
-                v.SizeUnit,
-                v.VendorPrice,
-                v.BuyPrice,
-                v.IsActive)).ToList() ?? [],
+            Variants = product.Variants?.Select(v =>
+            {
+                var variantPayout = v.VendorPrice;
+                if (customVendorPrice && priceOverride!.Variants.TryGetValue(v.Id, out var variantPrice))
+                    variantPayout = variantPrice.VendorPrice;
+
+                return new Prilixor.VendorPortal.Application.Onboarding.ProductVariantDto(
+                    v.Id.ToString(),
+                    v.ProductId.ToString(),
+                    v.Sku,
+                    v.SizeValue,
+                    v.SizeUnit,
+                    variantPayout,
+                    v.BuyPrice,
+                    v.IsActive);
+            }).ToList() ?? [],
             RentalPricingPlans = ProductRentalPricingPlanSync.ToProjectedDtos(
                 product,
                 durationMasters ?? [],

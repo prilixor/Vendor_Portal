@@ -365,7 +365,7 @@ const VendorOrderRequests = () => {
                     <p className="mt-1 text-sm text-muted-foreground">
                       Consolidated fulfillment · {group.items.length}{" "}
                       {group.items.length === 1 ? "item" : "items"}
-                      <span className="ml-2 font-semibold text-primary">₹{groupPayout.toFixed(0)}</span>
+                      <span className="ml-2 font-semibold text-primary">Your payout ₹{groupPayout.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span>
                     </p>
                   </div>
                   <TimerPill
@@ -424,7 +424,7 @@ const VendorOrderRequests = () => {
                                   }
                                 />
                               )}
-                              <MetaChip label={`₹${getPayoutAmount(offer).toFixed(0)}`} highlight />
+                              <MetaChip label={`Your payout ₹${getPayoutAmount(offer).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`} highlight />
                               <Badge
                                 variant="outline"
                                 className={cn(

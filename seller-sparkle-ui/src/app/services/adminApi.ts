@@ -202,6 +202,57 @@ export interface VendorProductListingDto {
   primaryThumbnailUrl?: string | null;
 }
 
+export interface VendorListingVariantPricingDto {
+  variantId: string;
+  sku: string;
+  sizeValue: number;
+  sizeUnit: string;
+  isActive: boolean;
+  catalogBuyPrice: number;
+  catalogVendorPrice: number;
+  buyPrice: number;
+  vendorPrice: number;
+}
+
+export interface VendorListingPricingDto {
+  listingId: string;
+  vendorId: string;
+  vendorName: string;
+  productId: string;
+  productName: string;
+  brandName?: string | null;
+  modelName?: string | null;
+  categoryName: string;
+  isChemical: boolean;
+  listingStatus: string;
+  availableQuantity: number;
+  imageUrl?: string | null;
+  isRentEnabled: boolean;
+  isBuyEnabled: boolean;
+  isCustomPricing: boolean;
+  catalogDailyRent: number;
+  catalogSecurityDeposit: number;
+  catalogBuyPrice?: number | null;
+  catalogVendorDailyRent: number;
+  catalogVendorBuyPrice?: number | null;
+  dailyRent: number;
+  securityDeposit: number;
+  buyPrice?: number | null;
+  vendorDailyRent: number;
+  vendorBuyPrice?: number | null;
+  variants: VendorListingVariantPricingDto[];
+}
+
+export interface SetVendorListingPricingRequest {
+  isCustomPricing: boolean;
+  dailyRent?: number | null;
+  securityDeposit?: number | null;
+  buyPrice?: number | null;
+  vendorDailyRent?: number | null;
+  vendorBuyPrice?: number | null;
+  variants: { variantId: string; buyPrice: number; vendorPrice: number }[];
+}
+
 export interface AdminUserDto {
   id: string;
   email: string;
@@ -904,6 +955,8 @@ export interface AdminOrderDto {
   totalAmount: number;
   depositAmount: number;
   vendorSubtotalAmount: number;
+  gstAmount?: number;
+  vendorPriceSetByAdmin?: boolean;
   createdOnUtc: string;
   startDate?: string | null;
   endDate?: string | null;
@@ -1069,6 +1122,23 @@ export const adminApi = {
 
   async getVendorProductListings(vendorId: string): Promise<VendorProductListingDto[]> {
     return apiClient.get<VendorProductListingDto[]>(`/vendors/${vendorId}/listings`);
+  },
+
+  async getVendorListingPricing(vendorId: string, listingId: string): Promise<VendorListingPricingDto> {
+    return apiClient.get<VendorListingPricingDto>(
+      `/admin/vendors/${encodeURIComponent(vendorId)}/listings/${encodeURIComponent(listingId)}/pricing`,
+    );
+  },
+
+  async setVendorListingPricing(
+    vendorId: string,
+    listingId: string,
+    body: SetVendorListingPricingRequest,
+  ): Promise<VendorListingPricingDto> {
+    return apiClient.put<VendorListingPricingDto>(
+      `/admin/vendors/${encodeURIComponent(vendorId)}/listings/${encodeURIComponent(listingId)}/pricing`,
+      body,
+    );
   },
 
   async getVendorInventorySummaries(vendorId: string): Promise<AdminVendorListingInventoryDto[]> {

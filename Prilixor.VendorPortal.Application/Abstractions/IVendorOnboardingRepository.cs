@@ -83,6 +83,9 @@ public interface IVendorOnboardingRepository
     Task ClearRentalDurationIconAssignmentsAsync(Guid iconId, CancellationToken cancellationToken);
 
     Task<VendorProductListing?> GetVendorProductListingByIdAsync(Guid vendorId, Guid listingId, CancellationToken cancellationToken);
+    Task<VendorListingPriceOverride?> GetVendorListingPriceOverrideAsync(Guid listingId, CancellationToken cancellationToken);
+    Task<HashSet<Guid>> GetListingIdsWithCustomVendorPricingAsync(IReadOnlyCollection<Guid> listingIds, CancellationToken cancellationToken);
+    Task UpsertVendorListingPriceOverrideAsync(VendorListingPriceOverride row, CancellationToken cancellationToken);
     Task<VendorProductListing?> GetVendorProductListingByVendorProductAsync(Guid vendorId, Guid productId, CancellationToken cancellationToken);
     Task AddVendorProductListingAsync(VendorProductListing listing, CancellationToken cancellationToken);
     Task UpdateVendorProductListingAsync(VendorProductListing listing, CancellationToken cancellationToken);

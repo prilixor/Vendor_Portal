@@ -46,6 +46,7 @@ import AdminDashboard from "@/app/components/admin/AdminDashboard";
 import Verification from "@/app/components/admin/Verification";
 import Vendors from "@/app/components/admin/Vendors";
 import VendorDetails from "@/app/components/admin/VendorDetails";
+import VendorListingPricing from "@/app/components/admin/VendorListingPricing";
 import ProductManagement from "@/app/components/admin/ProductManagement";
 import ChemicalManagement from "@/app/components/admin/ChemicalManagement";
 import AdminDoctors from "@/app/components/admin/AdminDoctors";
@@ -155,6 +156,7 @@ const App = () => (
               <Route path="verification" element={<Verification />} />
               <Route path="vendors" element={<Vendors />} />
               <Route path="vendors/:vendorId" element={<VendorDetails />} />
+              <Route path="vendors/:vendorId/listings/:listingId" element={<VendorListingPricing />} />
               <Route path="products" element={<ProductManagement />} />
               <Route path="rental-setup" element={<AdminRentalSetup />} />
               <Route path="rental-durations" element={<Navigate to="/admin/rental-setup" replace />} />
