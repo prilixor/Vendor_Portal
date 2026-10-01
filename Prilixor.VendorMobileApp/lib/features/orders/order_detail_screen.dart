@@ -621,7 +621,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                                                 OrderStatusChip(status: item.status),
                                                 const SizedBox(height: 4),
                                                 Text(
-                                                  '₹${item.payoutAmount.toStringAsFixed(0)}',
+                                                  formatVendorMoney(item.payoutAmount),
                                                   style: TextStyle(
                                                     color: context.appColors.textPrimary,
                                                     fontWeight: FontWeight.w700,
@@ -780,7 +780,7 @@ class _GroupHeroCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                '₹${groupPayout.toStringAsFixed(0)}',
+                formatVendorMoney(groupPayout),
                 style: TextStyle(
                   color: context.appColors.textPrimary,
                   fontWeight: FontWeight.w800,
@@ -788,7 +788,7 @@ class _GroupHeroCard extends StatelessWidget {
                 ),
               ),
               Text(
-                itemCount > 1 ? 'Combined' : 'Payout',
+                itemCount > 1 ? 'Estimated payout (combined)' : 'Estimated payout',
                 style: TextStyle(
                   color: context.appColors.textMuted,
                   fontSize: 10,
@@ -1995,25 +1995,6 @@ class _ItemDetailsPanel extends StatelessWidget {
                 ],
               ),
             ],
-            const SizedBox(height: 8),
-            Text(
-              'Deposit ₹${order.depositAmount.toStringAsFixed(0)} · customer, not your payout',
-              style: TextStyle(color: context.appColors.textMuted, fontSize: 12),
-            ),
-            const SizedBox(height: 2),
-            Text(
-              'GST ₹${order.gstAmount.toStringAsFixed(0)} · customer, not your payout',
-              style: TextStyle(color: context.appColors.textMuted, fontSize: 12),
-            ),
-            const SizedBox(height: 8),
-            Text(
-              'Your payout ₹${order.payoutAmount.toStringAsFixed(order.payoutAmount == order.payoutAmount.roundToDouble() ? 0 : 2)}',
-              style: TextStyle(
-                color: context.appColors.success,
-                fontSize: 12,
-                fontWeight: FontWeight.w700,
-              ),
-            ),
           ],
           const SizedBox(height: 8),
           _CompactDetailList(rows: [
@@ -2251,7 +2232,7 @@ class _MetricStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isBuy = order.orderType.toLowerCase() == 'buy';
-    final payout = '₹${order.payoutAmount.toStringAsFixed(0)}';
+    final payout = formatVendorMoney(order.payoutAmount);
 
     if (isBuy) {
       return Row(

@@ -1,5 +1,12 @@
 import '../utils/media_url.dart';
 
+/// Rupee text that keeps paise only when the amount is not a whole rupee.
+String formatVendorMoney(num value) {
+  final rounded = (value * 100).round() / 100;
+  final whole = rounded == rounded.roundToDouble();
+  return '₹${whole ? rounded.toStringAsFixed(0) : rounded.toStringAsFixed(2)}';
+}
+
 class VendorOrder {
   final String orderId;
   final String orderNumber;

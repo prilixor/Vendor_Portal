@@ -5,6 +5,7 @@ import 'package:provider/provider.dart';
 
 import '../../core/auth/auth_provider.dart';
 import '../../core/models/dispatch_offer_model.dart';
+import '../../core/models/vendor_order_model.dart';
 import '../../core/providers/vendor_order_provider.dart';
 import '../../core/theme.dart';
 import '../../core/utils/debouncer.dart';
@@ -527,7 +528,7 @@ class _RequestsHeader extends StatelessWidget {
                 Text(
                   groupCount == 0
                       ? 'Accept or reject incoming dispatch offers.'
-                      : 'Potential payout ₹${totalPayout.toStringAsFixed(0)}',
+                      : 'Potential payout ${formatVendorMoney(totalPayout)}',
                   style: TextStyle(
                     color: colors.textSecondary,
                     fontSize: 12,
@@ -674,7 +675,7 @@ class _RequestGroupCard extends StatelessWidget {
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            'Your payout ₹${payoutTotal.toStringAsFixed(0)}',
+                            'Your payout ${formatVendorMoney(payoutTotal)}',
                             style: TextStyle(
                               color: colors.accent,
                               fontSize: 11,
@@ -852,9 +853,13 @@ class _RequestItemRow extends StatelessWidget {
                   children: [
                     _MetaChip(label: 'Qty ${offer.quantity}'),
                     if (type != 'buy')
-                      _MetaChip(label: '${offer.rentalDays} days'),
+                      _MetaChip(
+                        label: (offer.rentalDurationLabel?.trim().isNotEmpty ?? false)
+                            ? offer.rentalDurationLabel!.trim()
+                            : '${offer.rentalDays} days',
+                      ),
                     _MetaChip(
-                      label: 'Your payout ₹${offer.payoutAmount.toStringAsFixed(0)}',
+                      label: 'Your payout ${formatVendorMoney(offer.payoutAmount)}',
                       highlight: true,
                     ),
                     Container(

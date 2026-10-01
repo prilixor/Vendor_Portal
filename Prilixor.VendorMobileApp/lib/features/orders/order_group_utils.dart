@@ -133,7 +133,7 @@ String formatDetailDate(String? value) {
 
 List<(String, String)> orderDetailRows(VendorOrder order) {
   final isBuy = order.orderType.toLowerCase() == 'buy';
-  final payout = '₹${order.payoutAmount.toStringAsFixed(0)}';
+  final payout = formatVendorMoney(order.payoutAmount);
 
   if (isBuy) {
     return [
@@ -419,7 +419,7 @@ class OrderItemMetaLine extends StatelessWidget {
                 children: [
                   TextSpan(text: 'Payout: ', style: muted),
                   TextSpan(
-                    text: '₹${order.payoutAmount.toStringAsFixed(0)}',
+                    text: formatVendorMoney(order.payoutAmount),
                     style: value,
                   ),
                 ],
@@ -496,7 +496,7 @@ class OrderGroupCardHeader extends StatelessWidget {
               ),
               const SizedBox(width: 10),
               Text(
-                '₹${group.totalPayout.toStringAsFixed(0)}',
+                formatVendorMoney(group.totalPayout),
                 style: const TextStyle(
                   color: AppTheme.accent,
                   fontWeight: FontWeight.w800,

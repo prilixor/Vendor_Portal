@@ -1532,16 +1532,6 @@ const VendorOrderDetail = () => {
                           </div>
                         </div>
                       ) : null}
-                      <div className="space-y-1">
-                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">Deposit</p>
-                        <p className="text-sm font-medium tabular-nums">₹{formatRupee(order.depositAmount ?? 0)}</p>
-                        <p className="text-[11px] text-muted-foreground">Customer deposit. Not part of your payout.</p>
-                      </div>
-                      <div className="space-y-1">
-                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">GST</p>
-                        <p className="text-sm font-medium tabular-nums">₹{formatRupee(order.gstAmount ?? 0)}</p>
-                        <p className="text-[11px] text-muted-foreground">Customer tax. Not part of your payout.</p>
-                      </div>
                       <div className="col-span-2 space-y-1 border-t border-border/70 pt-3">
                         <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">Your payout</p>
                         <p className="text-sm font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
