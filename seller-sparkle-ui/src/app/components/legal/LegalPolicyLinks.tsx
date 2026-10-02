@@ -165,26 +165,33 @@ export function LegalPolicyLinks({
   }
 
   return (
-    <nav aria-label="Policies" className={cn("flex flex-wrap items-center gap-x-0 gap-y-1", className)}>
+    // Narrow screens stack one policy per row; the separator only joins links that share a row.
+    <nav
+      aria-label="Policies"
+      className={cn(
+        "flex flex-col items-start gap-y-1 sm:flex-row sm:flex-wrap sm:items-center",
+        className,
+      )}
+    >
       {docs.map((doc, index) => (
-        <span key={doc.slug} className="inline-flex max-w-full items-center whitespace-nowrap">
-          {index > 0 ? (
-            <span className="mx-1.5 shrink-0 text-muted-foreground/40" aria-hidden>
-              ·
-            </span>
-          ) : null}
+        <span key={doc.slug} className="inline-flex min-w-0 max-w-full items-center whitespace-nowrap">
           <Link
             to={legalHref(doc)}
             target="_blank"
             rel="noopener noreferrer"
             className={cn(
-              "max-w-full truncate underline",
+              "min-w-0 max-w-full truncate underline",
               policyLinkClass,
               linkClassName,
             )}
           >
             {doc.title}
           </Link>
+          {index < docs.length - 1 ? (
+            <span className="mx-1.5 hidden shrink-0 text-muted-foreground/40 sm:inline" aria-hidden>
+              ·
+            </span>
+          ) : null}
         </span>
       ))}
     </nav>
