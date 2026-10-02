@@ -74,26 +74,31 @@ class _AddressesScreenState extends State<AddressesScreen> {
       pinConfirmed = true;
       locationError = null;
 
-      final subLocality = (result['subLocality'] as String?)?.trim() ?? '';
-      final locality = (result['locality'] as String?)?.trim() ?? '';
-      final administrativeArea = (result['administrativeArea'] as String?)?.trim() ?? '';
-      final postalCode = (result['postalCode'] as String?)?.trim() ?? '';
-      final addressLine = (result['addressLine'] as String?)?.trim() ?? '';
+      String field(List<String> keys) {
+        for (final key in keys) {
+          final raw = result[key];
+          if (raw == null) continue;
+          final text = raw.toString().trim();
+          if (text.isNotEmpty && text != 'null') return text;
+        }
+        return '';
+      }
 
-      final parts = <String>[];
-      if (subLocality.isNotEmpty) parts.add(subLocality);
-      if (locality.isNotEmpty) parts.add(locality);
-      final derivedStreet = parts.isNotEmpty ? parts.join(', ') : addressLine;
-      if (derivedStreet.isNotEmpty) {
-        streetCtrl.text = derivedStreet;
+      final addressLine = field(['line1', 'addressLine', 'subLocality']);
+      final city = field(['city', 'locality']);
+      final state = field(['state', 'administrativeArea']);
+      final postalCode = field(['postal', 'postalCode']);
+
+      if (addressLine.isNotEmpty) {
+        streetCtrl.text = addressLine;
         line1Error = null;
       }
-      if (administrativeArea.isNotEmpty) {
-        stateCtrl.text = administrativeArea;
+      if (state.isNotEmpty) {
+        stateCtrl.text = state;
         stateError = null;
       }
-      if (locality.isNotEmpty) {
-        cityCtrl.text = locality;
+      if (city.isNotEmpty) {
+        cityCtrl.text = city;
         cityError = null;
       }
       if (postalCode.isNotEmpty) {

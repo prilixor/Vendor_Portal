@@ -335,19 +335,12 @@ class _ProfileTabState extends State<_ProfileTab> with AutomaticKeepAliveClientM
     super.dispose();
   }
 
-  Future<void> _applyReverseGeocode(
-    double lat,
-    double lng, {
-    bool announceIfComplete = false,
-  }) async {
-    setState(() => _resolvingAddress = true);
-    final rev = await _placeSearch.reverse(latitude: lat, longitude: lng);
-    if (!mounted) return;
-
-    final line1 = rev?.line1?.trim();
-    final state = rev?.state?.trim();
-    final city = rev?.city?.trim();
-    final postal = rev?.postal?.trim();
+  void _writeResolvedAddress(ReverseGeocodeResult? rev) {
+    if (rev == null) return;
+    final line1 = rev.line1?.trim();
+    final state = rev.state?.trim();
+    final city = rev.city?.trim();
+    final postal = rev.postal?.trim();
     var remountPicker = false;
 
     if (line1 != null && line1.isNotEmpty) {
@@ -365,6 +358,21 @@ class _ProfileTabState extends State<_ProfileTab> with AutomaticKeepAliveClientM
       remountPicker = true;
     }
     if (remountPicker) _stateCityKey++;
+  }
+
+  Future<void> _applyReverseGeocode(
+    double lat,
+    double lng, {
+    ReverseGeocodeResult? preset,
+    bool announceIfComplete = false,
+  }) async {
+    if (preset != null && preset.hasAnyField) {
+      _writeResolvedAddress(preset);
+    }
+    setState(() => _resolvingAddress = true);
+    final rev = await _placeSearch.reverse(latitude: lat, longitude: lng);
+    if (!mounted) return;
+    _writeResolvedAddress(ReverseGeocodeResult.merge(rev, preset));
 
     setState(() => _resolvingAddress = false);
 
@@ -393,6 +401,7 @@ class _ProfileTabState extends State<_ProfileTab> with AutomaticKeepAliveClientM
   Future<void> _setMapLocation(
     double lat,
     double lng, {
+    ReverseGeocodeResult? preset,
     bool announceIfComplete = false,
   }) async {
     setState(() {
@@ -402,6 +411,7 @@ class _ProfileTabState extends State<_ProfileTab> with AutomaticKeepAliveClientM
     await _applyReverseGeocode(
       lat,
       lng,
+      preset: preset,
       announceIfComplete: announceIfComplete,
     );
   }
@@ -657,8 +667,12 @@ class _ProfileTabState extends State<_ProfileTab> with AutomaticKeepAliveClientM
                 longitude: _mapLng,
                 showRadius: false,
                 height: 260,
-                onLocationChanged: (point) =>
-                    _setMapLocation(point.latitude, point.longitude),
+                onLocationChanged: (point, fromSearch) => _setMapLocation(
+                  point.latitude,
+                  point.longitude,
+                  preset: fromSearch?.address,
+                  announceIfComplete: true,
+                ),
               ),
               const SizedBox(height: 12),
               Row(

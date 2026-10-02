@@ -214,15 +214,21 @@ class _StateCityPickerFieldsState extends State<StateCityPickerFields> {
   }
 
   Widget _cityField(VendorLocationProvider loc) {
-    final disabled = _selectedStateIso2 == null;
+    final waitingForState = _selectedStateIso2 == null;
+    final hasCity = widget.cityController.text.trim().isNotEmpty;
     return GestureDetector(
-      onTap: disabled ? null : () => _pickCity(loc),
+      onTap: waitingForState
+          ? () {
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text('Please select a state first.')),
+              );
+            }
+          : () => _pickCity(loc),
       child: AbsorbPointer(
         child: OnboardingTextField(
           controller: widget.cityController,
           label: 'City',
-          enabled: !disabled,
-          hint: disabled
+          hint: waitingForState && !hasCity
               ? 'Select state first'
               : loc.isLoadingCities
                   ? 'Loading cities…'
@@ -238,7 +244,9 @@ class _StateCityPickerFieldsState extends State<StateCityPickerFields> {
                 )
               : Icon(
                   Icons.expand_more_rounded,
-                  color: disabled ? context.appColors.textMuted.withValues(alpha: 0.4) : AppTheme.accent,
+                  color: waitingForState && !hasCity
+                      ? context.appColors.textMuted.withValues(alpha: 0.4)
+                      : AppTheme.accent,
                 ),
         ),
       ),
