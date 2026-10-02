@@ -362,16 +362,14 @@ const ServiceAreas = () => {
                       clearFieldError("location");
                     }}
                     onAddressResolved={(address) => {
-                      setEditing((prev) => ({
-                        ...prev,
-                        state: address?.state || prev.state || "",
-                        city: address?.city || prev.city,
-                      }));
+                      const nextState = address?.state || editing.state || "";
+                      const nextCity = address?.city || editing.city;
+                      setEditing((prev) => ({ ...prev, state: nextState, city: nextCity }));
                       if (address?.state) clearFieldError("state");
                       if (address?.city) clearFieldError("city");
                       const missing = missingAddressFieldLabels({
-                        state: address?.state,
-                        city: address?.city,
+                        state: nextState,
+                        city: nextCity,
                         requireLine1: false,
                         requirePostal: false,
                       });
