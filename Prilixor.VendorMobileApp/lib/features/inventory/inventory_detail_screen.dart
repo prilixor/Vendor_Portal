@@ -6,11 +6,29 @@ import '../../core/models/vendor_catalog_model.dart';
 import '../../core/providers/vendor_catalog_provider.dart';
 import '../../core/providers/vendor_profile_provider.dart';
 import '../../core/theme.dart';
+import '../../shared/widgets/chemical_size_stock_table.dart';
 import '../../shared/widgets/inventory_kpi_strip.dart';
 import '../../shared/widgets/list_pagination.dart';
 import 'edit_chemical_stock_screen.dart';
 import 'edit_equipment_stock_screen.dart';
 import 'listing_assets_screen.dart';
+
+List<ChemicalSizeStock> _chemicalSizes(
+  InventoryRecord record,
+  List<VariantInventoryRow> variants,
+) {
+  if (record.chemicalSizes.isNotEmpty) return record.chemicalSizes;
+  return [
+    for (final variant in variants)
+      ChemicalSizeStock(
+        label: variant.label,
+        sku: variant.sku,
+        total: variant.totalQuantity,
+        available: variant.availableQuantity,
+        reserved: variant.reservedQuantity,
+      ),
+  ];
+}
 
 class InventoryDetailScreen extends StatefulWidget {
   final String listingId;
@@ -41,6 +59,10 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
         Provider.of<VendorCatalogProvider>(context, listen: false);
     final record = provider.inventoryForListing(widget.listingId);
     if (vendorId == null || record == null) return;
+
+    if (record.isChemical && record.chemicalSizes.isEmpty) {
+      await provider.fetchVariantInventory(vendorId, widget.listingId);
+    }
 
     setState(() => _movementsLoading = true);
     final rows = await provider.fetchMovementsForListing(
@@ -196,41 +218,17 @@ class _InventoryDetailScreenState extends State<InventoryDetailScreen> {
             ),
             const SizedBox(height: 12),
             Text(
-              'Variant stock',
+              'Packaging stock',
               style: TextStyle(color: context.appColors.textPrimary, fontWeight: FontWeight.w600),
             ),
             const SizedBox(height: 8),
-            if (variants.isEmpty)
+            if (_chemicalSizes(record, variants).isEmpty)
               Text(
                 'No packaging stock yet. Tap Edit packaging stock to add units per size.',
                 style: TextStyle(color: context.appColors.textMuted, fontSize: 13),
               )
             else
-              ...variants.map(
-                (v) => Container(
-                  margin: const EdgeInsets.only(bottom: 8),
-                  padding: const EdgeInsets.all(12),
-                  decoration: BoxDecoration(
-                    color: AppTheme.card(context),
-                    borderRadius: BorderRadius.circular(10),
-                    border: Border.all(color: context.appColors.border),
-                  ),
-                  child: Row(
-                    children: [
-                      Expanded(
-                        child: Text(
-                          '${v.label} · ${v.sku}',
-                          style: TextStyle(color: context.appColors.textPrimary),
-                        ),
-                      ),
-                      Text(
-                        'Total ${v.totalQuantity}',
-                        style: const TextStyle(color: AppTheme.accent),
-                      ),
-                    ],
-                  ),
-                ),
-              ),
+              ChemicalSizeStockTable(sizes: _chemicalSizes(record, variants)),
           ] else ...[
             OutlinedButton.icon(
               onPressed: pending || provider.saving

@@ -670,6 +670,19 @@ export interface VendorListingSummaryApiDto {
   vendorDailyRent?: number;
   vendorBuyPrice?: number | null;
   variantPayouts?: { variantId: string; vendorPrice: number }[];
+  chemicalSizes?: VendorListingChemicalSizeApiDto[];
+}
+
+export interface VendorListingChemicalSizeApiDto {
+  variantId: string;
+  label: string;
+  sku: string;
+  sizeValue: number;
+  sizeUnit: string;
+  buyPrice: number;
+  totalQuantity: number;
+  availableQuantity: number;
+  reservedQuantity: number;
 }
 
 export interface VendorListingListResult {
@@ -687,6 +700,16 @@ export interface VendorListingListResult {
   activeCount: number;
   inactiveCount: number;
   draftCount: number;
+  equipmentStock?: VendorListingStockUnitsApiDto;
+  chemicalStock?: VendorListingStockUnitsApiDto;
+}
+
+export interface VendorListingStockUnitsApiDto {
+  totalUnits: number;
+  availableUnits: number;
+  reservedUnits: number;
+  rentedUnits: number;
+  blockedUnits: number;
 }
 
 export interface VendorExpiringOrderApiDto {

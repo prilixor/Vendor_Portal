@@ -7,6 +7,7 @@ import '../../core/providers/vendor_catalog_provider.dart';
 import '../../core/theme.dart';
 import '../../core/utils/debouncer.dart';
 import '../../shared/widgets/brand_page_loader.dart';
+import '../../shared/widgets/chemical_size_stock_table.dart';
 import '../../shared/widgets/inventory_kpi_strip.dart';
 import '../../shared/widgets/listing_thumb.dart';
 import 'inventory_detail_screen.dart';
@@ -99,13 +100,25 @@ class _InventoryScreenState extends State<InventoryScreen>
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<VendorCatalogProvider>(context);
-    final totals = provider.inventoryTotals;
-    final equipmentTotals = _sumRecords(
-      provider.inventoryRecords.where((r) => !r.isChemical),
-    );
-    final chemicalTotals = _sumRecords(
-      provider.inventoryRecords.where((r) => r.isChemical),
-    );
+    final equipmentTotals = provider.hasStockSplit
+        ? provider.equipmentStock
+        : _sumRecords(
+            provider.inventoryRecords.where((r) => !r.isChemical),
+          );
+    final chemicalTotals = provider.hasStockSplit
+        ? provider.chemicalStock
+        : _sumRecords(
+            provider.inventoryRecords.where((r) => r.isChemical),
+          );
+    final totals = provider.hasStockSplit
+        ? InventoryTotals(
+            total: equipmentTotals.total + chemicalTotals.total,
+            available: equipmentTotals.available + chemicalTotals.available,
+            reserved: equipmentTotals.reserved + chemicalTotals.reserved,
+            rented: equipmentTotals.rented + chemicalTotals.rented,
+            blocked: equipmentTotals.blocked + chemicalTotals.blocked,
+          )
+        : provider.inventoryTotals;
     final filtered = provider.inventoryRecords;
 
     return Scaffold(
@@ -524,6 +537,11 @@ class _InventoryCard extends StatelessWidget {
                           ),
                       ],
                     ),
+                    if (record.isChemical && record.chemicalSizes.isNotEmpty)
+                      ChemicalSizeStockDisclosure(
+                        sizes: record.chemicalSizes,
+                        productName: record.productName,
+                      ),
                   ],
                 ),
               ),

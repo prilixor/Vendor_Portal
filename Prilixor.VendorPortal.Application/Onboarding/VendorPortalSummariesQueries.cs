@@ -377,12 +377,27 @@ public sealed class VendorListingSummaryDto
     public decimal VendorDailyRent { get; init; }
     public decimal? VendorBuyPrice { get; init; }
     public List<VendorListingVariantPayoutDto> VariantPayouts { get; init; } = [];
+    public List<VendorListingChemicalSizeDto> ChemicalSizes { get; init; } = [];
 }
 
 public sealed class VendorListingVariantPayoutDto
 {
     public string VariantId { get; init; } = string.Empty;
     public decimal VendorPrice { get; init; }
+}
+
+/// <summary>One packaging size on a chemical listing, with admin buy price and live stock.</summary>
+public sealed class VendorListingChemicalSizeDto
+{
+    public string VariantId { get; init; } = string.Empty;
+    public string Label { get; init; } = string.Empty;
+    public string Sku { get; init; } = string.Empty;
+    public decimal SizeValue { get; init; }
+    public string SizeUnit { get; init; } = string.Empty;
+    public decimal BuyPrice { get; init; }
+    public int TotalQuantity { get; init; }
+    public int AvailableQuantity { get; init; }
+    public int ReservedQuantity { get; init; }
 }
 
 public sealed class VendorListingListResult
@@ -401,6 +416,17 @@ public sealed class VendorListingListResult
     public int ActiveCount { get; init; }
     public int InactiveCount { get; init; }
     public int DraftCount { get; init; }
+    public VendorListingStockUnitsDto EquipmentStock { get; init; } = new();
+    public VendorListingStockUnitsDto ChemicalStock { get; init; } = new();
+}
+
+public sealed class VendorListingStockUnitsDto
+{
+    public int TotalUnits { get; init; }
+    public int AvailableUnits { get; init; }
+    public int ReservedUnits { get; init; }
+    public int RentedUnits { get; init; }
+    public int BlockedUnits { get; init; }
 }
 
 public sealed record GetVendorListingListQuery(

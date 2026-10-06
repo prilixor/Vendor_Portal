@@ -388,6 +388,32 @@ class VariantInventoryRow {
   String get label => '$sizeValue $sizeUnit'.trim();
 }
 
+class ChemicalSizeStock {
+  final String label;
+  final String sku;
+  final int total;
+  final int available;
+  final int reserved;
+
+  const ChemicalSizeStock({
+    required this.label,
+    this.sku = '',
+    this.total = 0,
+    this.available = 0,
+    this.reserved = 0,
+  });
+
+  factory ChemicalSizeStock.fromJson(Map<String, dynamic> json) {
+    return ChemicalSizeStock(
+      label: json['label']?.toString() ?? '',
+      sku: json['sku']?.toString() ?? '',
+      total: _toInt(json['totalQuantity']),
+      available: _toInt(json['availableQuantity']),
+      reserved: _toInt(json['reservedQuantity']),
+    );
+  }
+}
+
 class InventoryRecord {
   final String listingId;
   final String productName;
@@ -399,6 +425,7 @@ class InventoryRecord {
   final int rented;
   final int blocked;
   final String? primaryImageUrl;
+  final List<ChemicalSizeStock> chemicalSizes;
 
   const InventoryRecord({
     required this.listingId,
@@ -411,6 +438,7 @@ class InventoryRecord {
     this.rented = 0,
     this.blocked = 0,
     this.primaryImageUrl,
+    this.chemicalSizes = const [],
   });
 
   double get utilization {

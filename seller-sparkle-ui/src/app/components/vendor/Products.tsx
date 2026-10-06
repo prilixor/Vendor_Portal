@@ -17,7 +17,7 @@ import { FormGrid } from "@/app/components/shared/FormGrid";
 import { FieldError } from "@/app/components/shared/FieldError";
 import { SearchableSelect } from "@/app/components/shared/SearchableSelect";
 import { ProductListing } from "@/app/models";
-import { Plus, Search, Pencil, Image as ImageIcon, Trash2, Loader2, Package, FlaskConical, Shield } from "lucide-react";
+import { Plus, Search, Pencil, Image as ImageIcon, Trash2, Loader2, Package, FlaskConical, Shield, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/app/guards/AuthContext";
 import { useVendorVerification } from "@/app/contexts/VendorVerificationContext";
@@ -53,6 +53,15 @@ type LocalListing = ProductListing & {
   catalogImage?: string;
   /** Per-packaging-size stock for chemical listings (same source as Admin vendor chemicals). */
   sizeStocks?: ChemStockSize[];
+  chemicalSizes?: {
+    label: string;
+    sku: string;
+    sizeValue: number;
+    sizeUnit: string;
+    buyPrice: number;
+    totalQuantity: number;
+    availableQuantity: number;
+  }[];
 };
 
 type CatalogCategory = {
@@ -140,112 +149,97 @@ const mapVariantRowsToSizeStocks = (rows: VendorVariantInventoryDto[]): ChemStoc
       available: r.availableQuantity || 0,
     }));
 
-const ChemQtySizeRows = ({ sizes, rowClassName }: { sizes: ChemStockSize[]; rowClassName?: string }) => (
-  <>
-    {sizes.map((s, i) => (
-      <div key={s.sku || i} className={cn("flex items-center justify-between gap-6", rowClassName)}>
-        <span className="truncate text-muted-foreground" title={s.sku || s.label}>
-          {s.label}
-        </span>
-        <span className="shrink-0 font-semibold tabular-nums">
-          {s.total}
-          {s.available !== s.total ? (
-            <span className="ml-1 font-normal text-muted-foreground">· {s.available}</span>
-          ) : null}
-        </span>
-      </div>
-    ))}
-  </>
-);
+type ChemPriceSize = { sizeValue: number; sizeUnit: string; buyPrice: number };
 
-/** Desktop hover popup — same pattern as Buy Price “Price by size”. */
-const ChemQtyHover = ({ quantity, sizes }: { quantity: number; sizes: ChemStockSize[] }) => (
-  <TooltipProvider>
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <div className="inline-flex cursor-default flex-col items-end">
-          <span className="whitespace-nowrap tabular-nums">{quantity}</span>
-          <span className="font-sans text-[10px] font-normal text-muted-foreground">
-            {sizes.length} {sizes.length === 1 ? "size" : "sizes"}
-          </span>
-        </div>
-      </TooltipTrigger>
-      <TooltipContent side="left" align="center" className="min-w-[10rem] p-0">
-        <div className="border-b border-border/60 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-          Qty by size
-        </div>
-        <div className="max-h-64 divide-y divide-border/40 overflow-auto px-3 py-1.5 font-sans text-xs">
-          <ChemQtySizeRows sizes={sizes} rowClassName="py-1" />
-        </div>
-      </TooltipContent>
-    </Tooltip>
-  </TooltipProvider>
-);
-
-/** Mobile: tap “Show all” instead of hover (same idea as ChemSizeBreakdown). */
-const ChemQtyBreakdown = ({ sizes }: { sizes: ChemStockSize[] }) => {
-  const COLLAPSED_COUNT = 3;
-  const [expanded, setExpanded] = useState(false);
-  const hasMore = sizes.length > COLLAPSED_COUNT;
-  const visible = expanded ? sizes : sizes.slice(0, COLLAPSED_COUNT);
+/** Click to expand buy price by packaging size. Same pattern as Admin vendor chemicals. */
+const ChemPriceDisclosure = ({
+  label,
+  count,
+  sizes,
+  align = "end",
+}: {
+  label: string;
+  count: number;
+  sizes: ChemPriceSize[];
+  align?: "start" | "end";
+}) => {
+  const [open, setOpen] = useState(false);
   return (
-    <div className="mt-1">
-      <div
-        className={`divide-y divide-border/40 rounded-md border border-border/60 ${
-          expanded ? "max-h-52 overflow-auto" : ""
-        }`}
+    <div className={cn("inline-flex max-w-full flex-col", align === "end" ? "items-end" : "items-start")}>
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className="inline-flex items-center gap-1 text-left"
+        aria-expanded={open}
       >
-        <ChemQtySizeRows sizes={visible} rowClassName="px-2.5 py-1 text-xs font-normal" />
-      </div>
-      {hasMore && (
-        <button
-          type="button"
-          onClick={() => setExpanded((e) => !e)}
-          className="mt-1 text-xs font-medium text-primary no-underline transition-colors hover:text-primary/80 hover:no-underline"
-        >
-          {expanded ? "Show less" : `Show all ${sizes.length} sizes`}
-        </button>
+        <span className="whitespace-nowrap font-mono tabular-nums">{label}</span>
+        <span className="font-sans text-[10px] font-normal text-muted-foreground">
+          · {count} {count === 1 ? "size" : "sizes"}
+        </span>
+        <ChevronDown className={cn("h-3 w-3 text-muted-foreground transition-transform", open && "rotate-180")} />
+      </button>
+      {open && (
+        <div className="mt-1 max-h-52 w-full min-w-[10rem] max-w-[16rem] divide-y divide-border/40 overflow-auto rounded-md border border-border/60 text-left">
+          {sizes.map((size, index) => (
+            <div key={`${size.sizeValue}-${size.sizeUnit}-${index}`} className="flex items-center justify-between gap-6 px-2.5 py-1 text-xs">
+              <span className="text-muted-foreground">
+                {size.sizeValue} {size.sizeUnit}
+              </span>
+              <span className="font-medium tabular-nums">₹{size.buyPrice.toLocaleString("en-IN")}</span>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );
 };
 
-/**
- * Per-size price breakdown for a chemical. Collapses to the first few sizes with a
- * "Show all" toggle so a chemical with many packaging sizes (e.g. 10+) doesn't blow up
- * the mobile card height; when expanded it scrolls instead of growing unbounded.
- */
-const ChemSizeBreakdown = ({ sizes }: { sizes: any[] }) => {
-  const COLLAPSED_COUNT = 3;
-  const [expanded, setExpanded] = useState(false);
-  const hasMore = sizes.length > COLLAPSED_COUNT;
-  const visible = expanded ? sizes : sizes.slice(0, COLLAPSED_COUNT);
+/** Click to expand quantity by packaging size. Same pattern as Admin vendor chemicals. */
+const ChemStockDisclosure = ({
+  total,
+  sizes,
+  align = "end",
+}: {
+  total: number;
+  sizes: ChemStockSize[];
+  align?: "start" | "end";
+}) => {
+  const [open, setOpen] = useState(false);
+  const count = sizes.length;
   return (
-    <div className="mt-1">
-      <div
-        className={`divide-y divide-border/40 rounded-md border border-border/60 ${
-          expanded ? "max-h-52 overflow-auto" : ""
-        }`}
-      >
-        {visible.map((v: any, i: number) => (
-          <div key={i} className="flex items-center justify-between px-2.5 py-1 text-xs">
-            <span className="text-muted-foreground">
-              {v.sizeValue} {v.sizeUnit}
+    <div className={cn("inline-flex max-w-full flex-col", align === "end" ? "items-end" : "items-start")}>
+      <span className="font-mono tabular-nums">{total}</span>
+      {count > 0 && (
+        <>
+          <button
+            type="button"
+            onClick={() => setOpen((value) => !value)}
+            className="inline-flex items-center gap-1 text-[10px] font-medium text-muted-foreground hover:text-foreground"
+            aria-expanded={open}
+          >
+            <span>
+              {count} {count === 1 ? "size" : "sizes"}
             </span>
-            <span className="font-mono font-medium tabular-nums">
-              ₹{Number(v.buyPrice).toLocaleString("en-IN")}
-            </span>
-          </div>
-        ))}
-      </div>
-      {hasMore && (
-        <button
-          type="button"
-          onClick={() => setExpanded((e) => !e)}
-          className="mt-1 text-xs font-medium text-primary no-underline transition-colors hover:text-primary/80 hover:no-underline"
-        >
-          {expanded ? "Show less" : `Show all ${sizes.length} sizes`}
-        </button>
+            <ChevronDown className={cn("h-3 w-3 transition-transform", open && "rotate-180")} />
+          </button>
+          {open && (
+            <div className="mt-1 max-h-40 w-full min-w-[9rem] max-w-[12rem] divide-y divide-border/40 overflow-auto rounded-md border border-border/60 text-left">
+              {sizes.map((size, index) => (
+                <div key={size.sku || index} className="flex items-center justify-between gap-3 px-2 py-1 text-[10px]">
+                  <span className="truncate text-muted-foreground" title={size.sku}>
+                    {size.label}
+                  </span>
+                  <span className="shrink-0 font-mono font-medium tabular-nums">
+                    {size.total}
+                    {size.available !== size.total ? (
+                      <span className="font-normal text-muted-foreground"> · {size.available}</span>
+                    ) : null}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
@@ -277,6 +271,13 @@ const mapListingSummary = (l: VendorListingSummaryApiDto): LocalListing => ({
   vendorDailyRent: l.vendorDailyRent,
   vendorBuyPrice: l.vendorBuyPrice ?? undefined,
   variantPayouts: l.variantPayouts,
+  chemicalSizes: l.chemicalSizes ?? [],
+  sizeStocks: (l.chemicalSizes ?? []).map((size) => ({
+    label: size.label,
+    sku: size.sku,
+    total: size.totalQuantity,
+    available: size.availableQuantity,
+  })),
 });
 
 const Products = () => {
@@ -491,19 +492,20 @@ const Products = () => {
 
   // Chemicals are priced per packaging size; expose the customer buy-price range + sorted sizes.
   const getChemPricing = (p: LocalListing) => {
-    const active = (p.variants || []).filter(
-      (v: any) => v?.isActive !== false && typeof v?.buyPrice === "number" && v.buyPrice > 0
-    );
+    const active = (p.chemicalSizes ?? []).filter((size) => size.buyPrice > 0);
     if (active.length === 0) return null;
-    const prices = active.map((v: any) => v.buyPrice as number);
+    const prices = active.map((size) => size.buyPrice);
     const min = Math.min(...prices);
     const max = Math.max(...prices);
     const label =
       min === max
         ? `₹${min.toLocaleString("en-IN")}`
         : `₹${min.toLocaleString("en-IN")} – ₹${max.toLocaleString("en-IN")}`;
-    const sorted = active.slice().sort((a: any, b: any) => (a.sizeValue ?? 0) - (b.sizeValue ?? 0));
-    return { label, sizes: sorted, count: active.length };
+    const sizes = active
+      .slice()
+      .sort((a, b) => a.sizeValue - b.sizeValue)
+      .map((size) => ({ sizeValue: size.sizeValue, sizeUnit: size.sizeUnit, buyPrice: size.buyPrice }));
+    return { label, sizes, count: active.length };
   };
 
   const confirmDeleteListing = async (id: string) => {
@@ -895,36 +897,12 @@ const Products = () => {
                           return <span className="text-muted-foreground">—</span>;
                         }
                         return (
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <div className="inline-flex cursor-default flex-col items-end">
-                                  <span className="whitespace-nowrap tabular-nums">{pricing.label}</span>
-                                  <span className="font-sans text-[10px] font-normal text-muted-foreground">
-                                    {pricing.count} {pricing.count === 1 ? "size" : "sizes"}
-                                    {p.hasCustomVendorPricing ? " · your payout is set" : ""}
-                                  </span>
-                                </div>
-                              </TooltipTrigger>
-                              <TooltipContent side="left" align="center" className="min-w-[10rem] p-0">
-                                <div className="border-b border-border/60 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                                  Price by size
-                                </div>
-                                <div className="max-h-64 divide-y divide-border/40 overflow-auto px-3 py-1.5 font-sans text-xs">
-                                  {pricing.sizes.map((v: any, i: number) => (
-                                    <div key={i} className="flex items-center justify-between gap-6 py-1">
-                                      <span className="text-muted-foreground">
-                                        {v.sizeValue} {v.sizeUnit}
-                                      </span>
-                                      <span className="font-semibold tabular-nums">
-                                        ₹{(v.buyPrice as number).toLocaleString("en-IN")}
-                                      </span>
-                                    </div>
-                                  ))}
-                                </div>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
+                          <div className="flex flex-col items-end">
+                            <ChemPriceDisclosure label={pricing.label} count={pricing.count} sizes={pricing.sizes} />
+                            {p.hasCustomVendorPricing ? (
+                              <span className="font-sans text-[10px] font-normal text-muted-foreground">your payout is set</span>
+                            ) : null}
+                          </div>
                         );
                       })()}
                     </td>
@@ -936,7 +914,7 @@ const Products = () => {
                   )}
                   <td className="px-3 py-3 text-right sm:px-4">
                     {activeTab === "chemical" && (p.sizeStocks?.length ?? 0) > 0 ? (
-                      <ChemQtyHover quantity={p.quantity} sizes={p.sizeStocks!} />
+                      <ChemStockDisclosure total={p.quantity} sizes={p.sizeStocks!} />
                     ) : (
                       p.quantity
                     )}
@@ -1010,10 +988,13 @@ const Products = () => {
                   </div>
                   <div className="min-w-0 text-right">
                     <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">Qty</dt>
-                    <dd className="font-mono tabular-nums">{p.quantity}</dd>
-                    {activeTab === "chemical" && (p.sizeStocks?.length ?? 0) > 0 ? (
-                      <ChemQtyBreakdown sizes={p.sizeStocks!} />
-                    ) : null}
+                    <dd>
+                      {activeTab === "chemical" && (p.sizeStocks?.length ?? 0) > 0 ? (
+                        <ChemStockDisclosure total={p.quantity} sizes={p.sizeStocks!} />
+                      ) : (
+                        <span className="font-mono tabular-nums">{p.quantity}</span>
+                      )}
+                    </dd>
                   </div>
                   {activeTab === "equipment" ? (
                     <>
@@ -1031,8 +1012,7 @@ const Products = () => {
                       <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">Buy Price (Admin)</dt>
                       {pricing ? (
                         <dd className="mt-1">
-                          <span className="font-mono font-semibold tabular-nums">{pricing.label}</span>
-                          <ChemSizeBreakdown sizes={pricing.sizes} />
+                          <ChemPriceDisclosure label={pricing.label} count={pricing.count} sizes={pricing.sizes} align="start" />
                         </dd>
                       ) : (
                         <dd className="text-muted-foreground">—</dd>

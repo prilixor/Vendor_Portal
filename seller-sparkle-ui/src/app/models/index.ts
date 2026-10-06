@@ -114,6 +114,14 @@ export interface InventoryRecord {
   catalogProductId?: string;
   isChemical?: boolean;
   primaryImage?: string;
+  chemicalSizes?: {
+    label: string;
+    sku: string;
+    buyPrice: number;
+    total: number;
+    available: number;
+    reserved: number;
+  }[];
 }
 
 export interface InventoryMovement {
