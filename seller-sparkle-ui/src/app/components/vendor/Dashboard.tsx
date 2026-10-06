@@ -382,7 +382,7 @@ const Dashboard = () => {
           surface="vendor_web"
           screen="vendor_dashboard"
           layout="quiet"
-          className="max-w-md"
+          className="w-full max-w-md"
         />
       </Card>
     </div>

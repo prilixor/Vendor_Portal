@@ -138,8 +138,8 @@ export function ListingDeliveryCheck({ line }: { line: CartLinePayload }) {
       <LegalPolicyLinks
         surface="customer_web"
         screen="product_detail"
-        className="mt-1 border-t border-border/60 pt-2 text-[11px]"
-        linkClassName="text-[11px]"
+        className="mt-1 w-full border-t border-border/60"
+        linkClassName="text-[13px] sm:text-[11px]"
         fallback={PRODUCT_DETAIL_FALLBACK}
       />
     </div>

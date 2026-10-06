@@ -1401,8 +1401,7 @@ const CustomerOrderDetail = () => {
       <LegalPolicyLinks
         surface="customer_web"
         screen="order_confirm"
-        className="text-xs"
-        linkClassName="text-xs"
+        className="w-full border-t border-border/60"
       />
 
       {/* Support and Cancellation Actions for Selected Item */}

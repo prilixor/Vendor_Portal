@@ -468,7 +468,7 @@ export const customerApi = {
     if (params.stock && params.stock !== "all") qs.set("stock", params.stock);
     if (params.favoritesOnly) qs.set("favoritesOnly", "true");
     qs.set("page", String(params.page && params.page > 0 ? params.page : 1));
-    qs.set("pageSize", String(params.pageSize && params.pageSize > 0 ? params.pageSize : 8));
+    qs.set("pageSize", String(params.pageSize && params.pageSize > 0 ? params.pageSize : 9));
     return apiClient.get<CustomerCatalogListingSummariesResult>(`/customers/catalog/listings/summaries?${qs.toString()}`);
   },
 

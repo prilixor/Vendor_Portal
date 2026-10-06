@@ -14,7 +14,7 @@ public sealed class CustomerCatalogListingSummaryQuerySpec
     public bool FavoritesOnly { get; init; }
     public Guid? CustomerId { get; init; }
     public int Page { get; init; } = 1;
-    public int PageSize { get; init; } = 8;
+    public int PageSize { get; init; } = 9;
 }
 
 public sealed class CustomerCatalogListingSummariesResult
@@ -36,7 +36,7 @@ public sealed record GetCustomerCatalogListingSummariesQuery(
     bool FavoritesOnly,
     Guid? CustomerId,
     int Page = 1,
-    int PageSize = 8) : IQuery<CustomerCatalogListingSummariesResult>;
+    int PageSize = 9) : IQuery<CustomerCatalogListingSummariesResult>;
 
 public sealed class GetCustomerCatalogListingSummariesQueryValidator
     : AbstractValidator<GetCustomerCatalogListingSummariesQuery>
