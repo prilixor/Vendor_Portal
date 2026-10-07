@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 import '../../core/models/vendor_catalog_model.dart';
@@ -25,37 +27,33 @@ class ChemicalSizeStockDisclosure extends StatelessWidget {
     final colors = context.appColors;
 
     return Padding(
-      padding: const EdgeInsets.only(top: 10),
-      child: Align(
-        alignment: Alignment.centerLeft,
-        child: Material(
-          color: colors.primarySoft,
-          borderRadius: BorderRadius.circular(999),
-          child: InkWell(
-            onTap: () => showChemicalSizeStockSheet(
-              context,
-              sizes: visible,
-              productName: productName,
-            ),
-            borderRadius: BorderRadius.circular(999),
-            child: Padding(
-              padding: const EdgeInsets.fromLTRB(10, 6, 8, 6),
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Text(
-                    label,
-                    style: TextStyle(
-                      color: colors.accent,
-                      fontSize: 12,
-                      fontWeight: FontWeight.w800,
-                    ),
-                  ),
-                  const SizedBox(width: 2),
-                  Icon(Icons.chevron_right_rounded, size: 16, color: colors.accent),
-                ],
+      padding: const EdgeInsets.only(top: 2),
+      child: InkWell(
+        onTap: () => showChemicalSizeStockSheet(
+          context,
+          sizes: visible,
+          productName: productName,
+        ),
+        borderRadius: BorderRadius.circular(6),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 2),
+          child: Row(
+            mainAxisSize: MainAxisSize.min,
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: colors.accent,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w700,
+                  height: 1.1,
+                ),
               ),
-            ),
+              Icon(Icons.chevron_right_rounded, size: 14, color: colors.accent),
+            ],
           ),
         ),
       ),
@@ -78,16 +76,24 @@ void showChemicalSizeStockSheet(
       borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
     ),
     builder: (ctx) {
-      final maxListHeight = MediaQuery.sizeOf(ctx).height * 0.62;
+      final screenHeight = MediaQuery.sizeOf(ctx).height;
+      // About three size cards. More sizes scroll inside this height
+      // so the sheet does not cover the stock tiles.
+      final maxListHeight = math.min(220.0, screenHeight * 0.34);
+      final countLabel = sizes.length == 1
+          ? 'Stock for this packaging size.'
+          : 'Stock for ${sizes.length} packaging sizes.';
       return SafeArea(
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(20, 4, 20, 24),
+          padding: const EdgeInsets.fromLTRB(20, 4, 20, 16),
           child: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
               Text(
                 productName?.trim().isNotEmpty == true ? productName!.trim() : 'Packaging sizes',
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
                 style: TextStyle(
                   color: colors.textPrimary,
                   fontWeight: FontWeight.w800,
@@ -97,7 +103,7 @@ void showChemicalSizeStockSheet(
               ),
               const SizedBox(height: 4),
               Text(
-                'Stock for each packaging size.',
+                countLabel,
                 style: TextStyle(
                   color: colors.textMuted,
                   fontSize: 13,
@@ -153,32 +159,31 @@ class ChemicalSizeStockCard extends StatelessWidget {
     final colors = context.appColors;
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(14, 12, 14, 12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
         color: colors.surfaceElevated,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.circular(10),
         border: Border.all(color: colors.border),
       ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+      child: Row(
         children: [
-          Text(
-            size.label,
-            style: TextStyle(
-              color: colors.textPrimary,
-              fontSize: 16,
-              fontWeight: FontWeight.w800,
-              height: 1.2,
+          Expanded(
+            flex: 4,
+            child: Text(
+              size.label,
+              maxLines: 2,
+              overflow: TextOverflow.ellipsis,
+              style: TextStyle(
+                color: colors.textPrimary,
+                fontSize: 14,
+                fontWeight: FontWeight.w800,
+                height: 1.2,
+              ),
             ),
           ),
-          const SizedBox(height: 10),
-          Row(
-            children: [
-              _SizeMetric(label: 'Total', value: size.total, color: colors.textPrimary),
-              _SizeMetric(label: 'Available', value: size.available, color: colors.success),
-              _SizeMetric(label: 'Reserved', value: size.reserved, color: colors.warning),
-            ],
-          ),
+          _SizeMetric(label: 'Total', value: size.total, color: colors.textPrimary),
+          _SizeMetric(label: 'Available', value: size.available, color: colors.success),
+          _SizeMetric(label: 'Reserved', value: size.reserved, color: colors.warning),
         ],
       ),
     );
@@ -198,9 +203,10 @@ class _SizeMetric extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Expanded(
+    return SizedBox(
+      width: 72,
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.end,
         children: [
           Text(
             label,
@@ -208,18 +214,18 @@ class _SizeMetric extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: context.appColors.textMuted,
-              fontSize: 11,
+              fontSize: 10,
               fontWeight: FontWeight.w600,
+              height: 1.1,
             ),
           ),
-          const SizedBox(height: 2),
           Text(
             '$value',
             style: TextStyle(
               color: color,
-              fontSize: 18,
+              fontSize: 14,
               fontWeight: FontWeight.w800,
-              height: 1.1,
+              height: 1.15,
               fontFeatures: const [FontFeature.tabularFigures()],
             ),
           ),

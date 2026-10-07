@@ -9,7 +9,7 @@ import { Label } from "@/app/components/ui/label";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import { FormGrid } from "@/app/components/shared/FormGrid";
 import { FieldError } from "@/app/components/shared/FieldError";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/app/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/app/components/ui/tooltip";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
@@ -127,6 +127,49 @@ const assetStatusClass = (status: string) => {
 
 type StockMetric = "total" | "available" | "reserved" | "rented" | "blocked";
 
+const StockSplitBody = ({
+  label,
+  equipment,
+  chemical,
+  combined,
+  hideHeading = false,
+}: {
+  label: string;
+  equipment: number;
+  chemical: number;
+  combined: number;
+  hideHeading?: boolean;
+}) => (
+  <>
+    {hideHeading ? null : (
+      <>
+        <p className="text-sm font-semibold">{label} stock</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">Equipment vs chemicals</p>
+      </>
+    )}
+    <div className={cn("space-y-1.5 text-sm", hideHeading ? "mt-3" : "mt-2.5")}>
+      <div className="flex items-center justify-between gap-3">
+        <span className="flex items-center gap-1.5 text-muted-foreground">
+          <Package className="h-3.5 w-3.5" />
+          Equipment
+        </span>
+        <span className="font-mono font-bold tabular-nums">{equipment}</span>
+      </div>
+      <div className="flex items-center justify-between gap-3">
+        <span className="flex items-center gap-1.5 text-muted-foreground">
+          <FlaskConical className="h-3.5 w-3.5" />
+          Chemicals
+        </span>
+        <span className="font-mono font-bold tabular-nums">{chemical}</span>
+      </div>
+      <div className="flex items-center justify-between gap-3 border-t border-border pt-1.5 font-semibold">
+        <span>All stock</span>
+        <span className="font-mono tabular-nums">{combined}</span>
+      </div>
+    </div>
+  </>
+);
+
 const StockSplitHover = ({
   label,
   equipment,
@@ -145,30 +188,44 @@ const StockSplitHover = ({
       <div className="cursor-default outline-none">{children}</div>
     </HoverCardTrigger>
     <HoverCardContent className="w-56 p-3" side="bottom" align="center">
-      <p className="text-sm font-semibold">{label} stock</p>
-      <p className="mt-0.5 text-xs text-muted-foreground">Equipment vs chemicals</p>
-      <div className="mt-2.5 space-y-1.5 text-sm">
-        <div className="flex items-center justify-between gap-3">
-          <span className="flex items-center gap-1.5 text-muted-foreground">
-            <Package className="h-3.5 w-3.5" />
-            Equipment
-          </span>
-          <span className="font-mono font-bold tabular-nums">{equipment}</span>
-        </div>
-        <div className="flex items-center justify-between gap-3">
-          <span className="flex items-center gap-1.5 text-muted-foreground">
-            <FlaskConical className="h-3.5 w-3.5" />
-            Chemicals
-          </span>
-          <span className="font-mono font-bold tabular-nums">{chemical}</span>
-        </div>
-        <div className="flex items-center justify-between gap-3 border-t border-border pt-1.5 font-semibold">
-          <span>All stock</span>
-          <span className="font-mono tabular-nums">{combined}</span>
-        </div>
-      </div>
+      <StockSplitBody label={label} equipment={equipment} chemical={chemical} combined={combined} />
     </HoverCardContent>
   </HoverCard>
+);
+
+/** Phone layout has no hover. A dropdown from a narrow tile covers the tabs, so the split opens as its own card. */
+const StockSplitTap = ({
+  label,
+  equipment,
+  chemical,
+  combined,
+  children,
+}: {
+  label: string;
+  equipment: number;
+  chemical: number;
+  combined: number;
+  children: React.ReactNode;
+}) => (
+  <Dialog>
+    <DialogTrigger asChild>
+      <button type="button" className="block w-full border-0 bg-transparent p-0 text-inherit">
+        {children}
+      </button>
+    </DialogTrigger>
+    <DialogContent
+      overlayClassName="bg-black/45"
+      className="top-auto bottom-6 w-[min(20rem,calc(100vw-2rem))] max-w-[min(20rem,calc(100vw-2rem))] translate-y-0 p-4"
+    >
+      <div className="pr-6 text-left">
+        <DialogTitle className="text-sm font-semibold">{label} stock</DialogTitle>
+        <DialogDescription className="mt-0.5 text-xs text-muted-foreground">
+          Equipment vs chemicals
+        </DialogDescription>
+        <StockSplitBody label={label} equipment={equipment} chemical={chemical} combined={combined} hideHeading />
+      </div>
+    </DialogContent>
+  </Dialog>
 );
 
 const Inventory = () => {
@@ -950,7 +1007,7 @@ const Inventory = () => {
           <div className="overflow-hidden rounded-xl border border-border/60 bg-card sm:hidden">
             <div className="grid grid-cols-5 divide-x divide-border">
               {summaryStats.map((stat) => (
-                <StockSplitHover
+                <StockSplitTap
                   key={stat.key}
                   label={stat.label}
                   equipment={splitTotals.equipment[stat.key]}
@@ -964,7 +1021,7 @@ const Inventory = () => {
                     <p className="text-[10px] font-medium leading-tight tracking-wide text-muted-foreground">{stat.label}</p>
                     <p className={cn("mt-1 font-mono text-base font-bold tabular-nums", stat.cls)}>{stat.value}</p>
                   </div>
-                </StockSplitHover>
+                </StockSplitTap>
               ))}
             </div>
           </div>
