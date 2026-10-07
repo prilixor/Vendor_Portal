@@ -257,6 +257,10 @@ class VendorProductListing {
   final bool isChemical;
   final String? primaryImageUrl;
   final String? primaryThumbnailUrl;
+  final bool hasCustomVendorPricing;
+  final double vendorDailyRent;
+  final double? vendorBuyPrice;
+  final Map<String, double> variantPayouts;
 
   const VendorProductListing({
     required this.id,
@@ -273,6 +277,10 @@ class VendorProductListing {
     this.isChemical = false,
     this.primaryImageUrl,
     this.primaryThumbnailUrl,
+    this.hasCustomVendorPricing = false,
+    this.vendorDailyRent = 0,
+    this.vendorBuyPrice,
+    this.variantPayouts = const {},
   });
 
   factory VendorProductListing.fromJson(Map<String, dynamic> json) {
@@ -291,6 +299,10 @@ class VendorProductListing {
       isChemical: json['isChemical'] == true,
       primaryImageUrl: json['primaryImageUrl']?.toString(),
       primaryThumbnailUrl: json['primaryThumbnailUrl']?.toString(),
+      hasCustomVendorPricing: json['hasCustomVendorPricing'] == true,
+      vendorDailyRent: _toDouble(json['vendorDailyRent']),
+      vendorBuyPrice: json['vendorBuyPrice'] == null ? null : _toDouble(json['vendorBuyPrice']),
+      variantPayouts: _variantPayouts(json['variantPayouts']),
     );
   }
 }
@@ -376,6 +388,32 @@ class VariantInventoryRow {
   String get label => '$sizeValue $sizeUnit'.trim();
 }
 
+class ChemicalSizeStock {
+  final String label;
+  final String sku;
+  final int total;
+  final int available;
+  final int reserved;
+
+  const ChemicalSizeStock({
+    required this.label,
+    this.sku = '',
+    this.total = 0,
+    this.available = 0,
+    this.reserved = 0,
+  });
+
+  factory ChemicalSizeStock.fromJson(Map<String, dynamic> json) {
+    return ChemicalSizeStock(
+      label: json['label']?.toString() ?? '',
+      sku: json['sku']?.toString() ?? '',
+      total: _toInt(json['totalQuantity']),
+      available: _toInt(json['availableQuantity']),
+      reserved: _toInt(json['reservedQuantity']),
+    );
+  }
+}
+
 class InventoryRecord {
   final String listingId;
   final String productName;
@@ -387,6 +425,7 @@ class InventoryRecord {
   final int rented;
   final int blocked;
   final String? primaryImageUrl;
+  final List<ChemicalSizeStock> chemicalSizes;
 
   const InventoryRecord({
     required this.listingId,
@@ -399,6 +438,7 @@ class InventoryRecord {
     this.rented = 0,
     this.blocked = 0,
     this.primaryImageUrl,
+    this.chemicalSizes = const [],
   });
 
   double get utilization {
@@ -653,6 +693,18 @@ class TrackedAsset {
       dueDate: json['dueDate']?.toString(),
     );
   }
+}
+
+Map<String, double> _variantPayouts(dynamic value) {
+  if (value is! List) return const {};
+  final map = <String, double>{};
+  for (final item in value) {
+    if (item is! Map) continue;
+    final id = item['variantId']?.toString() ?? '';
+    if (id.isEmpty) continue;
+    map[id] = _toDouble(item['vendorPrice']);
+  }
+  return map;
 }
 
 double _toDouble(dynamic value) {

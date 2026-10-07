@@ -38,7 +38,8 @@ public sealed record VendorDispatchOfferDto(
     decimal? RentalNormalPrice = null,
     string? RentalDiscountType = null,
     decimal? RentalDiscountValue = null,
-    decimal? RentalFinalPrice = null);
+    decimal? RentalFinalPrice = null,
+    decimal VendorSubtotalAmount = 0);
 
 public sealed record VendorOrderDto(
     Guid OrderId,
@@ -76,7 +77,9 @@ public sealed record VendorOrderDto(
     string? RentalDiscountType = null,
     decimal? RentalDiscountValue = null,
     decimal? RentalFinalPrice = null,
-    IReadOnlyList<CustomerPrescriptionFileDto>? PrescriptionFiles = null);
+    IReadOnlyList<CustomerPrescriptionFileDto>? PrescriptionFiles = null,
+    decimal DepositAmount = 0,
+    decimal GstAmount = 0);
 
 public sealed record GetVendorOrdersQuery(string VendorId, string? Status) : IQuery<List<VendorOrderDto>>;
 
@@ -629,7 +632,9 @@ public static class VendorOrderMapper
             RentalNormalPrice: o.RentalNormalPrice,
             RentalDiscountType: o.RentalDiscountType,
             RentalDiscountValue: o.RentalDiscountValue,
-            RentalFinalPrice: o.RentalFinalPrice);
+            RentalFinalPrice: o.RentalFinalPrice,
+            DepositAmount: o.DepositAmount,
+            GstAmount: o.GstAmount);
     }
 }
 
@@ -728,7 +733,8 @@ internal sealed class GetVendorPendingDispatchOffersQueryHandler(
                 RentalNormalPrice: order.RentalNormalPrice,
                 RentalDiscountType: order.RentalDiscountType,
                 RentalDiscountValue: order.RentalDiscountValue,
-                RentalFinalPrice: order.RentalFinalPrice));
+                RentalFinalPrice: order.RentalFinalPrice,
+                VendorSubtotalAmount: order.VendorSubtotalAmount));
 
             changed |= await dispatch.ReconcileAwaitingOrderAsync(order.Id, now, sideEffectCt);
         }

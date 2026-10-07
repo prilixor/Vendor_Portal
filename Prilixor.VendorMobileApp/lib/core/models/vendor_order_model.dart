@@ -1,5 +1,12 @@
 import '../utils/media_url.dart';
 
+/// Rupee text that keeps paise only when the amount is not a whole rupee.
+String formatVendorMoney(num value) {
+  final rounded = (value * 100).round() / 100;
+  final whole = rounded == rounded.roundToDouble();
+  return '₹${whole ? rounded.toStringAsFixed(0) : rounded.toStringAsFixed(2)}';
+}
+
 class VendorOrder {
   final String orderId;
   final String orderNumber;
@@ -9,6 +16,8 @@ class VendorOrder {
   final int rentalDays;
   final double totalAmount;
   final double vendorSubtotalAmount;
+  final double depositAmount;
+  final double gstAmount;
   final String? startDate;
   final String? endDate;
   final String listingId;
@@ -44,6 +53,8 @@ class VendorOrder {
     required this.rentalDays,
     required this.totalAmount,
     required this.vendorSubtotalAmount,
+    this.depositAmount = 0,
+    this.gstAmount = 0,
     this.startDate,
     this.endDate,
     required this.listingId,
@@ -104,6 +115,8 @@ class VendorOrder {
       totalAmount: (json['totalAmount'] as num?)?.toDouble() ?? 0,
       vendorSubtotalAmount:
           (json['vendorSubtotalAmount'] as num?)?.toDouble() ?? 0,
+      depositAmount: (json['depositAmount'] as num?)?.toDouble() ?? 0,
+      gstAmount: (json['gstAmount'] as num?)?.toDouble() ?? 0,
       startDate: json['startDate']?.toString(),
       endDate: json['endDate']?.toString(),
       listingId: json['listingId']?.toString() ?? '',

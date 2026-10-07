@@ -7,6 +7,7 @@ import '../../core/providers/vendor_catalog_provider.dart';
 import '../../core/theme.dart';
 import '../../core/utils/debouncer.dart';
 import '../../shared/widgets/brand_page_loader.dart';
+import '../../shared/widgets/chemical_size_stock_table.dart';
 import '../../shared/widgets/inventory_kpi_strip.dart';
 import '../../shared/widgets/listing_thumb.dart';
 import 'inventory_detail_screen.dart';
@@ -99,13 +100,25 @@ class _InventoryScreenState extends State<InventoryScreen>
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<VendorCatalogProvider>(context);
-    final totals = provider.inventoryTotals;
-    final equipmentTotals = _sumRecords(
-      provider.inventoryRecords.where((r) => !r.isChemical),
-    );
-    final chemicalTotals = _sumRecords(
-      provider.inventoryRecords.where((r) => r.isChemical),
-    );
+    final equipmentTotals = provider.hasStockSplit
+        ? provider.equipmentStock
+        : _sumRecords(
+            provider.inventoryRecords.where((r) => !r.isChemical),
+          );
+    final chemicalTotals = provider.hasStockSplit
+        ? provider.chemicalStock
+        : _sumRecords(
+            provider.inventoryRecords.where((r) => r.isChemical),
+          );
+    final totals = provider.hasStockSplit
+        ? InventoryTotals(
+            total: equipmentTotals.total + chemicalTotals.total,
+            available: equipmentTotals.available + chemicalTotals.available,
+            reserved: equipmentTotals.reserved + chemicalTotals.reserved,
+            rented: equipmentTotals.rented + chemicalTotals.rented,
+            blocked: equipmentTotals.blocked + chemicalTotals.blocked,
+          )
+        : provider.inventoryTotals;
     final filtered = provider.inventoryRecords;
 
     return Scaffold(
@@ -496,17 +509,31 @@ class _InventoryCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      record.productName,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: context.appColors.textPrimary,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 14,
-                        height: 1.25,
-                        letterSpacing: -0.1,
-                      ),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            record.productName,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: context.appColors.textPrimary,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 14,
+                              height: 1.25,
+                              letterSpacing: -0.1,
+                            ),
+                          ),
+                        ),
+                        if (record.isChemical && record.chemicalSizes.isNotEmpty) ...[
+                          const SizedBox(width: 8),
+                          ChemicalSizeStockDisclosure(
+                            sizes: record.chemicalSizes,
+                            productName: record.productName,
+                          ),
+                        ],
+                      ],
                     ),
                     const SizedBox(height: 8),
                     _UtilizationMeter(percent: util, label: utilPct),

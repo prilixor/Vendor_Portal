@@ -9,13 +9,13 @@ import { Label } from "@/app/components/ui/label";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import { FormGrid } from "@/app/components/shared/FormGrid";
 import { FieldError } from "@/app/components/shared/FieldError";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/app/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/app/components/ui/tooltip";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/app/components/ui/hover-card";
 import { InventoryMovement, InventoryRecord } from "@/app/models";
-import { Boxes, CheckCircle2, Clock, Package, Lock, ArrowDownRight, ArrowUpRight, Pause, Play, Ban, Pencil, Plus, Minus, Loader2, Barcode, Trash2, Search, FlaskConical } from "lucide-react";
+import { Boxes, CheckCircle2, Clock, Package, Lock, ArrowDownRight, ArrowUpRight, Pause, Play, Ban, Pencil, Plus, Minus, Loader2, Barcode, Trash2, Search, FlaskConical, ChevronDown } from "lucide-react";
 import { format } from "date-fns";
 import { TablePagination } from "@/app/components/shared/TablePagination";
 import { ListingThumb } from "@/app/components/shared/ListingThumb";
@@ -32,6 +32,65 @@ type ChemicalStockEditRow = {
   total: number;
   reserved: number;
   available: number;
+};
+
+type InventoryChemicalSize = NonNullable<InventoryRecord["chemicalSizes"]>[number];
+
+/** Click to expand stock by packaging size. Same pattern as Admin vendor chemicals. */
+const ChemInventoryDisclosure = ({
+  total,
+  sizes,
+  showTotal = true,
+}: {
+  total: number;
+  sizes: InventoryChemicalSize[];
+  showTotal?: boolean;
+}) => {
+  const [open, setOpen] = useState(false);
+  const count = sizes.length;
+  return (
+    <div className="inline-flex max-w-full flex-col items-end">
+      {showTotal ? <span className="font-mono tabular-nums">{total}</span> : null}
+      {count > 0 && (
+        <>
+          <button
+            type="button"
+            onClick={() => setOpen((value) => !value)}
+            className="inline-flex items-center gap-1 text-[10px] font-medium text-muted-foreground hover:text-foreground"
+            aria-expanded={open}
+          >
+            <span>
+              {count} {count === 1 ? "size" : "sizes"}
+            </span>
+            <ChevronDown className={cn("h-3 w-3 transition-transform", open && "rotate-180")} />
+          </button>
+          {open && (
+            <div className="mt-1 max-h-52 w-max min-w-[14rem] max-w-[18rem] overflow-auto rounded-md border border-border/60 text-left">
+              <div className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] gap-x-3 border-b border-border/60 px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                <span>Size</span>
+                <span className="text-right">Total</span>
+                <span className="text-right">Avail</span>
+                <span className="text-right">Rsv</span>
+              </div>
+              {sizes.map((size, index) => (
+                <div
+                  key={size.sku || index}
+                  className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-x-3 border-b border-border/40 px-2 py-1 text-[10px] last:border-b-0"
+                >
+                  <span className="truncate text-muted-foreground" title={size.sku || size.label}>
+                    {size.label}
+                  </span>
+                  <span className="text-right font-mono font-medium tabular-nums">{size.total}</span>
+                  <span className="text-right font-mono tabular-nums text-success">{size.available}</span>
+                  <span className="text-right font-mono tabular-nums text-warning">{size.reserved}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
 };
 
 const movementMeta: Record<string, { label: string; icon: any; cls: string }> = {
@@ -68,6 +127,49 @@ const assetStatusClass = (status: string) => {
 
 type StockMetric = "total" | "available" | "reserved" | "rented" | "blocked";
 
+const StockSplitBody = ({
+  label,
+  equipment,
+  chemical,
+  combined,
+  hideHeading = false,
+}: {
+  label: string;
+  equipment: number;
+  chemical: number;
+  combined: number;
+  hideHeading?: boolean;
+}) => (
+  <>
+    {hideHeading ? null : (
+      <>
+        <p className="text-sm font-semibold">{label} stock</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">Equipment vs chemicals</p>
+      </>
+    )}
+    <div className={cn("space-y-1.5 text-sm", hideHeading ? "mt-3" : "mt-2.5")}>
+      <div className="flex items-center justify-between gap-3">
+        <span className="flex items-center gap-1.5 text-muted-foreground">
+          <Package className="h-3.5 w-3.5" />
+          Equipment
+        </span>
+        <span className="font-mono font-bold tabular-nums">{equipment}</span>
+      </div>
+      <div className="flex items-center justify-between gap-3">
+        <span className="flex items-center gap-1.5 text-muted-foreground">
+          <FlaskConical className="h-3.5 w-3.5" />
+          Chemicals
+        </span>
+        <span className="font-mono font-bold tabular-nums">{chemical}</span>
+      </div>
+      <div className="flex items-center justify-between gap-3 border-t border-border pt-1.5 font-semibold">
+        <span>All stock</span>
+        <span className="font-mono tabular-nums">{combined}</span>
+      </div>
+    </div>
+  </>
+);
+
 const StockSplitHover = ({
   label,
   equipment,
@@ -86,30 +188,44 @@ const StockSplitHover = ({
       <div className="cursor-default outline-none">{children}</div>
     </HoverCardTrigger>
     <HoverCardContent className="w-56 p-3" side="bottom" align="center">
-      <p className="text-sm font-semibold">{label} stock</p>
-      <p className="mt-0.5 text-xs text-muted-foreground">Equipment vs chemicals</p>
-      <div className="mt-2.5 space-y-1.5 text-sm">
-        <div className="flex items-center justify-between gap-3">
-          <span className="flex items-center gap-1.5 text-muted-foreground">
-            <Package className="h-3.5 w-3.5" />
-            Equipment
-          </span>
-          <span className="font-mono font-bold tabular-nums">{equipment}</span>
-        </div>
-        <div className="flex items-center justify-between gap-3">
-          <span className="flex items-center gap-1.5 text-muted-foreground">
-            <FlaskConical className="h-3.5 w-3.5" />
-            Chemicals
-          </span>
-          <span className="font-mono font-bold tabular-nums">{chemical}</span>
-        </div>
-        <div className="flex items-center justify-between gap-3 border-t border-border pt-1.5 font-semibold">
-          <span>All stock</span>
-          <span className="font-mono tabular-nums">{combined}</span>
-        </div>
-      </div>
+      <StockSplitBody label={label} equipment={equipment} chemical={chemical} combined={combined} />
     </HoverCardContent>
   </HoverCard>
+);
+
+/** Phone layout has no hover. A dropdown from a narrow tile covers the tabs, so the split opens as its own card. */
+const StockSplitTap = ({
+  label,
+  equipment,
+  chemical,
+  combined,
+  children,
+}: {
+  label: string;
+  equipment: number;
+  chemical: number;
+  combined: number;
+  children: React.ReactNode;
+}) => (
+  <Dialog>
+    <DialogTrigger asChild>
+      <button type="button" className="block w-full border-0 bg-transparent p-0 text-inherit">
+        {children}
+      </button>
+    </DialogTrigger>
+    <DialogContent
+      overlayClassName="bg-black/45"
+      className="top-auto bottom-6 w-[min(20rem,calc(100vw-2rem))] max-w-[min(20rem,calc(100vw-2rem))] translate-y-0 p-4"
+    >
+      <div className="pr-6 text-left">
+        <DialogTitle className="text-sm font-semibold">{label} stock</DialogTitle>
+        <DialogDescription className="mt-0.5 text-xs text-muted-foreground">
+          Equipment vs chemicals
+        </DialogDescription>
+        <StockSplitBody label={label} equipment={equipment} chemical={chemical} combined={combined} hideHeading />
+      </div>
+    </DialogContent>
+  </Dialog>
 );
 
 const Inventory = () => {
@@ -201,6 +317,14 @@ const Inventory = () => {
         reserved: l.reservedQuantity,
         rented: l.rentedQuantity,
         blocked: l.blockedQuantity,
+        chemicalSizes: (l.chemicalSizes ?? []).map((size) => ({
+          label: size.label,
+          sku: size.sku,
+          buyPrice: size.buyPrice,
+          total: size.totalQuantity,
+          available: size.availableQuantity,
+          reserved: size.reservedQuantity,
+        })),
       }) satisfies InventoryRecord),
     [listingPage?.items],
   );
@@ -294,17 +418,35 @@ const Inventory = () => {
     void run();
   }, [user?.id, listingPage?.page, listingPage?.items?.map((i) => i.id).join("|")]);
 
-  const totals = {
-    total: listingPage?.totalUnits ?? 0,
-    available: listingPage?.availableUnits ?? 0,
-    reserved: listingPage?.reservedUnits ?? 0,
-    rented: listingPage?.rentedUnits ?? 0,
-    blocked: listingPage?.blockedUnits ?? 0,
-  };
+  const mapStock = (stock?: { totalUnits: number; availableUnits: number; reservedUnits: number; rentedUnits: number; blockedUnits: number }) => ({
+    total: stock?.totalUnits ?? 0,
+    available: stock?.availableUnits ?? 0,
+    reserved: stock?.reservedUnits ?? 0,
+    rented: stock?.rentedUnits ?? 0,
+    blocked: stock?.blockedUnits ?? 0,
+  });
+  const equipmentStock = mapStock(listingPage?.equipmentStock);
+  const chemicalStock = mapStock(listingPage?.chemicalStock);
+  const hasStockSplit = listingPage?.equipmentStock != null || listingPage?.chemicalStock != null;
+  const totals = hasStockSplit
+    ? {
+        total: equipmentStock.total + chemicalStock.total,
+        available: equipmentStock.available + chemicalStock.available,
+        reserved: equipmentStock.reserved + chemicalStock.reserved,
+        rented: equipmentStock.rented + chemicalStock.rented,
+        blocked: equipmentStock.blocked + chemicalStock.blocked,
+      }
+    : {
+        total: listingPage?.totalUnits ?? 0,
+        available: listingPage?.availableUnits ?? 0,
+        reserved: listingPage?.reservedUnits ?? 0,
+        rented: listingPage?.rentedUnits ?? 0,
+        blocked: listingPage?.blockedUnits ?? 0,
+      };
 
   const splitTotals = {
-    equipment: totals,
-    chemical: totals,
+    equipment: equipmentStock,
+    chemical: chemicalStock,
   };
 
   const tabCounts = {
@@ -865,7 +1007,7 @@ const Inventory = () => {
           <div className="overflow-hidden rounded-xl border border-border/60 bg-card sm:hidden">
             <div className="grid grid-cols-5 divide-x divide-border">
               {summaryStats.map((stat) => (
-                <StockSplitHover
+                <StockSplitTap
                   key={stat.key}
                   label={stat.label}
                   equipment={splitTotals.equipment[stat.key]}
@@ -879,7 +1021,7 @@ const Inventory = () => {
                     <p className="text-[10px] font-medium leading-tight tracking-wide text-muted-foreground">{stat.label}</p>
                     <p className={cn("mt-1 font-mono text-base font-bold tabular-nums", stat.cls)}>{stat.value}</p>
                   </div>
-                </StockSplitHover>
+                </StockSplitTap>
               ))}
             </div>
           </div>
@@ -930,7 +1072,7 @@ const Inventory = () => {
           </div>
         </div>
         
-        <div className={cn("mt-4 space-y-3 md:hidden transition-opacity duration-200", isPageChanging && "opacity-50")} style={paginatedInventory.length > 0 ? { minHeight: itemsPerPage * 168 } : undefined}>
+        <div className={cn("mt-4 space-y-3 md:hidden transition-opacity duration-200", isPageChanging && "opacity-50")}>
           {paginatedInventory.map((row) => {
             const utilization = row.total === 0 ? 0 : ((row.rented + row.reserved) / row.total) * 100;
             const stockCells = [
@@ -966,6 +1108,11 @@ const Inventory = () => {
                     </div>
                   ))}
                 </div>
+                {activeTab === "chemical" && (row.chemicalSizes?.length ?? 0) > 0 ? (
+                  <div className="mt-2 flex justify-end">
+                    <ChemInventoryDisclosure total={row.total} sizes={row.chemicalSizes!} showTotal={false} />
+                  </div>
+                ) : null}
                 <div className="mt-2 border-t border-border/60 pt-1">{stockRowActions(row)}</div>
               </div>
             );
@@ -996,14 +1143,20 @@ const Inventory = () => {
               {paginatedInventory.map((row) => {
                 const utilization = row.total === 0 ? 0 : ((row.rented + row.reserved) / row.total) * 100;
                 return (
-                  <tr key={row.productId} className="h-[72px] hover:bg-muted/20">
+                  <tr key={row.productId} className="align-top hover:bg-muted/20">
                     <td className="px-4 py-4">
                       <div className="flex min-w-0 items-center gap-3">
                         <ListingThumb src={row.primaryImage} alt={row.productName} />
                         <span className="min-w-0 truncate font-medium">{row.productName}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-4 text-right font-mono">{row.total}</td>
+                    <td className="px-4 py-4 text-right font-mono">
+                      {activeTab === "chemical" && (row.chemicalSizes?.length ?? 0) > 0 ? (
+                        <ChemInventoryDisclosure total={row.total} sizes={row.chemicalSizes!} />
+                      ) : (
+                        row.total
+                      )}
+                    </td>
                     <td className="px-4 py-4 text-right">
                       <span className="inline-flex items-center justify-center font-mono font-medium text-success bg-success/10 px-2.5 py-0.5 rounded-full min-w-[3rem]">
                         {row.available}
@@ -1028,12 +1181,6 @@ const Inventory = () => {
                   </tr>
                 );
               })}
-              {paginatedInventory.length > 0 &&
-                Array.from({ length: Math.max(0, itemsPerPage - paginatedInventory.length) }).map((_, i) => (
-                  <tr key={`stock-pad-${i}`} className="h-[72px]">
-                    <td colSpan={activeTab === "equipment" ? 8 : 7} />
-                  </tr>
-                ))}
               {!listingsLoading && (listingPage?.totalCount ?? 0) === 0 && !debouncedSearch && (
                 <tr>
                   <td colSpan={8} className="px-4 py-8 text-center text-sm text-muted-foreground">

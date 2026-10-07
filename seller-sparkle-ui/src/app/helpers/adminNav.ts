@@ -36,6 +36,7 @@ export const ADMIN_PERMISSIONS = {
   vendorsVerify: "vendors.verify",
   vendorsManage: "vendors.manage",
   vendorsImpersonate: "vendors.impersonate",
+  vendorsProductPrice: "vendors.product_price",
   catalogManage: "catalog.manage",
   adminsManage: "admins.manage",
   rolesManage: "roles.manage",

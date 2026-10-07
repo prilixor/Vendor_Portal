@@ -114,14 +114,14 @@ export function LegalAgreeCheckbox({
   if (docs.length === 0) return null;
 
   return (
-    <div className="flex items-start space-x-2">
+    <div className="flex min-w-0 items-start gap-2">
       <Checkbox
         id={id}
         checked={agreed}
         onCheckedChange={(checked) => onAgreedChange(checked === true)}
         className="mt-0.5"
       />
-      <Label htmlFor={id} className="cursor-pointer text-xs font-normal leading-normal text-muted-foreground">
+      <Label htmlFor={id} className="min-w-0 flex-1 cursor-pointer break-words text-xs font-normal leading-relaxed text-muted-foreground">
         {prefix} {joinTitles(docs)}.
       </Label>
     </div>

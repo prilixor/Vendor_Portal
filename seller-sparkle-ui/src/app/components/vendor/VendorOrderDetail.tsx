@@ -332,6 +332,15 @@ function itemPayout(item: VendorOrderApiDto): number {
     : item.totalAmount;
 }
 
+function formatRupee(value: number): string {
+  const rounded = Math.round(value * 100) / 100;
+  const hasPaise = Math.abs(rounded % 1) > 0.001;
+  return rounded.toLocaleString("en-IN", {
+    minimumFractionDigits: hasPaise ? 2 : 0,
+    maximumFractionDigits: hasPaise ? 2 : 0,
+  });
+}
+
 function reuseImageUrls(
   previous: VendorOrderImageApiDto[] | undefined,
   next: VendorOrderImageApiDto[],
@@ -1190,7 +1199,7 @@ const VendorOrderDetail = () => {
               </div>
               <div className="flex shrink-0 flex-col items-start border-t border-border pt-4 sm:pt-6 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0">
                 <p className="text-2xl font-bold tabular-nums tracking-tight sm:text-3xl">
-                  ₹{groupPayoutAmount.toFixed(2)}
+                  ₹{formatRupee(groupPayoutAmount)}
                 </p>
                 <p className="mt-1 text-[11px] text-muted-foreground uppercase font-semibold tracking-wider sm:text-xs">
                   Estimated Vendor Payout{orderGroupItems.length > 1 ? " (Combined)" : ""}
@@ -1284,7 +1293,7 @@ const VendorOrderDetail = () => {
                       {formatOrderStatusLabel(item.status)}
                     </span>
                     <span className="font-semibold tabular-nums text-xs sm:w-20 sm:text-right">
-                      ₹{itemPayout(item).toFixed(0)}
+                      ₹{formatRupee(itemPayout(item))}
                     </span>
                   </div>
                 </button>
@@ -1495,24 +1504,6 @@ const VendorOrderDetail = () => {
                             {order.rentalDurationDays} day{order.rentalDurationDays === 1 ? "" : "s"}
                           </p>
                         ) : null}
-                        {order.rentalFinalPrice != null ? (
-                          <div className="mt-1 flex flex-col gap-0.5 text-xs text-muted-foreground tabular-nums sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-2">
-                            {order.rentalNormalPrice != null &&
-                            Number(order.rentalNormalPrice) > Number(order.rentalFinalPrice) ? (
-                              <span className="strike-diagonal w-fit font-semibold text-rose-500 dark:text-rose-400">
-                                ₹{Number(order.rentalNormalPrice).toLocaleString("en-IN", {
-                                  maximumFractionDigits: 0,
-                                })}
-                              </span>
-                            ) : null}
-                            <span>
-                              Plan price ₹
-                              {Number(order.rentalFinalPrice).toLocaleString("en-IN", {
-                                maximumFractionDigits: 0,
-                              })}
-                            </span>
-                          </div>
-                        ) : null}
                       </div>
                       <div className="space-y-1">
                         <div className="flex flex-wrap items-center gap-2">
@@ -1524,6 +1515,28 @@ const VendorOrderDetail = () => {
                           )}
                         </div>
                         <p className="text-sm font-medium">{formatOrderTypeLabel(order.orderType)}</p>
+                      </div>
+                      {order.rentalFinalPrice != null ? (
+                        <div className="space-y-1">
+                          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">Plan price</p>
+                          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
+                            {order.rentalNormalPrice != null &&
+                            Number(order.rentalNormalPrice) > Number(order.rentalFinalPrice) ? (
+                              <span className="strike-diagonal w-fit text-xs font-semibold tabular-nums text-rose-500 dark:text-rose-400">
+                                ₹{Number(order.rentalNormalPrice).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+                              </span>
+                            ) : null}
+                            <span className="text-sm font-medium tabular-nums">
+                              ₹{Number(order.rentalFinalPrice).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+                            </span>
+                          </div>
+                        </div>
+                      ) : null}
+                      <div className="col-span-2 space-y-1 border-t border-border/70 pt-3">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">Your payout</p>
+                        <p className="text-sm font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
+                          ₹{formatRupee(itemPayout(order))}
+                        </p>
                       </div>
                     </>
                   )}

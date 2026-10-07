@@ -543,6 +543,8 @@ export interface VendorOrderApiDto {
   rentalPeriodUnit?: "day" | "week" | "month";
   totalAmount: number;
   vendorSubtotalAmount: number;
+  depositAmount?: number;
+  gstAmount?: number;
   startDate?: string;
   endDate?: string;
   listingId: string;
@@ -665,6 +667,23 @@ export interface VendorListingSummaryApiDto {
   primaryThumbnailUrl?: string | null;
   brandName?: string | null;
   modelName?: string | null;
+  hasCustomVendorPricing?: boolean;
+  vendorDailyRent?: number;
+  vendorBuyPrice?: number | null;
+  variantPayouts?: { variantId: string; vendorPrice: number }[];
+  chemicalSizes?: VendorListingChemicalSizeApiDto[];
+}
+
+export interface VendorListingChemicalSizeApiDto {
+  variantId: string;
+  label: string;
+  sku: string;
+  sizeValue: number;
+  sizeUnit: string;
+  buyPrice: number;
+  totalQuantity: number;
+  availableQuantity: number;
+  reservedQuantity: number;
 }
 
 export interface VendorListingListResult {
@@ -682,6 +701,16 @@ export interface VendorListingListResult {
   activeCount: number;
   inactiveCount: number;
   draftCount: number;
+  equipmentStock?: VendorListingStockUnitsApiDto;
+  chemicalStock?: VendorListingStockUnitsApiDto;
+}
+
+export interface VendorListingStockUnitsApiDto {
+  totalUnits: number;
+  availableUnits: number;
+  reservedUnits: number;
+  rentedUnits: number;
+  blockedUnits: number;
 }
 
 export interface VendorExpiringOrderApiDto {

@@ -180,17 +180,22 @@ internal sealed class GetAdminAlertFeedQueryHandler(
         var created = (log.ActionType ?? string.Empty).Contains("created", StringComparison.OrdinalIgnoreCase);
         var kind = ResolveListingKind(log.NewValue, log.Notes);
         var listingTitle = ExtractListingTitle(log.Notes) ?? "Listing";
+        var vendorId = ExtractJsonString(log.NewValue, "vendorId");
+        var listingLink = !string.IsNullOrWhiteSpace(vendorId) && !string.IsNullOrWhiteSpace(log.EntityId)
+            ? $"/admin/vendors/{vendorId}/listings/{log.EntityId}"
+            : kind == "chemical" ? "/admin/chemicals" : "/admin/products";
         return new AdminAlertFeedItem
         {
             Id = $"listing-{log.Id}",
             Type = "listing",
-            Title = created ? "New vendor listing needs pricing" : "Vendor listing updated",
+            Title = created ? "Vendor added a product" : "Vendor updated a listing",
             Description = string.IsNullOrWhiteSpace(log.Notes)
-                ? $"A vendor {(created ? "created" : "updated")} a {kind} listing. Review catalog pricing."
+                ? $"A vendor {(created ? "added" : "updated")} {listingTitle}. Open it to set a price for this vendor if it should differ from the catalog."
                 : log.Notes,
             Status = created ? "created" : "updated",
             Timestamp = log.CreatedAt,
-            Link = kind == "chemical" ? "/admin/chemicals" : "/admin/products",
+            Link = listingLink,
+            VendorId = vendorId,
             Kind = kind,
             Notes = log.Notes,
             ListingTitle = listingTitle,
@@ -247,6 +252,23 @@ internal sealed class GetAdminAlertFeedQueryHandler(
         }
 
         return kind;
+    }
+
+    private static string? ExtractJsonString(string? json, string propertyName)
+    {
+        if (string.IsNullOrWhiteSpace(json)) return null;
+        try
+        {
+            using var doc = JsonDocument.Parse(json);
+            if (doc.RootElement.TryGetProperty(propertyName, out var value))
+                return value.GetString();
+        }
+        catch (JsonException)
+        {
+            return null;
+        }
+
+        return null;
     }
 
     private static string? ExtractListingTitle(string? notes)

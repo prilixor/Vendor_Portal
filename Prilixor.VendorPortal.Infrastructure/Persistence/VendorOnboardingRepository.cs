@@ -440,6 +440,7 @@ public sealed class VendorOnboardingRepository(
     public async Task<Product?> GetProductByIdAsync(Guid productId, CancellationToken cancellationToken)
     {
         var product = await commonDbContext.Products
+            .Include(x => x.Category)
             .Include(x => x.ChemicalProperty)
             .Include(x => x.ProductImages)
             .Include(x => x.ProductDocuments)
@@ -452,6 +453,7 @@ public sealed class VendorOnboardingRepository(
         }
 
         return await dbContext.Products
+            .Include(x => x.Category)
             .Include(x => x.ChemicalProperty)
             .Include(x => x.ProductImages)
             .Include(x => x.ProductDocuments)
@@ -1247,6 +1249,61 @@ public sealed class VendorOnboardingRepository(
             .FirstOrDefaultAsync(x => x.Id == listingId && x.VendorId == vendorId && !x.IsDeleted, cancellationToken);
     }
 
+    public Task<VendorListingPriceOverride?> GetVendorListingPriceOverrideAsync(Guid listingId, CancellationToken cancellationToken)
+    {
+        return dbContext.VendorListingPriceOverrides
+            .AsNoTracking()
+            .Include(x => x.Variants)
+            .FirstOrDefaultAsync(x => x.VendorProductListingId == listingId, cancellationToken);
+    }
+
+    public async Task<HashSet<Guid>> GetListingIdsWithCustomVendorPricingAsync(
+        IReadOnlyCollection<Guid> listingIds,
+        CancellationToken cancellationToken)
+    {
+        if (listingIds.Count == 0)
+            return [];
+
+        var ids = await dbContext.VendorListingPriceOverrides
+            .AsNoTracking()
+            .Where(x => listingIds.Contains(x.VendorProductListingId) && x.IsCustomPricing)
+            .Select(x => x.VendorProductListingId)
+            .ToListAsync(cancellationToken);
+        return ids.ToHashSet();
+    }
+
+    public async Task UpsertVendorListingPriceOverrideAsync(VendorListingPriceOverride row, CancellationToken cancellationToken)
+    {
+        var existing = await dbContext.VendorListingPriceOverrides
+            .Include(x => x.Variants)
+            .FirstOrDefaultAsync(x => x.VendorProductListingId == row.VendorProductListingId, cancellationToken);
+
+        if (existing is null)
+        {
+            foreach (var variant in row.Variants)
+                variant.VendorListingPriceOverrideId = row.Id;
+            await dbContext.VendorListingPriceOverrides.AddAsync(row, cancellationToken);
+            return;
+        }
+
+        existing.IsCustomPricing = row.IsCustomPricing;
+        existing.DailyRent = row.DailyRent;
+        existing.SecurityDeposit = row.SecurityDeposit;
+        existing.BuyPrice = row.BuyPrice;
+        existing.VendorDailyRent = row.VendorDailyRent;
+        existing.VendorBuyPrice = row.VendorBuyPrice;
+        existing.ModifiedOnUtc = DateTime.UtcNow;
+
+        var previous = existing.Variants.ToList();
+        existing.Variants.Clear();
+        dbContext.VendorListingVariantPriceOverrides.RemoveRange(previous);
+        foreach (var variant in row.Variants)
+        {
+            variant.VendorListingPriceOverrideId = existing.Id;
+            existing.Variants.Add(variant);
+        }
+    }
+
     public Task<VendorProductListing?> GetVendorProductListingByVendorProductAsync(Guid vendorId, Guid productId, CancellationToken cancellationToken)
     {
         return dbContext.VendorProductListings
@@ -1857,6 +1914,109 @@ public sealed class VendorOnboardingRepository(
         };
     }
 
+    private async Task<List<ProductVariant>> LoadActiveProductVariantsAsync(
+        IReadOnlyList<Guid> productIds,
+        CancellationToken cancellationToken)
+    {
+        if (productIds.Count == 0) return [];
+        var rows = await commonDbContext.Set<ProductVariant>()
+            .AsNoTracking()
+            .Where(v => productIds.Contains(v.ProductId) && v.IsActive)
+            .ToListAsync(cancellationToken);
+        if (rows.Count == 0)
+        {
+            rows = await dbContext.Set<ProductVariant>()
+                .AsNoTracking()
+                .Where(v => productIds.Contains(v.ProductId) && v.IsActive)
+                .ToListAsync(cancellationToken);
+        }
+
+        return rows;
+    }
+
+    private static List<VendorListingChemicalSizeDto> BuildChemicalSizes(
+        Guid productId,
+        List<VendorVariantInventory>? stocks,
+        IReadOnlyDictionary<Guid, List<ProductVariant>> catalogByProduct)
+    {
+        var stockByVariant = (stocks ?? [])
+            .GroupBy(s => s.ProductVariantId)
+            .ToDictionary(g => g.Key, g => g.First());
+
+        if (catalogByProduct.TryGetValue(productId, out var catalog) && catalog.Count > 0)
+        {
+            return catalog
+                .Select(variant => ToChemicalSize(variant, stockByVariant.GetValueOrDefault(variant.Id)))
+                .ToList();
+        }
+
+        return (stocks ?? [])
+            .Where(s => s.ProductVariant is not null)
+            .OrderBy(s => s.ProductVariant.SizeValue)
+            .Select(s => ToChemicalSize(s.ProductVariant, s))
+            .ToList();
+    }
+
+    private static VendorListingChemicalSizeDto ToChemicalSize(ProductVariant variant, VendorVariantInventory? stock)
+        => new()
+        {
+            VariantId = variant.Id.ToString(),
+            Label = SizeFormatting.Format(variant.SizeValue, variant.SizeUnit),
+            Sku = variant.Sku ?? string.Empty,
+            SizeValue = variant.SizeValue,
+            SizeUnit = variant.SizeUnit ?? string.Empty,
+            BuyPrice = variant.BuyPrice,
+            TotalQuantity = stock?.TotalQuantity ?? 0,
+            AvailableQuantity = stock?.AvailableQuantity ?? 0,
+            ReservedQuantity = stock?.ReservedQuantity ?? 0,
+        };
+
+    private readonly record struct StockUnits(int Total, int Available, int Reserved, int Rented, int Blocked);
+
+    private static StockUnits SumStockUnits(
+        IEnumerable<VendorProductListing> rows,
+        IReadOnlyDictionary<Guid, VendorInventory> flatByListing,
+        IReadOnlyDictionary<Guid, List<VendorVariantInventory>> variantByListing,
+        bool useVariantQuantities)
+    {
+        var total = 0;
+        var available = 0;
+        var reserved = 0;
+        var rented = 0;
+        var blocked = 0;
+        foreach (var row in rows)
+        {
+            flatByListing.TryGetValue(row.Id, out var flat);
+            if (useVariantQuantities
+                && variantByListing.TryGetValue(row.Id, out var variants)
+                && variants.Count > 0)
+            {
+                total += variants.Sum(v => v.TotalQuantity);
+                available += variants.Sum(v => v.AvailableQuantity);
+            }
+            else
+            {
+                total += flat?.TotalQuantity ?? row.AvailableQuantity;
+                available += flat?.AvailableQuantity ?? row.AvailableQuantity;
+            }
+
+            reserved += flat?.ReservedQuantity ?? 0;
+            rented += flat?.RentedQuantity ?? 0;
+            blocked += flat?.BlockedQuantity ?? 0;
+        }
+
+        return new StockUnits(total, available, reserved, rented, blocked);
+    }
+
+    private static VendorListingStockUnitsDto ToStockUnitsDto(StockUnits units) => new()
+    {
+        TotalUnits = units.Total,
+        AvailableUnits = units.Available,
+        ReservedUnits = units.Reserved,
+        RentedUnits = units.Rented,
+        BlockedUnits = units.Blocked,
+    };
+
     public async Task<VendorListingListResult> SearchVendorListingSummariesAsync(
         Guid vendorId,
         string? search,
@@ -1939,23 +2099,43 @@ public sealed class VendorOnboardingRepository(
         var list = isChemical is null
             ? afterSearchAndStatus
             : afterSearchAndStatus.Where(l => chemicalIds.Contains(l.ProductId) == isChemical.Value).ToList();
-        var allIds = list.ConvertAll(l => l.Id);
-        var allInventories = await GetVendorInventoriesByListingIdsAsync(allIds, cancellationToken);
-        var pageRows = list.Skip((page - 1) * pageSize).Take(pageSize).ToList();
-        var pageIds = pageRows.ConvertAll(l => l.Id);
-        var inventories = allInventories.Where(i => pageIds.Contains(i.VendorProductListingId)).ToList();
-        var inventoryByListing = inventories
+        var stockListingIds = equipmentRows.Select(l => l.Id).Concat(chemicalRows.Select(l => l.Id)).Distinct().ToList();
+        var stockInventories = await GetVendorInventoriesByListingIdsAsync(stockListingIds, cancellationToken);
+        var stockByListing = stockInventories
             .GroupBy(i => i.VendorProductListingId)
             .ToDictionary(g => g.Key, g => g.First());
-        var variantRows = await GetVariantInventoriesByListingIdsAsync(pageIds, cancellationToken);
-        var variantByListing = variantRows
+        var chemicalVariantRows = await GetVariantInventoriesByListingIdsAsync(
+            chemicalRows.Select(l => l.Id).ToList(),
+            cancellationToken);
+        var chemicalVariantsByListing = chemicalVariantRows
             .GroupBy(v => v.VendorProductListingId)
             .ToDictionary(g => g.Key, g => g.ToList());
+        var equipmentStock = SumStockUnits(equipmentRows, stockByListing, chemicalVariantsByListing, useVariantQuantities: false);
+        var chemicalStock = SumStockUnits(chemicalRows, stockByListing, chemicalVariantsByListing, useVariantQuantities: true);
+        var pageRows = list.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+        var pageIds = pageRows.ConvertAll(l => l.Id);
+        var inventoryByListing = stockByListing;
+        var variantByListing = chemicalVariantsByListing;
         var listingImages = await GetVendorProductImagesByListingIdsAsync(pageIds, cancellationToken);
         var imagesByListing = listingImages
             .GroupBy(i => i.VendorProductListingId)
             .ToDictionary(g => g.Key, g => g.ToList());
+        var priceOverrides = await dbContext.VendorListingPriceOverrides
+            .AsNoTracking()
+            .Include(x => x.Variants)
+            .Where(x => pageIds.Contains(x.VendorProductListingId) && x.IsCustomPricing)
+            .ToListAsync(cancellationToken);
+        var priceOverrideByListing = priceOverrides.ToDictionary(x => x.VendorProductListingId);
         var pageProductIds = pageRows.Select(l => l.ProductId).Distinct().ToList();
+        var chemicalPageProductIds = pageRows
+            .Where(l => chemicalIds.Contains(l.ProductId))
+            .Select(l => l.ProductId)
+            .Distinct()
+            .ToList();
+        var catalogVariants = await LoadActiveProductVariantsAsync(chemicalPageProductIds, cancellationToken);
+        var catalogVariantsByProduct = catalogVariants
+            .GroupBy(v => v.ProductId)
+            .ToDictionary(g => g.Key, g => g.OrderBy(v => v.SizeValue).ToList());
         var productImages = await GetProductImagesByProductIdsAsync(pageProductIds, cancellationToken);
         var imagesByProduct = productImages
             .GroupBy(i => i.ProductId)
@@ -2003,6 +2183,8 @@ public sealed class VendorOnboardingRepository(
                 primaryImageUrl = null;
                 primaryThumbnailUrl = null;
             }
+            priceOverrideByListing.TryGetValue(l.Id, out var vendorPrice);
+            var hasCustomVendorPrice = vendorPrice is { IsCustomPricing: true };
             return new VendorListingSummaryDto
             {
                 Id = l.Id.ToString(),
@@ -2025,6 +2207,23 @@ public sealed class VendorOnboardingRepository(
                 PrimaryThumbnailUrl = ResolveStoredFileUrl(primaryThumbnailUrl),
                 BrandName = product?.BrandName,
                 ModelName = product?.ModelName,
+                HasCustomVendorPricing = hasCustomVendorPrice,
+                VendorDailyRent = hasCustomVendorPrice && vendorPrice!.VendorDailyRent.HasValue
+                    ? vendorPrice.VendorDailyRent.Value
+                    : product?.VendorDailyRent ?? 0m,
+                VendorBuyPrice = hasCustomVendorPrice && vendorPrice!.VendorBuyPrice.HasValue
+                    ? vendorPrice.VendorBuyPrice
+                    : product?.VendorBuyPrice,
+                VariantPayouts = hasCustomVendorPrice
+                    ? vendorPrice!.Variants.Select(v => new VendorListingVariantPayoutDto
+                    {
+                        VariantId = v.ProductVariantId.ToString(),
+                        VendorPrice = v.VendorPrice,
+                    }).ToList()
+                    : [],
+                ChemicalSizes = isChem
+                    ? BuildChemicalSizes(l.ProductId, variants, catalogVariantsByProduct)
+                    : [],
             };
         });
 
@@ -2034,16 +2233,18 @@ public sealed class VendorOnboardingRepository(
             TotalCount = list.Count,
             Page = page,
             PageSize = pageSize,
-            TotalUnits = allInventories.Sum(i => i.TotalQuantity),
-            AvailableUnits = allInventories.Sum(i => i.AvailableQuantity),
-            ReservedUnits = allInventories.Sum(i => i.ReservedQuantity),
-            RentedUnits = allInventories.Sum(i => i.RentedQuantity),
-            BlockedUnits = allInventories.Sum(i => i.BlockedQuantity),
+            TotalUnits = equipmentStock.Total + chemicalStock.Total,
+            AvailableUnits = equipmentStock.Available + chemicalStock.Available,
+            ReservedUnits = equipmentStock.Reserved + chemicalStock.Reserved,
+            RentedUnits = equipmentStock.Rented + chemicalStock.Rented,
+            BlockedUnits = equipmentStock.Blocked + chemicalStock.Blocked,
             EquipmentCount = equipmentCount,
             ChemicalCount = chemicalCount,
             ActiveCount = activeCount,
             InactiveCount = inactiveCount,
             DraftCount = draftCount,
+            EquipmentStock = ToStockUnitsDto(equipmentStock),
+            ChemicalStock = ToStockUnitsDto(chemicalStock),
         };
     }
 
@@ -2196,7 +2397,15 @@ public sealed class VendorOnboardingRepository(
 
         if (admin.RoleId is Guid roleId)
         {
-            return await GetPermissionCodesForRoleAsync(roleId, cancellationToken);
+            var roleCodes = await GetPermissionCodesForRoleAsync(roleId, cancellationToken);
+            if (string.Equals(admin.Role, SuperAdminRules.RoleCode, StringComparison.OrdinalIgnoreCase))
+            {
+                return AdminPermissions.AllCodes
+                    .Union(roleCodes, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+            }
+
+            return roleCodes;
         }
 
         // Legacy fallback: map string role via seeded system matrix

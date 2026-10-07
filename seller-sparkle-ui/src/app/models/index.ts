@@ -58,6 +58,8 @@ export interface BankDetails {
 export interface ServiceArea {
   id: string;
   name: string;
+  /** Used to pick the city. Not stored on the service-area API. */
+  state?: string;
   city: string;
   latitude: number;
   longitude: number;
@@ -112,6 +114,14 @@ export interface InventoryRecord {
   catalogProductId?: string;
   isChemical?: boolean;
   primaryImage?: string;
+  chemicalSizes?: {
+    label: string;
+    sku: string;
+    buyPrice: number;
+    total: number;
+    available: number;
+    reserved: number;
+  }[];
 }
 
 export interface InventoryMovement {

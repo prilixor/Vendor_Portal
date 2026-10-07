@@ -181,14 +181,18 @@ class _StateCityPickerFieldsState extends State<StateCityPickerFields> {
             _field(
               controller: widget.cityController,
               label: 'City',
-              hint: _selectedStateIso2 == null
+              hint: _selectedStateIso2 == null && widget.cityController.text.trim().isEmpty
                   ? 'Select state first'
                   : loc.isLoadingCities
                       ? 'Loading cities…'
                       : 'Select city',
-              onTap: _selectedStateIso2 == null ? null : () => _pickCity(loc),
+              onTap: _selectedStateIso2 == null
+                  ? () {
+                      showRequiredFieldsBlocked(context, message: 'Please select a state first.');
+                    }
+                  : () => _pickCity(loc),
               errorText: widget.cityError,
-              enabled: _selectedStateIso2 != null,
+              enabled: true,
               suffix: loc.isLoadingCities
                   ? const Padding(
                       padding: EdgeInsets.all(12),

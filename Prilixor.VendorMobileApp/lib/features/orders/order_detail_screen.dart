@@ -621,7 +621,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                                                 OrderStatusChip(status: item.status),
                                                 const SizedBox(height: 4),
                                                 Text(
-                                                  '₹${item.payoutAmount.toStringAsFixed(0)}',
+                                                  formatVendorMoney(item.payoutAmount),
                                                   style: TextStyle(
                                                     color: context.appColors.textPrimary,
                                                     fontWeight: FontWeight.w700,
@@ -780,7 +780,7 @@ class _GroupHeroCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                '₹${groupPayout.toStringAsFixed(0)}',
+                formatVendorMoney(groupPayout),
                 style: TextStyle(
                   color: context.appColors.textPrimary,
                   fontWeight: FontWeight.w800,
@@ -788,7 +788,7 @@ class _GroupHeroCard extends StatelessWidget {
                 ),
               ),
               Text(
-                itemCount > 1 ? 'Combined' : 'Payout',
+                itemCount > 1 ? 'Estimated payout (combined)' : 'Estimated payout',
                 style: TextStyle(
                   color: context.appColors.textMuted,
                   fontSize: 10,
@@ -1975,6 +1975,8 @@ class _ItemDetailsPanel extends StatelessWidget {
               style: TextStyle(color: context.appColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w600),
             ),
             if (order.rentalFinalPrice != null) ...[
+              const SizedBox(height: 8),
+              _SubsectionLabel('Plan price'),
               const SizedBox(height: 4),
               Wrap(
                 crossAxisAlignment: WrapCrossAlignment.center,
@@ -1987,8 +1989,8 @@ class _ItemDetailsPanel extends StatelessWidget {
                       style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: context.appColors.textMuted),
                     ),
                   Text(
-                    'Plan price ₹${order.rentalFinalPrice!.toStringAsFixed(0)}',
-                    style: TextStyle(color: context.appColors.textMuted, fontSize: 12),
+                    '₹${order.rentalFinalPrice!.toStringAsFixed(0)}',
+                    style: TextStyle(color: context.appColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w600),
                   ),
                 ],
               ),
@@ -2230,7 +2232,7 @@ class _MetricStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isBuy = order.orderType.toLowerCase() == 'buy';
-    final payout = '₹${order.payoutAmount.toStringAsFixed(0)}';
+    final payout = formatVendorMoney(order.payoutAmount);
 
     if (isBuy) {
       return Row(

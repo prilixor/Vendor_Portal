@@ -61,10 +61,29 @@ class VendorCatalogProvider extends ChangeNotifier {
     rented: 0,
     blocked: 0,
   );
+  InventoryTotals _equipmentStock = const InventoryTotals(
+    total: 0,
+    available: 0,
+    reserved: 0,
+    rented: 0,
+    blocked: 0,
+  );
+  InventoryTotals _chemicalStock = const InventoryTotals(
+    total: 0,
+    available: 0,
+    reserved: 0,
+    rented: 0,
+    blocked: 0,
+  );
+  bool _hasStockSplit = false;
 
   String? _lastListingSearch;
   String? _lastListingStatus;
   bool? _lastListingIsChemical;
+
+  InventoryTotals get equipmentStock => _equipmentStock;
+  InventoryTotals get chemicalStock => _chemicalStock;
+  bool get hasStockSplit => _hasStockSplit;
 
   InventoryTotals get inventoryTotals {
     if (_summaryTotals.total > 0 ||
@@ -242,6 +261,11 @@ class VendorCatalogProvider extends ChangeNotifier {
           rented: asJsonInt(body?['rentedUnits']),
           blocked: asJsonInt(body?['blockedUnits']),
         );
+        final equipmentRaw = asJsonMap(body?['equipmentStock']);
+        final chemicalRaw = asJsonMap(body?['chemicalStock']);
+        _hasStockSplit = equipmentRaw != null || chemicalRaw != null;
+        _equipmentStock = _stockFromMap(equipmentRaw);
+        _chemicalStock = _stockFromMap(chemicalRaw);
         _listingRows = reset ? rows : [..._listingRows, ...rows];
         _inventoryRecords = reset ? records : [..._inventoryRecords, ...records];
         _listings = _listingRows.map((r) => r.listing).toList();
@@ -306,6 +330,11 @@ class VendorCatalogProvider extends ChangeNotifier {
       reserved: asJsonInt(json['reservedQuantity']),
       rented: asJsonInt(json['rentedQuantity']),
       blocked: asJsonInt(json['blockedQuantity']),
+      chemicalSizes: asJsonList(json['chemicalSizes'])
+          .map(asJsonMap)
+          .whereType<Map<String, dynamic>>()
+          .map(ChemicalSizeStock.fromJson)
+          .toList(),
     );
   }
 
@@ -1293,6 +1322,25 @@ class VendorCatalogProvider extends ChangeNotifier {
         .whereType<Map>()
         .map((e) => Map<String, dynamic>.from(e))
         .toList();
+  }
+
+  InventoryTotals _stockFromMap(Map<String, dynamic>? map) {
+    if (map == null) {
+      return const InventoryTotals(
+        total: 0,
+        available: 0,
+        reserved: 0,
+        rented: 0,
+        blocked: 0,
+      );
+    }
+    return InventoryTotals(
+      total: asJsonInt(map['totalUnits']),
+      available: asJsonInt(map['availableUnits']),
+      reserved: asJsonInt(map['reservedUnits']),
+      rented: asJsonInt(map['rentedUnits']),
+      blocked: asJsonInt(map['blockedUnits']),
+    );
   }
 
   int _toInt(dynamic value) {

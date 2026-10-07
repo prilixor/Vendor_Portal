@@ -118,11 +118,12 @@ class _MockMapPickerScreenState extends State<MockMapPickerScreen> {
       _center = pos;
       _results = [];
       _searchError = null;
-      _previewHeadline = result.label;
+      _preview = result.address;
+      _previewHeadline = _headlineFor(result.address) ?? result.label;
     });
     _mapController.move(pos, 16);
     FocusScope.of(context).unfocus();
-    _resolvePreview(pos);
+    _resolvePreview(pos, fallback: result.address);
   }
 
   void _onMapEvent(MapEvent event) {
@@ -149,26 +150,33 @@ class _MockMapPickerScreenState extends State<MockMapPickerScreen> {
     _resolvePreview(point);
   }
 
-  Future<void> _resolvePreview(LatLng point) async {
-    setState(() {
-      _isResolving = true;
-      _preview = null;
-    });
+  String? _headlineFor(ReverseGeocodeResult? rev) {
+    if (rev == null || !rev.hasAnyField) return null;
+    final text = [
+      rev.line1,
+      rev.city,
+      rev.state,
+      rev.postal,
+    ].whereType<String>().where((s) => s.trim().isNotEmpty).join(', ');
+    return text.isEmpty ? null : text;
+  }
+
+  Future<void> _resolvePreview(LatLng point, {ReverseGeocodeResult? fallback}) async {
+    setState(() => _isResolving = true);
     try {
       final rev = await _placeSearch.reverse(
         latitude: point.latitude,
         longitude: point.longitude,
       );
       if (!mounted) return;
+      final merged = ReverseGeocodeResult.merge(rev, fallback);
       setState(() {
-        _preview = rev;
-        if (rev != null && rev.hasAnyField) {
-          _previewHeadline = [
-            rev.line1,
-            rev.city,
-            rev.state,
-            rev.postal,
-          ].whereType<String>().where((s) => s.trim().isNotEmpty).join(', ');
+        _preview = merged;
+        final headline = _headlineFor(merged);
+        if (headline != null) {
+          _previewHeadline = headline;
+        } else if (fallback == null) {
+          _previewHeadline = null;
         }
       });
     } finally {

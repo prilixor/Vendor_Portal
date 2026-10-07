@@ -34,7 +34,7 @@ import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { PageContentGate } from "@/app/components/shared/PageLoader";
 
-const PAGE_SIZE = 8;
+const PAGE_SIZE = 9;
 
 /** Filters by inventory level on active listings (not listing active/inactive). */
 type StockFilter = "all" | "low_stock" | "out_of_stock";

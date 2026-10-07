@@ -469,7 +469,11 @@ class _ServiceAreaEditScreenState extends State<ServiceAreaEditScreen> {
     super.dispose();
   }
 
-  Future<void> _setLocation(double lat, double lng) async {
+  Future<void> _setLocation(
+    double lat,
+    double lng, {
+    ReverseGeocodeResult? preset,
+  }) async {
     if (lat < -90 || lat > 90 || lng < -180 || lng > 180 || (lat == 0 && lng == 0)) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
@@ -481,6 +485,23 @@ class _ServiceAreaEditScreenState extends State<ServiceAreaEditScreen> {
       return;
     }
 
+    var remountPicker = false;
+    void writeAddress(ReverseGeocodeResult? resolved) {
+      final state = resolved?.state?.trim();
+      final city = resolved?.city?.trim();
+      if (state != null && state.isNotEmpty) {
+        _stateController.text = state;
+        remountPicker = true;
+      }
+      if (city != null && city.isNotEmpty) {
+        _cityController.text = city;
+        remountPicker = true;
+      }
+    }
+
+    writeAddress(preset);
+    if (remountPicker) _stateCityKey++;
+
     setState(() {
       _latitude = lat;
       _longitude = lng;
@@ -490,21 +511,14 @@ class _ServiceAreaEditScreenState extends State<ServiceAreaEditScreen> {
       _resolvingAddress = true;
     });
 
-    final rev = await _placeSearch.reverse(latitude: lat, longitude: lng);
+    final rev = ReverseGeocodeResult.merge(
+      await _placeSearch.reverse(latitude: lat, longitude: lng),
+      preset,
+    );
     if (!mounted) return;
 
-    final state = rev?.state?.trim();
-    final city = rev?.city?.trim();
-    var remountPicker = false;
-
-    if (state != null && state.isNotEmpty) {
-      _stateController.text = state;
-      remountPicker = true;
-    }
-    if (city != null && city.isNotEmpty) {
-      _cityController.text = city;
-      remountPicker = true;
-    }
+    remountPicker = false;
+    writeAddress(rev);
     if (remountPicker) _stateCityKey++;
 
     setState(() => _resolvingAddress = false);
@@ -710,8 +724,11 @@ class _ServiceAreaEditScreenState extends State<ServiceAreaEditScreen> {
                   radiusKm: _radius,
                   showRadius: true,
                   height: 280,
-                  onLocationChanged: (point) =>
-                      _setLocation(point.latitude, point.longitude),
+                  onLocationChanged: (point, fromSearch) => _setLocation(
+                    point.latitude,
+                    point.longitude,
+                    preset: fromSearch?.address,
+                  ),
                 ),
                 const SizedBox(height: 12),
                 Row(

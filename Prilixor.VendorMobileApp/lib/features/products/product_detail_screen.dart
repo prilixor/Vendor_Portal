@@ -822,7 +822,10 @@ class _ListingDetailsPanel extends StatelessWidget {
             icon: Icons.payments_outlined,
             badge: 'Read-only',
             children: [
-              AdminSizingPricingBody(product: catalogProduct),
+              AdminSizingPricingBody(
+                product: catalogProduct,
+                vendorPayoutByVariantId: listing.hasCustomVendorPricing ? listing.variantPayouts : const {},
+              ),
             ],
           ),
         ] else ...[
@@ -848,16 +851,24 @@ class _ListingDetailsPanel extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           _DetailSection(
-            title: 'Your pricing',
+            title: listing.hasCustomVendorPricing ? 'Your pricing · set for you' : 'Your pricing',
             icon: Icons.storefront_outlined,
             children: [
               _DetailRow(
                 label: 'Daily rate',
-                value: _money(catalogProduct?.vendorDailyRent ?? 0),
+                value: _money(
+                  listing.hasCustomVendorPricing
+                      ? listing.vendorDailyRent
+                      : (catalogProduct?.vendorDailyRent ?? 0),
+                ),
               ),
               _DetailRow(
                 label: 'Buy price',
-                value: _moneyOrDash(catalogProduct?.vendorBuyPrice),
+                value: _moneyOrDash(
+                  listing.hasCustomVendorPricing
+                      ? listing.vendorBuyPrice
+                      : catalogProduct?.vendorBuyPrice,
+                ),
               ),
             ],
           ),
