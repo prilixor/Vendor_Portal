@@ -509,23 +509,36 @@ class _InventoryCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      record.productName,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: context.appColors.textPrimary,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 14,
-                        height: 1.25,
-                        letterSpacing: -0.1,
-                      ),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            record.productName,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: context.appColors.textPrimary,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 14,
+                              height: 1.25,
+                              letterSpacing: -0.1,
+                            ),
+                          ),
+                        ),
+                        if (record.isChemical && record.chemicalSizes.isNotEmpty) ...[
+                          const SizedBox(width: 8),
+                          ChemicalSizeStockDisclosure(
+                            sizes: record.chemicalSizes,
+                            productName: record.productName,
+                          ),
+                        ],
+                      ],
                     ),
                     const SizedBox(height: 8),
                     _UtilizationMeter(percent: util, label: utilPct),
                     const SizedBox(height: 10),
                     Row(
-                      crossAxisAlignment: CrossAxisAlignment.start,
                       children: [
                         for (final cell in cells)
                           Expanded(
@@ -534,14 +547,6 @@ class _InventoryCard extends StatelessWidget {
                               semanticsLabel: cell.semantics,
                               value: cell.value,
                               color: cell.color,
-                              below: cell.label == 'Total' &&
-                                      record.isChemical &&
-                                      record.chemicalSizes.isNotEmpty
-                                  ? ChemicalSizeStockDisclosure(
-                                      sizes: record.chemicalSizes,
-                                      productName: record.productName,
-                                    )
-                                  : null,
                             ),
                           ),
                       ],
@@ -562,14 +567,12 @@ class _CountCell extends StatelessWidget {
   final String semanticsLabel;
   final int value;
   final Color color;
-  final Widget? below;
 
   const _CountCell({
     required this.label,
     required this.semanticsLabel,
     required this.value,
     required this.color,
-    this.below,
   });
 
   @override
@@ -608,7 +611,6 @@ class _CountCell extends StatelessWidget {
               ),
             ),
           ),
-          if (below != null) below!,
         ],
       ),
     );

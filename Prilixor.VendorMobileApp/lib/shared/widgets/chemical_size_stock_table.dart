@@ -27,7 +27,7 @@ class ChemicalSizeStockDisclosure extends StatelessWidget {
     final colors = context.appColors;
 
     return Padding(
-      padding: const EdgeInsets.only(top: 2),
+      padding: const EdgeInsets.only(top: 1),
       child: InkWell(
         onTap: () => showChemicalSizeStockSheet(
           context,
