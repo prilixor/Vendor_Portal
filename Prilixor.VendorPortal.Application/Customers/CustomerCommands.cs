@@ -55,6 +55,7 @@ internal sealed class RegisterCustomerCommandHandler(
     ICustomerRepository customers,
     IPasswordHasherService passwordHasher,
     ILegalAcceptanceRecorder legalAcceptances,
+    IPlatformSmsSettingsService smsSettings,
     ILogger<RegisterCustomerCommandHandler> logger)
     : ICommandHandler<RegisterCustomerCommand, CustomerRegisteredDto>
 {
@@ -129,9 +130,9 @@ internal sealed class RegisterCustomerCommandHandler(
             }
         }
 
-        // Phone is required for new customers. SMS OTP is always required.
+        // Phone is required for new customers. SMS OTP follows the admin phone-OTP switch.
         // Email remains optional (column stays nullable — no DB schema change).
-        var requiresPhoneOtp = true;
+        var requiresPhoneOtp = await smsSettings.IsPhoneOtpEnabledAsync(cancellationToken);
         var requiresEmailVerification = false;
 
         var entity = new Customer
@@ -291,7 +292,7 @@ internal sealed class UpdateCustomerProfileCommandHandler(
             {
                 return Result.Failure<CustomerProfileDto>(new Error(
                     "customers.email_exists",
-                    "This email is already used by another customer account.",
+                    "This email can't be used. Enter a different email address.",
                     ErrorCategory.Validation));
             }
 
@@ -342,7 +343,7 @@ internal sealed class UpdateCustomerProfileCommandHandler(
             {
                 return Result.Failure<CustomerProfileDto>(new Error(
                     "customers.phone_exists",
-                    "This phone number is already used by another customer account.",
+                    IndianMobilePhone.UnavailableMessage,
                     ErrorCategory.Validation));
             }
 

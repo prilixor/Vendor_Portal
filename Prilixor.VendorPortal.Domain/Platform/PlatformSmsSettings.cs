@@ -2,11 +2,17 @@ using Prilixor.Shared.Abstractions.DB;
 
 namespace Prilixor.VendorPortal.Domain.Platform;
 
-/// <summary>Single-row admin toggles for transactional Twilio SMS (OTP stays on Verify config).</summary>
+/// <summary>Single-row admin toggles for transactional SMS. OTP stays on ShreeSMS config.</summary>
 public class PlatformSmsSettings : AuditableEntity<Guid>, ISoftDelete
 {
-    /// <summary>Master switch for all transactional SMS below (Twilio:Enabled still required).</summary>
+    /// <summary>Master switch for all transactional SMS below.</summary>
     public bool TransactionalSmsEnabled { get; set; }
+
+    /// <summary>
+    /// When true, phone OTP is shown for sign-in, registration, and password reset.
+    /// When false, those screens use email or mobile plus password and do not send an OTP.
+    /// </summary>
+    public bool PhoneOtpEnabled { get; set; } = true;
 
     // Customer order lifecycle
     public bool CustomerOrderPlaced { get; set; }

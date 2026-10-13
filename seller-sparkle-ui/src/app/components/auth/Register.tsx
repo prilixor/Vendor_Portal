@@ -21,6 +21,7 @@ import {
 import { cn } from "@/app/helpers/utils";
 import { IndianMobileInput } from "@/app/components/shared/IndianMobileInput";
 import { PhoneOtpDialog } from "@/app/components/shared/PhoneOtpDialog";
+import { fetchPhoneOtpEnabled } from "@/app/helpers/phoneOtpSetting";
 import { clearImpersonationSession, clearPortalSession } from "@/app/helpers/authSession";
 import { RegisterLegalAgree } from "@/app/components/legal/RegisterLegalAgree";
 
@@ -166,6 +167,14 @@ const Register = () => {
       if (!agreed) return;
       const phoneNormalized = normalizeIndianMobileDigits(phone);
       await register(email, password, phoneNormalized, true);
+      const otpOn = await fetchPhoneOtpEnabled();
+      if (!otpOn) {
+        const mail = email.trim().toLowerCase();
+        sessionStorage.setItem("pending_verification_email", mail);
+        toast.success("Account created. Next: confirm your email.");
+        navigate(`/verify-email-sent?email=${encodeURIComponent(mail)}&portal=vendor`);
+        return;
+      }
       setPendingPhone(phoneNormalized);
       setOtpOpen(true);
     } catch (error) {

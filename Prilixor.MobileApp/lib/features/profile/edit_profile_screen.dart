@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_provider.dart';
+import '../../core/auth/phone_otp_setting.dart';
 import '../../core/providers/profile_provider.dart';
 import '../../core/theme.dart';
 import '../../core/utils/indian_mobile_phone.dart';
@@ -26,12 +27,16 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   bool _phoneVerified = false;
   bool _isResendingEmail = false;
   bool _initialized = false;
+  bool _phoneOtpEnabled = true;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Provider.of<ProfileProvider>(context, listen: false).fetchProfile();
+    });
+    PhoneOtpSetting.isEnabled().then((enabled) {
+      if (mounted) setState(() => _phoneOtpEnabled = enabled);
     });
   }
 
@@ -46,7 +51,11 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
         _phoneController.text = IndianMobilePhone.normalizeDigits(profile.phoneNumber);
         _initialized = true;
       }
-      _phoneVerified = profile.isPhoneVerified;
+      final digits = IndianMobilePhone.normalizeDigits(_phoneController.text);
+      final saved = IndianMobilePhone.normalizeDigits(profile.phoneNumber);
+      _phoneVerified = profile.isPhoneVerified &&
+          saved.isNotEmpty &&
+          digits == saved;
     }
   }
 
@@ -87,6 +96,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
   }
 
   Future<void> _verifyPhoneSms() async {
+    if (!await PhoneOtpSetting.isEnabled()) return;
     final normalized = IndianMobilePhone.normalizeDigits(_phoneController.text);
     if (!IndianMobilePhone.isValid(normalized)) return;
 
@@ -326,13 +336,23 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                 label: 'Phone',
                                 errorText: _phoneError,
                                 onChanged: (_) {
+                                  final digits = IndianMobilePhone.normalizeDigits(
+                                    _phoneController.text,
+                                  );
+                                  final saved = IndianMobilePhone.normalizeDigits(
+                                    profile.phoneNumber,
+                                  );
+                                  final stillVerified = profile.isPhoneVerified &&
+                                      saved.isNotEmpty &&
+                                      digits == saved;
                                   setState(() {
-                                    _phoneVerified = false;
+                                    _phoneVerified = stillVerified;
                                     if (_phoneError != null) _phoneError = null;
                                   });
                                 },
                               ),
                             ),
+                            if (_phoneOtpEnabled) ...[
                             const SizedBox(width: 8),
                             Padding(
                               padding: const EdgeInsets.only(top: 28),
@@ -365,6 +385,7 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                                 ),
                               ),
                             ),
+                            ],
                           ],
                         ),
                         if (_phoneError == null)
@@ -373,7 +394,9 @@ class _EditProfileScreenState extends State<EditProfileScreen> {
                             child: Text(
                               _phoneVerified
                                   ? 'Verified - SMS order updates can be delivered.'
-                                  : '10-digit Indian mobile starting with 6-9. Verify to enable SMS alerts.',
+                                  : _phoneOtpEnabled
+                                      ? '10-digit Indian mobile starting with 6-9. Verify to enable SMS alerts.'
+                                      : '10-digit Indian mobile starting with 6-9.',
                               style: const TextStyle(color: Colors.white38, fontSize: 11),
                             ),
                           ),

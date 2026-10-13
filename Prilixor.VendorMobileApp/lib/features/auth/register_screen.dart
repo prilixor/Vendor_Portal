@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/auth/auth_provider.dart';
+import '../../core/auth/phone_otp_setting.dart';
 import '../../core/utils/indian_mobile_phone.dart';
 import '../../core/utils/password_validation.dart';
 import '../../shared/widgets/custom_text_field.dart';
@@ -127,6 +128,15 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (!mounted) return;
 
     if (success) {
+      if (!await PhoneOtpSetting.isEnabled()) {
+        if (!mounted) return;
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => VerifyEmailSentScreen(initialEmail: email),
+          ),
+        );
+        return;
+      }
       final otpOk = await PhoneOtpDialog.show(
         context,
         phone: normalizedPhone,

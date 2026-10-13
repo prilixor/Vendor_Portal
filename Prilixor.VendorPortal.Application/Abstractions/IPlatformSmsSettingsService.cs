@@ -17,12 +17,14 @@ public sealed record PlatformSmsSettingsDto(
     bool VendorBankVerified,
     bool VendorDocumentVerified,
     bool VendorServiceAreaUpdated,
-    bool TwilioConfigured);
+    bool PhoneOtpEnabled,
+    bool SmsConfigured);
 
 public interface IPlatformSmsSettingsService
 {
     Task<PlatformSmsSettingsDto> GetAsync(CancellationToken ct = default);
     Task<PlatformSmsSettingsDto> UpdateAsync(PlatformSmsSettingsDto settings, CancellationToken ct = default);
+    Task<bool> IsPhoneOtpEnabledAsync(CancellationToken ct = default);
     Task<bool> IsCustomerEventEnabledAsync(CustomerSmsKind kind, CancellationToken ct = default);
     Task<bool> IsVendorEventEnabledAsync(VendorSmsKind kind, CancellationToken ct = default);
 }

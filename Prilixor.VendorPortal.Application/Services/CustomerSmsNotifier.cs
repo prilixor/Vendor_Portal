@@ -24,7 +24,7 @@ public sealed class CustomerSmsNotifier(
         {
             if (!sms.IsEnabled)
             {
-                logger.LogInformation("Customer SMS skipped: Twilio SMS disabled. CustomerId={CustomerId}", customerId);
+                logger.LogInformation("Customer SMS skipped: SMS disabled. CustomerId={CustomerId}", customerId);
                 return;
             }
 

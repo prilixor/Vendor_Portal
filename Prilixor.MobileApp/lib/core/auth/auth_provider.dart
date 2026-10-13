@@ -220,7 +220,11 @@ class AuthProvider extends ChangeNotifier {
   String _extractErrorMessage(DioException e, String fallback) {
     if (e.response?.data is Map) {
       final map = e.response!.data as Map;
-      return map['message']?.toString() ?? fallback;
+      final detail = map['detail']?.toString().trim();
+      if (detail != null && detail.isNotEmpty) return detail;
+      final message = map['message']?.toString().trim();
+      if (message != null && message.isNotEmpty) return message;
+      return fallback;
     }
     if (e.response?.data is String && (e.response!.data as String).isNotEmpty) {
       final str = e.response!.data as String;

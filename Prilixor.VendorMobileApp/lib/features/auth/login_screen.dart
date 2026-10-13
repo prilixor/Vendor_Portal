@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/auth/auth_provider.dart';
+import '../../core/auth/phone_otp_setting.dart';
 import '../../core/providers/vendor_profile_provider.dart';
 import '../../core/theme.dart';
 import '../../core/utils/indian_mobile_phone.dart';
@@ -86,7 +87,9 @@ class _LoginScreenState extends State<LoginScreen> {
         if (!mounted) return;
         final profile = profileProvider.profile;
         final rawPhone = profile?.supportPhone.trim() ?? '';
-        if (rawPhone.isNotEmpty && !(profile?.isPhoneVerified ?? false)) {
+        if (await PhoneOtpSetting.isEnabled() &&
+            rawPhone.isNotEmpty &&
+            !(profile?.isPhoneVerified ?? false)) {
           setState(() => _isProcessing = false);
           final normalizedPhone = IndianMobilePhone.normalizeDigits(rawPhone);
           final verified = await PhoneOtpDialog.show(

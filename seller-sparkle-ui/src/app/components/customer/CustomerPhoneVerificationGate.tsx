@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import { Loader2 } from "lucide-react";
 import { useAuth } from "@/app/guards/AuthContext";
 import { customerApi } from "@/app/services/customerApi";
+import { fetchPhoneOtpEnabled } from "@/app/helpers/phoneOtpSetting";
 import { PhoneOtpDialog } from "@/app/components/shared/PhoneOtpDialog";
 import { isValidIndianMobile, normalizeIndianMobileDigits } from "@/app/helpers/indianMobilePhone";
 import { AuthLayout } from "@/app/components/layout/AuthLayout";
@@ -39,9 +40,18 @@ export function CustomerPhoneVerificationGate({ children }: Props) {
 
     let cancelled = false;
     setChecking(true);
-    void customerApi
-      .getProfile()
-      .then((profile) => {
+    void (async () => {
+      const otpOn = await fetchPhoneOtpEnabled();
+      if (cancelled) return;
+      if (!otpOn) {
+        setNeedsPhoneVerify(false);
+        setNeedsEmailVerify(false);
+        setPhone("");
+        setChecking(false);
+        return;
+      }
+      try {
+        const profile = await customerApi.getProfile();
         if (cancelled) return;
         const raw = profile.phone?.trim() ?? "";
         const hasPhone = raw.length > 0;
@@ -64,17 +74,16 @@ export function CustomerPhoneVerificationGate({ children }: Props) {
           setPhone("");
           setNeedsPhoneVerify(false);
         }
-      })
-      .catch(() => {
+      } catch {
         if (!cancelled) {
           setNeedsPhoneVerify(false);
           setNeedsEmailVerify(false);
           setPhone("");
         }
-      })
-      .finally(() => {
+      } finally {
         if (!cancelled) setChecking(false);
-      });
+      }
+    })();
 
     return () => {
       cancelled = true;

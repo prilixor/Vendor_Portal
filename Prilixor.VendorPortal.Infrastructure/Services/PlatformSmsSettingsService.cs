@@ -13,12 +13,11 @@ namespace Prilixor.VendorPortal.Infrastructure.Services;
 public sealed class PlatformSmsSettingsService(
     ApplicationDbContext db,
     ISmsService sms,
-    IOptions<TwilioOptions> twilioOptions,
-    IOptions<TwoFactorOptions> twoFactorOptions,
+    IOptions<ShreeSmsOptions> shreeSmsOptions,
     IMemoryCache cache,
     ILogger<PlatformSmsSettingsService> logger) : IPlatformSmsSettingsService, IScopedService
 {
-    private const string CacheKey = "platform_sms_settings_v1";
+    private const string CacheKey = "platform_sms_settings_v2";
     private static readonly TimeSpan CacheDuration = TimeSpan.FromSeconds(30);
 
     public async Task<PlatformSmsSettingsDto> GetAsync(CancellationToken ct = default)
@@ -46,12 +45,19 @@ public sealed class PlatformSmsSettingsService(
         entity.VendorBankVerified = settings.VendorBankVerified;
         entity.VendorDocumentVerified = settings.VendorDocumentVerified;
         entity.VendorServiceAreaUpdated = settings.VendorServiceAreaUpdated;
+        entity.PhoneOtpEnabled = settings.PhoneOtpEnabled;
         entity.ModifiedOnUtc = DateTime.UtcNow;
 
         await db.SaveChangesAsync(ct);
         cache.Remove(CacheKey);
         logger.LogInformation("Platform SMS settings updated. TransactionalEnabled={Enabled}", entity.TransactionalSmsEnabled);
         return Map(entity);
+    }
+
+    public async Task<bool> IsPhoneOtpEnabledAsync(CancellationToken ct = default)
+    {
+        var s = await GetCachedAsync(ct);
+        return s.PhoneOtpEnabled;
     }
 
     public async Task<bool> IsCustomerEventEnabledAsync(CustomerSmsKind kind, CancellationToken ct = default)
@@ -142,19 +148,16 @@ public sealed class PlatformSmsSettingsService(
             e.VendorBankVerified,
             e.VendorDocumentVerified,
             e.VendorServiceAreaUpdated,
-            TwilioConfigured: sms.IsEnabled || IsSmsProviderConfigured());
+            e.PhoneOtpEnabled,
+            SmsConfigured: sms.IsEnabled || IsSmsProviderConfigured());
 
     private bool IsSmsProviderConfigured()
     {
-        var twilio = twilioOptions.Value;
-        if (twilio.Enabled
-            && !string.IsNullOrWhiteSpace(twilio.AccountSid)
-            && !string.IsNullOrWhiteSpace(twilio.AuthToken))
-        {
-            return true;
-        }
-
-        var twoFactor = twoFactorOptions.Value;
-        return twoFactor.Enabled && !string.IsNullOrWhiteSpace(twoFactor.ApiKey);
+        var shree = shreeSmsOptions.Value;
+        return shree.Enabled
+            && !string.IsNullOrWhiteSpace(shree.ApiKey)
+            && !string.IsNullOrWhiteSpace(shree.SenderId)
+            && !string.IsNullOrWhiteSpace(shree.EntityId)
+            && !string.IsNullOrWhiteSpace(shree.OtpTemplateId);
     }
 }

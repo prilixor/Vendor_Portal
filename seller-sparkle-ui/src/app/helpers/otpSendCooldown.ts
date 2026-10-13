@@ -1,4 +1,4 @@
-/** Matches backend TwilioOptions.OtpResendCooldownSeconds (default 45). */
+/** Matches backend ShreeSms:OtpResendCooldownSeconds (default 45). */
 export const OTP_RESEND_COOLDOWN_SECONDS = 45;
 
 const WAIT_SECONDS_RE = /(\d+)\s*seconds?/i;

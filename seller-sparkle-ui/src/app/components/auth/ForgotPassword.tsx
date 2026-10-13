@@ -33,6 +33,7 @@ import {
   authPortalSignInLabel,
   resolveAuthPortalType,
 } from "@/app/helpers/portalHost";
+import { fetchPhoneOtpEnabled } from "@/app/helpers/phoneOtpSetting";
 
 const EMAIL_RE = /^[^@\s]+@[^@\s]+\.[^@\s]+$/;
 
@@ -62,8 +63,8 @@ const ForgotPassword = () => {
   const portalType = resolveAuthPortalType(searchParams.get("portal"));
   const loginPath = authPortalLoginPath(portalType);
   const signInLabel = authPortalSignInLabel(portalType);
-  // Admin accounts are email-only (CEO: no admin phone / SMS).
-  const smsAllowed = portalType !== "admin";
+  // Admin accounts are email-only. SMS reset follows the phone OTP switch.
+  const [phoneOtpEnabled, setPhoneOtpEnabled] = useState<boolean | null>(null);
   const smsRole: "customer" | "vendor" =
     portalType === "vendor" ? "vendor" : "customer";
   const accountLabel =
@@ -91,6 +92,19 @@ const ForgotPassword = () => {
   const [smsResetToken, setSmsResetToken] = useState("");
   const [cooldown, setCooldown] = useState(0);
   const [smsSuccess, setSmsSuccess] = useState(false);
+  const smsAllowed = portalType !== "admin" && phoneOtpEnabled === true;
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchPhoneOtpEnabled().then((enabled) => {
+      if (cancelled) return;
+      setPhoneOtpEnabled(enabled);
+      if (!enabled) setMode("email");
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (cooldown <= 0) return;
@@ -278,6 +292,16 @@ const ForgotPassword = () => {
       setLoading(false);
     }
   };
+
+  if (phoneOtpEnabled === null) {
+    return (
+      <AuthLayout title="Forgot Password" subtitle="Loading reset options." portalType={portalType}>
+        <div className="flex justify-center py-10">
+          <Loader2 className="h-6 w-6 animate-spin text-primary" />
+        </div>
+      </AuthLayout>
+    );
+  }
 
   if (emailSuccess) {
     return (

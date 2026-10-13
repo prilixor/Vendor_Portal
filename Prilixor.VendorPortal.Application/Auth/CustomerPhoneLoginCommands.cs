@@ -32,13 +32,16 @@ public sealed class LoginCustomerWithPhoneOtpCommandValidator : AbstractValidato
 
 internal sealed class SendCustomerLoginOtpCommandHandler(
     IPhoneVerificationService phoneVerification,
-    ICustomerRepository customers)
+    ICustomerRepository customers,
+    IPlatformSmsSettingsService smsSettings)
     : ICommandHandler<SendCustomerLoginOtpCommand, PhoneOtpActionDto>
 {
     public async Task<Result<PhoneOtpActionDto>> Handle(
         SendCustomerLoginOtpCommand request,
         CancellationToken cancellationToken)
     {
+        if (!await smsSettings.IsPhoneOtpEnabledAsync(cancellationToken))
+            return PhoneOtpDisabled.Fail<PhoneOtpActionDto>();
         if (!IndianMobilePhone.TryToE164(request.Phone, out var e164)
             || !IndianMobilePhone.TryNormalize(request.Phone, out var national))
         {
@@ -72,13 +75,16 @@ internal sealed class SendCustomerLoginOtpCommandHandler(
 
 internal sealed class LoginCustomerWithPhoneOtpCommandHandler(
     IPhoneVerificationService phoneVerification,
-    ICustomerRepository customers)
+    ICustomerRepository customers,
+    IPlatformSmsSettingsService smsSettings)
     : ICommandHandler<LoginCustomerWithPhoneOtpCommand, CustomerPhoneLoginDto>
 {
     public async Task<Result<CustomerPhoneLoginDto>> Handle(
         LoginCustomerWithPhoneOtpCommand request,
         CancellationToken cancellationToken)
     {
+        if (!await smsSettings.IsPhoneOtpEnabledAsync(cancellationToken))
+            return PhoneOtpDisabled.Fail<CustomerPhoneLoginDto>();
         if (!IndianMobilePhone.TryToE164(request.Phone, out var e164)
             || !IndianMobilePhone.TryNormalize(request.Phone, out var national))
         {

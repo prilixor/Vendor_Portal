@@ -2,11 +2,8 @@ namespace Prilixor.VendorPortal.Application.Abstractions;
 
 public sealed record SmsSendResult(bool Success, string? ProviderMessageSid, string? Error);
 
-/// <summary>
-/// Outbound SMS payload. <see cref="Body"/> is used on upgraded accounts;
-/// <see cref="TrialTemplateKey"/> is used when Twilio trial template mode is enabled.
-/// </summary>
-public sealed record SmsMessage(string Body, string TrialTemplateKey);
+/// <summary>Outbound SMS body.</summary>
+public sealed record SmsMessage(string Body);
 
 public interface ISmsService
 {

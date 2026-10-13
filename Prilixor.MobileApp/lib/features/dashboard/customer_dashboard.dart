@@ -8,6 +8,7 @@ import '../notifications/notifications_screen.dart';
 import '../profile/profile_screen.dart';
 import '../cart/cart_screen.dart';
 import '../../core/auth/auth_provider.dart';
+import '../../core/auth/phone_otp_setting.dart';
 import '../../core/theme.dart';
 import '../../core/providers/cart_provider.dart';
 import '../../core/providers/notification_provider.dart';
@@ -99,6 +100,7 @@ class _CustomerDashboardState extends State<CustomerDashboard> with WidgetsBindi
       }
       if (!mounted) return;
       final profile = profileProvider.profile;
+      if (!await PhoneOtpSetting.isEnabled()) return;
       final rawPhone = profile?.phoneNumber.trim() ?? '';
       if (rawPhone.isNotEmpty && !(profile?.isPhoneVerified ?? false)) {
         final normalizedPhone = IndianMobilePhone.normalizeDigits(rawPhone);

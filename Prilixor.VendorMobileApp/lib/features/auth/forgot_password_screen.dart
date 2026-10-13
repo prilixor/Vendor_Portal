@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_provider.dart';
+import '../../core/auth/phone_otp_setting.dart';
 import '../../core/theme.dart';
 import '../../core/utils/indian_mobile_phone.dart';
 import '../../shared/widgets/indian_mobile_field.dart';
@@ -16,6 +17,7 @@ class ForgotPasswordScreen extends StatefulWidget {
 
 class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   int _tabIndex = 0; // 0 = Email, 1 = SMS OTP
+  bool _phoneOtpEnabled = true;
 
   // Email form
   final _emailController = TextEditingController();
@@ -33,6 +35,18 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
   int _smsStep = 0; // 0 = enter phone, 1 = verified token ready, set password
   String? _resetToken;
   String? _normalizedPhone;
+
+  @override
+  void initState() {
+    super.initState();
+    PhoneOtpSetting.isEnabled().then((enabled) {
+      if (!mounted) return;
+      setState(() {
+        _phoneOtpEnabled = enabled;
+        if (!enabled) _tabIndex = 0;
+      });
+    });
+  }
 
   @override
   void dispose() {
@@ -262,6 +276,7 @@ class _ForgotPasswordScreenState extends State<ForgotPasswordScreen> {
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 24),
+              if (_phoneOtpEnabled)
               // Segmented Choice: Email vs SMS
               Container(
                 decoration: BoxDecoration(

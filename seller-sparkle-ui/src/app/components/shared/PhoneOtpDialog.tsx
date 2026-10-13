@@ -182,12 +182,9 @@ export function PhoneOtpDialog({
       <DialogContent
         className="sm:max-w-md"
         showCloseButton={!required}
-        onInteractOutside={(e) => {
-          if (required) e.preventDefault();
-        }}
-        onEscapeKeyDown={(e) => {
-          if (required) e.preventDefault();
-        }}
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
+        onEscapeKeyDown={(e) => e.preventDefault()}
       >
         <DialogHeader>
           <DialogTitle>{title}</DialogTitle>

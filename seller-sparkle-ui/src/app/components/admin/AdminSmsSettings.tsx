@@ -7,8 +7,9 @@ import { Badge } from "@/app/components/ui/badge";
 import { adminApi, type PlatformSmsSettingsDto } from "@/app/services/adminApi";
 import { Loader2, MessageSquare, Save, CheckCircle2, AlertTriangle, Info } from "lucide-react";
 import { toast } from "sonner";
+import { clearPhoneOtpEnabledCache } from "@/app/helpers/phoneOtpSetting";
 
-type FlagKey = Exclude<keyof PlatformSmsSettingsDto, "twilioConfigured">;
+type FlagKey = Exclude<keyof PlatformSmsSettingsDto, "smsConfigured">;
 
 const CUSTOMER_FLAGS: { key: FlagKey; label: string; hint: string }[] = [
   { key: "customerOrderPlaced", label: "Order placed", hint: "When a customer places a rental/buy request" },
@@ -48,7 +49,8 @@ const defaults: PlatformSmsSettingsDto = {
   vendorBankVerified: false,
   vendorDocumentVerified: false,
   vendorServiceAreaUpdated: false,
-  twilioConfigured: false,
+  smsConfigured: false,
+  phoneOtpEnabled: true,
 };
 
 function FlagRow({
@@ -118,8 +120,9 @@ export default function AdminSmsSettings() {
   const save = async () => {
     setSaving(true);
     try {
-      const { twilioConfigured: _, ...payload } = settings;
+      const { smsConfigured: _, ...payload } = settings;
       const saved = await adminApi.updatePlatformSmsSettings(payload);
+      clearPhoneOtpEnabledCache();
       setSettings({ ...defaults, ...saved });
       toast.success("SMS settings saved.");
     } catch {
@@ -142,10 +145,10 @@ export default function AdminSmsSettings() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-semibold tracking-tight">SMS / Twilio</h1>
+        <h1 className="text-2xl font-semibold tracking-tight">SMS</h1>
         <p className="mt-1 text-sm text-muted-foreground">
           Control which transactional SMS events the platform may send. Defaults are off.
-          Phone OTP for customer/vendor registration and forgot-password always uses Twilio Verify and is not controlled here.
+          Phone OTP has its own switch and is not part of the transactional events below.
           User preferences and verified phone still apply when an event is enabled.
         </p>
       </div>
@@ -153,24 +156,44 @@ export default function AdminSmsSettings() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2 text-lg">
+            <MessageSquare className="h-5 w-5 text-primary" /> Phone OTP
+          </CardTitle>
+          <CardDescription>
+            Turns the SMS code screens on or off for customers and vendors.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <FlagRow
+            id="phoneOtpEnabled"
+            label="Enable phone OTP"
+            hint="On: sign-in, registration, and password reset can use an SMS code. Off: those screens use email or mobile number and password, and no OTP popup is shown."
+            checked={settings.phoneOtpEnabled}
+            onChange={(v) => setFlag("phoneOtpEnabled", v)}
+          />
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-lg">
             <MessageSquare className="h-5 w-5 text-primary" /> Master switch
           </CardTitle>
-          <CardDescription>Turns all transactional SMS below on or off. App setting Twilio:Enabled must also be true.</CardDescription>
+          <CardDescription>Turns all transactional SMS below on or off. ShreeSMS must also be enabled.</CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="flex items-start gap-2 rounded-lg border border-dashed p-3 text-xs text-muted-foreground">
             <Info className="mt-0.5 h-4 w-4 shrink-0" />
             <span>
-              Twilio Messaging configured:{" "}
-              <strong className={settings.twilioConfigured ? "text-emerald-600" : "text-amber-600"}>
-                {settings.twilioConfigured ? "Yes" : "No / disabled"}
+              ShreeSMS configured:{" "}
+              <strong className={settings.smsConfigured ? "text-emerald-600" : "text-amber-600"}>
+                {settings.smsConfigured ? "Yes" : "No / disabled"}
               </strong>
             </span>
           </div>
           <FlagRow
             id="transactionalSmsEnabled"
             label="Enable transactional SMS"
-            hint="When off, no customer/vendor event SMS is sent (OTP still works if Verify is configured)."
+            hint="When off, no customer/vendor event SMS is sent. Login and registration OTP use the Phone OTP switch above."
             checked={settings.transactionalSmsEnabled}
             onChange={(v) => setFlag("transactionalSmsEnabled", v)}
           />

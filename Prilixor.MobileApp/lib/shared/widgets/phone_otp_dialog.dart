@@ -46,7 +46,7 @@ class PhoneOtpDialog extends StatefulWidget {
   }) {
     return showDialog<bool>(
       context: context,
-      barrierDismissible: !required,
+      barrierDismissible: false,
       builder: (ctx) => PopScope(
         canPop: !required,
         child: PhoneOtpDialog(
@@ -72,16 +72,20 @@ class PhoneOtpDialog extends StatefulWidget {
 class _PhoneOtpDialogState extends State<PhoneOtpDialog> {
   final List<TextEditingController> _controllers = List.generate(6, (_) => TextEditingController());
   final List<FocusNode> _focusNodes = List.generate(6, (_) => FocusNode());
+  static const int _resendCooldownSeconds = 45;
+
   int _cooldown = 0;
   Timer? _cooldownTimer;
   bool _isSending = false;
   bool _isVerifying = false;
   String? _errorMessage;
+  String? _infoMessage;
 
   @override
   void initState() {
     super.initState();
     if (widget.skipAutoSend) {
+      _infoMessage = 'Verification code sent.';
       _startCooldown();
     } else {
       _sendCode();
@@ -100,8 +104,8 @@ class _PhoneOtpDialogState extends State<PhoneOtpDialog> {
     super.dispose();
   }
 
-  void _startCooldown() {
-    setState(() => _cooldown = 45);
+  void _startCooldown([int seconds = _resendCooldownSeconds]) {
+    setState(() => _cooldown = seconds);
     _cooldownTimer?.cancel();
     _cooldownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
       if (_cooldown <= 1) {
@@ -127,12 +131,19 @@ class _PhoneOtpDialogState extends State<PhoneOtpDialog> {
           : await provider.sendPhoneOtp(widget.phone, widget.role);
       if (!mounted) return;
       if (success) {
+        setState(() => _infoMessage = 'Verification code sent.');
         _startCooldown();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Verification code sent to +91 ${widget.phone}')),
-        );
       } else {
-        setState(() => _errorMessage = provider.errorMessage ?? 'Failed to send verification code.');
+        final message = provider.errorMessage ?? 'Failed to send verification code.';
+        final wait = _resendWaitSeconds(message);
+        if (wait != null) {
+          _startCooldown(wait);
+          return;
+        }
+        setState(() {
+          _infoMessage = null;
+          _errorMessage = message;
+        });
       }
     } catch (_) {
       if (mounted) {
@@ -143,6 +154,16 @@ class _PhoneOtpDialogState extends State<PhoneOtpDialog> {
         setState(() => _isSending = false);
       }
     }
+  }
+
+  int? _resendWaitSeconds(String message) {
+    final match = RegExp(r'(\d+)\s*seconds?', caseSensitive: false).firstMatch(message);
+    final isRateLimit = message.toLowerCase().contains('you can request a new code') ||
+        message.toLowerCase().contains('before requesting another code');
+    if (!isRateLimit) return null;
+    final seconds = match == null ? _resendCooldownSeconds : int.tryParse(match.group(1) ?? '');
+    if (seconds == null || seconds <= 0) return _resendCooldownSeconds;
+    return seconds;
   }
 
   String get _code => _controllers.map((c) => c.text).join();
@@ -299,6 +320,13 @@ class _PhoneOtpDialogState extends State<PhoneOtpDialog> {
                   _errorMessage!,
                   textAlign: TextAlign.center,
                   style: const TextStyle(color: Color(0xFFF87171), fontSize: 12.5),
+                ),
+              ] else if (_infoMessage != null) ...[
+                const SizedBox(height: 12),
+                Text(
+                  _infoMessage!,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(color: Color(0xFF10B981), fontSize: 13, fontWeight: FontWeight.w500),
                 ),
               ],
               const SizedBox(height: 16),

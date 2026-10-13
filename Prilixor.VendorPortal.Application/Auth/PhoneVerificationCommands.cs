@@ -41,11 +41,14 @@ public sealed class VerifyPhoneOtpCommandValidator : AbstractValidator<VerifyPho
 internal sealed class SendPhoneOtpCommandHandler(
     IPhoneVerificationService phoneVerification,
     IVendorOnboardingRepository vendors,
-    ICustomerRepository customers)
+    ICustomerRepository customers,
+    IPlatformSmsSettingsService smsSettings)
     : ICommandHandler<SendPhoneOtpCommand, PhoneOtpActionDto>
 {
     public async Task<Result<PhoneOtpActionDto>> Handle(SendPhoneOtpCommand request, CancellationToken cancellationToken)
     {
+        if (!await smsSettings.IsPhoneOtpEnabledAsync(cancellationToken))
+            return PhoneOtpDisabled.Fail<PhoneOtpActionDto>();
         if (!IndianMobilePhone.TryToE164(request.Phone, out var e164)
             || !IndianMobilePhone.TryNormalize(request.Phone, out var national))
         {
@@ -115,15 +118,21 @@ internal sealed class SendPhoneOtpCommandHandler(
 
                 if (existingCustomer is not null && existingCustomer.Id != customerId)
                 {
-                    var authPhone = IndianMobilePhone.NormalizeDigits(customer.Phone);
-                    // Stale JWT during another signup: allow OTP for the phone owner.
-                    if (string.Equals(authPhone, national, StringComparison.Ordinal))
-                    {
-                        return Result.Failure<PhoneOtpActionDto>(new Error(
-                            "customers.phone_exists",
-                            "This phone number is already used by another customer account.",
-                            ErrorCategory.Validation));
-                    }
+                    return Result.Failure<PhoneOtpActionDto>(new Error(
+                        "customers.phone_exists",
+                        IndianMobilePhone.UnavailableMessage,
+                        ErrorCategory.Validation));
+                }
+
+                var authPhone = IndianMobilePhone.NormalizeDigits(customer.Phone);
+                if (customer.PhoneVerifiedAt is not null
+                    && string.Equals(authPhone, national, StringComparison.Ordinal))
+                {
+                    return Result.Success(new PhoneOtpActionDto(
+                        true,
+                        "This phone number is already verified.",
+                        true,
+                        national));
                 }
             }
             else if (existingCustomer is null)
@@ -149,11 +158,14 @@ internal sealed class SendPhoneOtpCommandHandler(
 internal sealed class VerifyPhoneOtpCommandHandler(
     IPhoneVerificationService phoneVerification,
     IVendorOnboardingRepository vendors,
-    ICustomerRepository customers)
+    ICustomerRepository customers,
+    IPlatformSmsSettingsService smsSettings)
     : ICommandHandler<VerifyPhoneOtpCommand, PhoneOtpActionDto>
 {
     public async Task<Result<PhoneOtpActionDto>> Handle(VerifyPhoneOtpCommand request, CancellationToken cancellationToken)
     {
+        if (!await smsSettings.IsPhoneOtpEnabledAsync(cancellationToken))
+            return PhoneOtpDisabled.Fail<PhoneOtpActionDto>();
         if (!IndianMobilePhone.TryToE164(request.Phone, out var e164)
             || !IndianMobilePhone.TryNormalize(request.Phone, out var national))
         {
@@ -268,20 +280,11 @@ internal sealed class VerifyPhoneOtpCommandHandler(
                 }
 
                 var phoneOwner = await customers.GetCustomerByPhoneAsync(national, cancellationToken);
-                var authPhone = IndianMobilePhone.NormalizeDigits(customer.Phone);
-                if (phoneOwner is not null && phoneOwner.Id != customerId
-                    && !string.Equals(authPhone, national, StringComparison.Ordinal))
-                {
-                    phoneOwner.PhoneVerifiedAt = now;
-                    phoneOwner.ModifiedOnUtc = DateTime.UtcNow;
-                    await customers.UpdateCustomerAsync(phoneOwner, cancellationToken);
-                    await customers.SaveChangesAsync(cancellationToken);
-                }
-                else if (phoneOwner is not null && phoneOwner.Id != customerId)
+                if (phoneOwner is not null && phoneOwner.Id != customerId)
                 {
                     return Result.Failure<PhoneOtpActionDto>(new Error(
                         "customers.phone_exists",
-                        "This phone number is already used by another customer account.",
+                        IndianMobilePhone.UnavailableMessage,
                         ErrorCategory.Validation));
                 }
                 else

@@ -26,6 +26,7 @@ import {
 import { IndianMobileInput } from "@/app/components/shared/IndianMobileInput";
 import { PhoneOtpDialog } from "@/app/components/shared/PhoneOtpDialog";
 import { LegalPolicyLinks } from "@/app/components/legal/LegalPolicyLinks";
+import { fetchPhoneOtpEnabled } from "@/app/helpers/phoneOtpSetting";
 
 const Settings = () => {
   const { user } = useAuth();
@@ -34,6 +35,7 @@ const Settings = () => {
   const [phone, setPhone] = useState("");
   const [phoneVerified, setPhoneVerified] = useState(false);
   const [otpOpen, setOtpOpen] = useState(false);
+  const [phoneOtpEnabled, setPhoneOtpEnabled] = useState(true);
   const [timeZone] = useState(Intl.DateTimeFormat().resolvedOptions().timeZone || "Asia/Kolkata");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
@@ -84,6 +86,16 @@ const Settings = () => {
   };
 
   const passwordStrength = getPasswordStrength(newPassword);
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchPhoneOtpEnabled().then((enabled) => {
+      if (!cancelled) setPhoneOtpEnabled(enabled);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     const load = async () => {
@@ -261,10 +273,13 @@ const Settings = () => {
                     <p className="text-[11px] text-muted-foreground">
                       {phoneVerified
                         ? "Verified — SMS order alerts can be delivered."
-                        : "10-digit Indian mobile starting with 6–9. Verify to enable SMS alerts."}
+                        : phoneOtpEnabled
+                          ? "10-digit Indian mobile starting with 6–9. Verify to enable SMS alerts."
+                          : "10-digit Indian mobile starting with 6–9."}
                     </p>
                   )}
                 </div>
+                {phoneOtpEnabled ? (
                 <Button
                   type="button"
                   variant="outline"
@@ -274,6 +289,7 @@ const Settings = () => {
                 >
                   {phoneVerified ? "Verified" : "Verify SMS"}
                 </Button>
+                ) : null}
               </div>
             </div>
             <div className="space-y-1.5">

@@ -12,6 +12,7 @@ import { toast } from "sonner";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { isValidIndianMobile, normalizeIndianMobileDigits } from "@/app/helpers/indianMobilePhone";
 import { PhoneOtpDialog } from "@/app/components/shared/PhoneOtpDialog";
+import { fetchPhoneOtpEnabled } from "@/app/helpers/phoneOtpSetting";
 import { PORTAL_USER_KEY } from "@/app/helpers/authSession";
 import { isUnverifiedEmailError } from "@/app/helpers/authFailureToast";
 
@@ -61,9 +62,10 @@ const Login = () => {
 
       if (vendorId) {
         try {
+          const otpOn = await fetchPhoneOtpEnabled();
           const profile = await vendorOnboardingApi.getVendorProfile(vendorId);
           const rawPhone = profile.supportPhone?.trim() ?? "";
-          if (rawPhone && !profile.isPhoneVerified && isValidIndianMobile(rawPhone)) {
+          if (otpOn && rawPhone && !profile.isPhoneVerified && isValidIndianMobile(rawPhone)) {
             setPendingPhone(normalizeIndianMobileDigits(rawPhone));
             setOtpOpen(true);
             return;

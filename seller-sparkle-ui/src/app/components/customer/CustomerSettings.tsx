@@ -30,6 +30,7 @@ import {
 } from "@/app/helpers/passwordValidation";
 import { cn } from "@/app/helpers/utils";
 import { LegalPolicyLinks } from "@/app/components/legal/LegalPolicyLinks";
+import { fetchPhoneOtpEnabled } from "@/app/helpers/phoneOtpSetting";
 
 const CustomerSettings = () => {
   const { user, setSessionUser } = useAuth();
@@ -49,7 +50,9 @@ const CustomerSettings = () => {
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
   const [phoneVerified, setPhoneVerified] = useState(false);
+  const [verifiedPhone, setVerifiedPhone] = useState("");
   const [otpOpen, setOtpOpen] = useState(false);
+  const [phoneOtpEnabled, setPhoneOtpEnabled] = useState(true);
   const [resendingEmail, setResendingEmail] = useState(false);
 
   const hasStoredEmail = !!(data?.email?.trim());
@@ -57,11 +60,24 @@ const CustomerSettings = () => {
   const emailVerified = !!data?.isEmailVerified;
 
   useEffect(() => {
+    let cancelled = false;
+    void fetchPhoneOtpEnabled().then((enabled) => {
+      if (!cancelled) setPhoneOtpEnabled(enabled);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  useEffect(() => {
     if (data) {
       setFullName(data.fullName);
       setEmail(data.email?.trim() || "");
-      setPhone(data.phone ? normalizeIndianMobileDigits(data.phone) : "");
-      setPhoneVerified(!!data.isPhoneVerified);
+      const digits = data.phone ? normalizeIndianMobileDigits(data.phone) : "";
+      setPhone(digits);
+      const verified = !!data.isPhoneVerified && !!digits;
+      setPhoneVerified(verified);
+      setVerifiedPhone(verified ? digits : "");
     }
   }, [data]);
 
@@ -154,16 +170,14 @@ const CustomerSettings = () => {
     onError: (err: Error) => {
       const message = err.message || "Failed to update profile.";
       const lower = message.toLowerCase();
-      if (
-        lower.includes("phone") &&
-        (lower.includes("already") || lower.includes("exists") || lower.includes("in use"))
-      ) {
-        setProfileFieldErrors({ phone: "This phone number is already used by another account." });
+      const code = (err as Error & { code?: string }).code;
+      if (code === "customers.phone_exists" || (lower.includes("phone") && (lower.includes("already") || lower.includes("exists") || lower.includes("in use") || lower.includes("can't be used")))) {
+        setProfileFieldErrors({ phone: "This phone number can't be used. Enter a different mobile number." });
       } else if (
         lower.includes("email") &&
         (lower.includes("already") || lower.includes("exists") || lower.includes("in use"))
       ) {
-        setProfileFieldErrors({ email: "This email is already used by another account." });
+        setProfileFieldErrors({ email: "This email can't be used. Enter a different email address." });
       }
       toast.error(message);
     },
@@ -358,7 +372,8 @@ const CustomerSettings = () => {
                             value={phone}
                             onChange={(v) => {
                               setPhone(v);
-                              setPhoneVerified(false);
+                              const digits = normalizeIndianMobileDigits(v);
+                              setPhoneVerified(verifiedPhone.length > 0 && digits === verifiedPhone);
                               clearProfileFieldError("phone");
                             }}
                             invalid={!!profileFieldErrors.phone}
@@ -368,10 +383,13 @@ const CustomerSettings = () => {
                             <p className="text-[11px] text-muted-foreground">
                               {phoneVerified
                                 ? "Verified — SMS order updates can be delivered."
-                                : "10-digit Indian mobile starting with 6–9. Verify to enable SMS alerts."}
+                                : phoneOtpEnabled
+                                  ? "10-digit Indian mobile starting with 6–9. Verify to enable SMS alerts."
+                                  : "10-digit Indian mobile starting with 6–9."}
                             </p>
                           )}
                         </div>
+                        {phoneOtpEnabled ? (
                         <Button
                           type="button"
                           variant="outline"
@@ -381,6 +399,7 @@ const CustomerSettings = () => {
                         >
                           {phoneVerified ? "Verified" : "Verify SMS"}
                         </Button>
+                        ) : null}
                       </div>
                     </div>
                   </FormGrid>
@@ -543,7 +562,7 @@ const CustomerSettings = () => {
                     checked={dbPrefs.marketingEmailsEnabled}
                     onChange={(v) => togglePref("marketingEmailsEnabled", v)}
                   />
-                  {(!phone.trim() || !phoneVerified) && (
+                  {phoneOtpEnabled && (!phone.trim() || !phoneVerified) && (
                     <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-950">
                       {!phone.trim()
                         ? "Add and verify a phone number in Profile to receive SMS alerts."
@@ -555,7 +574,7 @@ const CustomerSettings = () => {
                     desc="Text alerts for order updates (requires a verified phone number)."
                     checked={dbPrefs.smsNotificationsEnabled !== false}
                     onChange={(v) => {
-                      if (v && (!phone.trim() || !phoneVerified)) {
+                      if (v && phoneOtpEnabled && (!phone.trim() || !phoneVerified)) {
                         toast.message(
                           !phone.trim()
                             ? "Add and verify a phone in Profile first."
@@ -593,6 +612,8 @@ const CustomerSettings = () => {
         phone={normalizeIndianMobileDigits(phone)}
         role="customer"
         onVerified={() => {
+          const digits = normalizeIndianMobileDigits(phone);
+          setVerifiedPhone(digits);
           setPhoneVerified(true);
           queryClient.invalidateQueries({ queryKey: ["customer-profile"] });
         }}

@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/auth/auth_provider.dart';
+import '../../core/auth/phone_otp_setting.dart';
 import '../../core/providers/vendor_notification_provider.dart';
 import '../../core/providers/vendor_onboarding_provider.dart';
 import '../../core/providers/vendor_order_provider.dart';
@@ -104,7 +105,9 @@ class _VendorDashboardState extends State<VendorDashboard>
       if (!mounted) return;
       final profile = profileProvider.profile;
       final rawPhone = profile?.supportPhone.trim() ?? '';
-      if (rawPhone.isNotEmpty && !(profile?.isPhoneVerified ?? false)) {
+      if (await PhoneOtpSetting.isEnabled() &&
+          rawPhone.isNotEmpty &&
+          !(profile?.isPhoneVerified ?? false)) {
         final normalizedPhone = IndianMobilePhone.normalizeDigits(rawPhone);
         await PhoneOtpDialog.show(
           context,

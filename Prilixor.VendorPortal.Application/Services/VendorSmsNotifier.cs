@@ -27,7 +27,7 @@ public sealed class VendorSmsNotifier(
         {
             if (!sms.IsEnabled)
             {
-                logger.LogInformation("Vendor SMS skipped: Twilio SMS disabled. VendorId={VendorId}", vendorId);
+                logger.LogInformation("Vendor SMS skipped: SMS disabled. VendorId={VendorId}", vendorId);
                 return;
             }
 

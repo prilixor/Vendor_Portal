@@ -2,12 +2,14 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_provider.dart';
+import '../../core/auth/phone_otp_setting.dart';
 import '../../core/theme.dart';
 import '../../core/utils/indian_mobile_phone.dart';
 import '../../shared/widgets/indian_mobile_field.dart';
 import '../../shared/widgets/phone_otp_dialog.dart';
 import '../../shared/widgets/required_field_ux.dart';
 import '../dashboard/customer_dashboard.dart';
+import 'forgot_password_screen.dart';
 import 'register_screen.dart';
 
 class LoginScreen extends StatefulWidget {
@@ -23,21 +25,34 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
   final FocusNode _phoneFocusNode = FocusNode();
   String? _phoneError;
+  String? _passwordError;
+  bool _showPassword = false;
   bool _isProcessing = false;
+  bool? _phoneOtpEnabled;
   int _cooldown = 0;
   Timer? _cooldownTimer;
+
+  @override
+  void initState() {
+    super.initState();
+    PhoneOtpSetting.isEnabled().then((enabled) {
+      if (mounted) setState(() => _phoneOtpEnabled = enabled);
+    });
+  }
 
   @override
   void dispose() {
     _cooldownTimer?.cancel();
     _phoneController.dispose();
+    _passwordController.dispose();
     _phoneFocusNode.dispose();
     super.dispose();
   }
 
-  void _startCooldown([int seconds = 30]) {
+  void _startCooldown([int seconds = 45]) {
     setState(() => _cooldown = seconds);
     _cooldownTimer?.cancel();
     _cooldownTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
@@ -84,13 +99,12 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
-    _startCooldown(30);
+    _startCooldown(45);
 
     final verified = await PhoneOtpDialog.show(
       context,
       phone: national,
       role: 'customer',
-      required: true,
       skipAutoSend: true,
       title: 'Enter verification code',
       description: 'Enter the 6-digit code sent to +91 $national.',
@@ -109,6 +123,49 @@ class _LoginScreenState extends State<LoginScreen> {
           ),
         );
       }
+    }
+  }
+
+  Future<void> _handlePasswordLogin() async {
+    final identifier = _phoneController.text.trim();
+    final isEmail = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(identifier);
+    final phoneErr = IndianMobilePhone.requiredError(identifier);
+    String? idError;
+    if (!isEmail && phoneErr != null) {
+      idError = 'Enter a valid email address or 10-digit Indian mobile number';
+    }
+    final password = _passwordController.text;
+    final passwordError = password.length < 8 ? 'Password must be at least 8 characters' : null;
+    setState(() {
+      _phoneError = idError;
+      _passwordError = passwordError;
+    });
+    if (idError != null || passwordError != null) {
+      showRequiredFieldsBlocked(context);
+      return;
+    }
+
+    setState(() => _isProcessing = true);
+    final authProvider = Provider.of<AuthProvider>(context, listen: false);
+    final success = await authProvider.login(identifier, password);
+    if (!mounted) return;
+    setState(() => _isProcessing = false);
+    if (!success) {
+      final err = authProvider.errorMessage ?? 'Invalid email/phone or password.';
+      setState(() => _phoneError = err);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text(err), backgroundColor: Colors.redAccent),
+      );
+      return;
+    }
+    if (widget.popOnSuccess) {
+      Navigator.of(context).pop(true);
+    } else {
+      Navigator.of(context).pushReplacement(
+        MaterialPageRoute(
+          builder: (_) => CustomerDashboard(key: CustomerDashboard.navigationKey),
+        ),
+      );
     }
   }
 
@@ -152,7 +209,9 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  'Enter your mobile number to receive a one-time code.',
+                  _phoneOtpEnabled == false
+                      ? 'Sign in with your email or mobile number and password.'
+                      : 'Enter your mobile number to receive a one-time code.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 16,
@@ -160,6 +219,67 @@ class _LoginScreenState extends State<LoginScreen> {
                   ),
                 ),
                 const SizedBox(height: 32),
+                if (_phoneOtpEnabled == null)
+                  const Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)))
+                else if (_phoneOtpEnabled == false) ...[
+                  TextField(
+                    controller: _phoneController,
+                    focusNode: _phoneFocusNode,
+                    keyboardType: TextInputType.emailAddress,
+                    style: TextStyle(color: colors.textPrimary),
+                    decoration: InputDecoration(
+                      labelText: 'Email or mobile number *',
+                      errorText: _phoneError,
+                      helperText: 'Use the email or mobile number on your account.',
+                    ),
+                    onChanged: (_) {
+                      if (_phoneError != null) setState(() => _phoneError = null);
+                    },
+                  ),
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _passwordController,
+                    obscureText: !_showPassword,
+                    style: TextStyle(color: colors.textPrimary),
+                    decoration: InputDecoration(
+                      labelText: 'Password *',
+                      errorText: _passwordError,
+                      suffixIcon: IconButton(
+                        onPressed: () => setState(() => _showPassword = !_showPassword),
+                        icon: Icon(_showPassword ? Icons.visibility_off : Icons.visibility),
+                      ),
+                    ),
+                    onChanged: (_) {
+                      if (_passwordError != null) setState(() => _passwordError = null);
+                    },
+                  ),
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),
+                        );
+                      },
+                      child: const Text('Forgot password?'),
+                    ),
+                  ),
+                  const SizedBox(height: 8),
+                  SizedBox(
+                    height: 56,
+                    child: ElevatedButton(
+                      onPressed: isLoading ? null : _handlePasswordLogin,
+                      child: isLoading
+                          ? const SizedBox(
+                              width: 24,
+                              height: 24,
+                              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                            )
+                          : const Text('Sign in', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                    ),
+                  ),
+                ] else ...[
                 const RequiredFieldsNote(),
                 IndianMobileField(
                   controller: _phoneController,
@@ -192,6 +312,7 @@ class _LoginScreenState extends State<LoginScreen> {
                           ),
                   ),
                 ),
+                ],
                 const SizedBox(height: 32),
                 Row(
                   mainAxisAlignment: MainAxisAlignment.center,

@@ -1827,7 +1827,7 @@ export const adminApi = {
   },
 
   async updatePlatformSmsSettings(
-    data: Omit<PlatformSmsSettingsDto, "twilioConfigured">,
+    data: Omit<PlatformSmsSettingsDto, "smsConfigured">,
   ): Promise<PlatformSmsSettingsDto> {
     return apiClient.put<PlatformSmsSettingsDto>("/admin/sms-settings", data);
   },
@@ -1850,5 +1850,6 @@ export interface PlatformSmsSettingsDto {
   vendorBankVerified: boolean;
   vendorDocumentVerified: boolean;
   vendorServiceAreaUpdated: boolean;
-  twilioConfigured: boolean;
+  phoneOtpEnabled: boolean;
+  smsConfigured: boolean;
 }

@@ -238,6 +238,11 @@ export const authApi = {
     return apiClient.post<PhoneOtpActionResponse>('/auth/phone/verify-otp', { phone, code, role });
   },
 
+  async getPhoneOtpEnabled(): Promise<boolean> {
+    const res = await apiClient.get<{ phoneOtpEnabled?: boolean }>('/auth/phone-otp-enabled');
+    return res.phoneOtpEnabled !== false;
+  },
+
   logout(): void {
     apiClient.removeAuthToken();
   },

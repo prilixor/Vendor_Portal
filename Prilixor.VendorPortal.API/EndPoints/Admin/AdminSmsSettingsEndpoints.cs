@@ -43,6 +43,7 @@ public sealed class UpdatePlatformSmsSettingsRequest
     public bool VendorBankVerified { get; set; }
     public bool VendorDocumentVerified { get; set; }
     public bool VendorServiceAreaUpdated { get; set; }
+    public bool PhoneOtpEnabled { get; set; } = true;
 }
 
 public sealed class UpdatePlatformSmsSettingsEndpoint(IPlatformSmsSettingsService settings)
@@ -79,7 +80,8 @@ public sealed class UpdatePlatformSmsSettingsEndpoint(IPlatformSmsSettingsServic
                 req.VendorBankVerified,
                 req.VendorDocumentVerified,
                 req.VendorServiceAreaUpdated,
-                TwilioConfigured: false),
+                req.PhoneOtpEnabled,
+                SmsConfigured: false),
             ct);
         return TypedResults.Ok(dto);
     }

@@ -13,6 +13,7 @@ public sealed class PlatformSmsSettingsConfiguration : IEntityTypeConfiguration<
         builder.Property(x => x.Id).HasColumnName("id");
 
         builder.Property(x => x.TransactionalSmsEnabled).HasColumnName("transactional_sms_enabled").HasDefaultValue(false);
+        builder.Property(x => x.PhoneOtpEnabled).HasColumnName("phone_otp_enabled").HasDefaultValue(true);
         builder.Property(x => x.CustomerOrderPlaced).HasColumnName("customer_order_placed").HasDefaultValue(false);
         builder.Property(x => x.CustomerOrderConfirmed).HasColumnName("customer_order_confirmed").HasDefaultValue(false);
         builder.Property(x => x.CustomerOrderCancelled).HasColumnName("customer_order_cancelled").HasDefaultValue(false);

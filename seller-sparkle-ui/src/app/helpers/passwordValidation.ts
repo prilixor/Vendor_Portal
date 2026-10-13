@@ -86,7 +86,7 @@ export function patchLivePasswordPair(
 }
 
 /* =========================================================================
- * Twilio branch compatible functions & live error helpers
+ * Live password error helpers
  * ========================================================================= */
 
 export function passwordLengthError(

@@ -79,13 +79,16 @@ public sealed class ResetPasswordWithSmsOtpCommandValidator : AbstractValidator<
 internal sealed class SendForgotPasswordSmsOtpCommandHandler(
     IPhoneVerificationService phoneVerification,
     ICustomerRepository customers,
-    IVendorOnboardingRepository vendors)
+    IVendorOnboardingRepository vendors,
+    IPlatformSmsSettingsService smsSettings)
     : ICommandHandler<SendForgotPasswordSmsOtpCommand, PhoneOtpActionDto>
 {
     public async Task<Result<PhoneOtpActionDto>> Handle(
         SendForgotPasswordSmsOtpCommand request,
         CancellationToken cancellationToken)
     {
+        if (!await smsSettings.IsPhoneOtpEnabledAsync(cancellationToken))
+            return PhoneOtpDisabled.Fail<PhoneOtpActionDto>();
         if (!IndianMobilePhone.TryToE164(request.Phone, out var e164)
             || !IndianMobilePhone.TryNormalize(request.Phone, out var national))
         {
@@ -140,13 +143,16 @@ internal sealed class SendForgotPasswordSmsOtpCommandHandler(
 internal sealed class VerifyForgotPasswordSmsOtpCommandHandler(
     IPhoneVerificationService phoneVerification,
     ICustomerRepository customers,
-    IVendorOnboardingRepository vendors)
+    IVendorOnboardingRepository vendors,
+    IPlatformSmsSettingsService smsSettings)
     : ICommandHandler<VerifyForgotPasswordSmsOtpCommand, ForgotPasswordSmsVerifiedDto>
 {
     public async Task<Result<ForgotPasswordSmsVerifiedDto>> Handle(
         VerifyForgotPasswordSmsOtpCommand request,
         CancellationToken cancellationToken)
     {
+        if (!await smsSettings.IsPhoneOtpEnabledAsync(cancellationToken))
+            return PhoneOtpDisabled.Fail<ForgotPasswordSmsVerifiedDto>();
         if (!IndianMobilePhone.TryToE164(request.Phone, out var e164)
             || !IndianMobilePhone.TryNormalize(request.Phone, out var national))
         {
@@ -243,13 +249,16 @@ internal sealed class VerifyForgotPasswordSmsOtpCommandHandler(
 internal sealed class ResetPasswordWithSmsOtpCommandHandler(
     ICustomerRepository customers,
     IVendorOnboardingRepository vendors,
-    IPasswordHasherService passwordHasher)
+    IPasswordHasherService passwordHasher,
+    IPlatformSmsSettingsService smsSettings)
     : ICommandHandler<ResetPasswordWithSmsOtpCommand, PhoneOtpActionDto>
 {
     public async Task<Result<PhoneOtpActionDto>> Handle(
         ResetPasswordWithSmsOtpCommand request,
         CancellationToken cancellationToken)
     {
+        if (!await smsSettings.IsPhoneOtpEnabledAsync(cancellationToken))
+            return PhoneOtpDisabled.Fail<PhoneOtpActionDto>();
         if (!IndianMobilePhone.TryNormalize(request.Phone, out var national))
         {
             return Result.Failure<PhoneOtpActionDto>(new Error(

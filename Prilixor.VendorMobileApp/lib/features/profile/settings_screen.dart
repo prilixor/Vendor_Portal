@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/auth/auth_provider.dart';
+import '../../core/auth/phone_otp_setting.dart';
 import '../../core/providers/vendor_profile_provider.dart';
 import '../../core/theme.dart';
 import '../../core/utils/indian_mobile_phone.dart';
@@ -27,10 +28,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
   String? _nameError;
   String? _phoneError;
   bool _phoneVerified = false;
+  bool _phoneOtpEnabled = true;
 
   @override
   void initState() {
     super.initState();
+    PhoneOtpSetting.isEnabled().then((enabled) {
+      if (mounted) setState(() => _phoneOtpEnabled = enabled);
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final vendorId =
           Provider.of<AuthProvider>(context, listen: false).vendorId;
@@ -210,6 +215,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               },
                             ),
                           ),
+                          if (_phoneOtpEnabled) ...[
                           const SizedBox(width: 8),
                           Padding(
                             padding: const EdgeInsets.only(top: 28),
@@ -242,6 +248,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                               ),
                             ),
                           ),
+                          ],
                         ],
                       ),
                       if (_phoneError == null)

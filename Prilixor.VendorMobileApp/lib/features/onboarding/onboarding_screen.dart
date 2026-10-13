@@ -6,6 +6,7 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/auth/auth_provider.dart';
+import '../../core/auth/phone_otp_setting.dart';
 import '../../core/config/app_urls.dart';
 import '../../core/models/vendor_onboarding_model.dart';
 import '../../core/models/vendor_profile_model.dart';
@@ -280,6 +281,7 @@ class _ProfileTabState extends State<_ProfileTab> with AutomaticKeepAliveClientM
   bool _locating = false;
   bool _resolvingAddress = false;
   bool _phoneVerified = false;
+  bool _phoneOtpEnabled = true;
   String? _phoneError;
   int _stateCityKey = 0;
   final PlaceSearch _placeSearch = PlaceSearch();
@@ -296,6 +298,9 @@ class _ProfileTabState extends State<_ProfileTab> with AutomaticKeepAliveClientM
   void initState() {
     super.initState();
     _syncFromProfile(widget.profile);
+    PhoneOtpSetting.isEnabled().then((enabled) {
+      if (mounted) setState(() => _phoneOtpEnabled = enabled);
+    });
   }
 
   @override
@@ -629,6 +634,7 @@ class _ProfileTabState extends State<_ProfileTab> with AutomaticKeepAliveClientM
                       },
                     ),
                   ),
+                  if (_phoneOtpEnabled) ...[
                   const SizedBox(width: 8),
                   Padding(
                     padding: const EdgeInsets.only(top: 28),
@@ -661,6 +667,7 @@ class _ProfileTabState extends State<_ProfileTab> with AutomaticKeepAliveClientM
                       ),
                     ),
                   ),
+                  ],
                 ],
               ),
               if (_phoneError == null)
