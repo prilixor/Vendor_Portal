@@ -122,7 +122,7 @@ internal sealed class SendForgotPasswordSmsOtpCommandHandler(
 
         if (accountExists)
         {
-            var send = await phoneVerification.SendOtpAsync(e164, cancellationToken);
+            var send = await phoneVerification.SendOtpAsync(e164, PhoneOtpPurpose.PasswordReset, cancellationToken);
             if (!send.Success)
             {
                 return Result.Failure<PhoneOtpActionDto>(new Error(

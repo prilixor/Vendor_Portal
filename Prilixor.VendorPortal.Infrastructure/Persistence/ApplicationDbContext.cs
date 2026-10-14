@@ -709,6 +709,7 @@ public class ApplicationDbContext : DbContext
             entity.Property(x => x.EmailNotificationsEnabled).HasColumnName("email_notifications_enabled");
             entity.Property(x => x.PushNotificationsEnabled).HasColumnName("push_notifications_enabled");
             entity.Property(x => x.NewOrderNotifications).HasColumnName("new_order_notifications");
+            entity.Property(x => x.SmsNotificationsEnabled).HasColumnName("sms_notifications_enabled");
             entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
             entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
             entity.Property(x => x.CreatedBy).HasColumnName("created_by");

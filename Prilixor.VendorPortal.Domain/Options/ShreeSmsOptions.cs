@@ -19,6 +19,12 @@ public sealed class ShreeSmsOptions
     /// <summary>DLT template id for the approved login OTP text.</summary>
     public string OtpTemplateId { get; set; } = string.Empty;
 
+    /// <summary>DLT template id for Number Update (verify mobile number).</summary>
+    public string PhoneVerificationTemplateId { get; set; } = string.Empty;
+
+    /// <summary>DLT template id for Password Reset OTP.</summary>
+    public string PasswordResetTemplateId { get; set; } = string.Empty;
+
     /// <summary>ShreeSMS panel: 4 = OTP Transactional.</summary>
     public int OtpSmsType { get; set; } = 4;
 

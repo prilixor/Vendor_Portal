@@ -34,7 +34,10 @@ public sealed class ShreeSmsPhoneVerificationService(
         && !string.IsNullOrWhiteSpace(_options.EntityId)
         && !string.IsNullOrWhiteSpace(_options.OtpTemplateId);
 
-    public async Task<PhoneOtpSendResult> SendOtpAsync(string e164Phone, CancellationToken ct = default)
+    public async Task<PhoneOtpSendResult> SendOtpAsync(
+        string e164Phone,
+        PhoneOtpPurpose purpose,
+        CancellationToken ct = default)
     {
         if (!TryAcquireSendSlot(e164Phone, out var waitSeconds))
         {
@@ -44,7 +47,8 @@ public sealed class ShreeSmsPhoneVerificationService(
             return new PhoneOtpSendResult(false, message, "phone.otp_rate_limited");
         }
 
-        if (!IsEnabled)
+        var templateId = TemplateIdFor(purpose);
+        if (!IsEnabled || string.IsNullOrWhiteSpace(templateId))
         {
             if (!environment.IsDevelopment())
             {
@@ -54,7 +58,8 @@ public sealed class ShreeSmsPhoneVerificationService(
             var code = string.IsNullOrWhiteSpace(_options.DevFallbackOtp) ? "000000" : _options.DevFallbackOtp.Trim();
             DevOtps[e164Phone] = new DevOtpEntry(code, DateTimeOffset.UtcNow.AddMinutes(10));
             logger.LogWarning(
-                "ShreeSMS OTP not configured (need ApiKey, SenderId, EntityId, OtpTemplateId). DEV OTP for {Phone}: {Code}",
+                "ShreeSMS OTP not configured for {Purpose} (need ApiKey, SenderId, EntityId, and that flow's template id). DEV OTP for {Phone}: {Code}",
+                purpose,
                 e164Phone,
                 code);
             return new PhoneOtpSendResult(true, "Verification code sent (development mode).");
@@ -76,9 +81,9 @@ public sealed class ShreeSmsPhoneVerificationService(
                 ["SenderID"] = _options.SenderId.Trim(),
                 ["SMSType"] = _options.OtpSmsType.ToString(),
                 ["Mobile"] = mobile,
-                ["MsgText"] = ShreeSmsOtpTemplate.WithCode(otp),
+                ["MsgText"] = ShreeSmsOtpTemplate.WithCode(purpose, otp),
                 ["EntityID"] = _options.EntityId.Trim(),
-                ["TemplateID"] = _options.OtpTemplateId.Trim()
+                ["TemplateID"] = templateId
             });
 
             using var response = await client.PostAsync(url, new FormUrlEncodedContent([]), ct);
@@ -151,6 +156,17 @@ public sealed class ShreeSmsPhoneVerificationService(
         }
 
         return Task.FromResult(new PhoneOtpVerifyResult(false, "Invalid or expired verification code.", "phone.invalid_code"));
+    }
+
+    private string TemplateIdFor(PhoneOtpPurpose purpose)
+    {
+        var id = purpose switch
+        {
+            PhoneOtpPurpose.PhoneVerification => _options.PhoneVerificationTemplateId,
+            PhoneOtpPurpose.PasswordReset => _options.PasswordResetTemplateId,
+            _ => _options.OtpTemplateId
+        };
+        return (id ?? string.Empty).Trim();
     }
 
     private static string GenerateNumericOtp(int length)

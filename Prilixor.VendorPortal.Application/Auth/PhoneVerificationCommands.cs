@@ -142,7 +142,7 @@ internal sealed class SendPhoneOtpCommandHandler(
             }
         }
 
-        var send = await phoneVerification.SendOtpAsync(e164, cancellationToken);
+        var send = await phoneVerification.SendOtpAsync(e164, PhoneOtpPurpose.PhoneVerification, cancellationToken);
         if (!send.Success)
         {
             return Result.Failure<PhoneOtpActionDto>(new Error(
