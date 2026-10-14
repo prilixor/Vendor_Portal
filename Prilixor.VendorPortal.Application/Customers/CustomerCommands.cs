@@ -671,7 +671,8 @@ public sealed record CustomerOrderQuoteDto(
     decimal ExpressFeeAmount,
     decimal GstAmount,
     decimal TotalAmount,
-    List<CustomerBuySuggestionDto> BuySuggestions);
+    List<CustomerBuySuggestionDto> BuySuggestions,
+    bool RazorpayTestMode = false);
 
 public sealed record CustomerBuySuggestionDto(
     Guid ListingId,
@@ -1060,7 +1061,8 @@ internal sealed record DeliveryDistanceResult(bool IsSuccess, decimal DistanceKm
 internal sealed class QuoteCustomerOrdersCommandHandler(
     ICustomerRepository customers,
     IVendorOnboardingRepository vendors,
-    IOptions<CustomerPricingOptions> pricingOptions)
+    IOptions<CustomerPricingOptions> pricingOptions,
+    IOptions<RazorpayOptions> razorpayOptions)
     : IQueryHandler<QuoteCustomerOrdersCommand, CustomerOrderQuoteDto>
 {
     public async Task<Result<CustomerOrderQuoteDto>> Handle(QuoteCustomerOrdersCommand request, CancellationToken cancellationToken)
@@ -1239,7 +1241,8 @@ internal sealed class QuoteCustomerOrdersCommandHandler(
             decimal.Round(expressFeeAmount, 2, MidpointRounding.AwayFromZero),
             decimal.Round(gstAmount, 2, MidpointRounding.AwayFromZero),
             decimal.Round(subtotalAmount + depositAmount + serviceFeeAmount + gstAmount, 2, MidpointRounding.AwayFromZero),
-            buySuggestions));
+            buySuggestions,
+            razorpayOptions.Value.KeyId.Trim().StartsWith("rzp_test_", StringComparison.OrdinalIgnoreCase)));
     }
 }
 

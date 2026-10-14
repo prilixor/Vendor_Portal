@@ -194,6 +194,7 @@ export interface CustomerOrderQuoteApi {
     buyAmount: number;
     savingsAmount: number;
   }>;
+  razorpayTestMode?: boolean;
 }
 
 export interface CustomerOrderApi {

@@ -797,6 +797,16 @@ const CustomerCheckout = () => {
               ) : null}
             </div>
 
+            {quote?.razorpayTestMode ? (
+              <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs leading-relaxed text-amber-950 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100">
+                <p className="font-semibold">Test payment. No real money is charged.</p>
+                <p className="mt-1">
+                  Use card <span className="font-semibold">4100 2800 0000 1007</span>. Any future expiry, any CVV, and any name.
+                  If a bank page opens, choose Success.
+                </p>
+              </div>
+            ) : null}
+
             <Button
               className="w-full bg-gradient-primary font-semibold text-primary-foreground shadow-glow hover:opacity-95"
               size="lg"
