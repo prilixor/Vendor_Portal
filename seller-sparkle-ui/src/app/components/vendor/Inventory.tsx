@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card } from "@/app/components/ui/card";
 import { StatCard } from "@/app/components/shared/StatCard";
@@ -8,13 +9,13 @@ import { Label } from "@/app/components/ui/label";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import { FormGrid } from "@/app/components/shared/FormGrid";
 import { FieldError } from "@/app/components/shared/FieldError";
-import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/app/components/ui/dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/app/components/ui/tooltip";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import { Tabs, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { HoverCard, HoverCardContent, HoverCardTrigger } from "@/app/components/ui/hover-card";
 import { InventoryMovement, InventoryRecord } from "@/app/models";
-import { Boxes, CheckCircle2, Clock, Package, Lock, ArrowDownRight, ArrowUpRight, Pause, Play, Ban, Pencil, Plus, Minus, Loader2, Barcode, Trash2, Search, FlaskConical } from "lucide-react";
+import { Boxes, CheckCircle2, Clock, Package, Lock, ArrowDownRight, ArrowUpRight, Pause, Play, Ban, Pencil, Plus, Minus, Loader2, Barcode, Trash2, Search, FlaskConical, ChevronDown } from "lucide-react";
 import { format } from "date-fns";
 import { TablePagination } from "@/app/components/shared/TablePagination";
 import { ListingThumb } from "@/app/components/shared/ListingThumb";
@@ -31,6 +32,65 @@ type ChemicalStockEditRow = {
   total: number;
   reserved: number;
   available: number;
+};
+
+type InventoryChemicalSize = NonNullable<InventoryRecord["chemicalSizes"]>[number];
+
+/** Click to expand stock by packaging size. Same pattern as Admin vendor chemicals. */
+const ChemInventoryDisclosure = ({
+  total,
+  sizes,
+  showTotal = true,
+}: {
+  total: number;
+  sizes: InventoryChemicalSize[];
+  showTotal?: boolean;
+}) => {
+  const [open, setOpen] = useState(false);
+  const count = sizes.length;
+  return (
+    <div className="inline-flex max-w-full flex-col items-end">
+      {showTotal ? <span className="font-mono tabular-nums">{total}</span> : null}
+      {count > 0 && (
+        <>
+          <button
+            type="button"
+            onClick={() => setOpen((value) => !value)}
+            className="inline-flex items-center gap-1 text-[10px] font-medium text-muted-foreground hover:text-foreground"
+            aria-expanded={open}
+          >
+            <span>
+              {count} {count === 1 ? "size" : "sizes"}
+            </span>
+            <ChevronDown className={cn("h-3 w-3 transition-transform", open && "rotate-180")} />
+          </button>
+          {open && (
+            <div className="mt-1 max-h-52 w-max min-w-[14rem] max-w-[18rem] overflow-auto rounded-md border border-border/60 text-left">
+              <div className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] gap-x-3 border-b border-border/60 px-2 py-1 text-[10px] font-medium uppercase tracking-wide text-muted-foreground">
+                <span>Size</span>
+                <span className="text-right">Total</span>
+                <span className="text-right">Avail</span>
+                <span className="text-right">Rsv</span>
+              </div>
+              {sizes.map((size, index) => (
+                <div
+                  key={size.sku || index}
+                  className="grid grid-cols-[minmax(0,1fr)_auto_auto_auto] items-center gap-x-3 border-b border-border/40 px-2 py-1 text-[10px] last:border-b-0"
+                >
+                  <span className="truncate text-muted-foreground" title={size.sku || size.label}>
+                    {size.label}
+                  </span>
+                  <span className="text-right font-mono font-medium tabular-nums">{size.total}</span>
+                  <span className="text-right font-mono tabular-nums text-success">{size.available}</span>
+                  <span className="text-right font-mono tabular-nums text-warning">{size.reserved}</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
 };
 
 const movementMeta: Record<string, { label: string; icon: any; cls: string }> = {
@@ -67,6 +127,49 @@ const assetStatusClass = (status: string) => {
 
 type StockMetric = "total" | "available" | "reserved" | "rented" | "blocked";
 
+const StockSplitBody = ({
+  label,
+  equipment,
+  chemical,
+  combined,
+  hideHeading = false,
+}: {
+  label: string;
+  equipment: number;
+  chemical: number;
+  combined: number;
+  hideHeading?: boolean;
+}) => (
+  <>
+    {hideHeading ? null : (
+      <>
+        <p className="text-sm font-semibold">{label} stock</p>
+        <p className="mt-0.5 text-xs text-muted-foreground">Equipment vs chemicals</p>
+      </>
+    )}
+    <div className={cn("space-y-1.5 text-sm", hideHeading ? "mt-3" : "mt-2.5")}>
+      <div className="flex items-center justify-between gap-3">
+        <span className="flex items-center gap-1.5 text-muted-foreground">
+          <Package className="h-3.5 w-3.5" />
+          Equipment
+        </span>
+        <span className="font-mono font-bold tabular-nums">{equipment}</span>
+      </div>
+      <div className="flex items-center justify-between gap-3">
+        <span className="flex items-center gap-1.5 text-muted-foreground">
+          <FlaskConical className="h-3.5 w-3.5" />
+          Chemicals
+        </span>
+        <span className="font-mono font-bold tabular-nums">{chemical}</span>
+      </div>
+      <div className="flex items-center justify-between gap-3 border-t border-border pt-1.5 font-semibold">
+        <span>All stock</span>
+        <span className="font-mono tabular-nums">{combined}</span>
+      </div>
+    </div>
+  </>
+);
+
 const StockSplitHover = ({
   label,
   equipment,
@@ -85,34 +188,49 @@ const StockSplitHover = ({
       <div className="cursor-default outline-none">{children}</div>
     </HoverCardTrigger>
     <HoverCardContent className="w-56 p-3" side="bottom" align="center">
-      <p className="text-sm font-semibold">{label} stock</p>
-      <p className="mt-0.5 text-xs text-muted-foreground">Equipment vs chemicals</p>
-      <div className="mt-2.5 space-y-1.5 text-sm">
-        <div className="flex items-center justify-between gap-3">
-          <span className="flex items-center gap-1.5 text-muted-foreground">
-            <Package className="h-3.5 w-3.5" />
-            Equipment
-          </span>
-          <span className="font-mono font-bold tabular-nums">{equipment}</span>
-        </div>
-        <div className="flex items-center justify-between gap-3">
-          <span className="flex items-center gap-1.5 text-muted-foreground">
-            <FlaskConical className="h-3.5 w-3.5" />
-            Chemicals
-          </span>
-          <span className="font-mono font-bold tabular-nums">{chemical}</span>
-        </div>
-        <div className="flex items-center justify-between gap-3 border-t border-border pt-1.5 font-semibold">
-          <span>All stock</span>
-          <span className="font-mono tabular-nums">{combined}</span>
-        </div>
-      </div>
+      <StockSplitBody label={label} equipment={equipment} chemical={chemical} combined={combined} />
     </HoverCardContent>
   </HoverCard>
 );
 
+/** Phone layout has no hover. A dropdown from a narrow tile covers the tabs, so the split opens as its own card. */
+const StockSplitTap = ({
+  label,
+  equipment,
+  chemical,
+  combined,
+  children,
+}: {
+  label: string;
+  equipment: number;
+  chemical: number;
+  combined: number;
+  children: React.ReactNode;
+}) => (
+  <Dialog>
+    <DialogTrigger asChild>
+      <button type="button" className="block w-full border-0 bg-transparent p-0 text-inherit">
+        {children}
+      </button>
+    </DialogTrigger>
+    <DialogContent
+      overlayClassName="bg-black/45"
+      className="top-auto bottom-6 w-[min(20rem,calc(100vw-2rem))] max-w-[min(20rem,calc(100vw-2rem))] translate-y-0 p-4"
+    >
+      <div className="pr-6 text-left">
+        <DialogTitle className="text-sm font-semibold">{label} stock</DialogTitle>
+        <DialogDescription className="mt-0.5 text-xs text-muted-foreground">
+          Equipment vs chemicals
+        </DialogDescription>
+        <StockSplitBody label={label} equipment={equipment} chemical={chemical} combined={combined} hideHeading />
+      </div>
+    </DialogContent>
+  </Dialog>
+);
+
 const Inventory = () => {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [inventory, setInventory] = useState<InventoryRecord[]>([]);
   const [editingRow, setEditingRow] = useState<InventoryRecord | null>(null);
   const [editForm, setEditForm] = useState({ total: 0, reserved: 0, rented: 0, blocked: 0 });
@@ -160,40 +278,64 @@ const Inventory = () => {
 
   const [currentPage, setCurrentPage] = useState(1);
   const [movementPage, setMovementPage] = useState(1);
-  const itemsPerPage = 5;
+  const itemsPerPage = 8;
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedSearch(searchQuery.trim()), 350);
+    return () => window.clearTimeout(t);
+  }, [searchQuery]);
+
+  const { data: listingPage, isLoading: listingsLoading, isPlaceholderData } = useQuery({
+    queryKey: ["vendor-listing-summaries", "inventory", user?.id, currentPage, debouncedSearch, activeTab],
+    queryFn: () =>
+      vendorOnboardingApi.getVendorListingSummaries(user!.id, {
+        search: debouncedSearch,
+        isChemical: activeTab === "chemical",
+        page: currentPage,
+        pageSize: itemsPerPage,
+      }, { quiet: true }),
+    enabled: Boolean(user?.id),
+    placeholderData: keepPreviousData,
+  });
+  const isPageChanging = isPlaceholderData && !listingsLoading;
   const movementsPerPage = 8;
 
-  const filteredInventory = useMemo(() => {
-    let result = inventory;
-    result = result.filter(row => {
-      const isChem = listingIsChemical[row.productId] || false;
-      if (activeTab === "equipment" && isChem) return false;
-      if (activeTab === "chemical" && !isChem) return false;
-      return true;
-    });
-
-    if (searchQuery.trim()) {
-      result = result.filter(row => 
-        row.productName.toLowerCase().includes(searchQuery.toLowerCase())
-      );
-    }
-    return result;
-  }, [inventory, searchQuery, activeTab, listingIsChemical]);
+  const paginatedInventory = useMemo(
+    () =>
+      (listingPage?.items ?? []).map((l) => ({
+        productId: l.id,
+        catalogProductId: l.productId,
+        isChemical: l.isChemical,
+        productName: `${l.listingTitle}${l.productName && l.productName !== l.listingTitle ? ` (${l.productName})` : ""}`,
+        primaryImage: resolveItemImageUrl({
+          primaryImageUrl: l.primaryImageUrl,
+          primaryThumbnailUrl: l.primaryThumbnailUrl,
+        }) ?? undefined,
+        total: l.totalQuantity,
+        available: l.availableQuantity,
+        reserved: l.reservedQuantity,
+        rented: l.rentedQuantity,
+        blocked: l.blockedQuantity,
+        chemicalSizes: (l.chemicalSizes ?? []).map((size) => ({
+          label: size.label,
+          sku: size.sku,
+          buyPrice: size.buyPrice,
+          total: size.totalQuantity,
+          available: size.availableQuantity,
+          reserved: size.reservedQuantity,
+        })),
+      }) satisfies InventoryRecord),
+    [listingPage?.items],
+  );
+  const filteredInventory = paginatedInventory;
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchQuery, activeTab]);
+  }, [debouncedSearch, activeTab]);
 
-  const totalInventoryPages = Math.max(1, Math.ceil(filteredInventory.length / itemsPerPage));
+  const totalInventoryPages = Math.max(1, Math.ceil((listingPage?.totalCount ?? 0) / itemsPerPage));
   const safeInventoryPage = Math.min(currentPage, totalInventoryPages);
-  const paginatedInventory = useMemo(
-    () =>
-      filteredInventory.slice(
-        (safeInventoryPage - 1) * itemsPerPage,
-        safeInventoryPage * itemsPerPage,
-      ),
-    [filteredInventory, safeInventoryPage],
-  );
 
   const totalMovementPages = Math.max(1, Math.ceil(movements.length / movementsPerPage));
   const safeMovementPage = Math.min(movementPage, totalMovementPages);
@@ -209,115 +351,17 @@ const Inventory = () => {
 
   const loadInventory = async () => {
     if (!user) return;
-
-    const [listings, products] = await Promise.all([
-      vendorOnboardingApi.getVendorProductListings(user.id),
-      vendorOnboardingApi.getProducts(),
-    ]);
-
-    const productById = new Map(products.map((p) => [p.id, p.productName]));
-    
-    const isChemMap: Record<string, boolean> = {};
-    listings.forEach(l => {
-      const p = products.find(prod => prod.id === l.productId);
-      isChemMap[l.id] = !!(
-        l.isChemical ||
-        p?.baseUnit ||
-        p?.casNumber ||
-        p?.chemicalFormula
-      );
-    });
-    setListingIsChemical(isChemMap);
-
-    const rows = await Promise.all(
-      listings.map(async (listing) => {
-        const isChemical = !!isChemMap[listing.id];
-        const baseName = `${listing.listingTitle}${productById.get(listing.productId) ? ` (${productById.get(listing.productId)})` : ""}`;
-        const primaryImage =
-          resolveItemImageUrl({
-            primaryImageUrl: listing.primaryImageUrl,
-            primaryThumbnailUrl: listing.primaryThumbnailUrl,
-          }) ?? undefined;
-
-        try {
-          // Chemicals: packaging-size (variant) stock is the source of truth — not flat VendorInventory.
-          if (isChemical) {
-            const [inv, variantRows] = await Promise.all([
-              vendorOnboardingApi.getVendorInventory(user.id, listing.id).catch(() => null),
-              vendorOnboardingApi.getVariantInventory(user.id, listing.id).catch(() => []),
-            ]);
-
-            if (variantRows.length > 0) {
-              const total = variantRows.reduce((sum, r) => sum + (r.totalQuantity || 0), 0);
-              const available = variantRows.reduce((sum, r) => sum + (r.availableQuantity || 0), 0);
-              const reserved = variantRows.reduce((sum, r) => sum + (r.reservedQuantity || 0), 0);
-              return {
-                productId: listing.id,
-                catalogProductId: listing.productId,
-                isChemical: true,
-                productName: baseName,
-                primaryImage,
-                total,
-                available,
-                reserved,
-                rented: 0,
-                blocked: inv?.blockedQuantity ?? 0,
-              } satisfies InventoryRecord;
-            }
-          }
-
-          const inv = await vendorOnboardingApi.getVendorInventory(user.id, listing.id);
-          return {
-            productId: listing.id,
-            catalogProductId: listing.productId,
-            isChemical,
-            productName: baseName,
-            primaryImage,
-            total: inv.totalQuantity,
-            available: inv.availableQuantity,
-            reserved: inv.reservedQuantity,
-            rented: inv.rentedQuantity,
-            blocked: inv.blockedQuantity,
-          } satisfies InventoryRecord;
-        } catch (error) {
-          const message = error instanceof Error ? error.message.toLowerCase() : "";
-          if (!message.includes("not found")) {
-            throw error;
-          }
-          const seeded = await vendorOnboardingApi.upsertVendorInventory(user.id, listing.id, {
-            vendorId: user.id,
-            listingId: listing.id,
-            totalQuantity: listing.availableQuantity,
-            availableQuantity: listing.availableQuantity,
-            reservedQuantity: 0,
-            rentedQuantity: 0,
-            blockedQuantity: 0,
-          });
-          return {
-            productId: listing.id,
-            catalogProductId: listing.productId,
-            isChemical,
-            productName: baseName,
-            primaryImage,
-            total: seeded.totalQuantity,
-            available: seeded.availableQuantity,
-            reserved: seeded.reservedQuantity,
-            rented: seeded.rentedQuantity,
-            blocked: seeded.blockedQuantity,
-          } satisfies InventoryRecord;
-        }
-      })
-    );
-
-    setInventory(rows);
+    await queryClient.invalidateQueries({ queryKey: ["vendor-listing-summaries", "inventory"] });
+    const listings = listingPage?.items ?? [];
+    setListingIsChemical(Object.fromEntries(listings.map((l) => [l.id, l.isChemical])));
 
     const movementRows = await Promise.all(
       listings.map(async (listing) => {
         try {
-          const m = await vendorOnboardingApi.getVendorInventoryMovements(user.id, listing.id);
+          const m = await vendorOnboardingApi.getVendorInventoryMovements(user.id, listing.id, { quiet: true });
           return m.map((x) => ({
             id: x.id,
-            productName: `${listing.listingTitle}${productById.get(listing.productId) ? ` (${productById.get(listing.productId)})` : ""}`,
+            productName: `${listing.listingTitle}${listing.productName && listing.productName !== listing.listingTitle ? ` (${listing.productName})` : ""}`,
             type: toUiMovementType(x.movementType),
             quantity: x.quantity,
             reference: x.referenceType || x.referenceId || "-",
@@ -336,12 +380,32 @@ const Inventory = () => {
   };
 
   useEffect(() => {
-    if (!user) return;
+    if (!user || !listingPage) return;
     const run = async () => {
       setBusy(true);
-      setLoadError(null);
       try {
-        await loadInventory();
+        const listings = listingPage.items;
+        setListingIsChemical(Object.fromEntries(listings.map((l) => [l.id, l.isChemical])));
+        const movementRows = await Promise.all(
+          listings.map(async (listing) => {
+            try {
+              const m = await vendorOnboardingApi.getVendorInventoryMovements(user.id, listing.id, { quiet: true });
+              return m.map((x) => ({
+                id: x.id,
+                productName: `${listing.listingTitle}${listing.productName && listing.productName !== listing.listingTitle ? ` (${listing.productName})` : ""}`,
+                type: toUiMovementType(x.movementType),
+                quantity: x.quantity,
+                reference: x.referenceType || x.referenceId || "-",
+                timestamp: x.eventAt || new Date().toISOString(),
+              } satisfies InventoryMovement));
+            } catch {
+              return [] as InventoryMovement[];
+            }
+          }),
+        );
+        setMovements(
+          movementRows.flat().sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()),
+        );
       } catch (error) {
         const message = error instanceof Error ? error.message : "Failed to load inventory.";
         setLoadError(message);
@@ -352,45 +416,43 @@ const Inventory = () => {
       }
     };
     void run();
-  }, [user]);
+  }, [user?.id, listingPage?.page, listingPage?.items?.map((i) => i.id).join("|")]);
 
-  const totals = useMemo(
-    () =>
-      inventory.reduce(
-        (acc, r) => ({
-          total: acc.total + r.total,
-          available: acc.available + r.available,
-          reserved: acc.reserved + r.reserved,
-          rented: acc.rented + r.rented,
-          blocked: acc.blocked + r.blocked,
-        }),
-        { total: 0, available: 0, reserved: 0, rented: 0, blocked: 0 }
-      ),
-    [inventory]
-  );
+  const mapStock = (stock?: { totalUnits: number; availableUnits: number; reservedUnits: number; rentedUnits: number; blockedUnits: number }) => ({
+    total: stock?.totalUnits ?? 0,
+    available: stock?.availableUnits ?? 0,
+    reserved: stock?.reservedUnits ?? 0,
+    rented: stock?.rentedUnits ?? 0,
+    blocked: stock?.blockedUnits ?? 0,
+  });
+  const equipmentStock = mapStock(listingPage?.equipmentStock);
+  const chemicalStock = mapStock(listingPage?.chemicalStock);
+  const hasStockSplit = listingPage?.equipmentStock != null || listingPage?.chemicalStock != null;
+  const totals = hasStockSplit
+    ? {
+        total: equipmentStock.total + chemicalStock.total,
+        available: equipmentStock.available + chemicalStock.available,
+        reserved: equipmentStock.reserved + chemicalStock.reserved,
+        rented: equipmentStock.rented + chemicalStock.rented,
+        blocked: equipmentStock.blocked + chemicalStock.blocked,
+      }
+    : {
+        total: listingPage?.totalUnits ?? 0,
+        available: listingPage?.availableUnits ?? 0,
+        reserved: listingPage?.reservedUnits ?? 0,
+        rented: listingPage?.rentedUnits ?? 0,
+        blocked: listingPage?.blockedUnits ?? 0,
+      };
 
-  const splitTotals = useMemo(() => {
-    const empty = () => ({ total: 0, available: 0, reserved: 0, rented: 0, blocked: 0 });
-    const equipment = empty();
-    const chemical = empty();
-    for (const row of inventory) {
-      const bucket = listingIsChemical[row.productId] || row.isChemical ? chemical : equipment;
-      bucket.total += row.total;
-      bucket.available += row.available;
-      bucket.reserved += row.reserved;
-      bucket.rented += row.rented;
-      bucket.blocked += row.blocked;
-    }
-    return { equipment, chemical };
-  }, [inventory, listingIsChemical]);
+  const splitTotals = {
+    equipment: equipmentStock,
+    chemical: chemicalStock,
+  };
 
-  const tabCounts = useMemo(
-    () => ({
-      equipment: inventory.filter((r) => !listingIsChemical[r.productId]).length,
-      chemical: inventory.filter((r) => !!listingIsChemical[r.productId]).length,
-    }),
-    [inventory, listingIsChemical],
-  );
+  const tabCounts = {
+    equipment: listingPage?.equipmentCount ?? 0,
+    chemical: listingPage?.chemicalCount ?? 0,
+  };
 
   const summaryStats: { key: StockMetric; label: string; value: number; cls: string }[] = [
     { key: "total", label: "Total", value: totals.total, cls: "text-foreground" },
@@ -935,7 +997,7 @@ const Inventory = () => {
         }
       />
 
-      {!hasLoaded && busy && <PageLoaderSlot />}
+      {listingsLoading && !listingPage && <PageLoaderSlot />}
       {loadError && (
         <Card className="mb-4 border-destructive/30 bg-destructive-soft p-4 text-sm text-destructive">{loadError}</Card>
       )}
@@ -945,7 +1007,7 @@ const Inventory = () => {
           <div className="overflow-hidden rounded-xl border border-border/60 bg-card sm:hidden">
             <div className="grid grid-cols-5 divide-x divide-border">
               {summaryStats.map((stat) => (
-                <StockSplitHover
+                <StockSplitTap
                   key={stat.key}
                   label={stat.label}
                   equipment={splitTotals.equipment[stat.key]}
@@ -959,7 +1021,7 @@ const Inventory = () => {
                     <p className="text-[10px] font-medium leading-tight tracking-wide text-muted-foreground">{stat.label}</p>
                     <p className={cn("mt-1 font-mono text-base font-bold tabular-nums", stat.cls)}>{stat.value}</p>
                   </div>
-                </StockSplitHover>
+                </StockSplitTap>
               ))}
             </div>
           </div>
@@ -1010,7 +1072,7 @@ const Inventory = () => {
           </div>
         </div>
         
-        <div className="mt-4 space-y-3 md:hidden" style={filteredInventory.length > 0 ? { minHeight: itemsPerPage * 168 } : undefined}>
+        <div className={cn("mt-4 space-y-3 md:hidden transition-opacity duration-200", isPageChanging && "opacity-50")}>
           {paginatedInventory.map((row) => {
             const utilization = row.total === 0 ? 0 : ((row.rented + row.reserved) / row.total) * 100;
             const stockCells = [
@@ -1046,19 +1108,24 @@ const Inventory = () => {
                     </div>
                   ))}
                 </div>
+                {activeTab === "chemical" && (row.chemicalSizes?.length ?? 0) > 0 ? (
+                  <div className="mt-2 flex justify-end">
+                    <ChemInventoryDisclosure total={row.total} sizes={row.chemicalSizes!} showTotal={false} />
+                  </div>
+                ) : null}
                 <div className="mt-2 border-t border-border/60 pt-1">{stockRowActions(row)}</div>
               </div>
             );
           })}
-          {hasLoaded && inventory.length === 0 && (
+          {!listingsLoading && (listingPage?.totalCount ?? 0) === 0 && !debouncedSearch && (
             <p className="py-8 text-center text-sm text-muted-foreground">No listings found to track inventory yet.</p>
           )}
-          {hasLoaded && inventory.length > 0 && filteredInventory.length === 0 && (
+          {!listingsLoading && (listingPage?.totalCount ?? 0) === 0 && !!debouncedSearch && (
             <p className="py-8 text-center text-sm text-muted-foreground">No products match your search.</p>
           )}
         </div>
 
-        <div className="mt-4 hidden overflow-x-auto rounded-lg border border-border md:block">
+        <div className={cn("mt-4 hidden overflow-x-auto rounded-lg border border-border md:block transition-opacity duration-200", isPageChanging && "opacity-50")}>
           <table className="w-full min-w-[700px] text-sm">
             <thead className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
               <tr className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
@@ -1076,14 +1143,20 @@ const Inventory = () => {
               {paginatedInventory.map((row) => {
                 const utilization = row.total === 0 ? 0 : ((row.rented + row.reserved) / row.total) * 100;
                 return (
-                  <tr key={row.productId} className="h-[72px] hover:bg-muted/20">
+                  <tr key={row.productId} className="align-top hover:bg-muted/20">
                     <td className="px-4 py-4">
                       <div className="flex min-w-0 items-center gap-3">
                         <ListingThumb src={row.primaryImage} alt={row.productName} />
                         <span className="min-w-0 truncate font-medium">{row.productName}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-4 text-right font-mono">{row.total}</td>
+                    <td className="px-4 py-4 text-right font-mono">
+                      {activeTab === "chemical" && (row.chemicalSizes?.length ?? 0) > 0 ? (
+                        <ChemInventoryDisclosure total={row.total} sizes={row.chemicalSizes!} />
+                      ) : (
+                        row.total
+                      )}
+                    </td>
                     <td className="px-4 py-4 text-right">
                       <span className="inline-flex items-center justify-center font-mono font-medium text-success bg-success/10 px-2.5 py-0.5 rounded-full min-w-[3rem]">
                         {row.available}
@@ -1108,20 +1181,14 @@ const Inventory = () => {
                   </tr>
                 );
               })}
-              {filteredInventory.length > 0 &&
-                Array.from({ length: Math.max(0, itemsPerPage - paginatedInventory.length) }).map((_, i) => (
-                  <tr key={`stock-pad-${i}`} className="h-[72px]">
-                    <td colSpan={activeTab === "equipment" ? 8 : 7} />
-                  </tr>
-                ))}
-              {hasLoaded && inventory.length === 0 && (
+              {!listingsLoading && (listingPage?.totalCount ?? 0) === 0 && !debouncedSearch && (
                 <tr>
                   <td colSpan={8} className="px-4 py-8 text-center text-sm text-muted-foreground">
                     No listings found to track inventory yet.
                   </td>
                 </tr>
               )}
-              {hasLoaded && inventory.length > 0 && filteredInventory.length === 0 && (
+              {listingPage && (listingPage.totalCount ?? 0) === 0 && debouncedSearch && (
                 <tr>
                   <td colSpan={8} className="px-4 py-8 text-center text-sm text-muted-foreground">
                     No products match your search.
@@ -1131,11 +1198,11 @@ const Inventory = () => {
             </tbody>
           </table>
         </div>
-        {filteredInventory.length > 0 && (
+        {(listingPage?.totalCount ?? 0) > 0 && (
           <TablePagination
             page={safeInventoryPage}
             pageSize={itemsPerPage}
-            total={filteredInventory.length}
+            total={listingPage?.totalCount ?? 0}
             onPageChange={setCurrentPage}
             label="products"
             ariaLabel="Product stock pagination"

@@ -1,4 +1,4 @@
-import { apiClient } from "@/app/services/apiClient";
+import { apiClient, type ApiClientOptions } from "@/app/services/apiClient";
 
 export interface VendorProfileApiDto {
   id: string;
@@ -15,6 +15,7 @@ export interface VendorProfileApiDto {
   latitude?: number;
   longitude?: number;
   onboardingCompleted: boolean;
+  isPhoneVerified?: boolean;
 }
 
 export interface VendorStatusDto {
@@ -542,6 +543,8 @@ export interface VendorOrderApiDto {
   rentalPeriodUnit?: "day" | "week" | "month";
   totalAmount: number;
   vendorSubtotalAmount: number;
+  depositAmount?: number;
+  gstAmount?: number;
   startDate?: string;
   endDate?: string;
   listingId: string;
@@ -569,6 +572,145 @@ export interface VendorOrderApiDto {
   rentalDiscountType?: string | null;
   rentalDiscountValue?: number | null;
   rentalFinalPrice?: number | null;
+}
+
+export interface VendorOrderListResult {
+  items: VendorOrderApiDto[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  statusCounts: Record<string, number>;
+}
+
+export interface VendorExpirationGroupApiDto {
+  baseOrderNumber: string;
+  items: VendorExpiringOrderApiDto[];
+}
+
+export interface VendorExpirationListResult {
+  items: VendorExpirationGroupApiDto[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface VendorNotificationListResult {
+  items: VendorNotificationDto[];
+  totalCount: number;
+  unreadCount: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface VendorDispatchOfferListResult {
+  items: VendorDispatchOfferApiDto[];
+  totalCount: number;
+  pendingCount: number;
+  page: number;
+  pageSize: number;
+  typeCounts: Record<string, number>;
+}
+
+export interface VendorDashboardActivityApiDto {
+  id: string;
+  title: string;
+  message: string;
+  timestamp: string;
+  notificationType: string;
+  read: boolean;
+}
+
+export interface VendorDashboardListingApiDto {
+  id: string;
+  title: string;
+  category: string;
+  dailyRent: number;
+  stock: number;
+  status: string;
+}
+
+export interface VendorDashboardSummaryApiDto {
+  ownerName: string;
+  businessName: string;
+  isVerified: boolean;
+  verificationMessage: string;
+  totalListings: number;
+  activeListings: number;
+  inventoryUnits: number;
+  unreadNotifications: number;
+  pendingRequestsCount: number;
+  confirmedOrdersCount: number;
+  inTransitOrdersCount: number;
+  dueReturnsCount: number;
+  recentActivity: VendorDashboardActivityApiDto[];
+  topListings: VendorDashboardListingApiDto[];
+}
+
+export interface VendorListingSummaryApiDto {
+  id: string;
+  productId: string;
+  listingTitle: string;
+  productName: string;
+  categoryName: string;
+  dailyRent: number;
+  weeklyRent: number;
+  monthlyRent: number;
+  securityDeposit: number;
+  availableQuantity: number;
+  totalQuantity: number;
+  reservedQuantity: number;
+  rentedQuantity: number;
+  blockedQuantity: number;
+  listingStatus: string;
+  isChemical: boolean;
+  primaryImageUrl?: string | null;
+  primaryThumbnailUrl?: string | null;
+  brandName?: string | null;
+  modelName?: string | null;
+  hasCustomVendorPricing?: boolean;
+  vendorDailyRent?: number;
+  vendorBuyPrice?: number | null;
+  variantPayouts?: { variantId: string; vendorPrice: number }[];
+  chemicalSizes?: VendorListingChemicalSizeApiDto[];
+}
+
+export interface VendorListingChemicalSizeApiDto {
+  variantId: string;
+  label: string;
+  sku: string;
+  sizeValue: number;
+  sizeUnit: string;
+  buyPrice: number;
+  totalQuantity: number;
+  availableQuantity: number;
+  reservedQuantity: number;
+}
+
+export interface VendorListingListResult {
+  items: VendorListingSummaryApiDto[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  totalUnits: number;
+  availableUnits: number;
+  reservedUnits: number;
+  rentedUnits: number;
+  blockedUnits: number;
+  equipmentCount: number;
+  chemicalCount: number;
+  activeCount: number;
+  inactiveCount: number;
+  draftCount: number;
+  equipmentStock?: VendorListingStockUnitsApiDto;
+  chemicalStock?: VendorListingStockUnitsApiDto;
+}
+
+export interface VendorListingStockUnitsApiDto {
+  totalUnits: number;
+  availableUnits: number;
+  reservedUnits: number;
+  rentedUnits: number;
+  blockedUnits: number;
 }
 
 export interface VendorExpiringOrderApiDto {
@@ -712,6 +854,10 @@ export const vendorOnboardingApi = {
     return apiClient.get<ProductApiDto[]>(`/vendors/catalog/products${query}`);
   },
 
+  getProduct(productId: string) {
+    return apiClient.get<ProductApiDto>(`/vendors/catalog/products/${encodeURIComponent(productId)}`);
+  },
+
   createVendorProductListing(vendorId: string, payload: UpsertVendorProductListingPayload) {
     return apiClient.post<VendorProductListingApiDto>(`/vendors/${vendorId}/listings`, payload);
   },
@@ -722,6 +868,28 @@ export const vendorOnboardingApi = {
 
   getVendorProductListings(vendorId: string) {
     return apiClient.get<VendorProductListingApiDto[]>(`/vendors/${vendorId}/listings`);
+  },
+
+  getVendorListingSummaries(
+    vendorId: string,
+    params: { search?: string; status?: string; isChemical?: boolean; page?: number; pageSize?: number } = {},
+    options?: ApiClientOptions,
+  ) {
+    const qs = new URLSearchParams();
+    const search = params.search?.trim();
+    if (search) qs.set("search", search);
+    if (params.status && params.status !== "all") qs.set("status", params.status);
+    if (params.isChemical != null) qs.set("isChemical", String(params.isChemical));
+    qs.set("page", String(params.page && params.page > 0 ? params.page : 1));
+    qs.set("pageSize", String(params.pageSize && params.pageSize > 0 ? params.pageSize : 8));
+    return apiClient.get<VendorListingListResult>(
+      `/vendors/${vendorId}/listings/summaries?${qs.toString()}`,
+      options,
+    );
+  },
+
+  getVendorDashboardSummary(vendorId: string, options?: ApiClientOptions) {
+    return apiClient.get<VendorDashboardSummaryApiDto>(`/vendors/${vendorId}/dashboard/summary`, options);
   },
 
   deleteVendorProductListing(vendorId: string, listingId: string) {
@@ -764,8 +932,8 @@ export const vendorOnboardingApi = {
     return apiClient.post<VendorInventoryMovementApiDto>(`/vendors/${vendorId}/listings/${listingId}/inventory/movements`, payload);
   },
 
-  getVendorInventoryMovements(vendorId: string, listingId: string) {
-    return apiClient.get<VendorInventoryMovementApiDto[]>(`/vendors/${vendorId}/listings/${listingId}/inventory/movements`);
+  getVendorInventoryMovements(vendorId: string, listingId: string, options?: ApiClientOptions) {
+    return apiClient.get<VendorInventoryMovementApiDto[]>(`/vendors/${vendorId}/listings/${listingId}/inventory/movements`, options);
   },
 
   getVendorProductAssets(vendorId: string, listingId: string) {
@@ -800,6 +968,21 @@ export const vendorOnboardingApi = {
     return apiClient.get<VendorNotificationDto[]>(`/vendors/${vendorId}/notifications`);
   },
 
+  getVendorNotificationSummaries(
+    vendorId: string,
+    params: { unreadOnly?: boolean; page?: number; pageSize?: number } = {},
+    options?: ApiClientOptions,
+  ) {
+    const qs = new URLSearchParams();
+    if (params.unreadOnly) qs.set("unreadOnly", "true");
+    qs.set("page", String(params.page && params.page > 0 ? params.page : 1));
+    qs.set("pageSize", String(params.pageSize && params.pageSize > 0 ? params.pageSize : 15));
+    return apiClient.get<VendorNotificationListResult>(
+      `/vendors/${vendorId}/notifications/summaries?${qs.toString()}`,
+      options,
+    );
+  },
+
   markVendorNotificationAsRead(vendorId: string, notificationId: string) {
     return apiClient.patch<VendorNotificationDto>(`/vendors/${vendorId}/notifications/${notificationId}/read`, { vendorId, notificationId });
   },
@@ -820,6 +1003,27 @@ export const vendorOnboardingApi = {
     return apiClient.get<VendorDispatchOfferApiDto[]>(`/vendors/${vendorId}/dispatch/offers`, options);
   },
 
+  getVendorDispatchOfferSummaries(
+    vendorId: string,
+    params: { search?: string; orderType?: string; page?: number; pageSize?: number } = {},
+    options?: ApiClientOptions,
+  ) {
+    const qs = new URLSearchParams();
+    const search = params.search?.trim();
+    if (search) qs.set("search", search);
+    if (params.orderType && params.orderType !== "all") qs.set("orderType", params.orderType);
+    qs.set("page", String(params.page && params.page > 0 ? params.page : 1));
+    qs.set("pageSize", String(params.pageSize && params.pageSize > 0 ? params.pageSize : 8));
+    return apiClient.get<VendorDispatchOfferListResult>(
+      `/vendors/${vendorId}/dispatch/offers/summaries?${qs.toString()}`,
+      options,
+    );
+  },
+
+  getVendorPendingDispatchOfferCount(vendorId: string, options?: ApiClientOptions) {
+    return apiClient.get<number>(`/vendors/${vendorId}/dispatch/offers/pending-count`, options);
+  },
+
   acceptVendorDispatchOrder(vendorId: string, orderId: string) {
     return apiClient.patch(`/vendors/${vendorId}/dispatch/orders/${orderId}/accept`, {});
   },
@@ -837,8 +1041,32 @@ export const vendorOnboardingApi = {
     return apiClient.get<VendorOrderApiDto[]>(`/vendors/${vendorId}/orders${query}`);
   },
 
+  getVendorOrderSummaries(
+    vendorId: string,
+    params: { search?: string; status?: string; page?: number; pageSize?: number } = {},
+    options?: ApiClientOptions,
+  ) {
+    const qs = new URLSearchParams();
+    const search = params.search?.trim();
+    if (search) qs.set("search", search);
+    if (params.status && params.status !== "all") qs.set("status", params.status);
+    qs.set("page", String(params.page && params.page > 0 ? params.page : 1));
+    qs.set("pageSize", String(params.pageSize && params.pageSize > 0 ? params.pageSize : 8));
+    return apiClient.get<VendorOrderListResult>(
+      `/vendors/${vendorId}/orders/summaries?${qs.toString()}`,
+      options,
+    );
+  },
+
   getVendorOrder(vendorId: string, orderId: string) {
     return apiClient.get<VendorOrderApiDto>(`/vendors/${vendorId}/orders/${orderId}`);
+  },
+
+  getVendorOrderGroup(vendorId: string, orderId: string, options?: ApiClientOptions) {
+    return apiClient.get<VendorOrderApiDto[]>(
+      `/vendors/${vendorId}/orders/${encodeURIComponent(orderId)}/group`,
+      options,
+    );
   },
 
   async getVendorOrderImageRequest(vendorId: string, orderId: string) {
@@ -897,6 +1125,23 @@ export const vendorOnboardingApi = {
 
   getVendorOrderExpirations(vendorId: string, withinDays = 7) {
     return apiClient.get<VendorExpiringOrderApiDto[]>(`/vendors/${vendorId}/orders/expirations?withinDays=${withinDays}`);
+  },
+
+  getVendorExpirationSummaries(
+    vendorId: string,
+    params: { withinDays?: number; search?: string; page?: number; pageSize?: number } = {},
+    options?: ApiClientOptions,
+  ) {
+    const qs = new URLSearchParams();
+    qs.set("withinDays", String(params.withinDays && params.withinDays > 0 ? params.withinDays : 7));
+    const search = params.search?.trim();
+    if (search) qs.set("search", search);
+    qs.set("page", String(params.page && params.page > 0 ? params.page : 1));
+    qs.set("pageSize", String(params.pageSize && params.pageSize > 0 ? params.pageSize : 8));
+    return apiClient.get<VendorExpirationListResult>(
+      `/vendors/${vendorId}/orders/expirations/summaries?${qs.toString()}`,
+      options,
+    );
   },
 
   // Push subscription methods

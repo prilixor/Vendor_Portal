@@ -489,6 +489,17 @@ img.customer-catalog-media-img {
   z-index: 6 !important;
 }
 
+/* Sonner: full cards stacked with gap — no scaled “cascade” peek behind. */
+[data-sonner-toaster] {
+  --offset: 16px;
+}
+[data-sonner-toaster][data-y-position="top"] {
+  top: var(--offset);
+}
+[data-sonner-toast] {
+  --scale: 1 !important;
+}
+
 .legal-bubble-toolbar {
   pointer-events: auto;
 }

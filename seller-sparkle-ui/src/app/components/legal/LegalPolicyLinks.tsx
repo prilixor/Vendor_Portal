@@ -40,9 +40,9 @@ function PolicyQuiet({
               linkClassName,
             )}
           >
-            <span className="min-w-0 truncate font-medium tracking-tight">{doc.title}</span>
+            <span className="min-w-0 break-words font-medium tracking-tight sm:truncate">{doc.title}</span>
             <ArrowUpRight
-              className="h-3.5 w-3.5 shrink-0 opacity-0 transition-all group-hover:translate-x-0.5 group-hover:-translate-y-0.5 group-hover:opacity-100 group-focus-visible:opacity-100"
+              className="h-3.5 w-3.5 shrink-0 opacity-70 transition-all lg:opacity-0 lg:group-hover:translate-x-0.5 lg:group-hover:-translate-y-0.5 lg:group-hover:opacity-100 lg:group-focus-visible:opacity-100"
               aria-hidden
             />
             <span className="sr-only">(opens in a new tab)</span>
@@ -76,7 +76,7 @@ function PolicyMenuList({
               linkClassName,
             )}
           >
-            <span className="min-w-0 truncate">{doc.title}</span>
+            <span className="min-w-0 break-words">{doc.title}</span>
             <ArrowUpRight className="h-3.5 w-3.5 shrink-0 text-muted-foreground" aria-hidden />
           </Link>
         </li>
@@ -100,8 +100,8 @@ export function LegalPolicyLinks({
   linkClassName?: string;
   fallback?: PublicLegalDocumentListItem[];
   /**
-   * inline — checkout / product one-line
-   * quiet — settings (typography list, senior product UI)
+   * inline — phone: one full-width row; sm+: dot-separated line
+   * quiet — settings list
    * menu — sidebar popover
    */
   layout?: LegalPolicyLinksLayout | LegacyLayout;
@@ -153,7 +153,7 @@ export function LegalPolicyLinks({
               <span className="truncate underline-offset-2 hover:underline">{menuLabel}</span>
             </Button>
           </PopoverTrigger>
-          <PopoverContent align="start" side="top" className="w-64 p-2 shadow-md">
+          <PopoverContent align="start" side="top" className="w-[min(16rem,calc(100vw-1.5rem))] p-2 shadow-md">
             <p className="px-2 pb-1.5 pt-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted-foreground">
               Policies
             </p>
@@ -165,26 +165,37 @@ export function LegalPolicyLinks({
   }
 
   return (
-    <nav aria-label="Policies" className={cn("flex flex-wrap items-center gap-x-0 gap-y-1", className)}>
+    // Phone rows share the container's left and right edges. The dot only joins links on sm+.
+    <nav
+      aria-label="Policies"
+      className={cn(
+        "flex w-full min-w-0 flex-col sm:flex-row sm:flex-wrap sm:items-center",
+        className,
+      )}
+    >
       {docs.map((doc, index) => (
-        <span key={doc.slug} className="inline-flex max-w-full items-center whitespace-nowrap">
-          {index > 0 ? (
-            <span className="mx-1.5 shrink-0 text-muted-foreground/40" aria-hidden>
-              ·
-            </span>
-          ) : null}
+        <span
+          key={doc.slug}
+          className="flex w-full min-w-0 max-w-full items-center border-b border-border/60 last:border-b-0 sm:inline-flex sm:w-auto sm:border-0"
+        >
           <Link
             to={legalHref(doc)}
             target="_blank"
             rel="noopener noreferrer"
             className={cn(
-              "max-w-full truncate underline",
+              "flex w-full min-w-0 items-center justify-between gap-3 py-2.5 text-left text-[13px] leading-snug no-underline sm:inline sm:w-auto sm:py-0 sm:text-[11px] sm:underline",
               policyLinkClass,
               linkClassName,
             )}
           >
-            {doc.title}
+            <span className="min-w-0 break-words sm:truncate">{doc.title}</span>
+            <ArrowUpRight className="h-3.5 w-3.5 shrink-0 opacity-70 sm:hidden" aria-hidden />
           </Link>
+          {index < docs.length - 1 ? (
+            <span className="mx-1.5 hidden shrink-0 text-muted-foreground/40 sm:inline" aria-hidden>
+              ·
+            </span>
+          ) : null}
         </span>
       ))}
     </nav>

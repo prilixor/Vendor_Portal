@@ -45,6 +45,7 @@ function shouldTreat401AsSessionExpiry(endpoint: string): boolean {
     path.includes("/auth/reset-password") ||
     path.includes("/auth/verify-email") ||
     path.includes("/auth/resend-verification") ||
+    path.includes("/auth/phone/") ||
     path.endsWith("/vendors/register") ||
     path.endsWith("/customers/register")
   ) {
@@ -172,7 +173,7 @@ class ApiClient {
       if (!code || String(code).includes("http") || String(code).includes("://")) {
         const sourceText = `${detail} ${title} ${description} ${rawMessage}`;
         const codeMatch = sourceText.match(
-          /(vendors\.[a-z0-9_]+(?:\.[a-z0-9_]+)*|customers\.[a-z0-9_]+(?:\.[a-z0-9_]+)*|admins\.[a-z0-9_]+(?:\.[a-z0-9_]+)*|documents\.[a-z0-9_]+(?:\.[a-z0-9_]+)*|bank_accounts\.[a-z0-9_]+(?:\.[a-z0-9_]+)*|auth\.[a-z0-9_]+(?:\.[a-z0-9_]+)*|directory\.[a-z0-9_]+(?:\.[a-z0-9_]+)*|EMAIL_NOT_VERIFIED)/i,
+          /(vendors\.[a-z0-9_]+(?:\.[a-z0-9_]+)*|customers\.[a-z0-9_]+(?:\.[a-z0-9_]+)*|admins\.[a-z0-9_]+(?:\.[a-z0-9_]+)*|documents\.[a-z0-9_]+(?:\.[a-z0-9_]+)*|bank_accounts\.[a-z0-9_]+(?:\.[a-z0-9_]+)*|auth\.[a-z0-9_]+(?:\.[a-z0-9_]+)*|directory\.[a-z0-9_]+(?:\.[a-z0-9_]+)*|phone\.[a-z0-9_]+(?:\.[a-z0-9_]+)*|EMAIL_NOT_VERIFIED)/i,
         );
         if (codeMatch) code = codeMatch[1];
       }

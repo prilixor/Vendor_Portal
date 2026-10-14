@@ -1,6 +1,6 @@
-import { useMemo, useState } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   CheckCheck,
   Bell,
@@ -16,7 +16,7 @@ import {
   Hand,
   LucideIcon,
 } from "lucide-react";
-import { customerApi, type CustomerNotificationApi } from "@/app/services/customerApi";
+import { customerApi, type CustomerNotificationApi, type CustomerNotificationListResult } from "@/app/services/customerApi";
 import {
   customerNotificationTypeBadgeClass,
   customerNotificationTypeBadgeLabel,
@@ -29,7 +29,8 @@ import { cn } from "@/app/helpers/utils";
 import { customerNotificationCopy } from "@/app/helpers/customerNotificationCopy";
 import { toast } from "sonner";
 
-export const customerNotificationsQueryKey = ["customer-notifications"] as const;
+export const customerNotificationsQueryKey = ["customer-notification-summaries"] as const;
+export const customerUnreadNotificationCountQueryKey = ["customer-notifications-unread-count"] as const;
 
 interface CustomerNotificationVisual {
   icon: LucideIcon;
@@ -150,40 +151,64 @@ const CustomerNotifications = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
 
-  const { data: notifications = [], isLoading, isError, error, refetch } = useQuery({
-    queryKey: customerNotificationsQueryKey,
-    queryFn: () => customerApi.getNotifications({ quiet: true }),
-  });
-
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 15;
 
-  const sortedNotifications = useMemo(() => {
-    return [...notifications].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-  }, [notifications]);
+  const { data, isLoading, isPlaceholderData, isError, error, refetch } = useQuery({
+    queryKey: [...customerNotificationsQueryKey, page],
+    queryFn: () => customerApi.getNotificationSummaries({ page, pageSize: PAGE_SIZE }, { quiet: true }),
+    placeholderData: keepPreviousData,
+  });
+  const isPageChanging = isPlaceholderData && !isLoading;
 
-  const unreadCount = useMemo(() => notifications.filter((n) => !n.readAt).length, [notifications]);
+  const notifications = data?.items ?? [];
+  const totalCount = data?.totalCount ?? 0;
+  const unreadCount = data?.unreadCount ?? 0;
+
+  const invalidateNotificationQueries = () => {
+    void queryClient.invalidateQueries({ queryKey: customerNotificationsQueryKey });
+    void queryClient.invalidateQueries({ queryKey: customerUnreadNotificationCountQueryKey });
+  };
 
   const markReadMutation = useMutation({
     mutationFn: (notificationId: string) => customerApi.markNotificationRead(notificationId),
     onMutate: async (notificationId) => {
       await queryClient.cancelQueries({ queryKey: customerNotificationsQueryKey });
-      const previous = queryClient.getQueryData<CustomerNotificationApi[]>(customerNotificationsQueryKey);
+      const previous = queryClient.getQueriesData<CustomerNotificationListResult>({
+        queryKey: customerNotificationsQueryKey,
+      });
+      const previousUnread = queryClient.getQueryData<number>(customerUnreadNotificationCountQueryKey);
       const readAt = new Date().toISOString();
-      queryClient.setQueryData<CustomerNotificationApi[]>(customerNotificationsQueryKey, (current) =>
-        (current ?? []).map((n) => (n.id === notificationId && !n.readAt ? { ...n, readAt } : n)),
+      queryClient.setQueriesData<CustomerNotificationListResult>(
+        { queryKey: customerNotificationsQueryKey },
+        (current) => {
+          if (!current) return current;
+          const alreadyRead = current.items.some((n) => n.id === notificationId && n.readAt);
+          return {
+            ...current,
+            items: current.items.map((n) => (n.id === notificationId && !n.readAt ? { ...n, readAt } : n)),
+            unreadCount: alreadyRead ? current.unreadCount : Math.max(0, current.unreadCount - 1),
+          };
+        },
       );
-      return { previous };
+      queryClient.setQueryData<number>(
+        customerUnreadNotificationCountQueryKey,
+        Math.max(0, (previousUnread ?? unreadCount) - 1),
+      );
+      return { previous, previousUnread };
     },
     onError: (err, _id, context) => {
-      if (context?.previous) {
-        queryClient.setQueryData(customerNotificationsQueryKey, context.previous);
+      context?.previous.forEach(([key, value]) => {
+        queryClient.setQueryData(key, value);
+      });
+      if (context?.previousUnread != null) {
+        queryClient.setQueryData(customerUnreadNotificationCountQueryKey, context.previousUnread);
       }
       const message = err instanceof Error ? err.message : "Could not update notification.";
       toast.error(message);
     },
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: customerNotificationsQueryKey });
+      invalidateNotificationQueries();
     },
   });
 
@@ -191,12 +216,24 @@ const CustomerNotifications = () => {
     mutationFn: () => customerApi.markAllNotificationsRead(),
     onMutate: async () => {
       await queryClient.cancelQueries({ queryKey: customerNotificationsQueryKey });
-      const previous = queryClient.getQueryData<CustomerNotificationApi[]>(customerNotificationsQueryKey);
+      const previous = queryClient.getQueriesData<CustomerNotificationListResult>({
+        queryKey: customerNotificationsQueryKey,
+      });
+      const previousUnread = queryClient.getQueryData<number>(customerUnreadNotificationCountQueryKey);
       const readAt = new Date().toISOString();
-      queryClient.setQueryData<CustomerNotificationApi[]>(customerNotificationsQueryKey, (current) =>
-        (current ?? []).map((n) => (n.readAt ? n : { ...n, readAt })),
+      queryClient.setQueriesData<CustomerNotificationListResult>(
+        { queryKey: customerNotificationsQueryKey },
+        (current) => {
+          if (!current) return current;
+          return {
+            ...current,
+            items: current.items.map((n) => (n.readAt ? n : { ...n, readAt })),
+            unreadCount: 0,
+          };
+        },
       );
-      return { previous };
+      queryClient.setQueryData<number>(customerUnreadNotificationCountQueryKey, 0);
+      return { previous, previousUnread };
     },
     onSuccess: (res) => {
       if (res.updatedCount > 0) {
@@ -204,14 +241,17 @@ const CustomerNotifications = () => {
       }
     },
     onError: (err, _vars, context) => {
-      if (context?.previous) {
-        queryClient.setQueryData(customerNotificationsQueryKey, context.previous);
+      context?.previous.forEach(([key, value]) => {
+        queryClient.setQueryData(key, value);
+      });
+      if (context?.previousUnread != null) {
+        queryClient.setQueryData(customerUnreadNotificationCountQueryKey, context.previousUnread);
       }
       const message = err instanceof Error ? err.message : "Could not mark all as read.";
       toast.error(message);
     },
     onSettled: () => {
-      void queryClient.invalidateQueries({ queryKey: customerNotificationsQueryKey });
+      invalidateNotificationQueries();
     },
   });
 
@@ -231,9 +271,13 @@ const CustomerNotifications = () => {
         const match = n.body.match(/Good news! (.*?) from your favorites/);
         if (match && match[1]) {
            try {
-             const results = await customerApi.getCatalogListings(undefined, match[1]);
-             if (results && results.length > 0) {
-               navigate(`/customer/shop/${encodeURIComponent(results[0].id)}`);
+             const results = await customerApi.getCatalogListingSummaries({
+               search: match[1],
+               page: 1,
+               pageSize: 8,
+             });
+             if (results.items.length > 0) {
+               navigate(`/customer/shop/${encodeURIComponent(results.items[0].id)}`);
                return;
              }
            } catch (e) {
@@ -268,7 +312,7 @@ const CustomerNotifications = () => {
               ? "Loading…"
               : unreadCount === 0
                 ? "You're all caught up"
-                : `${unreadCount} unread of ${notifications.length}`}
+                : `${unreadCount} unread of ${totalCount}`}
           </p>
         </div>
         <Button
@@ -296,9 +340,9 @@ const CustomerNotifications = () => {
       ) : null}
 
       <Card className="-mx-3 overflow-hidden rounded-none border-x-0 border-border/80 shadow-sm sm:mx-0 sm:rounded-lg sm:border">
-        <PageContentGate loading={isLoading}>
-          <ul className="divide-y divide-border/70">
-            {sortedNotifications.length === 0 ? (
+        <PageContentGate loading={isLoading && !data}>
+          <ul className={cn("divide-y divide-border/70 transition-opacity duration-200", isPageChanging && "opacity-50")}>
+            {notifications.length === 0 ? (
               <li className="flex flex-col items-center gap-2 px-4 py-14 text-center">
                 <span className="flex h-11 w-11 items-center justify-center rounded-full bg-muted">
                   <Bell className="h-5 w-5 text-muted-foreground" />
@@ -309,7 +353,7 @@ const CustomerNotifications = () => {
                 </p>
               </li>
             ) : (
-              sortedNotifications.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((n) => {
+              notifications.map((n) => {
                 const unread = !n.readAt;
                 const age = compactAge(n.createdAt);
                 const exactTime = absoluteTime(n.createdAt);
@@ -408,7 +452,7 @@ const CustomerNotifications = () => {
       <TablePagination
         page={page}
         pageSize={PAGE_SIZE}
-        total={sortedNotifications.length}
+        total={totalCount}
         onPageChange={setPage}
         label="items"
       />

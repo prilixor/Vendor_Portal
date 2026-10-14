@@ -92,31 +92,36 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
       await Future<void>.delayed(const Duration(milliseconds: 50));
       if (!mounted) return;
     }
+    if (_ordersInGroup.isEmpty) return;
     _refreshInFlight = true;
+    final selectedIndex = _selectedOrderIndex.clamp(0, _ordersInGroup.length - 1);
+    final selectedId = _ordersInGroup[selectedIndex].id;
     try {
       final detail = Provider.of<OrderDetailProvider>(context, listen: false);
       final orders = Provider.of<OrderProvider>(context, listen: false);
 
-      // Force bypasses list silent-cooldown so detail stays fresh vs dashboard polls.
-      await orders.fetchOrders(silent: silent, force: silent);
+      // Detail is the line the user opened. The list refresh must not block it,
+      // otherwise the previous order stays on screen until the heavy list returns.
+      final detailFuture = detail.fetchOrderDetail(selectedId, silent: silent);
+      final ordersFuture = orders.fetchOrders(silent: silent, force: silent);
+      await Future.wait([detailFuture, ordersFuture]);
       if (!mounted) return;
+      if (_selectedOrderIndex >= _ordersInGroup.length ||
+          _ordersInGroup[_selectedOrderIndex].id != selectedId) {
+        return;
+      }
 
       final byId = {for (final o in orders.orders) o.id: o};
-      final merged = _ordersInGroup.map((o) => byId[o.id] ?? o).toList();
-
-      final selectedId = merged[_selectedOrderIndex].id;
-      await detail.fetchOrderDetail(selectedId, silent: silent);
-      if (!mounted) return;
-
-      if (detail.currentOrder != null) {
-        final idx = merged.indexWhere((o) => o.id == detail.currentOrder!.id);
-        if (idx >= 0) merged[idx] = detail.currentOrder!;
-      }
+      final live = detail.currentOrder;
+      final merged = _ordersInGroup.map((o) {
+        if (live != null && live.id == o.id && live.id == selectedId) return live;
+        return byId[o.id] ?? o;
+      }).toList();
 
       setState(() => _ordersInGroup = merged);
 
       await detail.fetchGroupImageRequests(
-        _ordersInGroup.map((o) => o.id).toList(),
+        merged.map((o) => o.id).toList(),
         silent: silent,
       );
       if (!mounted) return;
@@ -124,6 +129,17 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
     } finally {
       _refreshInFlight = false;
     }
+  }
+
+  /// The line the user selected. The detail payload is used only after it
+  /// matches that line, so a previous order cannot flash underneath.
+  OrderModel? _orderForDetails(OrderDetailProvider provider) {
+    if (_ordersInGroup.isEmpty) return null;
+    final index = _selectedOrderIndex.clamp(0, _ordersInGroup.length - 1);
+    final selected = _ordersInGroup[index];
+    final live = provider.currentOrder;
+    if (live != null && live.id == selected.id) return live;
+    return selected;
   }
 
   bool _canRequestForStatus(String status) {
@@ -448,6 +464,30 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
   Widget build(BuildContext context) {
     final colors = context.appColors;
     final provider = Provider.of<OrderDetailProvider>(context);
+    final resolved = _orderForDetails(provider);
+    if (resolved == null) {
+      return Scaffold(
+        backgroundColor: colors.background,
+        appBar: AppBar(
+          title: Text('Back to orders', style: TextStyle(color: colors.textSecondary, fontSize: 16)),
+          backgroundColor: colors.background,
+          iconTheme: IconThemeData(color: colors.textSecondary),
+          elevation: 0,
+          titleSpacing: 0,
+        ),
+        body: provider.isLoading
+            ? const BrandPageLoader()
+            : Center(
+                child: Text(
+                  provider.errorMessage ?? 'Order not found',
+                  style: TextStyle(color: colors.textPrimary),
+                ),
+              ),
+      );
+    }
+    final order = resolved;
+    final rxReady = provider.prescriptionsReadyFor(order.id);
+    final rxFiles = rxReady ? provider.prescriptionFiles : const <PrescriptionFileModel>[];
     final groupTotal = _ordersInGroup.fold<double>(0, (sum, o) => sum + o.totalAmount);
     final groupDeposit = _ordersInGroup.fold<double>(0, (sum, o) => sum + o.depositAmount);
     final cleanOrderGroupNumber = _ordersInGroup.first.orderNumber.replaceAll(RegExp(r'-\d{2}$'), '');
@@ -461,16 +501,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
         elevation: 0,
         titleSpacing: 0,
       ),
-      body: provider.isLoading && provider.currentOrder == null
-          ? const BrandPageLoader()
-          : provider.currentOrder == null
-              ? Center(
-                  child: Text(
-                    provider.errorMessage ?? 'Order not found',
-                    style: TextStyle(color: colors.textPrimary),
-                  ),
-                )
-              : SingleChildScrollView(
+      body: SingleChildScrollView(
                   padding: EdgeInsets.fromLTRB(16, 8, 16, 16 + MediaQuery.paddingOf(context).bottom),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
@@ -640,7 +671,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                       children: [
                                         TextSpan(text: 'Timeline', style: _sectionTitleStyle(colors)),
                                         TextSpan(
-                                          text: ' · ${provider.currentOrder!.listingTitle}',
+                                          text: ' · ${order.listingTitle}',
                                           style: TextStyle(
                                             color: colors.textMuted,
                                             fontSize: 12,
@@ -660,17 +691,15 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                     tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                                   ),
                                   onPressed: () {
-                                    if (provider.currentOrder != null) {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (context) => ProductDetailScreen(
-                                            listingId: provider.currentOrder!.listingId,
-                                            previewImageUrl: provider.currentOrder!.listingPrimaryImageUrl,
-                                          ),
+                                    Navigator.push(
+                                      context,
+                                      MaterialPageRoute(
+                                        builder: (context) => ProductDetailScreen(
+                                          listingId: order.listingId,
+                                          previewImageUrl: order.listingPrimaryImageUrl,
                                         ),
-                                      );
-                                    }
+                                      ),
+                                    );
                                   },
                                   child: const Text(
                                     'View listing',
@@ -680,14 +709,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                               ],
                             ),
                             const SizedBox(height: 8),
-                            _buildTimeline(provider.currentOrder!.status, provider.currentOrder!.orderType),
+                            _buildTimeline(order.status, order.orderType),
                           ],
                         ),
                       ),
                       const SizedBox(height: _sectionGap),
 
                       // Rental / purchase details
-                      if (provider.currentOrder!.startDate != null)
+                      if (order.startDate != null)
                         Container(
                           padding: _cardPadding,
                           decoration: _cardDecoration(colors),
@@ -695,25 +724,25 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Text(
-                                provider.currentOrder!.orderType.toLowerCase() == 'buy'
+                                order.orderType.toLowerCase() == 'buy'
                                     ? 'Purchase details'
                                     : 'Rental details',
                                 style: _sectionTitleStyle(colors),
                               ),
                               const SizedBox(height: 10),
-                              if (provider.currentOrder!.orderType.toLowerCase() == 'buy') ...[
+                              if (order.orderType.toLowerCase() == 'buy') ...[
                                 _detailGridRow(
                                   colors,
                                   [
                                     _labeledValue(
                                       colors,
                                       'PURCHASE DATE',
-                                      _formatOrderDate(provider.currentOrder!.startDate),
+                                      _formatOrderDate(order.startDate),
                                     ),
                                     _labeledValue(
                                       colors,
                                       'QUANTITY',
-                                      '${provider.currentOrder!.quantity}',
+                                      '${order.quantity}',
                                     ),
                                   ],
                                 ),
@@ -724,12 +753,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                     _labeledValue(
                                       colors,
                                       'START DATE',
-                                      _formatOrderDate(provider.currentOrder!.startDate),
+                                      _formatOrderDate(order.startDate),
                                     ),
                                     _labeledValue(
                                       colors,
                                       'END DATE',
-                                      _formatOrderDate(provider.currentOrder!.endDate),
+                                      _formatOrderDate(order.endDate),
                                     ),
                                   ],
                                 ),
@@ -740,12 +769,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                     _labeledValue(
                                       colors,
                                       'QUANTITY',
-                                      '${provider.currentOrder!.quantity}',
+                                      '${order.quantity}',
                                     ),
                                     _labeledValue(
                                       colors,
                                       'ORDER TYPE',
-                                      formatOrderTypeLabel(provider.currentOrder!.orderType),
+                                      formatOrderTypeLabel(order.orderType),
                                     ),
                                   ],
                                 ),
@@ -753,10 +782,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                 _labeledValue(
                                   colors,
                                   'RENTAL PERIOD',
-                                  _rentalPeriodTitle(provider.currentOrder!),
+                                  _rentalPeriodTitle(order),
                                   subtitleWidget: _buildRentalPeriodMeta(
                                     colors,
-                                    provider.currentOrder!,
+                                    order,
                                   ),
                                 ),
                               ],
@@ -764,21 +793,21 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                           ),
                         ),
 
-                      if (provider.currentOrder!.hasMedicalReference) ...[
+                      if (order.hasMedicalReference) ...[
                         const SizedBox(height: _sectionGap),
-                        _MedicalReferenceCard(order: provider.currentOrder!),
+                        _MedicalReferenceCard(order: order),
                       ],
 
-                      if (provider.prescriptionFiles.isNotEmpty ||
-                          _canUploadPrescription(provider.currentOrder!.status)) ...[
+                      if (rxFiles.isNotEmpty ||
+                          _canUploadPrescription(order.status)) ...[
                         const SizedBox(height: _sectionGap),
                         _OrderPrescriptionCard(
-                          files: provider.prescriptionFiles,
-                          canEdit: _canUploadPrescription(provider.currentOrder!.status),
-                          loading: provider.prescriptionLoading,
+                          files: rxFiles,
+                          canEdit: _canUploadPrescription(order.status),
+                          loading: !rxReady || provider.prescriptionLoading,
                           pendingFileName: _pendingRxFile?.name,
-                          needsConsent: provider.prescriptionFiles.isEmpty &&
-                              !provider.currentOrder!.hasMedicalReference &&
+                          needsConsent: rxFiles.isEmpty &&
+                              !order.hasMedicalReference &&
                               _pendingRxFile != null,
                           acceptedLegal: _acceptedRxLegal,
                           onAcceptedLegal: (value) {
@@ -793,7 +822,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                           }),
                           onUpload: () => _uploadPrescription(provider),
                           onDelete: (fileId) => provider.deletePrescription(
-                            provider.currentOrder!.id,
+                            order.id,
                             fileId,
                           ),
                         ),
@@ -857,7 +886,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                       // Bottom action buttons
                       Builder(
                         builder: (context) {
-                          final order = provider.currentOrder!;
                           final status = order.status.trim().toLowerCase();
                           final canCancel = status == 'pending' || status == 'awaiting vendor acceptance';
                           final canExtendBuyout = status == 'active' && order.orderType.toLowerCase() == 'rent';
@@ -1170,9 +1198,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
   }
 
   Future<void> _uploadPrescription(OrderDetailProvider provider) async {
-    final order = provider.currentOrder;
+    final order = _orderForDetails(provider);
     if (order == null) return;
-    final needsConsent = provider.prescriptionFiles.isEmpty && !order.hasMedicalReference;
+    final detailReady = provider.currentOrder?.id == order.id;
+    final needsConsent = (!detailReady || provider.prescriptionFiles.isEmpty) &&
+        !order.hasMedicalReference;
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: const ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
@@ -1213,7 +1243,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
   }
 
   Future<void> _confirmPendingPrescription(OrderDetailProvider provider) async {
-    final order = provider.currentOrder;
+    final order = _orderForDetails(provider);
     final pending = _pendingRxFile;
     if (order == null || pending == null) return;
     await _sendPrescription(
@@ -1256,7 +1286,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
   }
 
   bool _shouldShowGroupPhotoSection(OrderDetailProvider provider) {
-    if (provider.imageRequestsByOrderId.isNotEmpty) return true;
+    final ids = _ordersInGroup.map((o) => o.id).toSet();
+    if (provider.imageRequestsByOrderId.keys.any(ids.contains)) return true;
     return _ordersInGroup.any((o) {
       final compact = o.status.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '_');
       return compact == 'pending' ||
@@ -1830,7 +1861,7 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 14),
-            if (loading)
+            if (loading && eligible.isEmpty && withRequest.isEmpty)
               Padding(
                 padding: const EdgeInsets.symmetric(vertical: 8),
                 child: Row(

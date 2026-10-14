@@ -1,5 +1,6 @@
 using Microsoft.Extensions.Options;
 using Prilixor.VendorPortal.Application.Abstractions;
+using Prilixor.VendorPortal.Application.Services;
 using Prilixor.VendorPortal.Domain.Customers;
 using Prilixor.VendorPortal.Domain.Options;
 using Prilixor.VendorPortal.Domain.Vendors;
@@ -37,6 +38,8 @@ internal sealed class SequentialDispatchService(
     ICustomerRepository customers,
     IVendorOnboardingRepository vendors,
     IVendorUploadStorageService uploadStorage,
+    VendorSmsNotifier vendorSms,
+    CustomerSmsNotifier customerSms,
     IOptions<CustomerPricingOptions> pricingOptions) : ISequentialDispatchService
 {
     private readonly CustomerPricingOptions options = pricingOptions.Value;
@@ -219,6 +222,12 @@ internal sealed class SequentialDispatchService(
             },
             cancellationToken);
         customersDirty = true;
+
+        await customerSms.TrySendAsync(
+            order.CustomerId,
+            SmsTemplates.CustomerOrderDispatchFailed(order.OrderNumber),
+            CustomerSmsKind.OrderDispatchFailed,
+            cancellationToken);
     }
 
     private async Task ExpireOpenOffersAsync(Guid orderId, DateTimeOffset now, CancellationToken cancellationToken)
@@ -252,6 +261,11 @@ internal sealed class SequentialDispatchService(
             },
             cancellationToken);
         vendorsDirty = true;
+
+        await vendorSms.TrySendAsync(
+            vendorId,
+            SmsTemplates.VendorDispatchOffer(order.OrderNumber),
+            cancellationToken);
     }
 
     private async Task<string> ResolveListingTitleAsync(CustomerRentalOrder order, CancellationToken cancellationToken)

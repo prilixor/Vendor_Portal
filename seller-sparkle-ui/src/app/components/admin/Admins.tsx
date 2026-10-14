@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from "react";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
@@ -48,22 +49,26 @@ const roleConfig: Record<string, { label: string; icon: typeof Shield; cls: stri
 
 type DialogMode = "create" | "view" | "edit" | "resetPassword" | null;
 
+const fallbackRoles = [
+  { code: "super_admin", name: "Super admin" },
+  { code: "verifier", name: "Verifier" },
+  { code: "operations_admin", name: "Operations admin" },
+];
+
 const Admins = () => {
   const { user, hasPermission } = useAuth();
   const canManage = hasPermission("admins.manage");
   const actorIsSuper = user?.adminRole === "super_admin" || user?.role === "super_admin";
+  const queryClient = useQueryClient();
 
-  const [admins, setAdmins] = useState<AdminUserDto[]>([]);
   const [mode, setMode] = useState<DialogMode>(null);
   const [selected, setSelected] = useState<AdminUserDto | null>(null);
-  const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("verifier");
   const [isActive, setIsActive] = useState(true);
-  const [roles, setRoles] = useState<{ code: string; name: string }[]>([]);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [resetCustomPassword, setResetCustomPassword] = useState("");
   const [useCustomResetPassword, setUseCustomResetPassword] = useState(false);
@@ -73,17 +78,46 @@ const Admins = () => {
   const [copiedTemp, setCopiedTemp] = useState(false);
   const [page, setPage] = useState(1);
 
-  const superAdminCount = useMemo(
-    () => admins.filter((a) => a.role === "super_admin" && a.isActive !== false).length,
-    [admins],
+  const { data, isLoading, isPlaceholderData, isError, error } = useQuery({
+    queryKey: ["admin-user-summaries", page],
+    queryFn: () => adminApi.getAdminUserSummaries({ page, pageSize: PAGE_SIZE }),
+    placeholderData: keepPreviousData,
+  });
+  const isPageChanging = isPlaceholderData && !isLoading;
+
+  const { data: rolesData } = useQuery({
+    queryKey: ["admin-roles-lookup"],
+    queryFn: async () => {
+      try {
+        return await adminApi.getAdminRoles();
+      } catch {
+        return [];
+      }
+    },
+  });
+
+  const roles = useMemo(
+    () => (rolesData && rolesData.length > 0
+      ? rolesData.map((x) => ({ code: x.code, name: x.name }))
+      : fallbackRoles),
+    [rolesData],
   );
 
-  const totalPages = Math.max(1, Math.ceil(admins.length / PAGE_SIZE));
-  const safePage = Math.min(page, totalPages);
-  const pageAdmins = useMemo(
-    () => admins.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
-    [admins, safePage],
-  );
+  const admins = data?.items ?? [];
+  const totalCount = data?.totalCount ?? 0;
+  const superAdminCount = data?.superAdminCount ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const safePage = Math.min(Math.max(1, page), totalPages);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
+  useEffect(() => {
+    if (isError) {
+      toast.error(getUserFriendlyMessage(error, "Failed to load admin users."));
+    }
+  }, [isError, error]);
 
   const clearFieldError = (key: string) => {
     setFieldErrors((prev) => {
@@ -94,27 +128,8 @@ const Admins = () => {
     });
   };
 
-  useEffect(() => {
-    loadAdmins();
-    adminApi.getAdminRoles().then((r) => setRoles(r.map((x) => ({ code: x.code, name: x.name })))).catch(() => {
-      setRoles([
-        { code: "super_admin", name: "Super admin" },
-        { code: "verifier", name: "Verifier" },
-        { code: "operations_admin", name: "Operations admin" },
-      ]);
-    });
-  }, []);
-
   const loadAdmins = async () => {
-    setLoading(true);
-    try {
-      const data = await adminApi.getAdminUsers();
-      setAdmins(data);
-    } catch (error) {
-      toast.error(error instanceof Error ? error.message : "Failed to load admin users.");
-    } finally {
-      setLoading(false);
-    }
+    await queryClient.invalidateQueries({ queryKey: ["admin-user-summaries"] });
   };
 
   const roleOptionsForEdit = useMemo(() => {
@@ -396,12 +411,12 @@ const Admins = () => {
           <p className="text-sm font-medium">
             Admin users
             <span className="ml-2 text-xs font-normal text-muted-foreground">
-              {loading ? "…" : `${admins.length} account${admins.length === 1 ? "" : "s"}`}
+              {isLoading ? "…" : `${totalCount} account${totalCount === 1 ? "" : "s"}`}
             </span>
           </p>
         </div>
 
-        <PageContentGate loading={loading}>{admins.length === 0 ? (
+        <PageContentGate loading={isLoading}>{totalCount === 0 ? (
           <div className="py-14 text-center space-y-2">
             <Users className="h-8 w-8 mx-auto text-muted-foreground/50" />
             <p className="text-sm font-medium">No admin users yet</p>
@@ -412,9 +427,9 @@ const Admins = () => {
             )}
           </div>
         ) : (
-          <>
+          <div className={cn("transition-opacity duration-200", isPageChanging && "opacity-50")}>
           <ul className="divide-y divide-border">
-            {pageAdmins.map((a) => {
+            {admins.map((a) => {
               const cfg = roleConfig[a.role] ?? {
                 label: roleLabel(a.role),
                 icon: Users,
@@ -503,12 +518,12 @@ const Admins = () => {
             <TablePagination
               page={safePage}
               pageSize={PAGE_SIZE}
-              total={admins.length}
+              total={totalCount}
               onPageChange={setPage}
               label="admins"
             />
           </div>
-          </>
+          </div>
         )}</PageContentGate>
       </Card>
 

@@ -26,6 +26,7 @@ internal sealed class BanVendorCommandHandler(
     IVendorOnboardingRepository repository,
     IEmailService emailService,
     IMediator mediator,
+    VendorSmsNotifier vendorSms,
     ILogger<BanVendorCommandHandler> logger)
     : ICommandHandler<BanVendorCommand, VendorDto>
 {
@@ -47,6 +48,8 @@ internal sealed class BanVendorCommandHandler(
             return Result.Failure<VendorDto>(new Error("vendors.not_found", "Vendor not found.", ErrorCategory.NotFound));
         }
 
+        var oldStatus = vendor.AccountStatus;
+
         // Ban vendor
         vendor.AccountStatus = "banned";
         await repository.UpdateVendorAsync(vendor, cancellationToken);
@@ -60,7 +63,7 @@ internal sealed class BanVendorCommandHandler(
             ActionType = "vendor_banned",
             EntityType = "vendor",
             EntityId = vendorId,
-            OldValue = JsonSerializer.Serialize(vendor.AccountStatus),
+            OldValue = JsonSerializer.Serialize(oldStatus),
             NewValue = JsonSerializer.Serialize("banned"),
             Notes = request.Reason,
             CreatedOnUtc = DateTime.UtcNow
@@ -108,6 +111,12 @@ internal sealed class BanVendorCommandHandler(
                 logger.LogError(notificationEx, "Failed to create notification record for vendor {VendorId}", vendorId);
             }
         }
+
+        await vendorSms.TrySendAsync(
+            vendorId,
+            SmsTemplates.VendorAccountBanned(request.Reason),
+            VendorSmsKind.AccountBanned,
+            cancellationToken);
 
         return Result.Success(new VendorDto(
             vendor.Id.ToString(),

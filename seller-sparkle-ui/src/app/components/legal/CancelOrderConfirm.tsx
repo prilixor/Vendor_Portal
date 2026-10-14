@@ -33,8 +33,7 @@ export function CancelOrderConfirm({
         <LegalPolicyLinks
           surface="customer_web"
           screen="order_cancel"
-          className="text-xs"
-          linkClassName="text-xs"
+          className="w-full border-t border-border/60"
         />
         <AlertDialogFooter>
           <AlertDialogCancel disabled={pending}>Keep request</AlertDialogCancel>

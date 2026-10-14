@@ -4,11 +4,15 @@ namespace Prilixor.VendorPortal.Domain.Customers;
 
 public class Customer : AuditableEntity<Guid>, ISoftDelete
 {
-    public string Email { get; set; } = string.Empty;
+    /// <summary>Optional when registering with phone only.</summary>
+    public string? Email { get; set; }
     public string PasswordHash { get; set; } = string.Empty;
     public string FullName { get; set; } = string.Empty;
     public string? Phone { get; set; }
-    public bool IsEmailVerified { get; set; } = true;
+    public DateTimeOffset? PhoneVerifiedAt { get; set; }
+    public bool IsEmailVerified { get; set; }
+    public string? EmailVerificationToken { get; set; }
+    public DateTimeOffset? EmailVerificationTokenExpiresAt { get; set; }
     public DateTimeOffset? LastLoginAt { get; set; }
 
     public bool IsDeleted { get; set; }

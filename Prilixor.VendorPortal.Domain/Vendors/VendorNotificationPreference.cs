@@ -7,6 +7,7 @@ public class VendorNotificationPreference : AuditableEntity<Guid>, ISoftDelete
     public Guid VendorId { get; set; }
     public bool EmailNotificationsEnabled { get; set; } = true;
     public bool PushNotificationsEnabled { get; set; } = true;
+    public bool SmsNotificationsEnabled { get; set; } = true;
     public bool NewOrderNotifications { get; set; } = true;
     public bool IsDeleted { get; set; }
     public DateTimeOffset? DeletedAt { get; set; }

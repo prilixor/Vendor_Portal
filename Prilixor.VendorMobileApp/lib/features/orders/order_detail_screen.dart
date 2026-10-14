@@ -87,16 +87,17 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       if (vendorId == null) return;
       final provider = Provider.of<VendorOrderProvider>(context, listen: false);
       await Future.wait([
-        provider.fetchOrders(vendorId, silent: true),
+        provider.fetchOrderGroup(vendorId, _selectedOrderId),
         provider.fetchOrderDetail(vendorId, _selectedOrderId, silent: silent),
       ]);
       if (!mounted) return;
       final selected = provider.selectedOrder;
       if (selected == null) return;
-      final groupIds = orderGroupItems(
-        anchor: selected,
-        allOrders: provider.orders,
-      ).map((o) => o.orderId).toList();
+      final groupIds = (provider.orderGroup.isNotEmpty
+              ? provider.orderGroup
+              : orderGroupItems(anchor: selected, allOrders: provider.orders))
+          .map((o) => o.orderId)
+          .toList();
       await provider.fetchGroupPhotoRequestMeta(
         vendorId,
         groupIds,
@@ -452,7 +453,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     final continuations = provider.continuations;
     final groupItems = order == null
         ? const <VendorOrder>[]
-        : orderGroupItems(anchor: order, allOrders: provider.orders);
+        : orderGroupItems(
+            anchor: order,
+            allOrders: provider.orderGroup.isNotEmpty
+                ? provider.orderGroup
+                : provider.orders,
+          );
     final activeItem = order == null
         ? null
         : groupItems.firstWhere(
@@ -615,7 +621,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                                                 OrderStatusChip(status: item.status),
                                                 const SizedBox(height: 4),
                                                 Text(
-                                                  '₹${item.payoutAmount.toStringAsFixed(0)}',
+                                                  formatVendorMoney(item.payoutAmount),
                                                   style: TextStyle(
                                                     color: context.appColors.textPrimary,
                                                     fontWeight: FontWeight.w700,
@@ -774,7 +780,7 @@ class _GroupHeroCard extends StatelessWidget {
             crossAxisAlignment: CrossAxisAlignment.end,
             children: [
               Text(
-                '₹${groupPayout.toStringAsFixed(0)}',
+                formatVendorMoney(groupPayout),
                 style: TextStyle(
                   color: context.appColors.textPrimary,
                   fontWeight: FontWeight.w800,
@@ -782,7 +788,7 @@ class _GroupHeroCard extends StatelessWidget {
                 ),
               ),
               Text(
-                itemCount > 1 ? 'Combined' : 'Payout',
+                itemCount > 1 ? 'Estimated payout (combined)' : 'Estimated payout',
                 style: TextStyle(
                   color: context.appColors.textMuted,
                   fontSize: 10,
@@ -1839,14 +1845,12 @@ class _PrescriptionFileTile extends StatelessWidget {
   final String fileUrl;
   final bool isImage;
   final VoidCallback onOpen;
-  final Widget? trailing;
 
   const _PrescriptionFileTile({
     required this.fileName,
     required this.fileUrl,
     required this.isImage,
     required this.onOpen,
-    this.trailing,
   });
 
   @override
@@ -1897,7 +1901,6 @@ class _PrescriptionFileTile extends StatelessWidget {
                   ),
                 ),
               ),
-              if (trailing != null) trailing!,
             ],
           ),
         ),
@@ -1972,6 +1975,8 @@ class _ItemDetailsPanel extends StatelessWidget {
               style: TextStyle(color: context.appColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w600),
             ),
             if (order.rentalFinalPrice != null) ...[
+              const SizedBox(height: 8),
+              _SubsectionLabel('Plan price'),
               const SizedBox(height: 4),
               Wrap(
                 crossAxisAlignment: WrapCrossAlignment.center,
@@ -1984,8 +1989,8 @@ class _ItemDetailsPanel extends StatelessWidget {
                       style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: context.appColors.textMuted),
                     ),
                   Text(
-                    'Plan price ₹${order.rentalFinalPrice!.toStringAsFixed(0)}',
-                    style: TextStyle(color: context.appColors.textMuted, fontSize: 12),
+                    '₹${order.rentalFinalPrice!.toStringAsFixed(0)}',
+                    style: TextStyle(color: context.appColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w600),
                   ),
                 ],
               ),
@@ -2227,7 +2232,7 @@ class _MetricStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isBuy = order.orderType.toLowerCase() == 'buy';
-    final payout = '₹${order.payoutAmount.toStringAsFixed(0)}';
+    final payout = formatVendorMoney(order.payoutAmount);
 
     if (isBuy) {
       return Row(

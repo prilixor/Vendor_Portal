@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { AuthLayout } from "@/app/components/layout/AuthLayout";
 import { Button } from "@/app/components/ui/button";
@@ -20,6 +20,9 @@ import {
 } from "@/app/helpers/passwordValidation";
 import { cn } from "@/app/helpers/utils";
 import { IndianMobileInput } from "@/app/components/shared/IndianMobileInput";
+import { PhoneOtpDialog } from "@/app/components/shared/PhoneOtpDialog";
+import { fetchPhoneOtpEnabled } from "@/app/helpers/phoneOtpSetting";
+import { clearImpersonationSession, clearPortalSession } from "@/app/helpers/authSession";
 import { RegisterLegalAgree } from "@/app/components/legal/RegisterLegalAgree";
 
 const Field = ({ id, label, type, value, onChange, placeholder, error, required }: any) => (
@@ -73,6 +76,7 @@ const PasswordField = ({
         onChange={onChange}
         placeholder={placeholder}
         aria-invalid={!!error}
+        autoComplete="new-password"
         className={cn(
           "pr-10",
           error && "border-destructive focus-visible:ring-destructive",
@@ -98,7 +102,7 @@ const PasswordField = ({
 
 const Register = () => {
   const navigate = useNavigate();
-  const { register } = useAuth();
+  const { register, setSessionUser } = useAuth();
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
@@ -109,6 +113,24 @@ const Register = () => {
   const [loading, setLoading] = useState(false);
   const [agreed, setAgreed] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
+  const [otpOpen, setOtpOpen] = useState(false);
+  const [pendingPhone, setPendingPhone] = useState("");
+
+  // Ensure OTP calls stay anonymous even if a prior vendor session is still in the tab.
+  useEffect(() => {
+    clearImpersonationSession();
+    clearPortalSession();
+    setSessionUser(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- run once on mount for register hygiene
+  }, []);
+
+  const goToEmailVerify = () => {
+    const mail = email.trim().toLowerCase();
+    sessionStorage.setItem("pending_verification_email", mail);
+    toast.success("Phone verified. Next: confirm your email.");
+    navigate(`/verify-email-sent?email=${encodeURIComponent(mail)}&portal=vendor&phoneVerified=1`);
+  };
+
   const passwordsMatch = passwordsMeetConfirm(password, confirm);
 
   const syncPasswordPair = (nextPassword: string, nextConfirm: string) => {
@@ -143,10 +165,18 @@ const Register = () => {
     setLoading(true);
     try {
       if (!agreed) return;
-      await register(email, password, normalizeIndianMobileDigits(phone), true);
-      sessionStorage.setItem("pending_verification_email", email.trim().toLowerCase());
-      toast.success("Verification link has been sent to your email.");
-      navigate("/verify-email-sent");
+      const phoneNormalized = normalizeIndianMobileDigits(phone);
+      await register(email, password, phoneNormalized, true);
+      const otpOn = await fetchPhoneOtpEnabled();
+      if (!otpOn) {
+        const mail = email.trim().toLowerCase();
+        sessionStorage.setItem("pending_verification_email", mail);
+        toast.success("Account created. Next: confirm your email.");
+        navigate(`/verify-email-sent?email=${encodeURIComponent(mail)}&portal=vendor`);
+        return;
+      }
+      setPendingPhone(phoneNormalized);
+      setOtpOpen(true);
     } catch (error) {
       let message = error instanceof Error ? error.message : "Registration failed.";
       if (message.toLowerCase().includes("already exists") || message.toLowerCase().includes("in use") || message.toLowerCase().includes("taken")) {
@@ -184,7 +214,7 @@ const Register = () => {
             <p className="text-xs text-destructive">{errors.phone}</p>
           ) : (
             <p className="text-[11px] text-muted-foreground">
-              10-digit Indian mobile number starting with 6, 7, 8, or 9.
+              10-digit Indian mobile starting with 6–9.
             </p>
           )}
         </div>
@@ -226,7 +256,7 @@ const Register = () => {
 
         <RegisterLegalAgree surface="vendor_web" agreed={agreed} onAgreedChange={setAgreed} />
 
-        <Button type="submit" className="w-full bg-gradient-primary hover:opacity-95 shadow-glow h-11" disabled={loading || !agreed}>
+        <Button type="submit" className="w-full bg-gradient-primary hover:opacity-95 shadow-glow h-11" disabled={loading || !agreed || otpOpen}>
           {loading ? <><Loader2 className="mr-2 h-4 w-4 animate-spin" /> Creating account…</> : "Create account"}
         </Button>
       </form>
@@ -235,10 +265,20 @@ const Register = () => {
         Already have an account?{" "}
         <Link to="/login" className="font-semibold text-primary hover:underline">Sign in</Link>
       </p>
+
+      <PhoneOtpDialog
+        open={otpOpen}
+        onOpenChange={setOtpOpen}
+        phone={pendingPhone}
+        role="vendor"
+        required
+        title="Verify your phone"
+        description={`Enter the 6-digit code we sent to +91 ${pendingPhone}. After this, we'll ask you to verify your email.`}
+        successMessage=""
+        onVerified={goToEmailVerify}
+      />
     </AuthLayout>
   );
 };
 
 export default Register;
-
-

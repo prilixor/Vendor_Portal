@@ -32,7 +32,23 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final vendorId = Provider.of<AuthProvider>(context, listen: false).vendorId;
     if (vendorId == null) return;
     await Provider.of<VendorNotificationProvider>(context, listen: false)
-        .fetchNotifications(vendorId, silent: silent);
+        .fetchNotifications(
+      vendorId,
+      silent: silent,
+      unreadOnly: _filter == _InboxFilter.unread,
+      reset: true,
+    );
+  }
+
+  void _maybeLoadMore() {
+    final vendorId = Provider.of<AuthProvider>(context, listen: false).vendorId;
+    if (vendorId == null) return;
+    Provider.of<VendorNotificationProvider>(context, listen: false)
+        .fetchNotifications(
+      vendorId,
+      unreadOnly: _filter == _InboxFilter.unread,
+      reset: false,
+    );
   }
 
   Future<void> _toggleRead(VendorNotification n) async {
@@ -62,14 +78,20 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final auth = Provider.of<AuthProvider>(context);
     final provider = Provider.of<VendorNotificationProvider>(context);
     final vendorId = auth.vendorId;
-    final items = provider.filteredNotifications(
-      unreadOnly: _filter == _InboxFilter.unread,
-    );
+    final items = provider.notifications;
 
     return RefreshIndicator(
       color: AppTheme.accent,
       onRefresh: () => _load(),
-      child: CustomScrollView(
+      child: NotificationListener<ScrollNotification>(
+        onNotification: (notification) {
+          if (notification.metrics.pixels >=
+              notification.metrics.maxScrollExtent - 400) {
+            _maybeLoadMore();
+          }
+          return false;
+        },
+        child: CustomScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
           SliverToBoxAdapter(
@@ -78,7 +100,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               child: _InboxHeader(
                 unreadCount: provider.unreadCount,
                 filter: _filter,
-                onFilterChanged: (f) => setState(() => _filter = f),
+                onFilterChanged: (f) {
+                  setState(() => _filter = f);
+                  _load(silent: true);
+                },
                 onMarkAllRead: vendorId == null || provider.unreadCount == 0
                     ? null
                     : () => provider.markAllAsRead(vendorId),
@@ -179,6 +204,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               ),
             ),
         ],
+      ),
       ),
     );
   }

@@ -89,6 +89,7 @@ function tierBadgeClass(tier?: string | null): string {
 
 type Props = {
   dailyRate: number;
+  minimumRentalDays?: number | null;
   hideDailyRateInput?: boolean;
   onDailyRateChange?: (rate: number) => void;
   masters: RentalDurationMasterDto[];
@@ -105,6 +106,7 @@ type Props = {
 
 export function RentalDurationPricingEditor({
   dailyRate,
+  minimumRentalDays,
   hideDailyRateInput = false,
   onDailyRateChange,
   masters,
@@ -418,6 +420,11 @@ export function RentalDurationPricingEditor({
                       Economic max {economicMaximumDays} days
                     </Badge>
                   )}
+                  {minimumRentalDays != null && minimumRentalDays > 0 && (
+                    <Badge variant="outline" className="font-normal">
+                      Minimum {minimumRentalDays} days
+                    </Badge>
+                  )}
                   {popularLabel && (
                     <Badge className="bg-blue-500/15 font-normal text-blue-800 hover:bg-blue-500/15 dark:text-blue-200">
                       Most popular: {popularLabel}
@@ -469,6 +476,11 @@ export function RentalDurationPricingEditor({
               <span className="inline-flex items-center rounded-md border border-border/70 bg-background px-2.5 py-1 text-xs text-muted-foreground">
                 {plans.length} plans
               </span>
+              {minimumRentalDays != null && minimumRentalDays > 0 && (
+                <span className="inline-flex items-center rounded-md border border-border/70 bg-background px-2.5 py-1 text-xs text-muted-foreground">
+                  Minimum {minimumRentalDays} days — shorter plans stay unavailable
+                </span>
+              )}
               <span className="text-xs text-muted-foreground">
                 Manage{" "}
                 <Link

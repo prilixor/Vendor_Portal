@@ -47,11 +47,25 @@ class OrderDetailProvider extends ChangeNotifier {
 
   List<PrescriptionFileModel> _prescriptionFiles = [];
   List<PrescriptionFileModel> get prescriptionFiles => List.unmodifiable(_prescriptionFiles);
+  String? _prescriptionOrderId;
+  bool prescriptionsReadyFor(String orderId) => _prescriptionOrderId == orderId;
   bool _prescriptionLoading = false;
   bool get prescriptionLoading => _prescriptionLoading;
 
+  /// Bumps on every detail fetch so a slower response for a previous line
+  /// cannot overwrite the order the user is looking at now.
+  int _detailEpoch = 0;
+  int _groupImageEpoch = 0;
+
   Future<void> fetchOrderDetail(String orderId, {bool silent = false}) async {
-    final showLoading = !silent || _currentOrder == null;
+    final epoch = ++_detailEpoch;
+    final switching = _currentOrder?.id != orderId;
+    final showLoading = _currentOrder == null || (!silent && switching);
+    if (switching) {
+      _prescriptionFiles = [];
+      _prescriptionOrderId = null;
+      _errorMessage = null;
+    }
     if (showLoading) {
       _isLoading = true;
       _errorMessage = null;
@@ -69,12 +83,16 @@ class OrderDetailProvider extends ChangeNotifier {
           },
         ),
       );
+      if (epoch != _detailEpoch) return;
       if (response.statusCode == 200) {
         _currentOrder = OrderModel.fromJson(response.data);
+        notifyListeners();
         await fetchImageRequest(orderId, silent: true);
+        if (epoch != _detailEpoch) return;
         await fetchPrescriptions(orderId, silent: true);
       }
     } on DioException catch (e) {
+      if (epoch != _detailEpoch) return;
       if (e.type == DioExceptionType.cancel ||
           e.type == DioExceptionType.connectionTimeout ||
           e.type == DioExceptionType.receiveTimeout ||
@@ -85,14 +103,17 @@ class OrderDetailProvider extends ChangeNotifier {
         _errorMessage = 'Failed to load order: ${e.message}';
       }
     } catch (e) {
+      if (epoch != _detailEpoch) return;
       if (!silent || _currentOrder == null) {
         _errorMessage = 'An unexpected error occurred.';
       }
     } finally {
-      if (showLoading) {
-        _isLoading = false;
+      if (epoch == _detailEpoch) {
+        if (showLoading) {
+          _isLoading = false;
+        }
+        notifyListeners();
       }
-      notifyListeners();
     }
   }
 
@@ -100,8 +121,10 @@ class OrderDetailProvider extends ChangeNotifier {
     List<String> orderIds, {
     bool silent = false,
   }) async {
+    final epoch = ++_groupImageEpoch;
     final ids = orderIds.where((id) => id.isNotEmpty).toSet().toList();
     if (ids.isEmpty) {
+      if (epoch != _groupImageEpoch) return;
       _imageRequestsByOrderId.clear();
       notifyListeners();
       return;
@@ -112,12 +135,15 @@ class OrderDetailProvider extends ChangeNotifier {
     }
     try {
       await Future.wait(ids.map((id) => fetchImageRequest(id, silent: true)));
+      if (epoch != _groupImageEpoch) return;
       _imageRequestsByOrderId.removeWhere((key, _) => !ids.contains(key));
     } finally {
-      if (!silent) {
-        _imageRequestLoading = false;
+      if (epoch == _groupImageEpoch) {
+        if (!silent) {
+          _imageRequestLoading = false;
+        }
+        notifyListeners();
       }
-      notifyListeners();
     }
   }
 
@@ -346,26 +372,38 @@ class OrderDetailProvider extends ChangeNotifier {
   }
 
   Future<void> fetchPrescriptions(String orderId, {bool silent = false}) async {
+    final epoch = _detailEpoch;
     if (!silent) {
       _prescriptionLoading = true;
       notifyListeners();
     }
+    List<PrescriptionFileModel>? next;
+    var failed = false;
     try {
       final response = await _apiClient.dio.get('/customers/me/orders/$orderId/prescriptions');
       final data = response.data;
       if (data is List) {
-        _prescriptionFiles = data
+        next = data
             .whereType<Map>()
             .map((e) => PrescriptionFileModel.fromJson(Map<String, dynamic>.from(e)))
             .toList();
       } else {
-        _prescriptionFiles = [];
+        next = [];
       }
     } catch (_) {
-      if (!silent) _prescriptionFiles = [];
+      failed = true;
     } finally {
-      if (!silent) _prescriptionLoading = false;
-      notifyListeners();
+      if (epoch == _detailEpoch) {
+        if (next != null) {
+          _prescriptionFiles = next;
+          _prescriptionOrderId = orderId;
+        } else if (failed) {
+          if (!silent) _prescriptionFiles = [];
+          _prescriptionOrderId = orderId;
+        }
+        if (!silent) _prescriptionLoading = false;
+        notifyListeners();
+      }
     }
   }
 

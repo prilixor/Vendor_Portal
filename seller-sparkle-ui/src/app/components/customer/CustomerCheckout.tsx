@@ -284,6 +284,8 @@ const CustomerCheckout = () => {
 
       clear();
       queryClient.invalidateQueries({ queryKey: ["customer-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-order-summaries"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-dashboard-summary"] });
       navigate("/customer/orders");
     },
     onError: (err: Error) => toast.error(getUserFriendlyMessage(err, "Unable to complete payment. Please try again.")),

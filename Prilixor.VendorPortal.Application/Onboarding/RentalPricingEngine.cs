@@ -66,7 +66,8 @@ public static class RentalPricingEngine
         IEnumerable<RentalDurationPricingInput> durations,
         IEnumerable<ExistingRentalPlanInput>? existingPlans = null,
         RentalPricingOptions? options = null,
-        bool resetManualOverrides = false)
+        bool resetManualOverrides = false,
+        int? minimumRentalDays = null)
     {
         options ??= new RentalPricingOptions();
         var existingByMaster = (existingPlans ?? [])
@@ -89,12 +90,13 @@ public static class RentalPricingEngine
 
         var rate = dailyRate;
         var hasBuyPriceCap = buyPrice is > 0m;
+        var minimumDays = NormalizeMinimumRentalDays(minimumRentalDays);
         var theoreticalMaximumDays = CalculateEconomicMaximumDays(rate, buyPrice);
 
         var eligible = new List<RentalDurationPricingInput>();
         foreach (var duration in orderedDurations)
         {
-            if (!hasBuyPriceCap || IsWithinBuyPrice(duration.DurationDays, rate, buyPrice!.Value))
+            if (IsDurationEligible(duration.DurationDays, rate, buyPrice, hasBuyPriceCap, minimumDays))
             {
                 eligible.Add(duration);
             }
@@ -113,7 +115,7 @@ public static class RentalPricingEngine
         foreach (var duration in orderedDurations)
         {
             existingByMaster.TryGetValue(duration.Id, out var existing);
-            var isEligible = !hasBuyPriceCap || IsWithinBuyPrice(duration.DurationDays, rate, buyPrice!.Value);
+            var isEligible = IsDurationEligible(duration.DurationDays, rate, buyPrice, hasBuyPriceCap, minimumDays);
             var basePrice = RoundMoney(rate * duration.DurationDays);
             var isManual = !resetManualOverrides
                 && existing is not null
@@ -194,6 +196,23 @@ public static class RentalPricingEngine
 
     public static bool IsWithinBuyPrice(int durationDays, decimal dailyRate, decimal buyPrice) =>
         durationDays > 0 && dailyRate > 0m && buyPrice > 0m && (dailyRate * durationDays) <= buyPrice;
+
+    /// <summary>Blank or non-positive values mean the product has no minimum rental length.</summary>
+    public static int? NormalizeMinimumRentalDays(int? minimumRentalDays) =>
+        minimumRentalDays is > 0 ? minimumRentalDays : null;
+
+    /// <summary>A plan is allowed when the product has no minimum, or the plan is at least that many days.</summary>
+    public static bool MeetsMinimumRentalDays(int durationDays, int? minimumRentalDays) =>
+        NormalizeMinimumRentalDays(minimumRentalDays) is not int minimum || durationDays >= minimum;
+
+    private static bool IsDurationEligible(
+        int durationDays,
+        decimal dailyRate,
+        decimal? buyPrice,
+        bool hasBuyPriceCap,
+        int? minimumRentalDays) =>
+        MeetsMinimumRentalDays(durationDays, minimumRentalDays)
+        && (!hasBuyPriceCap || IsWithinBuyPrice(durationDays, dailyRate, buyPrice!.Value));
 
     /// <summary>
     /// Isolated most-popular rule: keep a manual plan's recommendation when still eligible; otherwise the middle eligible duration.

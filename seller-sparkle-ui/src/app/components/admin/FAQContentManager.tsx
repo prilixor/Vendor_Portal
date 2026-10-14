@@ -265,7 +265,7 @@ export function FAQContentManager() {
                       <div className="flex items-start justify-between gap-2">
                         <h4 className="font-medium text-sm text-foreground">{item.question}</h4>
                         {item.isPublished ? (
-                          <Badge className="bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/20 border-emerald-300 gap-1 font-normal shrink-0">
+                          <Badge className="gap-1 border-emerald-200 bg-emerald-50 font-normal text-emerald-700 hover:bg-emerald-100 dark:border-emerald-500/40 dark:bg-emerald-500/15 dark:text-emerald-300 dark:hover:bg-emerald-500/20 shrink-0">
                             <CheckCircle className="h-3 w-3" /> Published
                           </Badge>
                         ) : (
@@ -318,7 +318,7 @@ export function FAQContentManager() {
                       </TableCell>
                       <TableCell>
                         {item.isPublished ? (
-                          <Badge className="bg-emerald-500/15 text-emerald-700 hover:bg-emerald-500/20 border-emerald-300 gap-1 font-normal">
+                          <Badge className="gap-1 border-emerald-200 bg-emerald-50 font-normal text-emerald-700 hover:bg-emerald-100 dark:border-emerald-500/40 dark:bg-emerald-500/15 dark:text-emerald-300 dark:hover:bg-emerald-500/20">
                             <CheckCircle className="h-3 w-3" /> Published
                           </Badge>
                         ) : (

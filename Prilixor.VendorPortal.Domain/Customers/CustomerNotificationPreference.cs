@@ -10,6 +10,7 @@ public class CustomerNotificationPreference : AuditableEntity<Guid>, ISoftDelete
     public bool DepositRefundsEnabled { get; set; } = true;
     public bool DirectMessagesEnabled { get; set; } = true;
     public bool MarketingEmailsEnabled { get; set; } = false;
+    public bool SmsNotificationsEnabled { get; set; } = true;
 
     public bool IsDeleted { get; set; }
     public DateTimeOffset? DeletedAt { get; set; }

@@ -1,12 +1,14 @@
 using FluentValidation;
 using MediatR;
 using Prilixor.VendorPortal.Application.Abstractions;
+using Prilixor.VendorPortal.Application.Common;
 using Prilixor.VendorPortal.Domain.Vendors;
 using Prilixor.VendorPortal.Domain.Options;
 using Prilixor.Shared.Abstractions.CQRS;
 using Prilixor.Shared.Models;
 using Prilixor.Shared.Extensions;
 using Prilixor.VendorPortal.Application.Customers;
+using Prilixor.VendorPortal.Application.Services;
 using Prilixor.VendorPortal.Domain.Customers;
 
 namespace Prilixor.VendorPortal.Application.Onboarding;
@@ -73,6 +75,8 @@ internal sealed class RegisterAdminUserCommandHandler(
             Email = request.Email.Trim().ToLowerInvariant(),
             PasswordHash = passwordHasherService.HashPassword(request.Password),
             FullName = request.FullName,
+            Phone = null,
+            PhoneVerifiedAt = null,
             Role = roleEntity.Code,
             RoleId = roleEntity.Id,
             IsActive = request.IsActive,
@@ -120,6 +124,56 @@ internal sealed class GetAdminUsersQueryHandler(IVendorOnboardingRepository repo
         var rows = await repository.GetAdminUsersAsync(cancellationToken);
         var result = rows.Select(RegisterAdminUserCommandHandler.ToDto).ToList();
         return Result.Success(result);
+    }
+}
+
+public sealed class AdminUserListResult
+{
+    public List<AdminUserDto> Items { get; init; } = [];
+    public int TotalCount { get; init; }
+    public int Page { get; init; }
+    public int PageSize { get; init; }
+    public int SuperAdminCount { get; init; }
+}
+
+public sealed record GetAdminUserListQuery(
+    string? Search,
+    int Page = 1,
+    int PageSize = 8) : IQuery<AdminUserListResult>;
+
+public sealed class GetAdminUserListQueryValidator : AbstractValidator<GetAdminUserListQuery>
+{
+    public GetAdminUserListQueryValidator()
+    {
+        RuleFor(x => x.Page).GreaterThan(0);
+        RuleFor(x => x.PageSize).InclusiveBetween(1, 100);
+    }
+}
+
+internal sealed class GetAdminUserListQueryHandler(IVendorOnboardingRepository repository)
+    : IQueryHandler<GetAdminUserListQuery, AdminUserListResult>
+{
+    public async Task<Result<AdminUserListResult>> Handle(
+        GetAdminUserListQuery request,
+        CancellationToken cancellationToken)
+    {
+        var page = Math.Max(1, request.Page);
+        var pageSize = Math.Clamp(request.PageSize, 1, 100);
+        var (items, totalCount) = await repository.SearchAdminUsersPagedAsync(
+            request.Search,
+            page,
+            pageSize,
+            cancellationToken);
+        var superAdminCount = await repository.CountActiveSuperAdminsAsync(cancellationToken);
+
+        return Result.Success(new AdminUserListResult
+        {
+            Items = items.Select(RegisterAdminUserCommandHandler.ToDto).ToList(),
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize,
+            SuperAdminCount = superAdminCount,
+        });
     }
 }
 
@@ -204,6 +258,10 @@ internal sealed class UpdateAdminUserCommandHandler(IVendorOnboardingRepository 
                 target.Email = email;
             }
         }
+
+        // Admin accounts are email-only (phone not used).
+        target.Phone = null;
+        target.PhoneVerifiedAt = null;
 
         AdminRole? newRole = null;
         if (request.RoleId is Guid rid)
@@ -304,6 +362,21 @@ internal sealed class UpdateAdminUserCommandHandler(IVendorOnboardingRepository 
     }
 }
 
+public sealed record GetOwnAdminProfileQuery(Guid AdminId) : IQuery<AdminUserDto>;
+
+internal sealed class GetOwnAdminProfileQueryHandler(IVendorOnboardingRepository repository)
+    : IQueryHandler<GetOwnAdminProfileQuery, AdminUserDto>
+{
+    public async Task<Result<AdminUserDto>> Handle(GetOwnAdminProfileQuery request, CancellationToken cancellationToken)
+    {
+        var admin = await repository.GetAdminUserByIdAsync(request.AdminId, cancellationToken);
+        if (admin is null || admin.IsDeleted)
+            return Result.Failure<AdminUserDto>(new Error("admin.not_found", "Admin user not found.", ErrorCategory.NotFound));
+
+        return Result.Success(RegisterAdminUserCommandHandler.ToDto(admin));
+    }
+}
+
 public sealed record UpdateOwnAdminProfileCommand(
     Guid AdminId,
     string? FullName,
@@ -336,6 +409,10 @@ internal sealed class UpdateOwnAdminProfileCommandHandler(
                 admin.Email = email;
             }
         }
+
+        // Admin accounts are email-only (phone not used).
+        admin.Phone = null;
+        admin.PhoneVerifiedAt = null;
 
         if (!string.IsNullOrWhiteSpace(request.NewPassword))
         {
@@ -614,7 +691,10 @@ public sealed class VerifyVendorBankAccountCommandValidator : AbstractValidator<
     }
 }
 
-internal sealed class VerifyVendorBankAccountCommandHandler(IVendorOnboardingRepository repository, IMediator mediator)
+internal sealed class VerifyVendorBankAccountCommandHandler(
+    IVendorOnboardingRepository repository,
+    IMediator mediator,
+    VendorSmsNotifier vendorSms)
     : ICommandHandler<VerifyVendorBankAccountCommand, VendorBankAccountDto>
 {
     public async Task<Result<VendorBankAccountDto>> Handle(VerifyVendorBankAccountCommand request, CancellationToken cancellationToken)
@@ -652,7 +732,10 @@ internal sealed class VerifyVendorBankAccountCommandHandler(IVendorOnboardingRep
 
         await repository.UpdateVendorBankAccountAsync(bankAccount, cancellationToken);
 
-        if (!string.Equals(oldStatus, "rejected", StringComparison.OrdinalIgnoreCase)
+        var last4 = GetLast4(bankAccount.AccountNumber);
+        var statusChanged = !string.Equals(oldStatus, request.VerificationStatus, StringComparison.OrdinalIgnoreCase);
+
+        if (statusChanged
             && string.Equals(request.VerificationStatus, "rejected", StringComparison.OrdinalIgnoreCase))
         {
             await mediator.Send(new CreateVendorNotificationCommand(
@@ -660,7 +743,7 @@ internal sealed class VerifyVendorBankAccountCommandHandler(IVendorOnboardingRep
                 "bank_rejected",
                 "Bank account verification rejected",
                 AdminNotificationMessageBuilder.WithReason(
-                    $"Your bank account ending with {GetLast4(bankAccount.AccountNumber)} was rejected. Please review and resubmit.",
+                    $"Your bank account ending with {last4} was rejected. Please review and resubmit.",
                     request.Notes),
                 "in_app",
                 "sent"), cancellationToken);
@@ -680,6 +763,19 @@ internal sealed class VerifyVendorBankAccountCommandHandler(IVendorOnboardingRep
 
         await repository.AddAdminAuditLogAsync(auditLog, cancellationToken);
         await repository.SaveChangesAsync(cancellationToken);
+
+        if (statusChanged
+            && (string.Equals(request.VerificationStatus, "approved", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(request.VerificationStatus, "rejected", StringComparison.OrdinalIgnoreCase)))
+        {
+            await vendorSms.TrySendAsync(
+                vendorId,
+                SmsTemplates.VendorBankVerified(
+                    string.Equals(request.VerificationStatus, "approved", StringComparison.OrdinalIgnoreCase),
+                    last4),
+                VendorSmsKind.BankVerified,
+                cancellationToken);
+        }
 
         return Result.Success(new VendorBankAccountDto(
             bankAccount.Id.ToString(),
@@ -729,7 +825,8 @@ public sealed class VerifyVendorDocumentCommandValidator : AbstractValidator<Ver
 internal sealed class VerifyVendorDocumentCommandHandler(
     IVendorOnboardingRepository repository,
     IVendorFileUrlResolver fileUrlResolver,
-    IMediator mediator)
+    IMediator mediator,
+    VendorSmsNotifier vendorSms)
     : ICommandHandler<VerifyVendorDocumentCommand, VendorDocumentDto>
 {
     public async Task<Result<VendorDocumentDto>> Handle(VerifyVendorDocumentCommand request, CancellationToken cancellationToken)
@@ -784,7 +881,9 @@ internal sealed class VerifyVendorDocumentCommandHandler(
             }
         }
 
-        if (!string.Equals(oldStatus, "rejected", StringComparison.OrdinalIgnoreCase)
+        var statusChanged = !string.Equals(oldStatus, request.VerificationStatus, StringComparison.OrdinalIgnoreCase);
+
+        if (statusChanged
             && string.Equals(request.VerificationStatus, "rejected", StringComparison.OrdinalIgnoreCase))
         {
             await mediator.Send(new CreateVendorNotificationCommand(
@@ -798,7 +897,7 @@ internal sealed class VerifyVendorDocumentCommandHandler(
                 "sent"), cancellationToken);
         }
 
-        if (!string.Equals(oldStatus, "approved", StringComparison.OrdinalIgnoreCase)
+        if (statusChanged
             && string.Equals(request.VerificationStatus, "approved", StringComparison.OrdinalIgnoreCase))
         {
             await mediator.Send(new CreateVendorNotificationCommand(
@@ -823,6 +922,19 @@ internal sealed class VerifyVendorDocumentCommandHandler(
         };
         await repository.AddAdminAuditLogAsync(auditLog, cancellationToken);
         await repository.SaveChangesAsync(cancellationToken);
+
+        if (statusChanged
+            && (string.Equals(request.VerificationStatus, "approved", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(request.VerificationStatus, "rejected", StringComparison.OrdinalIgnoreCase)))
+        {
+            await vendorSms.TrySendAsync(
+                vendorId,
+                SmsTemplates.VendorDocumentVerified(
+                    string.Equals(request.VerificationStatus, "approved", StringComparison.OrdinalIgnoreCase),
+                    document.DocumentType),
+                VendorSmsKind.DocumentVerified,
+                cancellationToken);
+        }
 
         return Result.Success(new VendorDocumentDto(
             document.Id.ToString(),
@@ -1599,5 +1711,57 @@ internal sealed class GetAdminAllPendingContinuationsQueryHandler(
         )).ToList();
 
         return Result.Success(list);
+    }
+}
+
+public sealed class AdminPendingContinuationListResult
+{
+    public List<AdminPendingContinuationDto> Items { get; init; } = [];
+    public int TotalCount { get; init; }
+    public int Page { get; init; }
+    public int PageSize { get; init; }
+}
+
+public sealed record GetAdminPendingContinuationListQuery(
+    int Page = 1,
+    int PageSize = 8) : IQuery<AdminPendingContinuationListResult>;
+
+public sealed class GetAdminPendingContinuationListQueryValidator : AbstractValidator<GetAdminPendingContinuationListQuery>
+{
+    public GetAdminPendingContinuationListQueryValidator()
+    {
+        RuleFor(x => x.Page).GreaterThan(0);
+        RuleFor(x => x.PageSize).InclusiveBetween(1, 100);
+    }
+}
+
+internal sealed class GetAdminPendingContinuationListQueryHandler(ICustomerRepository customers)
+    : IQueryHandler<GetAdminPendingContinuationListQuery, AdminPendingContinuationListResult>
+{
+    public async Task<Result<AdminPendingContinuationListResult>> Handle(
+        GetAdminPendingContinuationListQuery request,
+        CancellationToken cancellationToken)
+    {
+        var page = Math.Max(1, request.Page);
+        var pageSize = Math.Clamp(request.PageSize, 1, 100);
+        var (items, totalCount) = await customers.SearchPendingContinuationsForAdminPagedAsync(
+            page, pageSize, cancellationToken);
+
+        return Result.Success(new AdminPendingContinuationListResult
+        {
+            Items = items.Select(c => new AdminPendingContinuationDto(
+                c.Id,
+                c.CustomerRentalOrderId,
+                c.OrderNumber,
+                c.CustomerName,
+                c.VendorName,
+                c.ListingTitle,
+                c.TotalAmount,
+                c.CreatedOnUtc.UtcDateTime,
+                c.Type)).ToList(),
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize,
+        });
     }
 }

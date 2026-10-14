@@ -29,4 +29,7 @@ class AppUrls {
   static const String vendorSellerPath = '/vendor-seller-policy';
   static const String rentalPath = '/rental-and-purchase-policy';
   static const String grievancePath = '/grievance-redressal-policy';
+
+  /// Public page required by Google Play. Hosted on the customer site.
+  static const String deleteAccountUrl = 'https://blinksmed.com/delete-account';
 }

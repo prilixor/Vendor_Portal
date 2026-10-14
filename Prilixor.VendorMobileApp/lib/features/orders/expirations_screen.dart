@@ -5,6 +5,7 @@ import '../../core/auth/auth_provider.dart';
 import '../../core/models/expiring_order_model.dart';
 import '../../core/providers/vendor_order_provider.dart';
 import '../../core/theme.dart';
+import '../../core/utils/debouncer.dart';
 import '../../shared/widgets/brand_page_loader.dart';
 import 'order_detail_screen.dart';
 import 'order_group_utils.dart';
@@ -19,6 +20,7 @@ class ExpirationsScreen extends StatefulWidget {
 
 class _ExpirationsScreenState extends State<ExpirationsScreen> {
   final _searchController = TextEditingController();
+  final Debouncer _searchDebouncer = Debouncer(duration: catalogSearchDebounce);
   String _searchQuery = '';
   int _withinDays = 7;
 
@@ -30,6 +32,7 @@ class _ExpirationsScreenState extends State<ExpirationsScreen> {
 
   @override
   void dispose() {
+    _searchDebouncer.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -39,7 +42,25 @@ class _ExpirationsScreenState extends State<ExpirationsScreen> {
         Provider.of<AuthProvider>(context, listen: false).vendorId;
     if (vendorId == null) return;
     await Provider.of<VendorOrderProvider>(context, listen: false)
-        .fetchExpirations(vendorId, withinDays: _withinDays, silent: silent);
+        .fetchExpirations(
+      vendorId,
+      withinDays: _withinDays,
+      search: _searchQuery,
+      silent: silent,
+      reset: true,
+    );
+  }
+
+  void _maybeLoadMore() {
+    final vendorId =
+        Provider.of<AuthProvider>(context, listen: false).vendorId;
+    if (vendorId == null) return;
+    Provider.of<VendorOrderProvider>(context, listen: false).fetchExpirations(
+      vendorId,
+      withinDays: _withinDays,
+      search: _searchQuery,
+      reset: false,
+    );
   }
 
   String _formatEnd(String value) {
@@ -110,7 +131,10 @@ class _ExpirationsScreenState extends State<ExpirationsScreen> {
             child: TextField(
               controller: _searchController,
               style: TextStyle(color: colors.textPrimary, fontSize: 14),
-              onChanged: (v) => setState(() => _searchQuery = v),
+              onChanged: (v) {
+                setState(() => _searchQuery = v);
+                _searchDebouncer.run(_load);
+              },
               decoration: InputDecoration(
                 hintText: 'Search expirations',
                 hintStyle: TextStyle(color: colors.textMuted, fontSize: 13),
@@ -122,6 +146,7 @@ class _ExpirationsScreenState extends State<ExpirationsScreen> {
                         onPressed: () {
                           _searchController.clear();
                           setState(() => _searchQuery = '');
+                          _load();
                         },
                       )
                     : null,
@@ -255,7 +280,15 @@ class _ExpirationsScreenState extends State<ExpirationsScreen> {
                                 ),
                               ],
                             )
-                          : ListView.separated(
+                          : NotificationListener<ScrollNotification>(
+                              onNotification: (notification) {
+                                if (notification.metrics.pixels >=
+                                    notification.metrics.maxScrollExtent - 400) {
+                                  _maybeLoadMore();
+                                }
+                                return false;
+                              },
+                              child: ListView.separated(
                               physics: const AlwaysScrollableScrollPhysics(),
                               padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
                               itemCount: keys.length,
@@ -270,6 +303,7 @@ class _ExpirationsScreenState extends State<ExpirationsScreen> {
                                 );
                               },
                             ),
+                          ),
             ),
           ),
         ],

@@ -60,6 +60,17 @@ namespace Prilixor.VendorPortal.Infrastructure
 
             services.AddScoped<IEmailService, SmtpEmailService>();
             services.AddScoped<IPushNotificationService, WebPushNotificationService>();
+            services.Configure<SmsOptions>(configuration.GetSection(SmsOptions.SectionName));
+            services.Configure<ShreeSmsOptions>(configuration.GetSection(ShreeSmsOptions.SectionName));
+            services.AddHttpClient("ShreeSms", client =>
+            {
+                client.Timeout = TimeSpan.FromSeconds(30);
+            });
+            services.AddScoped<ISmsService, ShreeSmsService>();
+            services.AddSingleton<IPhoneVerificationService, ShreeSmsPhoneVerificationService>();
+
+            services.AddScoped<IPlatformSmsSettingsService, PlatformSmsSettingsService>();
+            services.AddMemoryCache();
             services.AddScoped<IWebsiteContentRepository, WebsiteContentRepository>();
             services.Configure<WebPushOptions>(configuration.GetSection(WebPushOptions.SectionName));
 

@@ -1,13 +1,12 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ChevronRight } from "lucide-react";
 import { customerApi, type CustomerOrderApi } from "@/app/services/customerApi";
 import { Button } from "@/app/components/ui/button";
 import { PageContentGate } from "@/app/components/shared/PageLoader";
 import { TablePagination } from "@/app/components/shared/TablePagination";
 import { ListingThumb } from "@/app/components/shared/ListingThumb";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/app/components/ui/table";
 import { toast } from "sonner";
 import { formatCustomerOrderStatusTitle, formatCustomerOrderStatusLabel, formatOrderTypeLabel, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
 import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
@@ -98,25 +97,6 @@ function orderTypeBadgeClass(orderType: string): string {
   return "bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/40 dark:text-teal-300 dark:border-teal-900";
 }
 
-function matchesStatusFilter(status: string, filter: StatusFilter): boolean {
-  if (filter === "All") return true;
-
-  const s = status.trim().toLowerCase().replace(/_/g, " ");
-  if (filter === "Pending") {
-    return s === "pending" || s === "awaiting vendor acceptance";
-  }
-  if (filter === "In transit") {
-    return s.includes("transit");
-  }
-  if (filter === "Cancelled") {
-    return s === "cancelled" || s === "canceled" || s === "dispatch failed";
-  }
-  if (filter === "Bought Out") {
-    return s === "bought out";
-  }
-  return s === filter.toLowerCase();
-}
-
 function isCustomerOrderCancellable(status: string): boolean {
   const s = status.trim().toLowerCase();
   return s === "pending" || s === "awaiting vendor acceptance";
@@ -170,53 +150,33 @@ const CustomerOrders = () => {
     setPage(1);
   }, [debouncedSearch, appliedFilter]);
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: ["customer-orders"],
-    queryFn: () => customerApi.getOrders(),
+  const { data, isLoading, isPlaceholderData, error } = useQuery({
+    queryKey: ["customer-order-summaries", page, debouncedSearch, appliedFilter],
+    queryFn: () =>
+      customerApi.getOrderSummaries({
+        search: debouncedSearch,
+        status: appliedFilter,
+        page,
+        pageSize: PAGE_SIZE,
+      }, { quiet: true }),
+    placeholderData: keepPreviousData,
     refetchInterval: 30_000,
   });
+  const isPageChanging = isPlaceholderData && !isLoading;
 
   const cancelMut = useMutation({
     mutationFn: (id: string) => customerApi.cancelOrder(id),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["customer-order-summaries"] });
       queryClient.invalidateQueries({ queryKey: ["customer-orders"] });
       toast.success("Order cancelled.");
     },
     onError: (err: Error) => toast.error(err.message),
   });
 
-  const filtered = useMemo(() => {
-    let list = data ?? [];
-    const q = debouncedSearch.toLowerCase();
-    if (q) {
-      list = list.filter(
-        (o) =>
-          o.orderNumber.toLowerCase().includes(q) ||
-          o.listingTitle.toLowerCase().includes(q) ||
-          o.id.toLowerCase().includes(q),
-      );
-    }
-    list = list.filter((o) => matchesStatusFilter(o.status, appliedFilter));
-    return list;
-  }, [data, debouncedSearch, appliedFilter]);
-
-  const statusCounts = useMemo(() => {
-    let searchable = data ?? [];
-    const q = debouncedSearch.toLowerCase();
-    if (q) {
-      searchable = searchable.filter(
-        (o) =>
-          o.orderNumber.toLowerCase().includes(q) ||
-          o.listingTitle.toLowerCase().includes(q) ||
-          o.id.toLowerCase().includes(q),
-      );
-    }
-
-    return STATUS_FILTERS.reduce<Record<StatusFilter, number>>((acc, filter) => {
-      acc[filter] = filter === "All" ? searchable.length : searchable.filter((o) => matchesStatusFilter(o.status, filter)).length;
-      return acc;
-    }, {} as Record<StatusFilter, number>);
-  }, [data, debouncedSearch]);
+  const pageSlice = data?.items ?? [];
+  const totalCount = data?.totalCount ?? 0;
+  const statusCounts = data?.statusCounts ?? {};
 
   const statusOptions = STATUS_FILTERS.filter(
     (label) => label !== "Bought Out" || (statusCounts["Bought Out"] ?? 0) > 0,
@@ -233,12 +193,12 @@ const CustomerOrders = () => {
           },
         ];
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
-  const pageSlice = useMemo(
-    () => filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
-    [filtered, safePage],
-  );
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
 
   if (error) {
     return <p className="text-sm text-destructive">{error instanceof Error ? error.message : "Failed to load orders."}</p>;
@@ -293,9 +253,10 @@ const CustomerOrders = () => {
         and orders no supplier accepted.
       </p>
 
-      <PageContentGate loading={isLoading}>
+      <PageContentGate loading={isLoading && !data}>
         <>
-          {filtered.length > 0 ? (
+          <div className={cn("transition-opacity duration-200", isPageChanging && "opacity-50")}>
+          {pageSlice.length > 0 ? (
             <div className="space-y-6">
               {(() => {
                 // Group the pageSlice items by their baseOrderNumber prefix
@@ -430,9 +391,9 @@ const CustomerOrders = () => {
             </div>
           ) : null}
 
-          {filtered.length === 0 && (
+          {pageSlice.length === 0 && (
             <p className="text-sm text-muted-foreground">
-              {data?.length === 0 ? (
+              {totalCount === 0 && appliedFilter === "All" && !debouncedSearch ? (
                 <>
                   No orders yet.{" "}
                   <Link to="/customer/shop" className="font-medium text-primary hover:underline">
@@ -448,10 +409,11 @@ const CustomerOrders = () => {
           <TablePagination
             page={safePage}
             pageSize={PAGE_SIZE}
-            total={filtered.length}
+            total={totalCount}
             onPageChange={setPage}
             label="orders"
           />
+          </div>
         </>
       </PageContentGate>
       <CancelOrderConfirm

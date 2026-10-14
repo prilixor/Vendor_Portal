@@ -24,6 +24,21 @@ class ProductDetailScreen extends StatefulWidget {
 }
 
 class _ProductDetailScreenState extends State<ProductDetailScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _hydrateCatalog());
+  }
+
+  Future<void> _hydrateCatalog() async {
+    final provider =
+        Provider.of<VendorCatalogProvider>(context, listen: false);
+    final row = provider.rowForListing(widget.listingId);
+    final productId = row?.listing.productId ?? '';
+    if (productId.isEmpty) return;
+    await provider.fetchProduct(productId);
+  }
+
   Future<void> _toggleStatus(VendorListingRow row, bool active) async {
     final vendorId =
         Provider.of<AuthProvider>(context, listen: false).vendorId;
@@ -807,7 +822,10 @@ class _ListingDetailsPanel extends StatelessWidget {
             icon: Icons.payments_outlined,
             badge: 'Read-only',
             children: [
-              AdminSizingPricingBody(product: catalogProduct),
+              AdminSizingPricingBody(
+                product: catalogProduct,
+                vendorPayoutByVariantId: listing.hasCustomVendorPricing ? listing.variantPayouts : const {},
+              ),
             ],
           ),
         ] else ...[
@@ -833,16 +851,24 @@ class _ListingDetailsPanel extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           _DetailSection(
-            title: 'Your pricing',
+            title: listing.hasCustomVendorPricing ? 'Your pricing · set for you' : 'Your pricing',
             icon: Icons.storefront_outlined,
             children: [
               _DetailRow(
                 label: 'Daily rate',
-                value: _money(catalogProduct?.vendorDailyRent ?? 0),
+                value: _money(
+                  listing.hasCustomVendorPricing
+                      ? listing.vendorDailyRent
+                      : (catalogProduct?.vendorDailyRent ?? 0),
+                ),
               ),
               _DetailRow(
                 label: 'Buy price',
-                value: _moneyOrDash(catalogProduct?.vendorBuyPrice),
+                value: _moneyOrDash(
+                  listing.hasCustomVendorPricing
+                      ? listing.vendorBuyPrice
+                      : catalogProduct?.vendorBuyPrice,
+                ),
               ),
             ],
           ),

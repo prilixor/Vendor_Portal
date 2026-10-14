@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { Role, User } from "@/app/models";
-import { authApi } from "@/app/services/authApi";
+import { authApi, RegisterCustomerResponse } from "@/app/services/authApi";
 import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
 import {
   ADMIN_USER_KEY,
@@ -18,8 +18,15 @@ interface AuthContextValue {
   user: User | null;
   isHydrating: boolean;
   login: (email: string, password: string, role: Role) => Promise<void>;
+  loginWithCustomerPhoneOtp: (phone: string, code: string) => Promise<void>;
   register: (email: string, password: string, phone: string, acceptedLegal?: boolean) => Promise<{ id: string; email: string }>;
-  registerCustomer: (email: string, password: string, fullName: string, phone?: string, acceptedLegal?: boolean) => Promise<{ id: string; email: string; fullName: string }>;
+  registerCustomer: (
+    email: string | null | undefined,
+    password: string,
+    fullName: string,
+    phone?: string | null,
+    acceptedLegal?: boolean,
+  ) => Promise<RegisterCustomerResponse>;
   logout: () => void;
   switchRole: (role: Role) => void;
   hasPermission: (permission: string) => boolean;
@@ -158,6 +165,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     persist(result.user);
   };
 
+  const loginWithCustomerPhoneOtp = async (phone: string, code: string) => {
+    const result = await authApi.loginWithCustomerPhoneOtp(phone, code);
+    clearImpersonationSession();
+    persist(result.user);
+  };
+
   const register = async (email: string, password: string, phone: string, acceptedLegal = true) => {
     const result = await authApi.registerVendor(email, password, phone, acceptedLegal);
     try {
@@ -173,7 +186,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return result;
   };
 
-  const registerCustomer = async (email: string, password: string, fullName: string, phone?: string, acceptedLegal = true) => {
+  const registerCustomer = async (
+    email: string | null | undefined,
+    password: string,
+    fullName: string,
+    phone?: string | null,
+    acceptedLegal = true,
+  ) => {
     return authApi.registerCustomer(email, password, fullName, phone, acceptedLegal);
   };
 
@@ -196,7 +215,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, isHydrating, login, register, registerCustomer, logout, switchRole, hasPermission, setSessionUser }}>
+    <AuthContext.Provider value={{ user, isHydrating, login, loginWithCustomerPhoneOtp, register, registerCustomer, logout, switchRole, hasPermission, setSessionUser }}>
       {children}
     </AuthContext.Provider>
   );

@@ -4,6 +4,7 @@ import 'package:flutter/services.dart';
 import 'theme/app_palette.dart';
 
 export 'theme/app_palette.dart';
+export 'theme/theme_provider.dart';
 
 class AppTheme {
   static const Color accent = AppPalette.accentSeed;

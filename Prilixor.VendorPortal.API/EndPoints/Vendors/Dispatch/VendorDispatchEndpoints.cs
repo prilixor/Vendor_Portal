@@ -3,6 +3,7 @@ using MediatR;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Prilixor.VendorPortal.API.Extensions;
 using Prilixor.VendorPortal.Application.Customers;
+using Prilixor.VendorPortal.Application.Onboarding;
 
 namespace Prilixor.VendorPortal.API.EndPoints.Vendors;
 
@@ -26,6 +27,131 @@ public sealed class VendorUpdateOrderStatusRequest : VendorIdRequest
     public Guid OrderId { get; set; }
     public string Status { get; set; } = string.Empty;
     public List<string>? AssetTags { get; set; }
+}
+
+public sealed class GetVendorOrderSummariesRequest : VendorIdRequest
+{
+    public string? Search { get; set; }
+    public string? Status { get; set; }
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 8;
+}
+
+public sealed class GetVendorExpirationSummariesRequest : VendorIdRequest
+{
+    public int WithinDays { get; set; } = 7;
+    public string? Search { get; set; }
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 8;
+}
+
+public sealed class GetVendorDispatchOfferSummariesRequest : VendorIdRequest
+{
+    public string? Search { get; set; }
+    public string? OrderType { get; set; }
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 8;
+}
+
+public sealed class GetVendorOrderSummariesEndpoint(IMediator mediator)
+    : Endpoint<GetVendorOrderSummariesRequest, Results<Ok<VendorOrderListResult>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("{vendorId}/orders/summaries");
+        Group<VendorOnboardingGroup>();
+    }
+
+    public override async Task<Results<Ok<VendorOrderListResult>, ProblemHttpResult>> ExecuteAsync(
+        GetVendorOrderSummariesRequest req,
+        CancellationToken ct)
+    {
+        var page = req.Page < 1 ? 1 : req.Page;
+        var pageSize = req.PageSize is < 1 or > 50 ? 8 : req.PageSize;
+        var result = await mediator.Send(
+            new GetVendorOrderListQuery(req.VendorId, req.Search, req.Status, page, pageSize),
+            ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class GetVendorOrderGroupEndpoint(IMediator mediator)
+    : Endpoint<VendorDispatchOrderRequest, Results<Ok<List<VendorOrderDto>>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("{vendorId}/orders/{orderId:guid}/group");
+        Group<VendorOnboardingGroup>();
+    }
+
+    public override async Task<Results<Ok<List<VendorOrderDto>>, ProblemHttpResult>> ExecuteAsync(
+        VendorDispatchOrderRequest req,
+        CancellationToken ct)
+    {
+        var result = await mediator.Send(new GetVendorOrderGroupQuery(req.VendorId, req.OrderId), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class GetVendorExpirationSummariesEndpoint(IMediator mediator)
+    : Endpoint<GetVendorExpirationSummariesRequest, Results<Ok<VendorExpirationListResult>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("{vendorId}/orders/expirations/summaries");
+        Group<VendorOnboardingGroup>();
+    }
+
+    public override async Task<Results<Ok<VendorExpirationListResult>, ProblemHttpResult>> ExecuteAsync(
+        GetVendorExpirationSummariesRequest req,
+        CancellationToken ct)
+    {
+        var page = req.Page < 1 ? 1 : req.Page;
+        var pageSize = req.PageSize is < 1 or > 50 ? 8 : req.PageSize;
+        var withinDays = req.WithinDays is < 1 or > 60 ? 7 : req.WithinDays;
+        var result = await mediator.Send(
+            new GetVendorExpirationListQuery(req.VendorId, withinDays, req.Search, page, pageSize),
+            ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class GetVendorDispatchOfferSummariesEndpoint(IMediator mediator)
+    : Endpoint<GetVendorDispatchOfferSummariesRequest, Results<Ok<VendorDispatchOfferListResult>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("{vendorId}/dispatch/offers/summaries");
+        Group<VendorOnboardingGroup>();
+    }
+
+    public override async Task<Results<Ok<VendorDispatchOfferListResult>, ProblemHttpResult>> ExecuteAsync(
+        GetVendorDispatchOfferSummariesRequest req,
+        CancellationToken ct)
+    {
+        var page = req.Page < 1 ? 1 : req.Page;
+        var pageSize = req.PageSize is < 1 or > 50 ? 8 : req.PageSize;
+        var result = await mediator.Send(
+            new GetVendorDispatchOfferListQuery(req.VendorId, req.Search, req.OrderType, page, pageSize),
+            ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class GetVendorPendingDispatchOfferCountEndpoint(IMediator mediator)
+    : Endpoint<VendorIdRequest, Results<Ok<int>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("{vendorId}/dispatch/offers/pending-count");
+        Group<VendorOnboardingGroup>();
+    }
+
+    public override async Task<Results<Ok<int>, ProblemHttpResult>> ExecuteAsync(VendorIdRequest req, CancellationToken ct)
+    {
+        var result = await mediator.Send(new GetVendorPendingDispatchOfferCountQuery(req.VendorId), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
 }
 
 public sealed class GetVendorPendingDispatchOffersEndpoint(IMediator mediator)

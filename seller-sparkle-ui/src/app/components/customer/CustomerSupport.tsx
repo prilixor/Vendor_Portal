@@ -143,7 +143,7 @@ const CustomerSupport = () => {
                 title="Copy phone number"
                 aria-label="Copy phone number"
               >
-                {copied ? <Check className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
+                {copied ? <Check className="h-4 w-4 text-emerald-700 dark:text-emerald-300" /> : <Copy className="h-4 w-4" />}
               </button>
             </div>
             <div className="grid grid-cols-2 gap-2">
@@ -161,7 +161,7 @@ const CustomerSupport = () => {
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  <MessageSquare className="mr-1.5 h-3.5 w-3.5 text-emerald-500" /> WhatsApp
+                  <MessageSquare className="mr-1.5 h-3.5 w-3.5 text-emerald-700 dark:text-emerald-300" /> WhatsApp
                 </a>
               </Button>
             </div>

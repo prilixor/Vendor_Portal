@@ -217,10 +217,12 @@ const AdminOrderDetail = () => {
     setSelectedItemId(null);
   }, [orderId]);
 
-  const { data: orders = [], isLoading, error } = useQuery({
-    queryKey: ["admin-orders"],
-    queryFn: () => adminApi.getAdminOrders({ quiet: true }),
+  const { data, isLoading, error } = useQuery({
+    queryKey: ["admin-order-detail", orderId],
+    queryFn: () => adminApi.getAdminOrderDetail(orderId!, { quiet: true }),
+    enabled: !!orderId,
   });
+  const orders = data?.items ?? [];
 
   const { data: prescriptionFiles = [] } = useQuery({
     queryKey: ["admin-order-prescriptions", currentItemId],
@@ -252,6 +254,11 @@ const AdminOrderDetail = () => {
     [orderGroupItems],
   );
 
+  const groupVendorPayout = useMemo(
+    () => orderGroupItems.reduce((sum, item) => sum + (item.vendorSubtotalAmount ?? 0), 0),
+    [orderGroupItems],
+  );
+
   const baseOrderNumber = selectedOrder ? getBaseOrderNumber(selectedOrder.orderNumber) : "";
 
   useEffect(() => {
@@ -269,7 +276,12 @@ const AdminOrderDetail = () => {
       });
   }, [selectedOrder?.orderId]);
 
-  const invalidate = () => queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ["admin-order-detail"] });
+    queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
+    queryClient.invalidateQueries({ queryKey: ["admin-order-summaries"] });
+    queryClient.invalidateQueries({ queryKey: ["admin-alert-summary"] });
+  };
 
   const updateStatusMutation = useMutation({
     mutationFn: (newStatus: string) =>
@@ -393,6 +405,14 @@ const AdminOrderDetail = () => {
               <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">
                 + ₹{groupDepositAmount.toFixed(0)} deposit
               </p>
+              <p className="mt-1 text-sm font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
+                Vendor payout ₹{groupVendorPayout.toLocaleString("en-IN", { maximumFractionDigits: 2 })}
+              </p>
+              {orderGroupItems.some((item) => item.vendorPriceSetByAdmin === false) ? (
+                <span className="mt-2 inline-flex w-fit rounded-full bg-orange-100 px-2 py-0.5 text-[11px] font-semibold text-orange-800 dark:bg-orange-950/50 dark:text-orange-300">
+                  Vendor price not set
+                </span>
+              ) : null}
             </div>
           </div>
         </CardContent>
@@ -734,6 +754,17 @@ const AdminOrderDetail = () => {
                 <p className="text-xs text-muted-foreground tabular-nums">
                   + ₹{selectedOrder.depositAmount.toFixed(0)} deposit
                 </p>
+                <p className="text-xs text-muted-foreground tabular-nums">
+                  GST ₹{(selectedOrder.gstAmount ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}
+                </p>
+                <p className="text-sm font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
+                  Vendor payout ₹{(selectedOrder.vendorSubtotalAmount ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}
+                </p>
+                {selectedOrder.vendorPriceSetByAdmin === false ? (
+                  <span className="inline-flex w-fit rounded-full bg-orange-100 px-2 py-0.5 text-[11px] font-semibold text-orange-800 dark:bg-orange-950/50 dark:text-orange-300">
+                    Vendor price not set
+                  </span>
+                ) : null}
               </div>
               <div className="space-y-1">
                 <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Status</p>

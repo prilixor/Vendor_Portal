@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 
 import '../api/api_client.dart';
 import '../models/vendor_notification_model.dart';
+import '../utils/paged_json.dart';
 
 class DashboardTopListing {
   final String id;
@@ -100,72 +101,54 @@ class VendorHomeProvider extends ChangeNotifier {
     }
 
     try {
-      // Wave 1 — hero + catalog stats (paint ASAP).
-      final wave1 = await Future.wait([
-        _safeGet('/vendors/$vendorId/profile'),
-        _safeGet('/vendors/$vendorId/listings'),
-      ]);
-
-      final profileRes = wave1[0];
-      if (profileRes?.data is Map) {
-        final profile = Map<String, dynamic>.from(profileRes!.data as Map);
-        final fromApi = profile['businessName']?.toString().trim() ?? '';
+      final response = await _api.dio.get('/vendors/$vendorId/dashboard/summary');
+      if (response.statusCode == 200) {
+        final body = asJsonMap(response.data) ?? {};
+        final fromApi = body['businessName']?.toString().trim() ?? '';
         if (fromApi.isNotEmpty) _businessName = fromApi;
+        _isVerified = body['isVerified'] == true;
+        final verification = body['verificationMessage']?.toString().trim() ?? '';
+        if (verification.isNotEmpty) _verificationMessage = verification;
+        totalListings = asJsonInt(body['totalListings']);
+        activeListings = asJsonInt(body['activeListings']);
+        inventoryUnits = asJsonInt(body['inventoryUnits']);
+        unreadNotifications = asJsonInt(body['unreadNotifications']);
+        pendingRequests = asJsonInt(body['pendingRequestsCount']);
+        confirmedOrders = asJsonInt(body['confirmedOrdersCount']);
+        inTransitOrders = asJsonInt(body['inTransitOrdersCount']);
+        dueReturns = asJsonInt(body['dueReturnsCount']);
+        _recentActivity = asJsonList(body['recentActivity'])
+            .whereType<Map>()
+            .map((raw) {
+              final json = Map<String, dynamic>.from(raw);
+              final read = json['read'] == true;
+              return VendorNotification(
+                id: json['id']?.toString() ?? '',
+                vendorId: vendorId,
+                notificationType: json['notificationType']?.toString() ?? '',
+                title: json['title']?.toString() ?? '',
+                message: json['message']?.toString() ?? '',
+                channel: 'in_app',
+                status: read ? 'read' : 'unread',
+                sentAt: DateTime.tryParse(json['timestamp']?.toString() ?? ''),
+                readAt: read
+                    ? DateTime.tryParse(json['timestamp']?.toString() ?? '')
+                    : null,
+              );
+            })
+            .toList();
+        _topListings = asJsonList(body['topListings']).whereType<Map>().map((raw) {
+          final json = Map<String, dynamic>.from(raw);
+          return DashboardTopListing(
+            id: json['id']?.toString() ?? '',
+            title: json['title']?.toString() ?? '',
+            category: json['category']?.toString() ?? 'Listing',
+            dailyRent: asJsonDouble(json['dailyRent']),
+            stock: asJsonInt(json['stock']),
+          );
+        }).toList();
       }
-
-      final listings = _parseList(wave1[1]?.data);
-      totalListings = listings.length;
-      activeListings = listings.where((l) {
-        final s = (l['listingStatus']?.toString() ?? '').toLowerCase();
-        return s == 'active' || s == 'approved';
-      }).length;
-      inventoryUnits = listings.fold<int>(
-        0,
-        (sum, l) => sum + _toInt(l['availableQuantity']),
-      );
-
-      final sortedListings = List<Map<String, dynamic>>.from(listings)
-        ..sort((a, b) =>
-            _toInt(b['availableQuantity']).compareTo(_toInt(a['availableQuantity'])));
-      _topListings = sortedListings.take(4).map((l) {
-        final category = l['categoryName']?.toString() ??
-            l['productCategory']?.toString() ??
-            l['category']?.toString() ??
-            'Listing';
-        return DashboardTopListing(
-          id: l['id']?.toString() ?? '',
-          title: l['listingTitle']?.toString() ?? '',
-          category: category,
-          dailyRent: _toDouble(l['dailyRent']),
-          weeklyRent: _toDouble(l['weeklyRent']),
-          monthlyRent: _toDouble(l['monthlyRent']),
-          stock: _toInt(l['availableQuantity']),
-        );
-      }).toList();
-
-      // Unblock UI after catalog wave — order counts fill in next.
       _loading = false;
-      notifyListeners();
-
-      // Wave 2 — order operation tiles (non-blocking for first paint).
-      final wave2 = await Future.wait([
-        _safeGet(
-          '/vendors/$vendorId/orders',
-          query: {'status': 'confirmed'},
-        ),
-        _safeGet(
-          '/vendors/$vendorId/orders',
-          query: {'status': 'in_transit'},
-        ),
-        _safeGet(
-          '/vendors/$vendorId/orders/expirations',
-          query: {'withinDays': 7},
-        ),
-      ]);
-
-      confirmedOrders = _parseList(wave2[0]?.data).length;
-      inTransitOrders = _parseList(wave2[1]?.data).length;
-      dueReturns = _parseList(wave2[2]?.data).length;
       notifyListeners();
     } on DioException catch (e) {
       _error = _dioMessage(e, 'Failed to load dashboard.');
@@ -186,37 +169,6 @@ class VendorHomeProvider extends ChangeNotifier {
     _isVerified = isVerified;
     _verificationMessage = message;
     notifyListeners();
-  }
-
-  Future<Response?> _safeGet(
-    String path, {
-    Map<String, dynamic>? query,
-  }) async {
-    try {
-      return await _api.dio.get(path, queryParameters: query);
-    } catch (_) {
-      return null;
-    }
-  }
-
-  List<Map<String, dynamic>> _parseList(dynamic data) {
-    if (data is! List) return const [];
-    return data
-        .whereType<Map>()
-        .map((e) => Map<String, dynamic>.from(e))
-        .toList();
-  }
-
-  int _toInt(dynamic value) {
-    if (value == null) return 0;
-    if (value is num) return value.toInt();
-    return int.tryParse(value.toString()) ?? 0;
-  }
-
-  double _toDouble(dynamic value) {
-    if (value == null) return 0;
-    if (value is num) return value.toDouble();
-    return double.tryParse(value.toString()) ?? 0;
   }
 
   String _dioMessage(DioException e, String fallback) {

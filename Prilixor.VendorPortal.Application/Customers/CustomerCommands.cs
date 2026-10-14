@@ -1,4 +1,6 @@
 using FluentValidation;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Prilixor.VendorPortal.Application.Abstractions;
 using Prilixor.VendorPortal.Application.Common;
@@ -10,14 +12,18 @@ using Prilixor.VendorPortal.Domain.Options;
 using Prilixor.VendorPortal.Domain.Vendors;
 using Prilixor.Shared.Abstractions.CQRS;
 using Prilixor.Shared.Models;
-using Microsoft.Extensions.Logging;
 
 namespace Prilixor.VendorPortal.Application.Customers;
 
-public sealed record CustomerRegisteredDto(Guid Id, string Email, string FullName);
+public sealed record CustomerRegisteredDto(
+    Guid Id,
+    string? Email,
+    string FullName,
+    bool RequiresPhoneOtp,
+    bool RequiresEmailVerification);
 
 public sealed record RegisterCustomerCommand(
-    string Email,
+    string? Email,
     string Password,
     string FullName,
     string? Phone,
@@ -32,12 +38,16 @@ public sealed class RegisterCustomerCommandValidator : AbstractValidator<Registe
 {
     public RegisterCustomerCommandValidator()
     {
-        RuleFor(x => x.Email).NotEmpty().EmailAddress();
         RuleFor(x => x.Password).NotEmpty().MinimumLength(8);
         RuleFor(x => x.FullName).NotEmpty().MinimumLength(2).MaximumLength(200);
         RuleFor(x => x.Phone)
-            .Must(p => string.IsNullOrWhiteSpace(p) || IndianMobilePhone.IsValid(p))
+            .NotEmpty()
+            .WithMessage("Phone number is required.")
+            .Must(p => IndianMobilePhone.IsValid(p))
             .WithMessage(IndianMobilePhone.InvalidMessage);
+        RuleFor(x => x.Email)
+            .EmailAddress()
+            .When(x => !string.IsNullOrWhiteSpace(x.Email));
     }
 }
 
@@ -45,17 +55,23 @@ internal sealed class RegisterCustomerCommandHandler(
     ICustomerRepository customers,
     IPasswordHasherService passwordHasher,
     ILegalAcceptanceRecorder legalAcceptances,
+    IPlatformSmsSettingsService smsSettings,
     ILogger<RegisterCustomerCommandHandler> logger)
     : ICommandHandler<RegisterCustomerCommand, CustomerRegisteredDto>
 {
     public async Task<Result<CustomerRegisteredDto>> Handle(RegisterCustomerCommand request, CancellationToken cancellationToken)
     {
-        var existing = await customers.GetCustomerByEmailAsync(request.Email, cancellationToken);
-        if (existing is not null)
+        // Opaque conflict message on signup (avoid email/phone account enumeration).
+        const string conflictMessage =
+            "Registration failed. If an account with this email or phone number exists, please try logging in.";
+
+        var hasEmail = !string.IsNullOrWhiteSpace(request.Email);
+        var hasPhone = !string.IsNullOrWhiteSpace(request.Phone);
+        if (!hasPhone)
         {
             return Result.Failure<CustomerRegisteredDto>(new Error(
-                "customers.email_exists",
-                "An account already exists for this email.",
+                "customers.phone_required",
+                "Phone number is required.",
                 ErrorCategory.Validation));
         }
 
@@ -71,18 +87,32 @@ internal sealed class RegisterCustomerCommandHandler(
         if (!acceptanceGate.IsSuccess)
             return Result.Failure<CustomerRegisteredDto>(acceptanceGate.Errors);
 
-        var entity = new Customer
+        string? email = null;
+        if (hasEmail)
         {
-            Email = request.Email.Trim().ToLowerInvariant(),
-            PasswordHash = passwordHasher.HashPassword(request.Password),
-            FullName = request.FullName.Trim(),
-            Phone = null,
-            IsEmailVerified = true,
-        };
+            if (!CustomerEmail.TryNormalize(request.Email, out var normalizedEmail))
+            {
+                return Result.Failure<CustomerRegisteredDto>(new Error(
+                    "customers.invalid_email",
+                    "Enter a valid email address.",
+                    ErrorCategory.Validation));
+            }
 
-        if (!string.IsNullOrWhiteSpace(request.Phone))
+            email = normalizedEmail;
+            var existing = await customers.GetCustomerByEmailAsync(email, cancellationToken);
+            if (existing is not null)
+            {
+                return Result.Failure<CustomerRegisteredDto>(new Error(
+                    "customers.email_exists",
+                    conflictMessage,
+                    ErrorCategory.Validation));
+            }
+        }
+
+        string? phone = null;
+        if (hasPhone)
         {
-            if (!IndianMobilePhone.TryNormalize(request.Phone, out var phone))
+            if (!IndianMobilePhone.TryNormalize(request.Phone, out phone))
             {
                 return Result.Failure<CustomerRegisteredDto>(new Error(
                     "customers.invalid_phone",
@@ -90,11 +120,45 @@ internal sealed class RegisterCustomerCommandHandler(
                     ErrorCategory.Validation));
             }
 
-            entity.Phone = phone;
+            var phoneOwner = await customers.GetCustomerByPhoneAsync(phone, cancellationToken);
+            if (phoneOwner is not null)
+            {
+                return Result.Failure<CustomerRegisteredDto>(new Error(
+                    "customers.phone_exists",
+                    conflictMessage,
+                    ErrorCategory.Validation));
+            }
         }
 
+        // Phone is required for new customers. SMS OTP follows the admin phone-OTP switch.
+        // Email remains optional (column stays nullable — no DB schema change).
+        var requiresPhoneOtp = await smsSettings.IsPhoneOtpEnabledAsync(cancellationToken);
+        var requiresEmailVerification = false;
+
+        var entity = new Customer
+        {
+            Email = email,
+            PasswordHash = passwordHasher.HashPassword(request.Password),
+            FullName = request.FullName.Trim(),
+            Phone = phone,
+            PhoneVerifiedAt = null,
+            IsEmailVerified = true,
+            EmailVerificationToken = null,
+            EmailVerificationTokenExpiresAt = null,
+        };
+
         await customers.AddCustomerAsync(entity, cancellationToken);
-        await customers.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await customers.SaveChangesAsync(cancellationToken);
+        }
+        catch (Exception ex) when (IsUniqueConstraintViolation(ex))
+        {
+            return Result.Failure<CustomerRegisteredDto>(new Error(
+                "customers.identifier_exists",
+                conflictMessage,
+                ErrorCategory.Validation));
+        }
 
         var acceptances = acceptanceGate.Value
             .Select(row =>
@@ -124,11 +188,40 @@ internal sealed class RegisterCustomerCommandHandler(
             cancellationToken);
         await customers.SaveChangesAsync(cancellationToken);
 
-        return Result.Success(new CustomerRegisteredDto(entity.Id, entity.Email, entity.FullName));
+        return Result.Success(new CustomerRegisteredDto(
+            entity.Id,
+            entity.Email,
+            entity.FullName,
+            requiresPhoneOtp,
+            requiresEmailVerification));
+    }
+
+    private static bool IsUniqueConstraintViolation(Exception ex)
+    {
+        for (var cur = ex; cur is not null; cur = cur.InnerException!)
+        {
+            var msg = cur.Message ?? string.Empty;
+            if (msg.Contains("23505", StringComparison.Ordinal)
+                || msg.Contains("ux_customers_email", StringComparison.OrdinalIgnoreCase)
+                || msg.Contains("ux_customers_phone", StringComparison.OrdinalIgnoreCase)
+                || msg.Contains("unique constraint", StringComparison.OrdinalIgnoreCase)
+                || msg.Contains("duplicate key", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
 
-public sealed record CustomerProfileDto(Guid Id, string Email, string FullName, string? Phone);
+public sealed record CustomerProfileDto(
+    Guid Id,
+    string? Email,
+    string FullName,
+    string? Phone,
+    bool IsPhoneVerified = false,
+    bool IsEmailVerified = false);
 
 public sealed record GetCustomerProfileQuery(Guid CustomerId) : IQuery<CustomerProfileDto>;
 
@@ -141,11 +234,16 @@ internal sealed class GetCustomerProfileQueryHandler(ICustomerRepository custome
         if (c is null || c.IsDeleted)
             return Result.Failure<CustomerProfileDto>(new Error("customers.not_found", "Customer not found.", ErrorCategory.NotFound));
 
-        return Result.Success(new CustomerProfileDto(c.Id, c.Email, c.FullName, c.Phone));
+        return Result.Success(new CustomerProfileDto(
+            c.Id, c.Email, c.FullName, c.Phone, c.PhoneVerifiedAt.HasValue, c.IsEmailVerified));
     }
 }
 
-public sealed record UpdateCustomerProfileCommand(Guid CustomerId, string FullName, string? Phone) : ICommand<CustomerProfileDto>;
+public sealed record UpdateCustomerProfileCommand(
+    Guid CustomerId,
+    string FullName,
+    string? Phone,
+    string? Email = null) : ICommand<CustomerProfileDto>;
 
 public sealed class UpdateCustomerProfileCommandValidator : AbstractValidator<UpdateCustomerProfileCommand>
 {
@@ -155,10 +253,17 @@ public sealed class UpdateCustomerProfileCommandValidator : AbstractValidator<Up
         RuleFor(x => x.Phone)
             .Must(p => string.IsNullOrWhiteSpace(p) || IndianMobilePhone.IsValid(p))
             .WithMessage(IndianMobilePhone.InvalidMessage);
+        RuleFor(x => x.Email)
+            .EmailAddress()
+            .When(x => !string.IsNullOrWhiteSpace(x.Email));
     }
 }
 
-internal sealed class UpdateCustomerProfileCommandHandler(ICustomerRepository customers)
+internal sealed class UpdateCustomerProfileCommandHandler(
+    ICustomerRepository customers,
+    IEmailService emailService,
+    IConfiguration configuration,
+    ILogger<UpdateCustomerProfileCommandHandler> logger)
     : ICommandHandler<UpdateCustomerProfileCommand, CustomerProfileDto>
 {
     public async Task<Result<CustomerProfileDto>> Handle(UpdateCustomerProfileCommand request, CancellationToken cancellationToken)
@@ -168,8 +273,60 @@ internal sealed class UpdateCustomerProfileCommandHandler(ICustomerRepository cu
             return Result.Failure<CustomerProfileDto>(new Error("customers.not_found", "Customer not found.", ErrorCategory.NotFound));
 
         c.FullName = request.FullName.Trim();
+
+        // Phone-only accounts may add an email once; existing email cannot be changed here.
+        var hadEmail = !string.IsNullOrWhiteSpace(c.Email);
+        var emailAdded = false;
+        if (!hadEmail && !string.IsNullOrWhiteSpace(request.Email))
+        {
+            if (!CustomerEmail.TryNormalize(request.Email, out var normalizedEmail))
+            {
+                return Result.Failure<CustomerProfileDto>(new Error(
+                    "customers.invalid_email",
+                    "Enter a valid email address.",
+                    ErrorCategory.Validation));
+            }
+
+            var emailOwner = await customers.GetCustomerByEmailAsync(normalizedEmail, cancellationToken);
+            if (emailOwner is not null && emailOwner.Id != c.Id)
+            {
+                return Result.Failure<CustomerProfileDto>(new Error(
+                    "customers.email_exists",
+                    "This email can't be used. Enter a different email address.",
+                    ErrorCategory.Validation));
+            }
+
+            c.Email = normalizedEmail;
+            c.IsEmailVerified = false;
+            c.EmailVerificationToken = VerificationTokenGenerator.GenerateSecureToken();
+            c.EmailVerificationTokenExpiresAt = DateTimeOffset.UtcNow.AddHours(24);
+            emailAdded = true;
+        }
+        else if (hadEmail && !string.IsNullOrWhiteSpace(request.Email))
+        {
+            var requested = CustomerEmail.Normalize(request.Email);
+            var current = CustomerEmail.Normalize(c.Email);
+            if (!string.Equals(requested, current, StringComparison.Ordinal))
+            {
+                return Result.Failure<CustomerProfileDto>(new Error(
+                    "customers.email_locked",
+                    "Email cannot be changed from Settings. Contact support if you need to update it.",
+                    ErrorCategory.Validation));
+            }
+        }
+
         if (string.IsNullOrWhiteSpace(request.Phone))
         {
+            if (string.IsNullOrWhiteSpace(c.Email))
+            {
+                return Result.Failure<CustomerProfileDto>(new Error(
+                    "customers.identifier_required",
+                    "Keep a phone number on the account, or add an email first.",
+                    ErrorCategory.Validation));
+            }
+
+            if (!string.IsNullOrWhiteSpace(c.Phone))
+                c.PhoneVerifiedAt = null;
             c.Phone = null;
         }
         else if (!IndianMobilePhone.TryNormalize(request.Phone, out var phone))
@@ -181,13 +338,44 @@ internal sealed class UpdateCustomerProfileCommandHandler(ICustomerRepository cu
         }
         else
         {
+            var phoneOwner = await customers.GetCustomerByPhoneAsync(phone, cancellationToken);
+            if (phoneOwner is not null && phoneOwner.Id != c.Id)
+            {
+                return Result.Failure<CustomerProfileDto>(new Error(
+                    "customers.phone_exists",
+                    IndianMobilePhone.UnavailableMessage,
+                    ErrorCategory.Validation));
+            }
+
+            if (!string.Equals(c.Phone, phone, StringComparison.Ordinal))
+                c.PhoneVerifiedAt = null;
             c.Phone = phone;
         }
 
         await customers.UpdateCustomerAsync(c, cancellationToken);
         await customers.SaveChangesAsync(cancellationToken);
 
-        return Result.Success(new CustomerProfileDto(c.Id, c.Email, c.FullName, c.Phone));
+        if (emailAdded && !string.IsNullOrWhiteSpace(c.Email) && !string.IsNullOrWhiteSpace(c.EmailVerificationToken))
+        {
+            try
+            {
+                var frontendUrl = configuration["FrontendUrl"] ?? "https://blinksmed.com";
+                var verificationLink =
+                    $"{frontendUrl}/verify-email?token={Uri.EscapeDataString(c.EmailVerificationToken)}&portal=customer";
+                var body = EmailTemplates.VendorEmailVerificationRequested(
+                    c.Email,
+                    verificationLink,
+                    c.FullName);
+                await emailService.SendEmailAsync(c.Email, "Verify Your Email Address", body, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to send customer email verification after profile update to {Email}", c.Email);
+            }
+        }
+
+        return Result.Success(new CustomerProfileDto(
+            c.Id, c.Email, c.FullName, c.Phone, c.PhoneVerifiedAt.HasValue, c.IsEmailVerified));
     }
 }
 
@@ -1059,6 +1247,7 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
     ICustomerRepository customers,
     IVendorOnboardingRepository vendors,
     IOptions<CustomerPricingOptions> pricingOptions,
+    CustomerSmsNotifier customerSms,
     ILegalAcceptanceRecorder legalAcceptances,
     ISequentialDispatchService dispatch)
     : ICommandHandler<PlaceCustomerOrdersCommand, PlaceCustomerOrdersResultDto>
@@ -1492,6 +1681,11 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
                         RelatedOrderId = order.Id,
                     },
                     cancellationToken);
+                await customerSms.TrySendAsync(
+                    request.CustomerId,
+                    SmsTemplates.CustomerOrderPending(order.OrderNumber),
+                    CustomerSmsKind.OrderPlaced,
+                    cancellationToken);
                 await customers.SaveChangesAsync(cancellationToken);
             }
 
@@ -1756,7 +1950,7 @@ internal sealed class GetCustomerOrderDetailQueryHandler(
     }
 }
 
-internal static class CustomerOrderStatusMapper
+public static class CustomerOrderStatusMapper
 {
     public static string ToDisplay(string status) => status.ToLowerInvariant() switch
     {
@@ -1780,7 +1974,8 @@ public sealed record CancelCustomerOrderCommand(Guid CustomerId, Guid OrderId) :
 internal sealed class CancelCustomerOrderCommandHandler(
     ICustomerRepository customers,
     IVendorOnboardingRepository vendors,
-    IVendorUploadStorageService uploadStorage)
+    IVendorUploadStorageService uploadStorage,
+    CustomerSmsNotifier customerSms)
     : ICommandHandler<CancelCustomerOrderCommand, CustomerOrderDto>
 {
     public async Task<Result<CustomerOrderDto>> Handle(CancelCustomerOrderCommand request, CancellationToken cancellationToken)
@@ -1900,6 +2095,11 @@ internal sealed class CancelCustomerOrderCommandHandler(
                 NotificationType = CustomerNotificationTypes.OrderCancelled,
                 RelatedOrderId = o.Id,
             },
+            cancellationToken);
+        await customerSms.TrySendAsync(
+            request.CustomerId,
+            SmsTemplates.CustomerOrderCancelled(o.OrderNumber),
+            CustomerSmsKind.OrderCancelled,
             cancellationToken);
         await customers.SaveChangesAsync(cancellationToken);
         await vendors.SaveChangesAsync(cancellationToken);

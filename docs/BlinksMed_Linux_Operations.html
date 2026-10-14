@@ -93,7 +93,7 @@ Compress-Archive -Path C:\Deploy\publish_api_linux\* -DestinationPath C:\Deploy\
 </pre>
   <p>On the PC: S3 → <b>blinksmed-backups</b> → <b>migration</b> → download <code>appsettings.Production.linux.json</code>. Save it as the local gitignored <code>appsettings.Production.json</code> (overwrite the PC copy). Do not commit it. Do not paste it in chat. After that, edit JSON only on that file.</p>
   <h3>5.2 On Linux SSM (root) — full replace JSON from the zip</h3>
-  <p>Backup live JSON to <code>/root</code>, copy API files, then replace the entire Production JSON from the zip <b>only if</b> DB/JWT/SMTP/keys in the zip match live Linux. If they do not match, the script keeps the live file and prints REFUSED.</p>
+  <p>Backup live JSON to <code>/root</code>, copy API files, then replace the entire Production JSON from the zip <b>only if</b> DB, JWT, SMTP, and the other listed secrets in the zip match live Linux. ShreeSMS settings are allowed to change. If the secrets do not match, the script keeps the live file and prints REFUSED.</p>
 <pre>systemctl stop blinksmed-api
 cp -a /var/www/api/appsettings.Production.json /root/appsettings.Production.json.bak
 
@@ -129,7 +129,6 @@ secret_paths = [
     ("JwtOptions", "SigningKey"),
     ("SmtpOptions",),
     ("BootstrapSuperAdmin", "Password"),
-    ("Twilio",),
     ("WebPush", "PrivateKey"),
     ("WebPush", "PublicKey"),
     ("Groq", "ApiKey"),
@@ -144,6 +143,8 @@ if bad:
     sys.exit(1)
 json.dump(zip_cfg, open(live_path, "w"), indent=2)
 print("FULL REPLACE OK — entire JSON from zip is now live")
+shree = zip_cfg.get("ShreeSms") or {}
+print("ShreeSms.Enabled", shree.get("Enabled"), "SenderId", shree.get("SenderId"))
 print("DispatchOfferTtlMinutes", zip_cfg.get("CustomerPricing", {}).get("DispatchOfferTtlMinutes"))
 print("MaxDispatchVendorsPerLine", zip_cfg.get("CustomerPricing", {}).get("MaxDispatchVendorsPerLine"))
 print("OrderImageRequest", zip_cfg.get("OrderImageRequest"))

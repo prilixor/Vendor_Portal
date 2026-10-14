@@ -1,5 +1,6 @@
 ﻿import { useEffect, useMemo, useState } from "react";
 import { useSearchParams } from "react-router-dom";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/app/components/shared/PageHeader";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import { Card } from "@/app/components/ui/card";
@@ -16,12 +17,12 @@ import { FormGrid } from "@/app/components/shared/FormGrid";
 import { FieldError } from "@/app/components/shared/FieldError";
 import { SearchableSelect } from "@/app/components/shared/SearchableSelect";
 import { ProductListing } from "@/app/models";
-import { Plus, Search, Pencil, Image as ImageIcon, Trash2, Loader2, Package, FlaskConical, Shield } from "lucide-react";
+import { Plus, Search, Pencil, Image as ImageIcon, Trash2, Loader2, Package, FlaskConical, Shield, ChevronDown } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/app/guards/AuthContext";
 import { useVendorVerification } from "@/app/contexts/VendorVerificationContext";
 import { ListingThumb } from "@/app/components/shared/ListingThumb";
-import { vendorOnboardingApi, VendorVariantInventoryDto } from "@/app/services/vendorOnboardingApi";
+import { vendorOnboardingApi, VendorVariantInventoryDto, type VendorListingSummaryApiDto } from "@/app/services/vendorOnboardingApi";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
 import { cn, resolveItemImageUrl, resolveCatalogProductImageUrl } from "@/app/helpers/utils";
 import { Badge } from "@/app/components/ui/badge";
@@ -35,6 +36,8 @@ type LocalListing = ProductListing & {
   buyPrice?: number;
   vendorDailyRent?: number;
   vendorBuyPrice?: number;
+  hasCustomVendorPricing?: boolean;
+  variantPayouts?: { variantId: string; vendorPrice: number }[];
   gstPercent?: number;
   isRentEnabled?: boolean;
   isBuyEnabled?: boolean;
@@ -50,6 +53,15 @@ type LocalListing = ProductListing & {
   catalogImage?: string;
   /** Per-packaging-size stock for chemical listings (same source as Admin vendor chemicals). */
   sizeStocks?: ChemStockSize[];
+  chemicalSizes?: {
+    label: string;
+    sku: string;
+    sizeValue: number;
+    sizeUnit: string;
+    buyPrice: number;
+    totalQuantity: number;
+    availableQuantity: number;
+  }[];
 };
 
 type CatalogCategory = {
@@ -137,119 +149,140 @@ const mapVariantRowsToSizeStocks = (rows: VendorVariantInventoryDto[]): ChemStoc
       available: r.availableQuantity || 0,
     }));
 
-const ChemQtySizeRows = ({ sizes, rowClassName }: { sizes: ChemStockSize[]; rowClassName?: string }) => (
-  <>
-    {sizes.map((s, i) => (
-      <div key={s.sku || i} className={cn("flex items-center justify-between gap-6", rowClassName)}>
-        <span className="truncate text-muted-foreground" title={s.sku || s.label}>
-          {s.label}
-        </span>
-        <span className="shrink-0 font-semibold tabular-nums">
-          {s.total}
-          {s.available !== s.total ? (
-            <span className="ml-1 font-normal text-muted-foreground">· {s.available}</span>
-          ) : null}
-        </span>
-      </div>
-    ))}
-  </>
-);
+type ChemPriceSize = { sizeValue: number; sizeUnit: string; buyPrice: number };
 
-/** Desktop hover popup — same pattern as Buy Price “Price by size”. */
-const ChemQtyHover = ({ quantity, sizes }: { quantity: number; sizes: ChemStockSize[] }) => (
-  <TooltipProvider>
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <div className="inline-flex cursor-default flex-col items-end">
-          <span className="whitespace-nowrap tabular-nums">{quantity}</span>
-          <span className="font-sans text-[10px] font-normal text-muted-foreground">
-            {sizes.length} {sizes.length === 1 ? "size" : "sizes"}
-          </span>
-        </div>
-      </TooltipTrigger>
-      <TooltipContent side="left" align="center" className="min-w-[10rem] p-0">
-        <div className="border-b border-border/60 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-          Qty by size
-        </div>
-        <div className="max-h-64 divide-y divide-border/40 overflow-auto px-3 py-1.5 font-sans text-xs">
-          <ChemQtySizeRows sizes={sizes} rowClassName="py-1" />
-        </div>
-      </TooltipContent>
-    </Tooltip>
-  </TooltipProvider>
-);
-
-/** Mobile: tap “Show all” instead of hover (same idea as ChemSizeBreakdown). */
-const ChemQtyBreakdown = ({ sizes }: { sizes: ChemStockSize[] }) => {
-  const COLLAPSED_COUNT = 3;
-  const [expanded, setExpanded] = useState(false);
-  const hasMore = sizes.length > COLLAPSED_COUNT;
-  const visible = expanded ? sizes : sizes.slice(0, COLLAPSED_COUNT);
+/** Click to expand buy price by packaging size. Same pattern as Admin vendor chemicals. */
+const ChemPriceDisclosure = ({
+  label,
+  count,
+  sizes,
+  align = "end",
+}: {
+  label: string;
+  count: number;
+  sizes: ChemPriceSize[];
+  align?: "start" | "end";
+}) => {
+  const [open, setOpen] = useState(false);
   return (
-    <div className="mt-1">
-      <div
-        className={`divide-y divide-border/40 rounded-md border border-border/60 ${
-          expanded ? "max-h-52 overflow-auto" : ""
-        }`}
+    <div className={cn("inline-flex max-w-full flex-col", align === "end" ? "items-end" : "items-start")}>
+      <button
+        type="button"
+        onClick={() => setOpen((value) => !value)}
+        className="inline-flex items-center gap-1 text-left"
+        aria-expanded={open}
       >
-        <ChemQtySizeRows sizes={visible} rowClassName="px-2.5 py-1 text-xs font-normal" />
-      </div>
-      {hasMore && (
-        <button
-          type="button"
-          onClick={() => setExpanded((e) => !e)}
-          className="mt-1 text-xs font-medium text-primary no-underline transition-colors hover:text-primary/80 hover:no-underline"
-        >
-          {expanded ? "Show less" : `Show all ${sizes.length} sizes`}
-        </button>
+        <span className="whitespace-nowrap font-mono tabular-nums">{label}</span>
+        <span className="font-sans text-[10px] font-normal text-muted-foreground">
+          · {count} {count === 1 ? "size" : "sizes"}
+        </span>
+        <ChevronDown className={cn("h-3 w-3 text-muted-foreground transition-transform", open && "rotate-180")} />
+      </button>
+      {open && (
+        <div className="mt-1 max-h-52 w-full min-w-[10rem] max-w-[16rem] divide-y divide-border/40 overflow-auto rounded-md border border-border/60 text-left">
+          {sizes.map((size, index) => (
+            <div key={`${size.sizeValue}-${size.sizeUnit}-${index}`} className="flex items-center justify-between gap-6 px-2.5 py-1 text-xs">
+              <span className="text-muted-foreground">
+                {size.sizeValue} {size.sizeUnit}
+              </span>
+              <span className="font-medium tabular-nums">₹{size.buyPrice.toLocaleString("en-IN")}</span>
+            </div>
+          ))}
+        </div>
       )}
     </div>
   );
 };
 
-/**
- * Per-size price breakdown for a chemical. Collapses to the first few sizes with a
- * "Show all" toggle so a chemical with many packaging sizes (e.g. 10+) doesn't blow up
- * the mobile card height; when expanded it scrolls instead of growing unbounded.
- */
-const ChemSizeBreakdown = ({ sizes }: { sizes: any[] }) => {
-  const COLLAPSED_COUNT = 3;
-  const [expanded, setExpanded] = useState(false);
-  const hasMore = sizes.length > COLLAPSED_COUNT;
-  const visible = expanded ? sizes : sizes.slice(0, COLLAPSED_COUNT);
+/** Click to expand quantity by packaging size. Same pattern as Admin vendor chemicals. */
+const ChemStockDisclosure = ({
+  total,
+  sizes,
+  align = "end",
+}: {
+  total: number;
+  sizes: ChemStockSize[];
+  align?: "start" | "end";
+}) => {
+  const [open, setOpen] = useState(false);
+  const count = sizes.length;
   return (
-    <div className="mt-1">
-      <div
-        className={`divide-y divide-border/40 rounded-md border border-border/60 ${
-          expanded ? "max-h-52 overflow-auto" : ""
-        }`}
-      >
-        {visible.map((v: any, i: number) => (
-          <div key={i} className="flex items-center justify-between px-2.5 py-1 text-xs">
-            <span className="text-muted-foreground">
-              {v.sizeValue} {v.sizeUnit}
+    <div className={cn("inline-flex max-w-full flex-col", align === "end" ? "items-end" : "items-start")}>
+      <span className="font-mono tabular-nums">{total}</span>
+      {count > 0 && (
+        <>
+          <button
+            type="button"
+            onClick={() => setOpen((value) => !value)}
+            className="inline-flex items-center gap-1 text-[10px] font-medium text-muted-foreground hover:text-foreground"
+            aria-expanded={open}
+          >
+            <span>
+              {count} {count === 1 ? "size" : "sizes"}
             </span>
-            <span className="font-mono font-medium tabular-nums">
-              ₹{Number(v.buyPrice).toLocaleString("en-IN")}
-            </span>
-          </div>
-        ))}
-      </div>
-      {hasMore && (
-        <button
-          type="button"
-          onClick={() => setExpanded((e) => !e)}
-          className="mt-1 text-xs font-medium text-primary no-underline transition-colors hover:text-primary/80 hover:no-underline"
-        >
-          {expanded ? "Show less" : `Show all ${sizes.length} sizes`}
-        </button>
+            <ChevronDown className={cn("h-3 w-3 transition-transform", open && "rotate-180")} />
+          </button>
+          {open && (
+            <div className="mt-1 max-h-40 w-full min-w-[9rem] max-w-[12rem] divide-y divide-border/40 overflow-auto rounded-md border border-border/60 text-left">
+              {sizes.map((size, index) => (
+                <div key={size.sku || index} className="flex items-center justify-between gap-3 px-2 py-1 text-[10px]">
+                  <span className="truncate text-muted-foreground" title={size.sku}>
+                    {size.label}
+                  </span>
+                  <span className="shrink-0 font-mono font-medium tabular-nums">
+                    {size.total}
+                    {size.available !== size.total ? (
+                      <span className="font-normal text-muted-foreground"> · {size.available}</span>
+                    ) : null}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
       )}
     </div>
   );
 };
+
+const mapListingSummary = (l: VendorListingSummaryApiDto): LocalListing => ({
+  id: l.id,
+  productId: l.productId,
+  categoryId: "",
+  category: l.categoryName,
+  productName: l.productName,
+  title: l.listingTitle || l.productName,
+  dailyRent: l.dailyRent,
+  weeklyRent: l.weeklyRent,
+  monthlyRent: l.monthlyRent,
+  securityDeposit: l.securityDeposit,
+  quantity: l.totalQuantity,
+  status: normalizeListingStatus(l.listingStatus),
+  primaryImage: resolveItemImageUrl({
+    primaryImageUrl: l.primaryImageUrl,
+    primaryThumbnailUrl: l.primaryThumbnailUrl,
+  }) ?? undefined,
+  images: [],
+  createdAt: new Date().toISOString(),
+  brandName: l.brandName ?? undefined,
+  modelName: l.modelName ?? undefined,
+  isChemical: l.isChemical,
+  hasCustomVendorPricing: l.hasCustomVendorPricing,
+  vendorDailyRent: l.vendorDailyRent,
+  vendorBuyPrice: l.vendorBuyPrice ?? undefined,
+  variantPayouts: l.variantPayouts,
+  chemicalSizes: l.chemicalSizes ?? [],
+  sizeStocks: (l.chemicalSizes ?? []).map((size) => ({
+    label: size.label,
+    sku: size.sku,
+    total: size.totalQuantity,
+    available: size.availableQuantity,
+  })),
+});
 
 const Products = () => {
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const initialFilter = (searchParams.get("status") as "all" | "active" | "inactive") ?? "all";
   
@@ -308,7 +341,13 @@ const Products = () => {
   };
 
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const itemsPerPage = 8;
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+
+  useEffect(() => {
+    const t = window.setTimeout(() => setDebouncedSearch(search.trim()), 350);
+    return () => window.clearTimeout(t);
+  }, [search]);
 
   useEffect(() => {
     setCurrentPage(1);
@@ -334,18 +373,35 @@ const Products = () => {
     return [p.brandName, p.modelName].filter(Boolean).join(" · ");
   };
 
-  const filtered = products.filter((p) => {
-    const isChem = isChemicalListing(p);
-    if (activeTab === "equipment" && isChem) return false;
-    if (activeTab === "chemical" && !isChem) return false;
-
-    const m = (filter === "all" || p.status === filter);
-    const s = !search || p.title.toLowerCase().includes(search.toLowerCase()) || p.category.toLowerCase().includes(search.toLowerCase());
-    const f = !showFavoritesOnly || (p.favoriteCount && p.favoriteCount > 0);
-    return m && s && f;
+  const { data: listingPage, isLoading: listingsLoading, isPlaceholderData, isError: listingsError, error: listingsErrorValue } = useQuery({
+    queryKey: ["vendor-listing-summaries", user?.id, currentPage, debouncedSearch, filter, activeTab],
+    queryFn: () =>
+      vendorOnboardingApi.getVendorListingSummaries(user!.id, {
+        search: debouncedSearch,
+        status: filter,
+        isChemical: activeTab === "chemical",
+        page: currentPage,
+        pageSize: itemsPerPage,
+      }, { quiet: true }),
+    enabled: Boolean(user?.id),
+    placeholderData: keepPreviousData,
   });
+  const isPageChanging = isPlaceholderData && !listingsLoading;
 
-  const paginatedProducts = filtered.slice((currentPage - 1) * itemsPerPage, currentPage * itemsPerPage);
+  const paginatedProducts = useMemo(
+    () => (listingPage?.items ?? []).map(mapListingSummary),
+    [listingPage?.items],
+  );
+  const filteredCount = listingPage?.totalCount ?? 0;
+  const tabCounts = {
+    equipment: listingPage?.equipmentCount ?? 0,
+    chemical: listingPage?.chemicalCount ?? 0,
+  };
+  const statusCounts = {
+    all: activeTab === "chemical" ? tabCounts.chemical : tabCounts.equipment,
+    active: listingPage?.activeCount ?? 0,
+    inactive: listingPage?.inactiveCount ?? 0,
+  };
 
   const toggleListingStatus = async (listing: LocalListing) => {
     if (!user) return;
@@ -358,7 +414,7 @@ const Products = () => {
   const confirmStatusChange = async (id: string, action: 'activate' | 'deactivate') => {
     if (!user) return;
 
-    const listing = products.find(p => p.id === id);
+    const listing = paginatedProducts.find(p => p.id === id);
     if (!listing) return;
 
     try {
@@ -372,7 +428,7 @@ const Products = () => {
         availableQuantity: listing.quantity,
         listingStatus: newStatus,
       });
-      setProducts(products.map((p) => (p.id === listing.id ? { ...p, status: newStatus } : p)));
+      await refreshListings();
       toast.success(`Listing ${action}d successfully`);
       setStatusConfirmId(null);
       setStatusConfirmAction(null);
@@ -392,25 +448,42 @@ const Products = () => {
 
   const openEditListing = async (p: LocalListing) => {
     setFieldErrors({});
-    setEditing(p);
+    const loaded = catalogProducts.length > 0 ? { products: catalogProducts } : await loadCatalogAndListings();
+    const catalog = loaded?.products.find((c) => c.id === p.productId);
+    const payoutByVariant = new Map((p.variantPayouts ?? []).map((row) => [row.variantId, row.vendorPrice]));
+    const variants = (catalog?.variants || p.variants || []).map((variant: any) => {
+      const customPayout = payoutByVariant.get(variant.id);
+      return customPayout == null ? variant : { ...variant, vendorPrice: customPayout };
+    });
+    setEditing({
+      ...p,
+      categoryId: catalog?.categoryId ?? p.categoryId,
+      variants,
+      rentalPricingPlans: catalog?.rentalPricingPlans || p.rentalPricingPlans || [],
+      buyPrice: catalog?.buyPrice ?? p.buyPrice,
+      vendorDailyRent: p.hasCustomVendorPricing ? p.vendorDailyRent ?? catalog?.vendorDailyRent : catalog?.vendorDailyRent ?? p.vendorDailyRent,
+      vendorBuyPrice: p.hasCustomVendorPricing ? p.vendorBuyPrice ?? catalog?.vendorBuyPrice : catalog?.vendorBuyPrice ?? p.vendorBuyPrice,
+      gstPercent: catalog?.gstPercent ?? p.gstPercent,
+      isRentEnabled: catalog?.isRentEnabled ?? p.isRentEnabled,
+      isBuyEnabled: catalog?.isBuyEnabled ?? p.isBuyEnabled,
+    });
     // For chemical listings, pre-load existing per-size (variant) stock and align QTY to that sum.
-    if (activeTab === "chemical" && user && p.variants && p.variants.length > 0) {
+    if (activeTab === "chemical" && user && variants.length > 0) {
       try {
         const stocks = await vendorOnboardingApi.getVariantInventory(user.id, p.id);
         const stockMap: Record<string, number> = {};
         stocks.forEach((s) => { stockMap[s.productVariantId] = s.totalQuantity; });
-        // Ensure every catalog variant has a row (default 0) so save always syncs totals.
-        p.variants.forEach((v: any) => {
+        variants.forEach((v: any) => {
           if (stockMap[v.id] === undefined) stockMap[v.id] = 0;
         });
         const variantTotal = Object.values(stockMap).reduce((sum, n) => sum + (Number(n) || 0), 0);
         setVariantStocks(stockMap);
-        setEditing({ ...p, quantity: variantTotal });
+        setEditing((current) => current ? { ...current, quantity: variantTotal } : current);
       } catch {
         const empty: Record<string, number> = {};
-        p.variants.forEach((v: any) => { empty[v.id] = 0; });
+        variants.forEach((v: any) => { empty[v.id] = 0; });
         setVariantStocks(empty);
-        setEditing({ ...p, quantity: 0 });
+        setEditing((current) => current ? { ...current, quantity: 0 } : current);
       }
     } else {
       setVariantStocks({});
@@ -419,19 +492,20 @@ const Products = () => {
 
   // Chemicals are priced per packaging size; expose the customer buy-price range + sorted sizes.
   const getChemPricing = (p: LocalListing) => {
-    const active = (p.variants || []).filter(
-      (v: any) => v?.isActive !== false && typeof v?.buyPrice === "number" && v.buyPrice > 0
-    );
+    const active = (p.chemicalSizes ?? []).filter((size) => size.buyPrice > 0);
     if (active.length === 0) return null;
-    const prices = active.map((v: any) => v.buyPrice as number);
+    const prices = active.map((size) => size.buyPrice);
     const min = Math.min(...prices);
     const max = Math.max(...prices);
     const label =
       min === max
         ? `₹${min.toLocaleString("en-IN")}`
         : `₹${min.toLocaleString("en-IN")} – ₹${max.toLocaleString("en-IN")}`;
-    const sorted = active.slice().sort((a: any, b: any) => (a.sizeValue ?? 0) - (b.sizeValue ?? 0));
-    return { label, sizes: sorted, count: active.length };
+    const sizes = active
+      .slice()
+      .sort((a, b) => a.sizeValue - b.sizeValue)
+      .map((size) => ({ sizeValue: size.sizeValue, sizeUnit: size.sizeUnit, buyPrice: size.buyPrice }));
+    return { label, sizes, count: active.length };
   };
 
   const confirmDeleteListing = async (id: string) => {
@@ -440,7 +514,7 @@ const Products = () => {
     try {
       setBusy(true);
       await vendorOnboardingApi.deleteVendorProductListing(user.id, id);
-      setProducts(products.filter((p) => p.id !== id));
+      await refreshListings();
       toast.success("Listing deleted successfully");
       setDeleteConfirmId(null);
     } catch (error) {
@@ -454,22 +528,10 @@ const Products = () => {
   const loadCatalogAndListings = async () => {
     if (!user) return { categories: [] as CatalogCategory[], products: [] as CatalogProduct[] };
 
-    const [categoriesRes, productsRes, listingsRes] = await Promise.all([
+    const [categoriesRes, productsRes] = await Promise.all([
       vendorOnboardingApi.getProductCategories(),
       vendorOnboardingApi.getProducts(),
-      vendorOnboardingApi.getVendorProductListings(user.id),
     ]);
-
-    const inventories = await Promise.all(
-      listingsRes.map(async (l) => {
-        try {
-          return await vendorOnboardingApi.getVendorInventory(user.id, l.id);
-        } catch {
-          return null;
-        }
-      })
-    );
-    const inventoryMap = new Map(inventories.filter(i => i !== null).map(i => [i!.vendorProductListingId, i]));
 
     const mappedCategories: CatalogCategory[] = categoriesRes.map((c) => ({
       id: c.id,
@@ -500,122 +562,19 @@ const Products = () => {
       images: p.images,
       documents: p.documents,
     }));
-    const byProductId = new Map(mappedProducts.map((p) => [p.id, p]));
-    const byCategoryId = new Map(mappedCategories.map((c) => [c.id, c]));
-
-    // For chemicals, QTY must come from per-size (variant) stock — not the flat listing inventory.
-    const chemicalListingIds = listingsRes
-      .filter((l) => {
-        const product = byProductId.get(l.productId);
-        const category = product ? byCategoryId.get(product.categoryId) : undefined;
-        return !!(category?.isChemical || product?.baseUnit || product?.casNumber || product?.chemicalFormula || l.isChemical);
-      })
-      .map((l) => l.id);
-
-    const variantInventoryByListing = new Map<string, VendorVariantInventoryDto[]>();
-    await Promise.all(
-      chemicalListingIds.map(async (listingId) => {
-        try {
-          const rows = await vendorOnboardingApi.getVariantInventory(user.id, listingId);
-          variantInventoryByListing.set(listingId, rows);
-        } catch {
-          // Keep listing-level qty as fallback when variant inventory is unavailable.
-        }
-      })
-    );
-
     setCategories(mappedCategories);
     setCatalogProducts(mappedProducts);
-    setProducts(
-      listingsRes.map((l) => {
-        const product = byProductId.get(l.productId);
-        const category = product ? byCategoryId.get(product.categoryId) : undefined;
-        const isChemical = !!(category?.isChemical || product?.baseUnit || product?.casNumber || product?.chemicalFormula || l.isChemical);
-        const listingQty = inventoryMap.get(l.id)?.totalQuantity ?? l.availableQuantity;
-        const fetchedVariantRows = isChemical ? variantInventoryByListing.get(l.id) : undefined;
-        const variantRows = fetchedVariantRows ?? [];
-        const sizeStocks = variantRows.length > 0
-          ? mapVariantRowsToSizeStocks(variantRows)
-          : (isChemical && fetchedVariantRows && (product?.variants?.length ?? 0) > 0
-            ? (product!.variants || [])
-                .filter((v: any) => v?.isActive !== false)
-                .slice()
-                .sort((a: any, b: any) => (a.sizeValue ?? 0) - (b.sizeValue ?? 0))
-                .map((v: any) => ({
-                  label: `${v.sizeValue} ${v.sizeUnit}`.trim(),
-                  sku: (v.sku as string) || "",
-                  total: 0,
-                  available: 0,
-                }))
-            : []);
-        const quantity = isChemical && fetchedVariantRows
-          ? variantRows.reduce((sum, r) => sum + (r.totalQuantity || 0), 0)
-          : listingQty;
-        return {
-          id: l.id,
-          productId: l.productId,
-          categoryId: product?.categoryId ?? "",
-          category: category?.name ?? "Unknown",
-          productName: product?.name ?? "Unknown",
-          title: product?.name ?? l.listingTitle,
-          dailyRent: product?.dailyRent ?? l.dailyRent,
-          weeklyRent: product?.weeklyRent ?? l.weeklyRent ?? 0,
-          monthlyRent: product?.monthlyRent ?? l.monthlyRent,
-          securityDeposit: product?.securityDeposit ?? l.securityDeposit,
-          buyPrice: product?.buyPrice,
-          vendorDailyRent: product?.vendorDailyRent ?? 0,
-          vendorBuyPrice: product?.vendorBuyPrice,
-          gstPercent: product?.gstPercent ?? 18,
-          isRentEnabled: product?.isRentEnabled ?? true,
-          isBuyEnabled: product?.isBuyEnabled ?? true,
-          quantity,
-          status: normalizeListingStatus(l.listingStatus),
-          primaryImage: resolveItemImageUrl({
-            primaryImageUrl: l.primaryImageUrl,
-            primaryThumbnailUrl: l.primaryThumbnailUrl,
-          })
-            ?? resolveCatalogProductImageUrl(product?.images)
-            ?? undefined,
-          catalogImage: resolveCatalogProductImageUrl(product?.images) ?? undefined,
-          images: [],
-          favoriteCount: l.favoriteCount ?? 0,
-          createdAt: new Date().toISOString(),
-          baseUnit: product?.baseUnit,
-          casNumber: product?.casNumber,
-          chemicalFormula: product?.chemicalFormula,
-          brandName: product?.brandName,
-          modelName: product?.modelName,
-          variants: product?.variants || [],
-          rentalPricingPlans: product?.rentalPricingPlans || [],
-          isChemical,
-          sizeStocks: isChemical ? sizeStocks : undefined,
-        };
-      })
-    );
-
     return { categories: mappedCategories, products: mappedProducts };
   };
 
   useEffect(() => {
     if (!user) return;
-
-    const load = async () => {
-      setBusy(true);
-      setLoadError(null);
-      try {
-        await loadCatalogAndListings();
-      } catch (error) {
-        const message = getUserFriendlyMessage(error);
-        setLoadError(message);
-        toast.error(message);
-      } finally {
-        setBusy(false);
-        setHasLoaded(true);
-      }
-    };
-
-    void load();
+    setHasLoaded(true);
   }, [user]);
+
+  const refreshListings = async () => {
+    await queryClient.invalidateQueries({ queryKey: ["vendor-listing-summaries"] });
+  };
 
   const openNew = async () => {
     setFieldErrors({});
@@ -711,6 +670,7 @@ const Products = () => {
       }
 
       await loadCatalogAndListings();
+      await refreshListings();
       setEditing(null);
       setVariantStocks({});
       toast.success("Listing saved");
@@ -825,9 +785,9 @@ const Products = () => {
         }
       />
 
-      {!hasLoaded && busy && <PageLoaderSlot />}
+      {listingsLoading && !listingPage && <PageLoaderSlot />}
 
-      {hasLoaded && (
+      {(hasLoaded || listingPage) && (
       <Card className="border-border/60 p-4 sm:p-6 lg:p-8">
         {loadError && (
           <div className="mb-4 rounded-lg border border-destructive/30 bg-destructive-soft px-4 py-2 text-sm text-destructive">
@@ -840,12 +800,12 @@ const Products = () => {
             <TabsTrigger value="equipment" className="text-xs sm:text-sm">
               <Package className="mr-1 sm:mr-2 h-4 w-4 shrink-0" />
               <span className="truncate">Equipment</span>
-              <span className="hidden sm:inline ml-1">({products.filter(p => !isChemicalListing(p)).length})</span>
+              <span className="ml-1 tabular-nums">({tabCounts.equipment})</span>
             </TabsTrigger>
             <TabsTrigger value="chemical" className="text-xs sm:text-sm">
               <FlaskConical className="mr-1 sm:mr-2 h-4 w-4 shrink-0" />
               <span className="truncate">Chemicals</span>
-              <span className="hidden sm:inline ml-1">({products.filter(p => isChemicalListing(p)).length})</span>
+              <span className="ml-1 tabular-nums">({tabCounts.chemical})</span>
             </TabsTrigger>
           </TabsList>
         </Tabs>
@@ -864,14 +824,14 @@ const Products = () => {
             </div>
             <Tabs value={filter} onValueChange={handleFilterChange}>
               <TabsList className="w-full sm:w-auto">
-                <TabsTrigger value="all" className="flex-1 sm:flex-none">All <span className="ml-1.5 text-xs text-muted-foreground">({products.length})</span></TabsTrigger>
-                <TabsTrigger value="active" className="flex-1 sm:flex-none">Active</TabsTrigger>
-                <TabsTrigger value="inactive" className="flex-1 sm:flex-none">Inactive</TabsTrigger>
+                <TabsTrigger value="all" className="flex-1 sm:flex-none">All <span className="ml-1 text-xs text-muted-foreground tabular-nums">({statusCounts.all})</span></TabsTrigger>
+                <TabsTrigger value="active" className="flex-1 sm:flex-none">Active <span className="ml-1 text-xs text-muted-foreground tabular-nums">({statusCounts.active})</span></TabsTrigger>
+                <TabsTrigger value="inactive" className="flex-1 sm:flex-none">Inactive <span className="ml-1 text-xs text-muted-foreground tabular-nums">({statusCounts.inactive})</span></TabsTrigger>
               </TabsList>
             </Tabs>
           </div>
         </div>
-        <div className="hidden overflow-x-auto rounded-lg border border-border md:block">
+        <div className={cn("hidden overflow-x-auto rounded-lg border border-border md:block transition-opacity duration-200", isPageChanging && "opacity-50")}>
           <table className="w-full min-w-[600px] text-sm">
             <thead className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
               <tr>
@@ -922,6 +882,11 @@ const Products = () => {
                         ₹{p.dailyRent ?? 0}
                         <span className="text-muted-foreground">/day</span>
                       </div>
+                      {p.hasCustomVendorPricing && (
+                        <div className="text-[11px] text-emerald-700 dark:text-emerald-400">
+                          Your payout ₹{Number(p.vendorDailyRent ?? 0).toLocaleString("en-IN")}/day
+                        </div>
+                      )}
                     </td>
                   )}
                   {activeTab === "chemical" && (
@@ -932,35 +897,12 @@ const Products = () => {
                           return <span className="text-muted-foreground">—</span>;
                         }
                         return (
-                          <TooltipProvider>
-                            <Tooltip>
-                              <TooltipTrigger asChild>
-                                <div className="inline-flex cursor-default flex-col items-end">
-                                  <span className="whitespace-nowrap tabular-nums">{pricing.label}</span>
-                                  <span className="font-sans text-[10px] font-normal text-muted-foreground">
-                                    {pricing.count} {pricing.count === 1 ? "size" : "sizes"}
-                                  </span>
-                                </div>
-                              </TooltipTrigger>
-                              <TooltipContent side="left" align="center" className="min-w-[10rem] p-0">
-                                <div className="border-b border-border/60 px-3 py-1.5 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                                  Price by size
-                                </div>
-                                <div className="max-h-64 divide-y divide-border/40 overflow-auto px-3 py-1.5 font-sans text-xs">
-                                  {pricing.sizes.map((v: any, i: number) => (
-                                    <div key={i} className="flex items-center justify-between gap-6 py-1">
-                                      <span className="text-muted-foreground">
-                                        {v.sizeValue} {v.sizeUnit}
-                                      </span>
-                                      <span className="font-semibold tabular-nums">
-                                        ₹{(v.buyPrice as number).toLocaleString("en-IN")}
-                                      </span>
-                                    </div>
-                                  ))}
-                                </div>
-                              </TooltipContent>
-                            </Tooltip>
-                          </TooltipProvider>
+                          <div className="flex flex-col items-end">
+                            <ChemPriceDisclosure label={pricing.label} count={pricing.count} sizes={pricing.sizes} />
+                            {p.hasCustomVendorPricing ? (
+                              <span className="font-sans text-[10px] font-normal text-muted-foreground">your payout is set</span>
+                            ) : null}
+                          </div>
                         );
                       })()}
                     </td>
@@ -972,7 +914,7 @@ const Products = () => {
                   )}
                   <td className="px-3 py-3 text-right sm:px-4">
                     {activeTab === "chemical" && (p.sizeStocks?.length ?? 0) > 0 ? (
-                      <ChemQtyHover quantity={p.quantity} sizes={p.sizeStocks!} />
+                      <ChemStockDisclosure total={p.quantity} sizes={p.sizeStocks!} />
                     ) : (
                       p.quantity
                     )}
@@ -996,10 +938,10 @@ const Products = () => {
                   </td>
                 </tr>
               ))}
-              {hasLoaded && filtered.length === 0 && (
+              {(hasLoaded || listingPage) && filteredCount === 0 && (
                 <tr>
                   <td colSpan={7} className="px-3 py-8 text-center text-sm text-muted-foreground sm:px-4">
-                    {products.length === 0
+                    {statusCounts.all === 0 && !debouncedSearch && filter === "all"
                       ? "No listings created yet."
                       : "No listings match your current search/filter."}
                   </td>
@@ -1046,10 +988,13 @@ const Products = () => {
                   </div>
                   <div className="min-w-0 text-right">
                     <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">Qty</dt>
-                    <dd className="font-mono tabular-nums">{p.quantity}</dd>
-                    {activeTab === "chemical" && (p.sizeStocks?.length ?? 0) > 0 ? (
-                      <ChemQtyBreakdown sizes={p.sizeStocks!} />
-                    ) : null}
+                    <dd>
+                      {activeTab === "chemical" && (p.sizeStocks?.length ?? 0) > 0 ? (
+                        <ChemStockDisclosure total={p.quantity} sizes={p.sizeStocks!} />
+                      ) : (
+                        <span className="font-mono tabular-nums">{p.quantity}</span>
+                      )}
+                    </dd>
                   </div>
                   {activeTab === "equipment" ? (
                     <>
@@ -1067,8 +1012,7 @@ const Products = () => {
                       <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">Buy Price (Admin)</dt>
                       {pricing ? (
                         <dd className="mt-1">
-                          <span className="font-mono font-semibold tabular-nums">{pricing.label}</span>
-                          <ChemSizeBreakdown sizes={pricing.sizes} />
+                          <ChemPriceDisclosure label={pricing.label} count={pricing.count} sizes={pricing.sizes} align="start" />
                         </dd>
                       ) : (
                         <dd className="text-muted-foreground">—</dd>
@@ -1088,21 +1032,21 @@ const Products = () => {
               </div>
             );
           })}
-          {hasLoaded && filtered.length === 0 && (
+          {(hasLoaded || listingPage) && filteredCount === 0 && (
             <div className="rounded-lg border border-border px-3 py-8 text-center text-sm text-muted-foreground">
-              {products.length === 0
+              {statusCounts.all === 0 && !debouncedSearch && filter === "all"
                 ? "No listings created yet."
                 : "No listings match your current search/filter."}
             </div>
           )}
         </div>
 
-        {filtered.length > 0 && (
+        {filteredCount > 0 && (
           <div className="px-0">
             <TablePagination
               page={currentPage}
               pageSize={itemsPerPage}
-              total={filtered.length}
+              total={filteredCount}
               onPageChange={setCurrentPage}
               label="products"
             />
@@ -1113,7 +1057,7 @@ const Products = () => {
       <Dialog open={!!editing} onOpenChange={(v) => !v && setEditing(null)}>
         <DialogContent className="flex max-h-[min(92dvh,900px)] w-[calc(100vw-1rem)] max-w-2xl flex-col gap-0 overflow-hidden p-0 sm:w-[calc(100vw-1.5rem)] sm:max-w-2xl">
           <DialogHeader className="shrink-0 space-y-1 border-b border-border px-4 py-3.5 pr-12 text-left sm:px-6 sm:py-4">
-            <DialogTitle>{products.some((p) => p.id === editing?.id) ? "Edit listing" : "New listing"}</DialogTitle>
+            <DialogTitle>{editing?.id ? "Edit listing" : "New listing"}</DialogTitle>
             <DialogDescription>
               Pricing and catalog name are set by Admin. Update quantity and status for your listing.
             </DialogDescription>
@@ -1293,6 +1237,7 @@ const Products = () => {
                     <div className="rounded-xl border border-border bg-muted/20 px-3 py-2.5 space-y-2">
                       <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                         Your payout
+                        {editing.hasCustomVendorPricing ? " · set for you" : ""}
                       </p>
                       <div className="grid grid-cols-2 gap-2">
                         <div>
@@ -1311,7 +1256,7 @@ const Products = () => {
                         </div>
                       </div>
                       <p className="text-[11px] text-muted-foreground">
-                        Rental payout = vendor daily rate Ã— plan days (set by Admin)
+                        Rental payout = vendor daily rate × plan days (set by Admin)
                       </p>
                     </div>
                   </div>
@@ -1582,7 +1527,7 @@ const Products = () => {
 
       {/* Delete Confirmation Card */}
       {deleteConfirmId && (() => {
-        const listing = products.find(p => p.id === deleteConfirmId);
+        const listing = paginatedProducts.find(p => p.id === deleteConfirmId);
         if (!listing) return null;
         return (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50 p-4">
@@ -1633,7 +1578,7 @@ const Products = () => {
       
       {/* Status Confirmation Card */}
       {statusConfirmId && statusConfirmAction && (() => {
-        const listing = products.find(p => p.id === statusConfirmId);
+        const listing = paginatedProducts.find(p => p.id === statusConfirmId);
         if (!listing) return null;
         const isActivating = statusConfirmAction === 'activate';
         return (
