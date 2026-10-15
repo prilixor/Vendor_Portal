@@ -834,6 +834,37 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     ),
                   ],
                   const SizedBox(height: 12),
+                  if (quote.razorpayTestMode) ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFFBEB),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFFCD34D)),
+                      ),
+                      child: const Text.rich(
+                        TextSpan(
+                          style: TextStyle(fontSize: 12, height: 1.4, color: Color(0xFF451A03)),
+                          children: [
+                            TextSpan(
+                              text: 'Test payment. No real money is charged.\n',
+                              style: TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                            TextSpan(text: 'Use card '),
+                            TextSpan(
+                              text: '4100 2800 0000 1007',
+                              style: TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                            TextSpan(
+                              text: '. Any future expiry, any CVV, and any name. If a bank page opens, choose Success.',
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
                   SizedBox(
                 width: double.infinity,
                 height: 56,

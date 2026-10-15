@@ -30,6 +30,7 @@ class OrderQuoteModel {
   final double gstAmount;
   final double totalAmount;
   final List<BuySuggestionModel> buySuggestions;
+  final bool razorpayTestMode;
 
   OrderQuoteModel({
     required this.subtotalAmount,
@@ -40,6 +41,7 @@ class OrderQuoteModel {
     required this.gstAmount,
     required this.totalAmount,
     this.buySuggestions = const [],
+    this.razorpayTestMode = false,
   });
 
   factory OrderQuoteModel.fromJson(Map<String, dynamic> json) {
@@ -56,6 +58,7 @@ class OrderQuoteModel {
       gstAmount: (json['gstAmount'] ?? 0).toDouble(),
       totalAmount: (json['totalAmount'] ?? 0).toDouble(),
       buySuggestions: suggestions,
+      razorpayTestMode: json['razorpayTestMode'] == true,
     );
   }
 }
