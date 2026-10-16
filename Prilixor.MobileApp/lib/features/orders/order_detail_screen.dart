@@ -11,6 +11,7 @@ import '../../core/models/order_model.dart';
 import '../../core/models/medical_model.dart';
 import '../../core/models/order_image_request_model.dart';
 import '../../core/utils/platform_file_payload.dart';
+import '../../core/utils/gst_label.dart';
 import '../../core/utils/rental_period.dart';
 import '../../core/utils/order_badges.dart';
 import '../../shared/widgets/brand_page_loader.dart';
@@ -182,12 +183,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
           builder: (context, setStateBottomSheet) {
             return Consumer<OrderDetailProvider>(
               builder: (context, provider, _) {
-                return Padding(
-                  padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, left: 24, right: 24, top: 24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+                return _scrollableSheet(
+                  context,
+                  children: [
                   Text('Extend Rental', style: TextStyle(color: colors.textPrimary, fontSize: 22, fontWeight: FontWeight.bold)),
                   SizedBox(height: 8),
                   Text('Need more time? Extend your rental period below.', style: TextStyle(color: colors.textSecondary, fontSize: 14)),
@@ -223,13 +221,18 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                   ),
                   SizedBox(height: 24),
                   
-                  // Quote details
-                  if (provider.isActionLoading)
-                    Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)))
-                  else if (provider.extensionQuote != null)
+                  // Quote details. Keep the last quote visible while the next day count loads.
+                  if (provider.extensionQuote != null)
                     Container(
-                      padding: EdgeInsets.all(16),
-                      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(12)),
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: context.isDarkMode
+                            ? Colors.white.withValues(alpha: 0.05)
+                            : colors.background,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: colors.border),
+                      ),
                       child: Column(
                         children: [
                           _buildQuoteRow(context, 'Extension Cost', provider.extensionQuote!.extensionAmount),
@@ -239,7 +242,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                             _buildQuoteRow(context, 'Service Fee', provider.extensionQuote!.serviceFeeAmount),
                           ],
                           SizedBox(height: 8),
-                          _buildQuoteRow(context, 'GST', provider.extensionQuote!.gstAmount),
+                          _buildQuoteRow(context, formatGstLabel(provider.extensionQuote!.gstPercent), provider.extensionQuote!.gstAmount),
                           Divider(color: colors.border, height: 24),
                           _buildQuoteRow(context, 'Total Due Now', provider.extensionQuote!.totalAmount, isBold: true),
                           SizedBox(height: 8),
@@ -252,7 +255,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                           ),
                         ],
                       ),
-                    ),
+                    )
+                  else if (provider.isActionLoading)
+                    const Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF))),
                   
                   SizedBox(height: 32),
                   SizedBox(
@@ -260,7 +265,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                     height: 56,
                     child: ElevatedButton(
                       style: ElevatedButton.styleFrom(backgroundColor: Color(0xFF6C63FF)),
-                      onPressed: provider.isActionLoading || provider.extensionQuote == null
+                      onPressed: provider.extensionQuote == null || provider.isActionLoading
                           ? null
                           : () async {
                               final success = await provider.processExtension(_ordersInGroup[_selectedOrderIndex].id, _extensionDays);
@@ -272,10 +277,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                       child: Text('Confirm Extension', style: TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.bold)),
                     ),
                   ),
-                  SizedBox(height: 32),
+                  const SizedBox(height: 8),
                 ],
-              ),
-            );
+              );
               },
             );
           },
@@ -297,12 +301,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
       builder: (context) {
         return Consumer<OrderDetailProvider>(
           builder: (context, provider, _) {
-            return Padding(
-              padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom, left: 24, right: 24, top: 24),
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
+            return _scrollableSheet(
+              context,
+              children: [
                   Text('Buyout Equipment', style: TextStyle(color: colors.textPrimary, fontSize: 22, fontWeight: FontWeight.bold)),
                   SizedBox(height: 8),
                   Text('Love it? Keep it! We will deduct a portion of your rental fees from the purchase price.', style: TextStyle(color: colors.textSecondary, fontSize: 14)),
@@ -312,8 +313,15 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                     Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)))
                   else if (provider.buyoutQuote != null)
                     Container(
-                      padding: EdgeInsets.all(16),
-                      decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.05), borderRadius: BorderRadius.circular(12)),
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(16),
+                      decoration: BoxDecoration(
+                        color: context.isDarkMode
+                            ? Colors.white.withValues(alpha: 0.05)
+                            : colors.background,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: colors.border),
+                      ),
                       child: Column(
                         children: [
                           _buildQuoteRow(context, 'Base Price', provider.buyoutQuote!.baseBuyoutAmount),
@@ -325,7 +333,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                             _buildQuoteRow(context, 'Service Fee', provider.buyoutQuote!.serviceFeeAmount),
                           ],
                           SizedBox(height: 8),
-                          _buildQuoteRow(context, 'GST', provider.buyoutQuote!.gstAmount),
+                          _buildQuoteRow(context, formatGstLabel(provider.buyoutQuote!.gstPercent), provider.buyoutQuote!.gstAmount),
                           Divider(color: colors.border, height: 24),
                           _buildQuoteRow(context, 'Total Due Now', provider.buyoutQuote!.totalAmount, isBold: true),
                         ],
@@ -350,9 +358,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                       child: Text('Confirm Purchase', style: TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.bold)),
                     ),
                   ),
-                  SizedBox(height: 32),
+                  const SizedBox(height: 8),
                 ],
-              ),
             );
           },
         );
@@ -360,13 +367,54 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
     );
   }
 
+  /// Keeps a tall bottom sheet inside the screen and lets the customer scroll to the rest.
+  Widget _scrollableSheet(BuildContext context, {required List<Widget> children}) {
+    final maxHeight = MediaQuery.sizeOf(context).height * 0.92;
+    final keyboard = MediaQuery.viewInsetsOf(context).bottom;
+    final safeBottom = MediaQuery.paddingOf(context).bottom;
+    return Padding(
+      padding: EdgeInsets.only(bottom: keyboard),
+      child: ConstrainedBox(
+        constraints: BoxConstraints(maxHeight: maxHeight),
+        child: SingleChildScrollView(
+          padding: EdgeInsets.fromLTRB(24, 24, 24, 24 + safeBottom),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: children,
+          ),
+        ),
+      ),
+    );
+  }
+
   Widget _buildQuoteRow(BuildContext context, String label, double amount, {bool isBold = false, Color? color}) {
     final colors = context.appColors;
+    final valueColor = color ?? colors.textPrimary;
+    final labelColor = color ?? colors.textSecondary;
     return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        Text(label, style: TextStyle(color: color ?? colors.textSecondary, fontSize: isBold ? 16 : 14, fontWeight: isBold ? FontWeight.bold : FontWeight.normal)),
-        Text('₹${amount.toStringAsFixed(2)}', style: TextStyle(color: color ?? Colors.white, fontSize: isBold ? 18 : 14, fontWeight: isBold ? FontWeight.bold : FontWeight.normal)),
+        Expanded(
+          child: Text(
+            label,
+            style: TextStyle(
+              color: labelColor,
+              fontSize: isBold ? 16 : 14,
+              fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+            ),
+          ),
+        ),
+        const SizedBox(width: 12),
+        Text(
+          '₹${amount.toStringAsFixed(2)}',
+          style: TextStyle(
+            color: valueColor,
+            fontSize: isBold ? 18 : 14,
+            fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
+            fontFeatures: const [FontFeature.tabularFigures()],
+          ),
+        ),
       ],
     );
   }

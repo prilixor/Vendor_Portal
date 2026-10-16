@@ -189,7 +189,8 @@ public sealed record AdminOrderDto(
     string? DoctorContactNumber = null,
     string? DoctorUniqueCode = null,
     decimal GstAmount = 0,
-    bool VendorPriceSetByAdmin = false);
+    bool VendorPriceSetByAdmin = false,
+    decimal? GstPercent = null);
 
 public sealed record GetAdminAllOrdersQuery() : IQuery<List<AdminOrderDto>>;
 

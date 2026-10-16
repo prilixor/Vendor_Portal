@@ -74,6 +74,7 @@ internal sealed class GetAdminOrderDetailQueryHandler(
             DoctorContactNumber: r.Doctor?.ContactNumber,
             DoctorUniqueCode: r.Doctor?.UniqueCode,
             GstAmount: o.GstAmount,
-            VendorPriceSetByAdmin: vendorPriceSetByAdmin);
+            VendorPriceSetByAdmin: vendorPriceSetByAdmin,
+            GstPercent: r.GstPercent);
     }
 }

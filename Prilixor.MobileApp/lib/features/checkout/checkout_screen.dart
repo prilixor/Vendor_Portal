@@ -18,6 +18,7 @@ import '../../shared/widgets/required_field_ux.dart';
 import '../../shared/widgets/catalog_image.dart';
 import '../../shared/widgets/rent_exceeds_buy_dialog.dart';
 import '../../shared/widgets/struck_price.dart';
+import '../../core/utils/gst_label.dart';
 import '../../core/utils/rental_period.dart';
 import '../profile/addresses_screen.dart';
 import 'medical_reference_screen.dart';
@@ -317,8 +318,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           ? const BrandPageLoader()
           : cart.lines.isEmpty
           ? Center(child: Text('Cart is empty', style: TextStyle(color: colors.textPrimary)))
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
+          : Column(
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -785,9 +789,14 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                             const SizedBox(height: 8),
                             _buildQuoteRow('Service Fee', quote.serviceFeeAmount),
                           ],
-                          if (quote.gstAmount > 0) ...[
+                          if (quote.gstLines.isNotEmpty) ...[
+                            for (final line in quote.gstLines) ...[
+                              const SizedBox(height: 8),
+                              _buildQuoteRow(formatGstLabel(line.gstPercent), line.gstAmount),
+                            ],
+                          ] else if (quote.gstAmount > 0) ...[
                             const SizedBox(height: 8),
-                            _buildQuoteRow('Taxes (GST)', quote.gstAmount),
+                            _buildQuoteRow('GST', quote.gstAmount),
                           ],
                           Padding(
                             padding: const EdgeInsets.symmetric(vertical: 12),
@@ -806,14 +815,23 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                         ],
                       ),
                     ),
-                  SizedBox(height: 100 + navBarInset),
+                  const SizedBox(height: 8),
                 ],
               ),
             ),
-      bottomSheet: quote != null
-          ? Container(
-              padding: EdgeInsets.fromLTRB(20, 12, 20, 20 + navBarInset),
-              color: colors.surface,
+                ),
+                if (quote != null)
+                  ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxHeight: MediaQuery.sizeOf(context).height * 0.42,
+                    ),
+                    child: SingleChildScrollView(
+                      child: Container(
+              padding: EdgeInsets.fromLTRB(20, 12, 20, 12 + navBarInset),
+              decoration: BoxDecoration(
+                color: colors.surface,
+                border: Border(top: BorderSide(color: colors.border)),
+              ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -972,8 +990,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
               ),
                 ],
               ),
-            )
-          : null,
+            ),
+                    ),
+                  ),
+              ],
+            ),
     );
   }
 

@@ -26,6 +26,7 @@ import { Checkbox } from "@/app/components/ui/checkbox";
 import { RentExceedsBuyDialog } from "@/app/components/shared/RentExceedsBuyDialog";
 import { BackLink } from "@/app/components/shared/BackLink";
 import { StruckPrice } from "@/app/components/shared/RentalPeriodPlanDropdown";
+import { formatGstRateLabel } from "@/app/helpers/gstLabel";
 import { dayPlanTitle } from "@/app/helpers/rentalDurationIcons";
 import { formatRentalDuration } from "@/app/helpers/rentalPeriod";
 import { lastShopHref } from "@/app/helpers/customerShopBrowse";
@@ -182,6 +183,12 @@ const CustomerCheckout = () => {
   const distanceFee = quote?.distanceFeeAmount ?? 0;
   const serviceFee = quote?.serviceFeeAmount ?? 0;
   const gstAmount = quote?.gstAmount ?? 0;
+  const gstRows = (quote?.gstLines ?? []).filter((line) => line.gstAmount > 0);
+  const gstDisplayRows = gstRows.length > 0
+    ? gstRows
+    : gstAmount > 0
+      ? [{ gstPercent: undefined, gstAmount }]
+      : [];
   const grandTotal = quote?.totalAmount ?? (totalEstimatedRent + totalDeposit + serviceFee + gstAmount);
 
   const placeMutation = useMutation({
@@ -751,12 +758,12 @@ const CustomerCheckout = () => {
                   <span className="tabular-nums text-foreground">{formatCheckoutInr(serviceFee)}</span>
                 </div>
               )}
-              {gstAmount > 0 ? (
-                <div className="flex justify-between gap-4 text-muted-foreground">
-                  <span>GST</span>
-                  <span className="tabular-nums text-foreground">{formatCheckoutInr(gstAmount)}</span>
+              {gstDisplayRows.map((line, index) => (
+                <div key={`${line.gstPercent ?? "gst"}-${index}`} className="flex justify-between gap-4 text-muted-foreground">
+                  <span>{formatGstRateLabel(line.gstPercent)}</span>
+                  <span className="tabular-nums text-foreground">{formatCheckoutInr(line.gstAmount)}</span>
                 </div>
-              ) : null}
+              ))}
               <div className="flex justify-between gap-4 border-t pt-3 text-base font-bold">
                 <span>Total</span>
                 <span className="tabular-nums">{formatCheckoutInr(grandTotal)}</span>

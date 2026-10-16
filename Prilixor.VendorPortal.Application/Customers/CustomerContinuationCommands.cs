@@ -18,7 +18,8 @@ public sealed record ExtensionQuoteDto(
     decimal ExtensionAmount,
     decimal ServiceFeeAmount,
     decimal GstAmount,
-    decimal TotalAmount);
+    decimal TotalAmount,
+    decimal GstPercent);
 
 public sealed record QuoteExtensionCommand(Guid CustomerId, Guid OrderId, int AdditionalDays) : ICommand<ExtensionQuoteDto>;
 
@@ -66,7 +67,8 @@ internal sealed class QuoteExtensionCommandHandler(
             extensionAmount,
             serviceFeeAmount,
             gstAmount,
-            totalAmount);
+            totalAmount,
+            options.GstPercent);
 
         return Result.Success(dto);
     }
@@ -151,7 +153,8 @@ public sealed record BuyoutQuoteDto(
     decimal RentDeductionAmount,
     decimal ServiceFeeAmount,
     decimal GstAmount,
-    decimal TotalAmount);
+    decimal TotalAmount,
+    decimal GstPercent);
 
 public sealed record QuoteBuyoutCommand(Guid CustomerId, Guid OrderId) : ICommand<BuyoutQuoteDto>;
 
@@ -203,7 +206,8 @@ internal sealed class QuoteBuyoutCommandHandler(
             rentDeductionAmount,
             serviceFeeAmount,
             gstAmount,
-            totalAmount);
+            totalAmount,
+            options.GstPercent);
 
         return Result.Success(dto);
     }
@@ -294,7 +298,8 @@ public sealed record PendingExtensionDto(
     decimal TotalAmount,
     DateOnly OriginalEndDate,
     DateOnly NewEndDate,
-    DateTime CreatedAtUtc);
+    DateTime CreatedAtUtc,
+    decimal GstPercent);
 
 public sealed record PendingBuyoutDto(
     Guid BuyoutId,
@@ -304,23 +309,27 @@ public sealed record PendingBuyoutDto(
     decimal ServiceFeeAmount,
     decimal GstAmount,
     decimal TotalAmount,
-    DateTime CreatedAtUtc);
+    DateTime CreatedAtUtc,
+    decimal GstPercent);
 
 public sealed record GetOrderContinuationsQuery(Guid OrderId) : IQuery<OrderContinuationsDto>;
 
-internal sealed class GetOrderContinuationsQueryHandler(ICustomerRepository customers)
+internal sealed class GetOrderContinuationsQueryHandler(
+    ICustomerRepository customers,
+    IOptions<CustomerPricingOptions> pricingOptions)
     : IQueryHandler<GetOrderContinuationsQuery, OrderContinuationsDto>
 {
     public async Task<Result<OrderContinuationsDto>> Handle(GetOrderContinuationsQuery request, CancellationToken cancellationToken)
     {
         var extensions = await customers.GetPendingCustomerRentalOrderExtensionsAsync(request.OrderId, cancellationToken);
         var buyouts = await customers.GetPendingCustomerRentalOrderBuyoutsAsync(request.OrderId, cancellationToken);
+        var gstPercent = pricingOptions.Value.GstPercent;
 
         var extensionsDto = extensions.Select(e => new PendingExtensionDto(
-            e.Id, e.CustomerRentalOrderId, e.AdditionalDays, e.ExtensionAmount, e.ServiceFeeAmount, e.GstAmount, e.TotalAmount, e.OriginalEndDate, e.NewEndDate, e.CreatedOnUtc)).ToList();
+            e.Id, e.CustomerRentalOrderId, e.AdditionalDays, e.ExtensionAmount, e.ServiceFeeAmount, e.GstAmount, e.TotalAmount, e.OriginalEndDate, e.NewEndDate, e.CreatedOnUtc, gstPercent)).ToList();
 
         var buyoutsDto = buyouts.Select(b => new PendingBuyoutDto(
-            b.Id, b.CustomerRentalOrderId, b.BaseBuyoutAmount, b.RentDeductionAmount, b.ServiceFeeAmount, b.GstAmount, b.TotalAmount, b.CreatedOnUtc)).ToList();
+            b.Id, b.CustomerRentalOrderId, b.BaseBuyoutAmount, b.RentDeductionAmount, b.ServiceFeeAmount, b.GstAmount, b.TotalAmount, b.CreatedOnUtc, gstPercent)).ToList();
 
         return Result.Success(new OrderContinuationsDto(extensionsDto, buyoutsDto));
     }

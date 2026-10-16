@@ -1997,7 +1997,10 @@ public sealed class CustomerRepository(
         {
             var listing = map.GetValueOrDefault(o.VendorProductListingId);
             var img = ResolveOrderPrimaryImageUrl(listing, productMap);
-            return new CustomerRentalOrderWithListing(o, listing, img);
+            decimal? gstPercent = null;
+            if (listing is not null && productMap.TryGetValue(listing.ProductId, out var product))
+                gstPercent = product.GstPercent;
+            return new CustomerRentalOrderWithListing(o, listing, img, GstPercent: gstPercent);
         });
         var withMedical = await AttachMedicalReferencesAsync(results, cancellationToken);
         return await AttachVariantDescriptionsAsync(withMedical, cancellationToken);

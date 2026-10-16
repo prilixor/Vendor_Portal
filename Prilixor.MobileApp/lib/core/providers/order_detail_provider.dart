@@ -281,25 +281,34 @@ class OrderDetailProvider extends ChangeNotifier {
     return success;
   }
 
+  int _extensionQuoteRequest = 0;
+
   Future<void> quoteExtension(String orderId, int days) async {
-    _isActionLoading = true;
+    final requestId = ++_extensionQuoteRequest;
     _errorMessage = null;
-    notifyListeners();
+    // Keep the current quote on screen while the next day count is priced.
+    if (_extensionQuote == null) {
+      _isActionLoading = true;
+      notifyListeners();
+    }
 
     try {
       final response = await _apiClient.dio.post(
         '/customers/me/orders/$orderId/extensions/quote',
         data: {'additionalDays': days},
       );
+      if (requestId != _extensionQuoteRequest) return;
       if (response.statusCode == 200) {
         _extensionQuote = ExtensionQuoteModel.fromJson(response.data);
       }
     } catch (e) {
+      if (requestId != _extensionQuoteRequest) return;
       _errorMessage = 'Failed to quote extension.';
-      _extensionQuote = null;
     } finally {
-      _isActionLoading = false;
-      notifyListeners();
+      if (requestId == _extensionQuoteRequest) {
+        _isActionLoading = false;
+        notifyListeners();
+      }
     }
   }
 

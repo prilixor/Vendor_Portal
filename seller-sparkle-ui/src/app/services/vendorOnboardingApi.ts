@@ -1226,6 +1226,7 @@ export interface PendingExtensionDto {
   extensionAmount: number;
   serviceFeeAmount: number;
   gstAmount: number;
+  gstPercent?: number;
   totalAmount: number;
   originalEndDate: string;
   newEndDate: string;
@@ -1239,6 +1240,7 @@ export interface PendingBuyoutDto {
   rentDeductionAmount: number;
   serviceFeeAmount: number;
   gstAmount: number;
+  gstPercent?: number;
   totalAmount: number;
   createdAtUtc: string;
 }

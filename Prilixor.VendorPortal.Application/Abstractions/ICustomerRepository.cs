@@ -230,7 +230,8 @@ public sealed record CustomerRentalOrderWithListing(
     VendorProductListing? Listing,
     string? ListingPrimaryImageUrl,
     Prilixor.VendorPortal.Domain.Common.Doctor? Doctor = null,
-    string? VariantDescription = null);
+    string? VariantDescription = null,
+    decimal? GstPercent = null);
 
 /// <summary>Listing row for customer browse (mapped from vendor listings).</summary>
 public sealed record CustomerCatalogListingDto(

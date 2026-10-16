@@ -37,6 +37,7 @@ class PendingExtension {
   final double extensionAmount;
   final double serviceFeeAmount;
   final double gstAmount;
+  final double? gstPercent;
   final double totalAmount;
   final String? originalEndDate;
   final String? newEndDate;
@@ -49,6 +50,7 @@ class PendingExtension {
     required this.extensionAmount,
     this.serviceFeeAmount = 0,
     required this.gstAmount,
+    this.gstPercent,
     required this.totalAmount,
     this.originalEndDate,
     this.newEndDate,
@@ -63,6 +65,7 @@ class PendingExtension {
       extensionAmount: (json['extensionAmount'] as num?)?.toDouble() ?? 0,
       serviceFeeAmount: (json['serviceFeeAmount'] as num?)?.toDouble() ?? 0,
       gstAmount: (json['gstAmount'] as num?)?.toDouble() ?? 0,
+      gstPercent: json['gstPercent'] == null ? null : (json['gstPercent'] as num).toDouble(),
       totalAmount: (json['totalAmount'] as num?)?.toDouble() ?? 0,
       originalEndDate: json['originalEndDate']?.toString(),
       newEndDate: json['newEndDate']?.toString(),
@@ -78,6 +81,7 @@ class PendingBuyout {
   final double rentDeductionAmount;
   final double serviceFeeAmount;
   final double gstAmount;
+  final double? gstPercent;
   final double totalAmount;
   final String? createdAtUtc;
 
@@ -88,6 +92,7 @@ class PendingBuyout {
     required this.rentDeductionAmount,
     this.serviceFeeAmount = 0,
     required this.gstAmount,
+    this.gstPercent,
     required this.totalAmount,
     this.createdAtUtc,
   });
@@ -100,6 +105,7 @@ class PendingBuyout {
       rentDeductionAmount: (json['rentDeductionAmount'] as num?)?.toDouble() ?? 0,
       serviceFeeAmount: (json['serviceFeeAmount'] as num?)?.toDouble() ?? 0,
       gstAmount: (json['gstAmount'] as num?)?.toDouble() ?? 0,
+      gstPercent: json['gstPercent'] == null ? null : (json['gstPercent'] as num).toDouble(),
       totalAmount: (json['totalAmount'] as num?)?.toDouble() ?? 0,
       createdAtUtc: json['createdAtUtc']?.toString(),
     );

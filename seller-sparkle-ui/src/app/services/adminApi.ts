@@ -956,6 +956,7 @@ export interface AdminOrderDto {
   depositAmount: number;
   vendorSubtotalAmount: number;
   gstAmount?: number;
+  gstPercent?: number | null;
   vendorPriceSetByAdmin?: boolean;
   createdOnUtc: string;
   startDate?: string | null;

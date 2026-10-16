@@ -4,6 +4,7 @@ class ExtensionQuoteModel {
   final double extensionAmount;
   final double serviceFeeAmount;
   final double gstAmount;
+  final double? gstPercent;
   final double totalAmount;
 
   ExtensionQuoteModel({
@@ -12,6 +13,7 @@ class ExtensionQuoteModel {
     required this.extensionAmount,
     required this.serviceFeeAmount,
     required this.gstAmount,
+    this.gstPercent,
     required this.totalAmount,
   });
 
@@ -22,6 +24,7 @@ class ExtensionQuoteModel {
       extensionAmount: (json['extensionAmount'] ?? 0).toDouble(),
       serviceFeeAmount: (json['serviceFeeAmount'] ?? 0).toDouble(),
       gstAmount: (json['gstAmount'] ?? 0).toDouble(),
+      gstPercent: json['gstPercent'] == null ? null : (json['gstPercent'] as num).toDouble(),
       totalAmount: (json['totalAmount'] ?? 0).toDouble(),
     );
   }
@@ -32,6 +35,7 @@ class BuyoutQuoteModel {
   final double rentDeductionAmount;
   final double serviceFeeAmount;
   final double gstAmount;
+  final double? gstPercent;
   final double totalAmount;
 
   BuyoutQuoteModel({
@@ -39,6 +43,7 @@ class BuyoutQuoteModel {
     required this.rentDeductionAmount,
     required this.serviceFeeAmount,
     required this.gstAmount,
+    this.gstPercent,
     required this.totalAmount,
   });
 
@@ -48,6 +53,7 @@ class BuyoutQuoteModel {
       rentDeductionAmount: (json['rentDeductionAmount'] ?? 0).toDouble(),
       serviceFeeAmount: (json['serviceFeeAmount'] ?? 0).toDouble(),
       gstAmount: (json['gstAmount'] ?? 0).toDouble(),
+      gstPercent: json['gstPercent'] == null ? null : (json['gstPercent'] as num).toDouble(),
       totalAmount: (json['totalAmount'] ?? 0).toDouble(),
     );
   }

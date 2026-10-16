@@ -12,6 +12,7 @@ import '../../core/models/prescription_file_model.dart';
 import '../../core/models/vendor_order_model.dart';
 import '../../core/providers/vendor_order_provider.dart';
 import '../../core/theme.dart';
+import '../../core/utils/gst_label.dart';
 import '../../core/utils/media_url.dart';
 import '../../core/utils/vendor_photo_picker.dart';
 import '../../shared/widgets/brand_page_loader.dart';
@@ -948,7 +949,7 @@ class _PendingContinuationsCard extends StatelessWidget {
                   ('Original end date', formatDate(ext.originalEndDate)),
                   ('New end date', formatDate(ext.newEndDate)),
                   ('Base extension rent', '₹${ext.extensionAmount.toStringAsFixed(2)}'),
-                  ('GST', '₹${ext.gstAmount.toStringAsFixed(2)}'),
+                  (formatGstLabel(ext.gstPercent), '₹${ext.gstAmount.toStringAsFixed(2)}'),
                   ('Total to collect', '₹${ext.totalAmount.toStringAsFixed(2)}'),
                 ],
                 busy: busy,
@@ -966,7 +967,7 @@ class _PendingContinuationsCard extends StatelessWidget {
                 rows: [
                   ('Base buyout value', '₹${buy.baseBuyoutAmount.toStringAsFixed(2)}'),
                   ('Rent deduction', '-₹${buy.rentDeductionAmount.toStringAsFixed(2)}'),
-                  ('GST', '₹${buy.gstAmount.toStringAsFixed(2)}'),
+                  (formatGstLabel(buy.gstPercent), '₹${buy.gstAmount.toStringAsFixed(2)}'),
                   ('Total to collect', '₹${buy.totalAmount.toStringAsFixed(2)}'),
                 ],
                 busy: busy,

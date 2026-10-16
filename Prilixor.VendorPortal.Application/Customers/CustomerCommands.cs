@@ -663,6 +663,8 @@ public sealed record CartLineRequest(
     DateOnly? RentalStartDate = null,
     bool HasPrescriptionFile = false);
 
+public sealed record CustomerGstLineDto(decimal GstPercent, decimal GstAmount);
+
 public sealed record CustomerOrderQuoteDto(
     decimal SubtotalAmount,
     decimal DepositAmount,
@@ -672,7 +674,8 @@ public sealed record CustomerOrderQuoteDto(
     decimal GstAmount,
     decimal TotalAmount,
     List<CustomerBuySuggestionDto> BuySuggestions,
-    bool RazorpayTestMode = false);
+    bool RazorpayTestMode = false,
+    List<CustomerGstLineDto>? GstLines = null);
 
 public sealed record CustomerBuySuggestionDto(
     Guid ListingId,
@@ -1100,6 +1103,7 @@ internal sealed class QuoteCustomerOrdersCommandHandler(
         decimal distanceFeeAmount = 0m;
         decimal expressFeeAmount = 0m;
         decimal gstAmount = 0m;
+        var gstByRate = new Dictionary<decimal, decimal>();
         var buySuggestions = new List<CustomerBuySuggestionDto>();
         var vendorAreasByVendorId = new Dictionary<Guid, List<VendorServiceArea>>();
 
@@ -1231,7 +1235,17 @@ internal sealed class QuoteCustomerOrdersCommandHandler(
             distanceFeeAmount += lineDistanceFee;
             expressFeeAmount += lineExpressFee;
             gstAmount += lineGst;
+            if (lineGst > 0m)
+            {
+                gstByRate.TryGetValue(agg.GstPercent, out var bucket);
+                gstByRate[agg.GstPercent] = bucket + lineGst;
+            }
         }
+
+        var gstLines = gstByRate
+            .OrderBy(x => x.Key)
+            .Select(x => new CustomerGstLineDto(x.Key, decimal.Round(x.Value, 2, MidpointRounding.AwayFromZero)))
+            .ToList();
 
         return Result.Success(new CustomerOrderQuoteDto(
             decimal.Round(subtotalAmount, 2, MidpointRounding.AwayFromZero),
@@ -1242,7 +1256,8 @@ internal sealed class QuoteCustomerOrdersCommandHandler(
             decimal.Round(gstAmount, 2, MidpointRounding.AwayFromZero),
             decimal.Round(subtotalAmount + depositAmount + serviceFeeAmount + gstAmount, 2, MidpointRounding.AwayFromZero),
             buySuggestions,
-            razorpayOptions.Value.KeyId.Trim().StartsWith("rzp_test_", StringComparison.OrdinalIgnoreCase)));
+            razorpayOptions.Value.KeyId.Trim().StartsWith("rzp_test_", StringComparison.OrdinalIgnoreCase),
+            gstLines));
     }
 }
 

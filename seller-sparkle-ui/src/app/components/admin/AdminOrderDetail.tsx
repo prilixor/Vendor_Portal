@@ -4,6 +4,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Building, Calendar, DollarSign, Package, User } from "lucide-react";
 import { adminApi, type AdminOrderDto } from "@/app/services/adminApi";
 import { useAuth } from "@/app/guards/AuthContext";
+import { formatGstRateLabel } from "@/app/helpers/gstLabel";
 import { formatOrderStatusLabel, formatOrderStatusTitle, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
 import { cn, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
@@ -755,7 +756,7 @@ const AdminOrderDetail = () => {
                   + ₹{selectedOrder.depositAmount.toFixed(0)} deposit
                 </p>
                 <p className="text-xs text-muted-foreground tabular-nums">
-                  GST ₹{(selectedOrder.gstAmount ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}
+                  {formatGstRateLabel(selectedOrder.gstPercent)} ₹{(selectedOrder.gstAmount ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}
                 </p>
                 <p className="text-sm font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
                   Vendor payout ₹{(selectedOrder.vendorSubtotalAmount ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}

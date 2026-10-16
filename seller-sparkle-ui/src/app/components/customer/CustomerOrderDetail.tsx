@@ -25,6 +25,7 @@ import { ChatMessageTextarea } from "@/app/components/shared/ChatMessageTextarea
 import { ChatDaySeparator } from "@/app/components/shared/ChatDaySeparator";
 import { toast } from "sonner";
 import { isSameChatDay } from "@/app/helpers/chatDayLabel";
+import { formatGstRateLabel } from "@/app/helpers/gstLabel";
 import { formatCustomerOrderStatusTitle, formatCustomerOrderStatusLabel, formatOrderTypeLabel, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
 import { cn, orderPhotoTileUrl, originalUrlFromThumb, photoAtSlot, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
 import type { ExtensionQuoteApi, BuyoutQuoteApi } from "@/app/services/customerApi";
@@ -1488,7 +1489,7 @@ const CustomerOrderDetail = () => {
               </div>
             </div>
 
-            {quoteExtensionMut.isPending ? (
+            {!extensionQuote && quoteExtensionMut.isPending ? (
               <p className="text-sm text-muted-foreground">Calculating quote…</p>
             ) : extensionQuote ? (
               <div className="rounded-lg border bg-muted/50 p-4 space-y-2 text-sm">
@@ -1508,7 +1509,7 @@ const CustomerOrderDetail = () => {
                   </div>
                 )}
                 <div className="flex justify-between text-muted-foreground">
-                  <span>GST:</span>
+                  <span>{formatGstRateLabel(extensionQuote.gstPercent)}:</span>
                   <span>₹{extensionQuote.gstAmount.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between border-t pt-2 font-bold text-foreground">
@@ -1522,7 +1523,7 @@ const CustomerOrderDetail = () => {
             <Button variant="outline" onClick={() => setExtensionDialogOpen(false)}>Cancel</Button>
             <Button 
               onClick={() => processExtensionMut.mutate()} 
-              disabled={processExtensionMut.isPending || quoteExtensionMut.isPending || !extensionQuote}
+              disabled={processExtensionMut.isPending || !extensionQuote}
             >
               {processExtensionMut.isPending ? "Processing..." : "Confirm & Pay"}
             </Button>
@@ -1560,7 +1561,7 @@ const CustomerOrderDetail = () => {
                   </div>
                 )}
                 <div className="flex justify-between text-muted-foreground">
-                  <span>GST:</span>
+                  <span>{formatGstRateLabel(buyoutQuote.gstPercent)}:</span>
                   <span>₹{buyoutQuote.gstAmount.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between border-t border-emerald-200 pt-2 font-bold text-foreground dark:border-emerald-800">

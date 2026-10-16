@@ -179,6 +179,11 @@ export interface CustomerAddressApi {
   isDefault: boolean;
 }
 
+export interface CustomerGstLineApi {
+  gstPercent: number;
+  gstAmount: number;
+}
+
 export interface CustomerOrderQuoteApi {
   subtotalAmount: number;
   depositAmount: number;
@@ -186,6 +191,8 @@ export interface CustomerOrderQuoteApi {
   distanceFeeAmount: number;
   expressFeeAmount: number;
   gstAmount: number;
+  /** One row per GST slab. A mixed cart lists 12% and 18% separately. */
+  gstLines?: CustomerGstLineApi[];
   totalAmount: number;
   buySuggestions: Array<{
     listingId: string;
@@ -294,6 +301,7 @@ export interface ExtensionQuoteApi {
   serviceFeeAmount: number;
   gstAmount: number;
   totalAmount: number;
+  gstPercent?: number;
 }
 
 export interface BuyoutQuoteApi {
@@ -302,6 +310,7 @@ export interface BuyoutQuoteApi {
   serviceFeeAmount: number;
   gstAmount: number;
   totalAmount: number;
+  gstPercent?: number;
 }
 
 export interface HospitalApi {
