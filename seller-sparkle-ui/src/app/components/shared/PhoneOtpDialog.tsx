@@ -63,6 +63,8 @@ export function PhoneOtpDialog({
   const verifiedRef = useRef(false);
   const autoSendKeyRef = useRef<string | null>(null);
   const sendInFlightRef = useRef(false);
+  const verifyingRef = useRef(false);
+  const formRef = useRef<HTMLFormElement>(null);
 
   const phoneValid = isValidIndianMobile(phone);
 
@@ -139,19 +141,22 @@ export function PhoneOtpDialog({
     }
   };
 
-  const verify = async () => {
-    if (code.length < 6) {
+  const verify = async (raw?: string) => {
+    const value = (raw ?? code).replace(/\D/g, "").slice(0, 6);
+    if (value.length < 6) {
       setDialogError("Enter the 6-digit code.");
       return;
     }
+    if (verifyingRef.current) return;
+    verifyingRef.current = true;
     setVerifying(true);
     setDialogError(null);
     try {
       if (verifyOtp) {
-        await verifyOtp(phone, code);
+        await verifyOtp(phone, value);
         if (successMessage) toast.success(successMessage);
       } else {
-        const res = await authApi.verifyPhoneOtp(phone, code, role);
+        const res = await authApi.verifyPhoneOtp(phone, value, role);
         const nextMessage =
           successMessage === undefined
             ? (res.message || "Phone verified.")
@@ -164,7 +169,11 @@ export function PhoneOtpDialog({
     } catch (error) {
       const message = error instanceof Error ? error.message : "Invalid code.";
       setDialogError(message);
+      window.setTimeout(() => {
+        formRef.current?.querySelector<HTMLInputElement>("[data-input-otp]")?.focus();
+      }, 0);
     } finally {
+      verifyingRef.current = false;
       setVerifying(false);
     }
   };
@@ -186,60 +195,90 @@ export function PhoneOtpDialog({
         onInteractOutside={(e) => e.preventDefault()}
         onEscapeKeyDown={(e) => e.preventDefault()}
       >
-        <DialogHeader>
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>{resolvedDescription}</DialogDescription>
-        </DialogHeader>
-        <div className="flex flex-col items-center gap-4 py-2">
-          <InputOTP maxLength={6} value={code} onChange={setCode} disabled={!phoneValid}>
-            <InputOTPGroup>
-              <InputOTPSlot index={0} />
-              <InputOTPSlot index={1} />
-              <InputOTPSlot index={2} />
-              <InputOTPSlot index={3} />
-              <InputOTPSlot index={4} />
-              <InputOTPSlot index={5} />
-            </InputOTPGroup>
-          </InputOTP>
-          {dialogError ? (
-            <p className="text-center text-sm text-destructive">{dialogError}</p>
-          ) : dialogInfo ? (
-            <p className="text-center text-sm text-emerald-600 dark:text-emerald-400">{dialogInfo}</p>
-          ) : null}
-          <Button
-            type="button"
-            variant="link"
-            className="h-auto p-0 text-xs"
-            disabled={!phoneValid || sending || cooldown > 0}
-            onClick={() => void sendCode()}
-          >
-            {sending ? (
-              <>
-                <Loader2 className="mr-1 h-3 w-3 animate-spin" /> Sending…
-              </>
-            ) : cooldown > 0 ? (
-              `Resend in ${cooldown}s`
-            ) : (
-              "Resend code"
-            )}
-          </Button>
-        </div>
-        <DialogFooter>
-          {!required ? (
-            <Button type="button" variant="outline" onClick={() => handleOpenChange(false)} disabled={verifying}>
-              Cancel
+        <form
+          ref={formRef}
+          className="grid gap-4"
+          onSubmit={(event) => {
+            event.preventDefault();
+            void verify();
+          }}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter" || event.defaultPrevented) return;
+            event.preventDefault();
+            void verify();
+          }}
+        >
+          <DialogHeader>
+            <DialogTitle>{title}</DialogTitle>
+            <DialogDescription>{resolvedDescription}</DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col items-center gap-4 py-2">
+            <InputOTP
+              maxLength={6}
+              value={code}
+              onChange={setCode}
+              onComplete={(value) => {
+                void verify(value);
+              }}
+              onKeyDown={(event) => {
+                if (event.key !== "Enter") return;
+                event.preventDefault();
+                void verify();
+              }}
+              disabled={!phoneValid || verifying}
+              autoFocus
+              inputMode="numeric"
+              autoComplete="one-time-code"
+            >
+              <InputOTPGroup>
+                <InputOTPSlot index={0} />
+                <InputOTPSlot index={1} />
+                <InputOTPSlot index={2} />
+                <InputOTPSlot index={3} />
+                <InputOTPSlot index={4} />
+                <InputOTPSlot index={5} />
+              </InputOTPGroup>
+            </InputOTP>
+            {dialogError ? (
+              <p className="text-center text-sm text-destructive">{dialogError}</p>
+            ) : dialogInfo ? (
+              <p className="text-center text-sm text-emerald-600 dark:text-emerald-400">{dialogInfo}</p>
+            ) : null}
+            <Button
+              type="button"
+              variant="link"
+              className="h-auto p-0 text-xs"
+              disabled={!phoneValid || sending || cooldown > 0 || verifying}
+              onClick={() => void sendCode()}
+            >
+              {sending ? (
+                <>
+                  <Loader2 className="mr-1 h-3 w-3 animate-spin" /> Sending…
+                </>
+              ) : cooldown > 0 ? (
+                `Resend in ${cooldown}s`
+              ) : (
+                "Resend code"
+              )}
             </Button>
-          ) : null}
-          <Button type="button" onClick={() => void verify()} disabled={!phoneValid || verifying || code.length < 6}>
-            {verifying ? (
-              <>
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Verifying…
-              </>
-            ) : (
-              "Verify"
-            )}
-          </Button>
-        </DialogFooter>
+          </div>
+          <DialogFooter>
+            {!required ? (
+              <Button type="button" variant="outline" onClick={() => handleOpenChange(false)} disabled={verifying}>
+                Cancel
+              </Button>
+            ) : null}
+            <Button type="submit" disabled={!phoneValid || verifying || code.length < 6}>
+              {verifying ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Verifying…
+                </>
+              ) : (
+                "Verify"
+              )}
+            </Button>
+          </DialogFooter>
+        </form>
       </DialogContent>
     </Dialog>
   );

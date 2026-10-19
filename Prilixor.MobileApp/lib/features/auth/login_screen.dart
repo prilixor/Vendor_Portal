@@ -25,13 +25,17 @@ class LoginScreen extends StatefulWidget {
 
 class _LoginScreenState extends State<LoginScreen> {
   final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _identifierController = TextEditingController();
   final TextEditingController _passwordController = TextEditingController();
   final FocusNode _phoneFocusNode = FocusNode();
+  final FocusNode _identifierFocusNode = FocusNode();
   String? _phoneError;
+  String? _identifierError;
   String? _passwordError;
   bool _showPassword = false;
   bool _isProcessing = false;
   bool? _phoneOtpEnabled;
+  String _method = 'otp';
   int _cooldown = 0;
   Timer? _cooldownTimer;
 
@@ -47,8 +51,10 @@ class _LoginScreenState extends State<LoginScreen> {
   void dispose() {
     _cooldownTimer?.cancel();
     _phoneController.dispose();
+    _identifierController.dispose();
     _passwordController.dispose();
     _phoneFocusNode.dispose();
+    _identifierFocusNode.dispose();
     super.dispose();
   }
 
@@ -127,7 +133,7 @@ class _LoginScreenState extends State<LoginScreen> {
   }
 
   Future<void> _handlePasswordLogin() async {
-    final identifier = _phoneController.text.trim();
+    final identifier = _identifierController.text.trim();
     final isEmail = RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch(identifier);
     final phoneErr = IndianMobilePhone.requiredError(identifier);
     String? idError;
@@ -137,7 +143,7 @@ class _LoginScreenState extends State<LoginScreen> {
     final password = _passwordController.text;
     final passwordError = password.length < 8 ? 'Password must be at least 8 characters' : null;
     setState(() {
-      _phoneError = idError;
+      _identifierError = idError;
       _passwordError = passwordError;
     });
     if (idError != null || passwordError != null) {
@@ -152,7 +158,7 @@ class _LoginScreenState extends State<LoginScreen> {
     setState(() => _isProcessing = false);
     if (!success) {
       final err = authProvider.errorMessage ?? 'Invalid email/phone or password.';
-      setState(() => _phoneError = err);
+      setState(() => _identifierError = err);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(err), backgroundColor: Colors.redAccent),
       );
@@ -167,6 +173,71 @@ class _LoginScreenState extends State<LoginScreen> {
         ),
       );
     }
+  }
+
+  Widget _passwordFields(AppPalette colors, bool isLoading) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        TextField(
+          controller: _identifierController,
+          focusNode: _identifierFocusNode,
+          keyboardType: TextInputType.emailAddress,
+          style: TextStyle(color: colors.textPrimary),
+          decoration: InputDecoration(
+            labelText: 'Email or mobile number *',
+            errorText: _identifierError,
+            helperText: 'Use the email or mobile number on your account.',
+          ),
+          onChanged: (_) {
+            if (_identifierError != null) setState(() => _identifierError = null);
+          },
+        ),
+        const SizedBox(height: 16),
+        TextField(
+          controller: _passwordController,
+          obscureText: !_showPassword,
+          style: TextStyle(color: colors.textPrimary),
+          decoration: InputDecoration(
+            labelText: 'Password *',
+            errorText: _passwordError,
+            suffixIcon: IconButton(
+              onPressed: () => setState(() => _showPassword = !_showPassword),
+              icon: Icon(_showPassword ? Icons.visibility_off : Icons.visibility),
+            ),
+          ),
+          onChanged: (_) {
+            if (_passwordError != null) setState(() => _passwordError = null);
+          },
+        ),
+        Align(
+          alignment: Alignment.centerRight,
+          child: TextButton(
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),
+              );
+            },
+            child: const Text('Forgot password?'),
+          ),
+        ),
+        const SizedBox(height: 8),
+        SizedBox(
+          height: 56,
+          child: ElevatedButton(
+            onPressed: isLoading ? null : _handlePasswordLogin,
+            child: isLoading
+                ? const SizedBox(
+                    width: 24,
+                    height: 24,
+                    child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                  )
+                : const Text('Sign in', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          ),
+        ),
+      ],
+    );
   }
 
   @override
@@ -209,9 +280,9 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 8),
                 Text(
-                  _phoneOtpEnabled == false
-                      ? 'Sign in with your email or mobile number and password.'
-                      : 'Enter your mobile number to receive a one-time code.',
+                  _phoneOtpEnabled == true && _method == 'otp'
+                      ? 'Enter your mobile number to receive a one-time code.'
+                      : 'Sign in with your email or mobile number and password.',
                   textAlign: TextAlign.center,
                   style: TextStyle(
                     fontSize: 16,
@@ -221,97 +292,50 @@ class _LoginScreenState extends State<LoginScreen> {
                 const SizedBox(height: 32),
                 if (_phoneOtpEnabled == null)
                   const Center(child: CircularProgressIndicator(color: Color(0xFF6C63FF)))
-                else if (_phoneOtpEnabled == false) ...[
-                  TextField(
-                    controller: _phoneController,
-                    focusNode: _phoneFocusNode,
-                    keyboardType: TextInputType.emailAddress,
-                    style: TextStyle(color: colors.textPrimary),
-                    decoration: InputDecoration(
-                      labelText: 'Email or mobile number *',
-                      errorText: _phoneError,
-                      helperText: 'Use the email or mobile number on your account.',
+                else ...[
+                  if (_phoneOtpEnabled == true) ...[
+                    _MethodSwitch(
+                      method: _method,
+                      onChanged: (value) => setState(() => _method = value),
                     ),
-                    onChanged: (_) {
-                      if (_phoneError != null) setState(() => _phoneError = null);
-                    },
-                  ),
-                  const SizedBox(height: 16),
-                  TextField(
-                    controller: _passwordController,
-                    obscureText: !_showPassword,
-                    style: TextStyle(color: colors.textPrimary),
-                    decoration: InputDecoration(
-                      labelText: 'Password *',
-                      errorText: _passwordError,
-                      suffixIcon: IconButton(
-                        onPressed: () => setState(() => _showPassword = !_showPassword),
-                        icon: Icon(_showPassword ? Icons.visibility_off : Icons.visibility),
+                    const SizedBox(height: 20),
+                  ],
+                  if (_phoneOtpEnabled == false || _method == 'password')
+                    _passwordFields(colors, isLoading)
+                  else ...[
+                    const RequiredFieldsNote(),
+                    IndianMobileField(
+                      controller: _phoneController,
+                      focusNode: _phoneFocusNode,
+                      label: 'Mobile number',
+                      required: true,
+                      errorText: _phoneError,
+                      helperText: 'We’ll send a 6-digit OTP to this registered mobile number.',
+                      onChanged: (_) {
+                        if (_phoneError != null) setState(() => _phoneError = null);
+                      },
+                    ),
+                    const SizedBox(height: 24),
+                    SizedBox(
+                      height: 56,
+                      child: ElevatedButton(
+                        onPressed: (isLoading || _cooldown > 0) ? null : _handleSendOtp,
+                        child: isLoading
+                            ? const SizedBox(
+                                width: 24,
+                                height: 24,
+                                child: CircularProgressIndicator(
+                                  color: Colors.white,
+                                  strokeWidth: 2,
+                                ),
+                              )
+                            : Text(
+                                _cooldown > 0 ? 'Send OTP in ${_cooldown}s' : 'Send OTP',
+                                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+                              ),
                       ),
                     ),
-                    onChanged: (_) {
-                      if (_passwordError != null) setState(() => _passwordError = null);
-                    },
-                  ),
-                  Align(
-                    alignment: Alignment.centerRight,
-                    child: TextButton(
-                      onPressed: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(builder: (_) => const ForgotPasswordScreen()),
-                        );
-                      },
-                      child: const Text('Forgot password?'),
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  SizedBox(
-                    height: 56,
-                    child: ElevatedButton(
-                      onPressed: isLoading ? null : _handlePasswordLogin,
-                      child: isLoading
-                          ? const SizedBox(
-                              width: 24,
-                              height: 24,
-                              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                            )
-                          : const Text('Sign in', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                    ),
-                  ),
-                ] else ...[
-                const RequiredFieldsNote(),
-                IndianMobileField(
-                  controller: _phoneController,
-                  focusNode: _phoneFocusNode,
-                  label: 'Mobile number',
-                  required: true,
-                  errorText: _phoneError,
-                  helperText: 'We’ll send a 6-digit OTP to this registered mobile number.',
-                  onChanged: (_) {
-                    if (_phoneError != null) setState(() => _phoneError = null);
-                  },
-                ),
-                const SizedBox(height: 24),
-                SizedBox(
-                  height: 56,
-                  child: ElevatedButton(
-                    onPressed: (isLoading || _cooldown > 0) ? null : _handleSendOtp,
-                    child: isLoading
-                        ? const SizedBox(
-                            width: 24,
-                            height: 24,
-                            child: CircularProgressIndicator(
-                              color: Colors.white,
-                              strokeWidth: 2,
-                            ),
-                          )
-                        : Text(
-                            _cooldown > 0 ? 'Send OTP in ${_cooldown}s' : 'Send OTP',
-                            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                          ),
-                  ),
-                ),
+                  ],
                 ],
                 const SizedBox(height: 32),
                 Row(
@@ -331,6 +355,56 @@ class _LoginScreenState extends State<LoginScreen> {
                 ),
                 const SizedBox(height: 24),
               ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _MethodSwitch extends StatelessWidget {
+  final String method;
+  final ValueChanged<String> onChanged;
+
+  const _MethodSwitch({required this.method, required this.onChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+    return Container(
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(12),
+      ),
+      child: Row(
+        children: [
+          _tab(context, 'otp', 'OTP'),
+          _tab(context, 'password', 'Password'),
+        ],
+      ),
+    );
+  }
+
+  Widget _tab(BuildContext context, String value, String label) {
+    final selected = method == value;
+    return Expanded(
+      child: Material(
+        color: selected ? const Color(0xFF6C63FF) : Colors.transparent,
+        borderRadius: BorderRadius.circular(10),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(10),
+          onTap: () => onChanged(value),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(vertical: 12),
+            child: Text(
+              label,
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                fontWeight: FontWeight.w700,
+                color: selected ? Colors.white : context.appColors.textSecondary,
+              ),
             ),
           ),
         ),
