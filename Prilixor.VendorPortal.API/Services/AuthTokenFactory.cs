@@ -10,6 +10,14 @@ namespace Prilixor.VendorPortal.API.Services;
 
 public static class AuthTokenFactory
 {
+    /// <summary>
+    /// A sign-in can keep calling the API for this many days. Renewals keep the original deadline.
+    /// </summary>
+    public const int SessionLifetimeDays = 50;
+
+    public static DateTimeOffset CreateSessionExpiry() =>
+        DateTimeOffset.UtcNow.AddDays(SessionLifetimeDays);
+
     public static (string AccessToken, List<Claim> Claims) CreateAccessToken(
         JwtOptions jwt,
         string userId,

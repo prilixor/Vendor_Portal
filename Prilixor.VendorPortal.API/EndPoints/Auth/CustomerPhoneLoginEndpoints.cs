@@ -79,7 +79,7 @@ public sealed class LoginCustomerWithPhoneOtpEndpoint(
             Id = Guid.NewGuid(),
             UserId = userId,
             Token = AuthTokenFactory.CreateRefreshTokenValue(),
-            ExpiresAt = DateTimeOffset.UtcNow.AddDays(7),
+            ExpiresAt = AuthTokenFactory.CreateSessionExpiry(),
             IsRevoked = false,
             CreatedAt = DateTimeOffset.UtcNow
         };

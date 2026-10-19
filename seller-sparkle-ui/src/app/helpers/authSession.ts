@@ -2,6 +2,7 @@
 
 export const ADMIN_USER_KEY = "adminUser";
 export const ADMIN_TOKEN_KEY = "admin_portal_token";
+export const ADMIN_REFRESH_TOKEN_KEY = "admin_portal_refresh_token";
 export const PORTAL_USER_KEY = "vendor_portal_user";
 export const PORTAL_TOKEN_KEY = "vendor_portal_token";
 export const PORTAL_REFRESH_TOKEN_KEY = "vendor_portal_refresh_token";
@@ -52,6 +53,33 @@ export function setPortalAccessToken(token: string): void {
   localStorage.setItem(PORTAL_TOKEN_KEY, token);
 }
 
+export function getActiveRefreshToken(): string | null {
+  if (typeof window === "undefined") return null;
+  if (isAdminPath()) {
+    return localStorage.getItem(ADMIN_REFRESH_TOKEN_KEY) || localStorage.getItem(PORTAL_REFRESH_TOKEN_KEY);
+  }
+  return localStorage.getItem(PORTAL_REFRESH_TOKEN_KEY);
+}
+
+export function setActiveRefreshToken(token: string): void {
+  if (isAdminPath()) localStorage.setItem(ADMIN_REFRESH_TOKEN_KEY, token);
+  else localStorage.setItem(PORTAL_REFRESH_TOKEN_KEY, token);
+}
+
+/** True when the access token is missing an expiry or is inside the skew window. */
+export function isAccessTokenStale(token: string, skewSeconds = 60): boolean {
+  try {
+    const part = token.split(".")[1];
+    if (!part) return true;
+    const json = JSON.parse(atob(part.replace(/-/g, "+").replace(/_/g, "/"))) as { exp?: number };
+    const exp = Number(json.exp);
+    if (!Number.isFinite(exp)) return true;
+    return exp * 1000 <= Date.now() + skewSeconds * 1000;
+  } catch {
+    return true;
+  }
+}
+
 export function setImpersonationSession(input: {
   token: string;
   user: { id: string; email: string; name: string; role: "vendor" | "customer" };
@@ -96,6 +124,7 @@ export function readImpersonationUser<T = Record<string, unknown>>(): T | null {
 export function clearAdminSession(): void {
   localStorage.removeItem(ADMIN_USER_KEY);
   localStorage.removeItem(ADMIN_TOKEN_KEY);
+  localStorage.removeItem(ADMIN_REFRESH_TOKEN_KEY);
 }
 
 export function clearPortalSession(): void {

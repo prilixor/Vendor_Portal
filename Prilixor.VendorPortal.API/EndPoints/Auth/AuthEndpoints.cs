@@ -216,7 +216,7 @@ public sealed class LoginEndpoint(
             Id = Guid.NewGuid(),
             UserId = userId,
             Token = AuthTokenFactory.CreateRefreshTokenValue(),
-            ExpiresAt = DateTimeOffset.UtcNow.AddDays(7),
+            ExpiresAt = AuthTokenFactory.CreateSessionExpiry(),
             IsRevoked = false,
             CreatedAt = DateTimeOffset.UtcNow
         };
@@ -791,7 +791,7 @@ public sealed class RefreshTokenEndpoint(
             Id = Guid.NewGuid(),
             UserId = userId,
             Token = AuthTokenFactory.CreateRefreshTokenValue(),
-            ExpiresAt = DateTimeOffset.UtcNow.AddDays(7),
+            ExpiresAt = storedToken.ExpiresAt,
             IsRevoked = false,
             CreatedAt = DateTimeOffset.UtcNow
         };
@@ -803,6 +803,37 @@ public sealed class RefreshTokenEndpoint(
             tokenString,
             newRefreshToken.Token,
             new AuthUserDto(userId, email, name, portalRole, adminRoleCode, permissions)));
+    }
+}
+
+public sealed class LogoutRequest
+{
+    public string RefreshToken { get; set; } = string.Empty;
+}
+
+public sealed class LogoutEndpoint(IVendorOnboardingRepository repository)
+    : Endpoint<LogoutRequest, Ok>
+{
+    public override void Configure()
+    {
+        Post("auth/logout");
+        AllowAnonymous();
+    }
+
+    public override async Task<Ok> ExecuteAsync(LogoutRequest req, CancellationToken ct)
+    {
+        if (!string.IsNullOrWhiteSpace(req.RefreshToken))
+        {
+            var stored = await repository.GetRefreshTokenAsync(req.RefreshToken, ct);
+            if (stored is not null && !stored.IsRevoked)
+            {
+                stored.IsRevoked = true;
+                await repository.UpdateRefreshTokenAsync(stored, ct);
+                await repository.SaveChangesAsync(ct);
+            }
+        }
+
+        return TypedResults.Ok();
     }
 }
 

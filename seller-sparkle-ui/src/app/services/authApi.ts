@@ -1,4 +1,5 @@
-import { apiClient } from './apiClient';
+import { apiClient, revokeStoredSession } from './apiClient';
+import { setActiveRefreshToken } from '@/app/helpers/authSession';
 import { User, Role } from '@/app/models';
 
 export interface LoginRequest {
@@ -9,6 +10,7 @@ export interface LoginRequest {
 
 export interface LoginResponse {
   token: string;
+  refreshToken?: string;
   user: {
     id: string;
     email: string;
@@ -103,6 +105,7 @@ export const authApi = {
     });
 
     apiClient.setAuthToken(response.token);
+    if (response.refreshToken) setActiveRefreshToken(response.refreshToken);
 
     return {
       token: response.token,
@@ -215,6 +218,7 @@ export const authApi = {
   async loginWithCustomerPhoneOtp(phone: string, code: string): Promise<{ token: string; user: User }> {
     const response = await apiClient.post<LoginResponse>('/auth/login/sms/verify-otp', { phone, code });
     apiClient.setAuthToken(response.token);
+    if (response.refreshToken) setActiveRefreshToken(response.refreshToken);
     return {
       token: response.token,
       user: {
@@ -244,6 +248,7 @@ export const authApi = {
   },
 
   logout(): void {
+    revokeStoredSession();
     apiClient.removeAuthToken();
   },
 };

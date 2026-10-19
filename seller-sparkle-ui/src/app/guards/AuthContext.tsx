@@ -9,10 +9,14 @@ import {
   clearImpersonationSession,
   clearPortalSession,
   ensureAdminTokenMigrated,
+  getActiveAccessToken,
+  getActiveRefreshToken,
+  isAccessTokenStale,
   isAdminPath,
   readImpersonationUser,
   setAdminAccessToken,
 } from "@/app/helpers/authSession";
+import { refreshStoredSession } from "@/app/services/apiClient";
 
 interface AuthContextValue {
   user: User | null;
@@ -80,9 +84,36 @@ function readInitialUser(): User | null {
   }
 }
 
+function needsSessionRenewal(): boolean {
+  if (typeof window === "undefined") return false;
+  if (readImpersonationUser()) return false;
+  const access = getActiveAccessToken();
+  const refresh = getActiveRefreshToken();
+  return Boolean(access && refresh && isAccessTokenStale(access));
+}
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(() => readInitialUser());
-  const [isHydrating] = useState(false);
+  const [isHydrating, setIsHydrating] = useState(needsSessionRenewal);
+
+  useEffect(() => {
+    if (!isHydrating) return;
+    let cancelled = false;
+    void refreshStoredSession().then((renewed) => {
+      if (cancelled) return;
+      if (!renewed) {
+        if (isAdminPath()) clearAdminSession();
+        else clearPortalSession();
+        setUser(null);
+      } else {
+        setUser(readInitialUser());
+      }
+      setIsHydrating(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isHydrating]);
 
   const logout = () => {
     // Impersonation is tab-scoped — never wipe the admin session in other tabs.

@@ -1,10 +1,16 @@
 import {
+  ADMIN_REFRESH_TOKEN_KEY,
+  ADMIN_TOKEN_KEY,
+  ADMIN_USER_KEY,
   getActiveAccessToken,
+  getActiveRefreshToken,
+  IMPERSONATION_TOKEN_KEY,
   isAdminPath,
+  PORTAL_REFRESH_TOKEN_KEY,
+  PORTAL_TOKEN_KEY,
+  PORTAL_USER_KEY,
   setAdminAccessToken,
   setPortalAccessToken,
-  ADMIN_TOKEN_KEY,
-  PORTAL_TOKEN_KEY,
 } from "@/app/helpers/authSession";
 import {
   beginPortalRequest,
@@ -36,11 +42,109 @@ function resolveApiBaseUrl(): string {
 
 const API_BASE_URL = resolveApiBaseUrl();
 
+function usingImpersonationSession(): boolean {
+  return typeof window !== "undefined"
+    && !isAdminPath()
+    && !!sessionStorage.getItem(IMPERSONATION_TOKEN_KEY);
+}
+
+let refreshInFlight: Promise<boolean> | null = null;
+
+/** Renew the saved sign-in. One shared call so parallel 401s do not revoke each other. */
+export function refreshStoredSession(): Promise<boolean> {
+  if (usingImpersonationSession()) return Promise.resolve(false);
+  if (refreshInFlight) return refreshInFlight;
+  refreshInFlight = renewStoredSession().finally(() => {
+    refreshInFlight = null;
+  });
+  return refreshInFlight;
+}
+
+async function renewStoredSession(): Promise<boolean> {
+  const access = getActiveAccessToken();
+  const refresh = getActiveRefreshToken();
+  if (!access || !refresh) return false;
+
+  const response = await fetch(`${API_BASE_URL}/auth/refresh`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ token: access, refreshToken: refresh }),
+  }).catch(() => null);
+  if (!response?.ok) return false;
+
+  const data = await response.json().catch(() => null) as {
+    token?: string;
+    refreshToken?: string;
+    user?: {
+      id?: string;
+      email?: string;
+      name?: string;
+      role?: string;
+      adminRole?: string;
+      permissions?: string[];
+    };
+  } | null;
+  if (!data?.token || !data.refreshToken) return false;
+
+  if (isAdminPath()) {
+    setAdminAccessToken(data.token);
+    localStorage.setItem(ADMIN_REFRESH_TOKEN_KEY, data.refreshToken);
+    const existing = readJson(ADMIN_USER_KEY);
+    localStorage.setItem(ADMIN_USER_KEY, JSON.stringify({
+      ...existing,
+      id: data.user?.id ?? existing?.id,
+      email: data.user?.email ?? existing?.email,
+      name: data.user?.name ?? existing?.name,
+      fullName: data.user?.name ?? existing?.fullName ?? existing?.name,
+      role: data.user?.adminRole || data.user?.role || existing?.role,
+      adminRole: data.user?.adminRole || existing?.adminRole || existing?.role,
+      permissions: data.user?.permissions ?? existing?.permissions ?? [],
+    }));
+  } else {
+    setPortalAccessToken(data.token);
+    localStorage.setItem(PORTAL_REFRESH_TOKEN_KEY, data.refreshToken);
+    const existing = readJson(PORTAL_USER_KEY);
+    if (data.user) {
+      localStorage.setItem(PORTAL_USER_KEY, JSON.stringify({
+        ...existing,
+        id: data.user.id ?? existing?.id,
+        email: data.user.email ?? existing?.email,
+        name: data.user.name ?? existing?.name,
+        role: data.user.role ?? existing?.role,
+      }));
+    }
+  }
+  return true;
+}
+
+function readJson(key: string): Record<string, unknown> | null {
+  try {
+    const raw = localStorage.getItem(key);
+    return raw ? JSON.parse(raw) as Record<string, unknown> : null;
+  } catch {
+    return null;
+  }
+}
+
+/** Tell the server this browser's saved sign-in is finished. */
+export function revokeStoredSession(): void {
+  const refresh = getActiveRefreshToken();
+  if (!refresh || usingImpersonationSession()) return;
+  void fetch(`${API_BASE_URL}/auth/logout`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ refreshToken: refresh }),
+    keepalive: true,
+  }).catch(() => undefined);
+}
+
 /** Login/register/forgot-password return 401 for bad credentials — not an expired session. */
 function shouldTreat401AsSessionExpiry(endpoint: string): boolean {
   const path = (endpoint.split("?")[0] ?? "").replace(/\/+$/, "").toLowerCase();
   if (
     path.includes("/auth/login") ||
+    path.includes("/auth/refresh") ||
+    path.includes("/auth/logout") ||
     path.includes("/auth/forgot-password") ||
     path.includes("/auth/reset-password") ||
     path.includes("/auth/verify-email") ||
@@ -81,32 +185,6 @@ class ApiClient {
     localStorage.removeItem(PORTAL_TOKEN_KEY);
   }
 
-  private getHeaders(includeJsonContentType: boolean = true): HeadersInit {
-    const token = this.getToken();
-    const headers: HeadersInit = {};
-
-    if (includeJsonContentType) {
-      headers["Content-Type"] = "application/json";
-    }
-
-    if (token) {
-      headers["Authorization"] = `Bearer ${token}`;
-    }
-
-    return headers;
-  }
-
-  private getAuthHeaders(): HeadersInit {
-    const token = this.getToken();
-    if (!token) {
-      return {};
-    }
-
-    return {
-      Authorization: `Bearer ${token}`,
-    };
-  }
-
   private shouldTrack(_method: string, _endpoint: string, _options?: ApiClientOptions) {
     // Never drive a full-pane loader from apiClient. That overlay caused
     // project-wide fade/vibrate on search, filter, save, and navigation.
@@ -134,11 +212,34 @@ class ApiClient {
     }
   }
 
-  private async handleResponse<T>(response: Response, endpoint = ""): Promise<T> {
-    if (response.status === 401 && shouldTreat401AsSessionExpiry(endpoint)) {
-      window.dispatchEvent(new Event('unauthorized'));
+  private async send<T>(
+    endpoint: string,
+    init: RequestInit,
+    includeJson: boolean,
+    retry = true,
+  ): Promise<T> {
+    const headers = new Headers(init.headers);
+    if (includeJson && !headers.has("Content-Type")) {
+      headers.set("Content-Type", "application/json");
+    }
+    const token = this.getToken();
+    if (token) headers.set("Authorization", `Bearer ${token}`);
+
+    const response = await fetch(this.buildUrl(endpoint), { ...init, headers });
+    if (response.status === 401 && retry && shouldTreat401AsSessionExpiry(endpoint) && !usingImpersonationSession()) {
+      const refreshed = await refreshStoredSession();
+      if (refreshed) return this.send<T>(endpoint, init, includeJson, false);
+      window.dispatchEvent(new Event("unauthorized"));
       throw new UnauthorizedRedirectError();
     }
+    if (response.status === 401 && shouldTreat401AsSessionExpiry(endpoint)) {
+      window.dispatchEvent(new Event("unauthorized"));
+      throw new UnauthorizedRedirectError();
+    }
+    return this.handleResponse<T>(response, endpoint);
+  }
+
+  private async handleResponse<T>(response: Response, endpoint = ""): Promise<T> {
 
     if (!response.ok) {
       const parsed = await response.json().catch(() => ({ detail: "An error occurred" }));
@@ -207,32 +308,14 @@ class ApiClient {
   }
 
   async get<T>(endpoint: string, options?: ApiClientOptions): Promise<T> {
-    return this.track(
-      "GET",
-      endpoint,
-      async () => {
-        const response = await fetch(this.buildUrl(endpoint), {
-          method: "GET",
-          headers: this.getHeaders(false),
-        });
-        return this.handleResponse<T>(response, endpoint);
-      },
-      options,
-    );
+    return this.track("GET", endpoint, () => this.send<T>(endpoint, { method: "GET" }, false), options);
   }
 
   async post<T>(endpoint: string, data?: unknown, options?: ApiClientOptions): Promise<T> {
     return this.track(
       "POST",
       endpoint,
-      async () => {
-        const response = await fetch(this.buildUrl(endpoint), {
-          method: "POST",
-          headers: this.getHeaders(true),
-          body: data ? JSON.stringify(data) : undefined,
-        });
-        return this.handleResponse<T>(response, endpoint);
-      },
+      () => this.send<T>(endpoint, { method: "POST", body: data ? JSON.stringify(data) : undefined }, true),
       options,
     );
   }
@@ -241,14 +324,7 @@ class ApiClient {
     return this.track(
       "PUT",
       endpoint,
-      async () => {
-        const response = await fetch(this.buildUrl(endpoint), {
-          method: "PUT",
-          headers: this.getHeaders(true),
-          body: data ? JSON.stringify(data) : undefined,
-        });
-        return this.handleResponse<T>(response, endpoint);
-      },
+      () => this.send<T>(endpoint, { method: "PUT", body: data ? JSON.stringify(data) : undefined }, true),
       options,
     );
   }
@@ -257,46 +333,24 @@ class ApiClient {
     return this.track(
       "PATCH",
       endpoint,
-      async () => {
-        const hasBody = data !== undefined;
-        const response = await fetch(this.buildUrl(endpoint), {
-          method: "PATCH",
-          headers: this.getHeaders(hasBody),
-          body: hasBody ? JSON.stringify(data) : undefined,
-        });
-        return this.handleResponse<T>(response, endpoint);
-      },
+      () => this.send<T>(
+        endpoint,
+        { method: "PATCH", body: data !== undefined ? JSON.stringify(data) : undefined },
+        data !== undefined,
+      ),
       options,
     );
   }
 
   async delete<T>(endpoint: string, options?: ApiClientOptions): Promise<T> {
-    return this.track(
-      "DELETE",
-      endpoint,
-      async () => {
-        const response = await fetch(this.buildUrl(endpoint), {
-          method: "DELETE",
-          headers: this.getHeaders(false),
-        });
-        return this.handleResponse<T>(response, endpoint);
-      },
-      options,
-    );
+    return this.track("DELETE", endpoint, () => this.send<T>(endpoint, { method: "DELETE" }, false), options);
   }
 
   async postForm<T>(endpoint: string, data: FormData, options?: ApiClientOptions): Promise<T> {
     return this.track(
       "POST",
       endpoint,
-      async () => {
-        const response = await fetch(this.buildUrl(endpoint), {
-          method: "POST",
-          headers: this.getAuthHeaders(),
-          body: data,
-        });
-        return this.handleResponse<T>(response, endpoint);
-      },
+      () => this.send<T>(endpoint, { method: "POST", body: data }, false),
       options,
     );
   }
@@ -329,7 +383,7 @@ class ApiClient {
     window.URL.revokeObjectURL(url);
   }
 
-  async fetchBlob(endpoint: string, options?: ApiClientOptions): Promise<Blob> {
+  async fetchBlob(endpoint: string, options?: ApiClientOptions, retry = true): Promise<Blob> {
     return this.track(
       "GET",
       endpoint,
@@ -345,6 +399,12 @@ class ApiClient {
           headers,
         });
 
+        if (response.status === 401 && retry && shouldTreat401AsSessionExpiry(endpoint) && !usingImpersonationSession()) {
+          const refreshed = await refreshStoredSession();
+          if (refreshed) return this.fetchBlob(endpoint, options, false);
+          window.dispatchEvent(new Event("unauthorized"));
+          throw new UnauthorizedRedirectError();
+        }
         if (response.status === 401) {
           window.dispatchEvent(new Event("unauthorized"));
           throw new UnauthorizedRedirectError();
