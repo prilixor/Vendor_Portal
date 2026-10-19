@@ -22,6 +22,13 @@ import { LegalPolicyLinks } from "@/app/components/legal/LegalPolicyLinks";
 const CustomerSupport = () => {
   const [searchParams] = useSearchParams();
   const orderRef = searchParams.get("order")?.trim();
+  const orderId = searchParams.get("orderId")?.trim();
+  const backToOrder =
+    orderId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orderId)
+      ? `/customer/orders/${orderId}`
+      : orderRef
+        ? `/customer/orders/${encodeURIComponent(orderRef)}`
+        : null;
   const [copied, setCopied] = useState(false);
 
   const { data: publicContent } = usePublicWebsiteContent();
@@ -76,7 +83,7 @@ const CustomerSupport = () => {
       <div>
         {orderRef ? (
           <div className="mb-3">
-            <BackLink to={`/customer/orders/${encodeURIComponent(orderRef)}`} label="Back to order" />
+            <BackLink to={backToOrder ?? "/customer/orders"} label="Back to order" />
           </div>
         ) : null}
         <div className="flex items-center gap-3">

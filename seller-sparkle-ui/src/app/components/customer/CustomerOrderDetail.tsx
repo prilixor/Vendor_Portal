@@ -1,4 +1,4 @@
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { useState, useMemo, useRef, useEffect, type ReactNode } from "react";
 import { useQuery, useQueries, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Check, CheckSquare, Headset, ImageOff, Images, Info, Loader2, Maximize2, MessageCircle, Package } from "lucide-react";
@@ -81,6 +81,10 @@ function isCustomerOrderCancellable(status: string): boolean {
 
 /** Match Customer Mobile order detail polling while the page is open. */
 const CUSTOMER_ORDER_POLL_MS = 15_000;
+
+function isOrderGuid(value: string | undefined): value is string {
+  return !!value && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
 
 function orderStatusCompact(status: string): string {
   return status.trim().toLowerCase().replace(/\s+/g, "_");
@@ -416,7 +420,9 @@ function OrderTimeline({ status, orderType }: { status: string; orderType?: stri
 
 const CustomerOrderDetail = () => {
   const { orderId } = useParams<{ orderId: string }>();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const routeIsGuid = isOrderGuid(orderId);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
 
   const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
@@ -437,8 +443,25 @@ const CustomerOrderDetail = () => {
   const [photoRequestSelection, setPhotoRequestSelection] = useState<string[]>([]);
   const [photoSelectionInitialized, setPhotoSelectionInitialized] = useState(false);
 
+  // Support links historically used the order number. Resolve it to the order id before calling the API.
+  const orderNumberLookup = useQuery({
+    queryKey: ["customer-order-id-by-number", orderId],
+    enabled: !!orderId && !routeIsGuid,
+    retry: false,
+    queryFn: async () => {
+      const result = await customerApi.getOrderSummaries({ search: orderId, pageSize: 50 });
+      const wanted = orderId!.trim().toLowerCase();
+      return result.items.find((item) => item.orderNumber.trim().toLowerCase() === wanted)?.id ?? null;
+    },
+  });
+
+  useEffect(() => {
+    if (!orderNumberLookup.data || !isOrderGuid(orderNumberLookup.data)) return;
+    navigate(`/customer/orders/${orderNumberLookup.data}`, { replace: true });
+  }, [navigate, orderNumberLookup.data]);
+
   // Fetch current selected item details
-  const currentItemId = selectedItemId || orderId;
+  const currentItemId = selectedItemId || (routeIsGuid ? orderId : undefined);
 
   const { data, isLoading, isFetching, error } = useQuery({
     queryKey: ["customer-order", currentItemId],
@@ -450,7 +473,7 @@ const CustomerOrderDetail = () => {
   const { data: groupOrders } = useQuery({
     queryKey: ["customer-order-group", orderId],
     queryFn: () => customerApi.getOrderGroup(orderId!, { quiet: true }),
-    enabled: !!orderId,
+    enabled: routeIsGuid && !!orderId,
     refetchInterval: CUSTOMER_ORDER_POLL_MS,
   });
 
@@ -756,6 +779,33 @@ const CustomerOrderDetail = () => {
   }, [data]);
 
   if (!orderId) return <p className="text-sm text-muted-foreground">Missing order.</p>;
+
+  if (!routeIsGuid) {
+    if (orderNumberLookup.isError) {
+      const lookupError = orderNumberLookup.error;
+      return (
+        <div className="space-y-4">
+          <p className="text-sm text-destructive">
+            {lookupError instanceof Error ? lookupError.message : "Not found."}
+          </p>
+          <Button variant="outline" asChild>
+            <Link to="/customer/orders">Back to orders</Link>
+          </Button>
+        </div>
+      );
+    }
+    if (orderNumberLookup.isSuccess && !orderNumberLookup.data) {
+      return (
+        <div className="space-y-4">
+          <p className="text-sm text-destructive">Order not found.</p>
+          <Button variant="outline" asChild>
+            <Link to="/customer/orders">Back to orders</Link>
+          </Button>
+        </div>
+      );
+    }
+    return <PageLoaderSlot />;
+  }
 
   if (error) {
     return (
@@ -1410,7 +1460,7 @@ const CustomerOrderDetail = () => {
         <Button variant="outline" className="w-full justify-center sm:w-auto" asChild>
           <Link
             className="inline-flex items-center justify-center"
-            to={`/customer/support?order=${encodeURIComponent(activeItem.orderNumber)}`}
+            to={`/customer/support?order=${encodeURIComponent(activeItem.orderNumber)}&orderId=${encodeURIComponent(activeItem.id)}`}
           >
             <Headset className="mr-1.5 h-4 w-4 shrink-0 sm:mr-2" />
             <span className="sm:hidden">Support</span>
