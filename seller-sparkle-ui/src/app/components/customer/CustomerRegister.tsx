@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router-dom";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { AuthLayout } from "@/app/components/layout/AuthLayout";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
@@ -7,7 +7,7 @@ import { Label } from "@/app/components/ui/label";
 import { useAuth } from "@/app/guards/AuthContext";
 import { toast } from "sonner";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
-import { normalizeIndianMobileDigits, requiredIndianMobileError } from "@/app/helpers/indianMobilePhone";
+import { maskIndianMobileInput, normalizeIndianMobileDigits, requiredIndianMobileError } from "@/app/helpers/indianMobilePhone";
 import { IndianMobileInput } from "@/app/components/shared/IndianMobileInput";
 import { PhoneOtpDialog } from "@/app/components/shared/PhoneOtpDialog";
 import { RegisterLegalAgree } from "@/app/components/legal/RegisterLegalAgree";
@@ -21,10 +21,11 @@ const isValidEmail = (value: string) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value.
 
 const CustomerRegister = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { registerCustomer, login, setSessionUser } = useAuth();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
+  const [phone, setPhone] = useState(() => maskIndianMobileInput(searchParams.get("phone") ?? ""));
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);

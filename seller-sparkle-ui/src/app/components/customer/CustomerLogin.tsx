@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useLocation } from "react-router-dom";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { AuthLayout } from "@/app/components/layout/AuthLayout";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
@@ -13,10 +13,20 @@ import { toast } from "sonner";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { IndianMobileInput } from "@/app/components/shared/IndianMobileInput";
 import { PhoneOtpDialog } from "@/app/components/shared/PhoneOtpDialog";
-import { normalizeIndianMobileDigits, requiredIndianMobileError } from "@/app/helpers/indianMobilePhone";
+import { maskIndianMobileInput, normalizeIndianMobileDigits, requiredIndianMobileError } from "@/app/helpers/indianMobilePhone";
 import { OTP_RESEND_COOLDOWN_SECONDS, parseOtpSendCooldown } from "@/app/helpers/otpSendCooldown";
 
 type SignInMethod = "otp" | "password";
+
+function isUnregisteredOrInvalidPhone(error: unknown): boolean {
+  const code =
+    error && typeof error === "object" && "code" in error && typeof (error as { code?: unknown }).code === "string"
+      ? (error as { code: string }).code
+      : "";
+  if (code === "auth.customer_phone_not_found" || code === "phone.invalid") return true;
+  const message = error instanceof Error ? error.message.toLowerCase() : "";
+  return message.includes("no customer account found");
+}
 
 function MethodSwitch({
   method,
@@ -72,6 +82,7 @@ function CustomerLoginFooter({ vendorLoginHref }: { vendorLoginHref: string }) {
 
 const CustomerLogin = () => {
   const location = useLocation();
+  const navigate = useNavigate();
   const from = (location.state as { from?: string } | null)?.from ?? "/customer/shop";
   const { login, loginWithCustomerPhoneOtp } = useAuth();
   const vendorLoginHref = getVendorPortalHref("/login");
@@ -153,16 +164,25 @@ const CustomerLogin = () => {
     }
   };
 
+  const goToRegister = (digits: string) => {
+    const mobile = maskIndianMobileInput(digits);
+    navigate(mobile ? `/customer/register?phone=${encodeURIComponent(mobile)}` : "/customer/register");
+  };
+
   const handleOtpSubmit = async (ev: React.FormEvent) => {
     ev.preventDefault();
     const phoneErr = requiredIndianMobileError(phone);
+    const national = normalizeIndianMobileDigits(phone);
     if (phoneErr) {
-      setOtpErrors({ phone: phoneErr });
+      if (!national) {
+        setOtpErrors({ phone: phoneErr });
+        return;
+      }
+      goToRegister(national);
       return;
     }
     if (cooldown > 0) return;
 
-    const national = normalizeIndianMobileDigits(phone);
     setOtpLoading(true);
     setOtpErrors({});
     try {
@@ -176,10 +196,14 @@ const CustomerLogin = () => {
         startCooldown(wait, national);
         return;
       }
+      if (isUnregisteredOrInvalidPhone(error)) {
+        goToRegister(national);
+        return;
+      }
       const message =
         error instanceof Error && error.message.trim()
           ? error.message
-          : "No customer account found for this mobile number.";
+          : "Could not send the code. Try again.";
       setOtpErrors({ form: message });
     } finally {
       setOtpLoading(false);
@@ -189,13 +213,13 @@ const CustomerLogin = () => {
   const showOtp = phoneOtpEnabled === true;
   const activeMethod: SignInMethod = showOtp ? method : "password";
   const subtitle = activeMethod === "otp"
-    ? "Enter your mobile number to receive a one-time code."
+    ? "Enter your mobile number to sign in, or continue to create an account."
     : "Sign in with your email or mobile number and password.";
 
   return (
     <AuthLayout
       title="Customer sign in"
-      subtitle={phoneOtpEnabled === null ? "Enter your mobile number to receive a one-time code." : subtitle}
+      subtitle={phoneOtpEnabled === null ? "Enter your mobile number to sign in, or continue to create an account." : subtitle}
       portalType="customer"
       backTo="/customer/shop"
       backLabel="Back to shop"
