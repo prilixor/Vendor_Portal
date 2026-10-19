@@ -148,7 +148,9 @@ export function CustomerStoreHeader() {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                {navItems.map((item) => (
+                {navItems
+                  .filter((item) => item.to !== "/customer/notifications")
+                  .map((item) => (
                   <DropdownMenuItem key={item.to} onClick={() => navigate(item.to)}>
                     <item.icon className="mr-2 h-4 w-4" />
                     {item.label}
