@@ -14,6 +14,8 @@ using System.Text;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Prilixor.VendorPortal.API.EndPoints.Common;
+using Prilixor.VendorPortal.API.Security;
+using Prilixor.VendorPortal.Application.Security;
 
 try
 {
@@ -77,6 +79,7 @@ builder.Services.AddAuthorization(options =>
 });
 builder.Services.AddSingleton<Microsoft.AspNetCore.Authorization.IAuthorizationHandler,
     Prilixor.VendorPortal.API.Authorization.PermissionAuthorizationHandler>();
+builder.Services.AddSingleton<ApiRateLimitGate>();
 
 builder.Services.AddCors(options =>
 {
@@ -172,6 +175,8 @@ app.UseCors();
 
 app.UseAuthentication()
     .UseAuthorization();
+
+app.UseMiddleware<ApiRateLimitMiddleware>();
 
 app.UseStaticFiles();
 app.UseStaticFiles(new StaticFileOptions
