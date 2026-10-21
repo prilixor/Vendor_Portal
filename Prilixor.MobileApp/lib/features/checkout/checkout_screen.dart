@@ -26,6 +26,9 @@ import 'medical_reference_screen.dart';
 /// Temporary: hide Vendor pickup from checkout UI (keep code for later).
 const bool kShowVendorPickupOption = false;
 
+/// Hide Standard / Express. Checkout always places a standard delivery.
+const bool kShowDeliverySpeedOptions = false;
+
 class CheckoutScreen extends StatefulWidget {
   const CheckoutScreen({super.key});
 
@@ -159,7 +162,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     await provider.getQuote(
       cart.lines,
       addressId: _selectedAddressId,
-      deliveryOption: _deliveryOption,
+      deliveryOption: kShowDeliverySpeedOptions ? _deliveryOption : 'standard',
       medicalRefs: _medicalRefs,
     );
     if (!mounted) return;
@@ -522,23 +525,41 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     const FieldErrorText('Delivery address is required'),
 
                   const SizedBox(height: 24),
-                  Text('Delivery option', style: TextStyle(color: colors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
+                  Text(
+                    kShowDeliverySpeedOptions ? 'Delivery option' : 'Delivery',
+                    style: TextStyle(color: colors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
                   const SizedBox(height: 12),
-                  _deliveryOptionTile(
-                    value: 'standard',
-                    title: 'Standard (2-3 days)',
-                    trailing: 'Included',
-                  ),
-                  _deliveryOptionTile(
-                    value: 'express',
-                    title: 'Express (next-day)',
-                    trailing: 'Dynamic',
-                  ),
-                  if (kShowVendorPickupOption)
+                  if (kShowDeliverySpeedOptions) ...[
                     _deliveryOptionTile(
-                      value: 'vendor_pickup',
-                      title: 'Vendor pickup',
-                      trailing: 'Free',
+                      value: 'standard',
+                      title: 'Standard (2-3 days)',
+                      trailing: 'Included',
+                    ),
+                    _deliveryOptionTile(
+                      value: 'express',
+                      title: 'Express (next-day)',
+                      trailing: 'Dynamic',
+                    ),
+                    if (kShowVendorPickupOption)
+                      _deliveryOptionTile(
+                        value: 'vendor_pickup',
+                        title: 'Vendor pickup',
+                        trailing: 'Free',
+                      ),
+                  ] else
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: colors.surface,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: colors.border),
+                      ),
+                      child: Text(
+                        "We'll deliver to the address you selected. The vendor confirms the delivery time after accepting your request, and your rental starts on delivery.",
+                        style: TextStyle(color: colors.textPrimary, fontSize: 14, height: 1.45),
+                      ),
                     ),
 
                   if (needsPrescription) ...[
@@ -913,7 +934,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                           final session = await provider.createCheckout(
                             cart.lines,
                             addressId: _selectedAddressId,
-                            deliveryOption: _deliveryOption,
+                            deliveryOption: kShowDeliverySpeedOptions ? _deliveryOption : 'standard',
                             medicalRefs: _medicalRefs,
                             prescriptionFiles: _prescriptionFiles,
                             acceptedLegal: _acceptedLegal,

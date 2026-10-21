@@ -38,6 +38,9 @@ type DeliveryChoice = "standard" | "express" | "vendor_pickup";
 /** Temporary: hide Vendor pickup from checkout UI (keep code for later). */
 const SHOW_VENDOR_PICKUP_OPTION = false;
 
+/** Hide Standard / Express. Checkout always places a standard delivery. */
+const SHOW_DELIVERY_SPEED_OPTIONS = false;
+
 function formatAddressOption(a: { label?: string | null; line1: string; city: string }): string {
   const tail = `${a.line1}, ${a.city}`;
   return a.label?.trim() ? `${a.label.trim()} — ${tail}` : tail;
@@ -63,6 +66,7 @@ const CustomerCheckout = () => {
   const { lines, totalEstimatedRent, clear, updateLine } = useCart();
   const [addressId, setAddressId] = useState<string>("");
   const [deliveryChoice, setDeliveryChoice] = useState<DeliveryChoice>("standard");
+  const selectedDelivery: DeliveryChoice = SHOW_DELIVERY_SPEED_OPTIONS ? deliveryChoice : "standard";
   const [hasInitializedAddress, setHasInitializedAddress] = useState(false);
   const [applyToAll, setApplyToAll] = useState(false);
   const [failedLines, setFailedLines] = useState<PlaceCustomerOrdersResultApi["failedLines"]>([]);
@@ -149,7 +153,7 @@ const CustomerCheckout = () => {
 
   const quotePayload = useMemo(
     () => ({
-      deliveryOption: deliveryChoice,
+      deliveryOption: selectedDelivery,
       customerAddressId: addressId || undefined,
       lines: lines.map((l) => ({
         listingId: l.listingId,
@@ -169,11 +173,11 @@ const CustomerCheckout = () => {
           : {}),
       })),
     }),
-    [addressId, deliveryChoice, lines, medicalRefs, prescriptionFiles],
+    [addressId, selectedDelivery, lines, medicalRefs, prescriptionFiles],
   );
 
   const { data: quote, isFetching: quoteLoading, error: quoteError } = useQuery({
-    queryKey: ["customer-order-quote", addressId, deliveryChoice, lines, medicalRefs],
+    queryKey: ["customer-order-quote", addressId, selectedDelivery, lines, medicalRefs],
     queryFn: () => customerApi.quoteOrders(quotePayload),
     enabled: user?.role === "customer" && lines.length > 0,
     retry: false,
@@ -194,7 +198,7 @@ const CustomerCheckout = () => {
   const placeMutation = useMutation({
     mutationFn: async () => {
       const checkout = await customerApi.createCheckout({
-        deliveryOption: deliveryChoice,
+        deliveryOption: selectedDelivery,
         customerAddressId: addressId || undefined,
         acceptedLegal,
         acceptedPrescriptionLegal: sharingHealthData ? acceptedPrescriptionLegal : false,
@@ -451,9 +455,12 @@ const CustomerCheckout = () => {
 
           <Card className="border-border/80 shadow-sm">
             <CardHeader className="pb-4">
-              <p className="text-base font-semibold">Delivery option</p>
+              <p className="text-base font-semibold">
+                {SHOW_DELIVERY_SPEED_OPTIONS ? "Delivery option" : "Delivery"}
+              </p>
             </CardHeader>
             <CardContent className="pt-0">
+              {SHOW_DELIVERY_SPEED_OPTIONS ? (
               <RadioGroup
                 value={deliveryChoice}
                 onValueChange={(v) => setDeliveryChoice(v as DeliveryChoice)}
@@ -503,6 +510,13 @@ const CustomerCheckout = () => {
                   </label>
                 )}
               </RadioGroup>
+              ) : (
+                <div className="rounded-xl border border-border bg-muted/40 px-4 py-3.5">
+                  <p className="text-sm leading-relaxed text-foreground">
+                    We&apos;ll deliver to the address you selected. The vendor confirms the delivery time after accepting your request, and your rental starts on delivery.
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
 
