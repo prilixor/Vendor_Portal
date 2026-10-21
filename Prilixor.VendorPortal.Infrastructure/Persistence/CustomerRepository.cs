@@ -4327,6 +4327,20 @@ public sealed class CustomerRepository(
             .ToListAsync(cancellationToken);
     }
 
+    public async Task<List<Guid>> GetOrderIdsWithDuplicatePendingExtensionsAsync(CancellationToken cancellationToken)
+    {
+        var orderIds = await customerDb.CustomerRentalOrderExtensions
+            .Where(x => !x.IsDeleted && x.Status == "pending_approval")
+            .Select(x => x.CustomerRentalOrderId)
+            .ToListAsync(cancellationToken);
+
+        return orderIds
+            .GroupBy(id => id)
+            .Where(group => group.Count() > 1)
+            .Select(group => group.Key)
+            .ToList();
+    }
+
     public Task<List<CustomerRentalOrderBuyout>> GetPendingCustomerRentalOrderBuyoutsAsync(Guid orderId, CancellationToken cancellationToken)
     {
         return customerDb.CustomerRentalOrderBuyouts

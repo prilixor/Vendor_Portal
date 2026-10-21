@@ -222,6 +222,13 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                       ),
                     ],
                   ),
+                  if ((provider.extensionQuote?.pendingDays ?? 0) > 0) ...[
+                    SizedBox(height: 12),
+                    Text(
+                      'A ${provider.extensionQuote!.pendingDays}-day extension is already waiting for approval. Confirming adds the days above, for ${provider.extensionQuote!.additionalDays} days in total.',
+                      style: TextStyle(color: colors.textSecondary, fontSize: 13),
+                    ),
+                  ],
                   SizedBox(height: 24),
                   
                   // Quote details. Keep the last quote visible while the next day count loads.
@@ -271,13 +278,22 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                       onPressed: provider.extensionQuote == null || provider.isActionLoading
                           ? null
                           : () async {
+                              final updating = (provider.extensionQuote?.pendingDays ?? 0) > 0;
                               final success = await provider.processExtension(_ordersInGroup[_selectedOrderIndex].id, _extensionDays);
                               if (success && context.mounted) {
                                 Navigator.pop(context);
-                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Rental extended successfully!'), backgroundColor: Colors.green));
+                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(
+                                  content: Text(updating
+                                      ? 'Extension request updated. Still waiting for vendor approval.'
+                                      : 'Rental extended successfully!'),
+                                  backgroundColor: Colors.green,
+                                ));
                               }
                             },
-                      child: Text('Confirm Extension', style: TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.bold)),
+                      child: Text(
+                        (provider.extensionQuote?.pendingDays ?? 0) > 0 ? 'Update request' : 'Confirm Extension',
+                        style: TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.bold),
+                      ),
                     ),
                   ),
                   const SizedBox(height: 8),
@@ -1377,7 +1393,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
       );
     }
 
-    final steps = _timelineSteps(orderType);
+    final steps = _timelineSteps(orderType, status);
     final isRentalActiveCurrent = progress.currentIndex != null &&
         steps[progress.currentIndex!].key == 'active' &&
         orderType.toLowerCase() != 'buy';
@@ -1493,7 +1509,7 @@ class _TimelineProgress {
   });
 }
 
-List<_TimelineStepData> _timelineSteps(String orderType) {
+List<_TimelineStepData> _timelineSteps(String orderType, String status) {
   final isBuy = orderType.toLowerCase() == 'buy';
   if (isBuy) {
     return const [
@@ -1503,14 +1519,20 @@ List<_TimelineStepData> _timelineSteps(String orderType) {
       _TimelineStepData(key: 'active', label: 'Delivered & Purchased'),
     ];
   }
-  return const [
-    _TimelineStepData(key: 'placed', label: 'Order Placed'),
-    _TimelineStepData(key: 'confirmed', label: 'Supplier Confirmed'),
-    _TimelineStepData(key: 'out', label: 'Out for Delivery'),
-    _TimelineStepData(key: 'delivered', label: 'Delivered'),
-    _TimelineStepData(key: 'active', label: 'Rental Active'),
-    _TimelineStepData(key: 'returned', label: 'Returned'),
+  final steps = <_TimelineStepData>[
+    const _TimelineStepData(key: 'placed', label: 'Order Placed'),
+    const _TimelineStepData(key: 'confirmed', label: 'Supplier Confirmed'),
+    const _TimelineStepData(key: 'out', label: 'Out for Delivery'),
+    const _TimelineStepData(key: 'delivered', label: 'Delivered'),
+    const _TimelineStepData(key: 'active', label: 'Rental Active'),
+    const _TimelineStepData(key: 'returned', label: 'Returned'),
   ];
+  // Customers can no longer request a buyout. Keep the stage only for an order that was already bought out.
+  final compact = status.toLowerCase().trim().replaceAll(RegExp(r'\s+'), '_');
+  if (compact == 'bought_out') {
+    steps.add(const _TimelineStepData(key: 'bought_out', label: 'Bought Out'));
+  }
+  return steps;
 }
 
 /// Matches web `getTimelineProgress` in CustomerOrderDetail.tsx.
@@ -1536,8 +1558,14 @@ _TimelineProgress _timelineProgress(String status, String orderType) {
         ? const _TimelineProgress(cancelled: false, completedThrough: 3, currentIndex: null)
         : const _TimelineProgress(cancelled: false, completedThrough: 3, currentIndex: 4);
   }
+  if (isBuy && (compact == 'returned' || compact == 'bought_out')) {
+    return const _TimelineProgress(cancelled: false, completedThrough: 3, currentIndex: null);
+  }
   if (compact == 'returned') {
     return const _TimelineProgress(cancelled: false, completedThrough: 5, currentIndex: null);
+  }
+  if (compact == 'bought_out') {
+    return const _TimelineProgress(cancelled: false, completedThrough: 6, currentIndex: null);
   }
   return const _TimelineProgress(cancelled: false, completedThrough: 0, currentIndex: 1);
 }

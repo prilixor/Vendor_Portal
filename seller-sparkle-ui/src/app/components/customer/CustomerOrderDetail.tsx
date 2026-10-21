@@ -589,7 +589,10 @@ const CustomerOrderDetail = () => {
   const processExtensionMut = useMutation({
     mutationFn: () => customerApi.processExtension(activeItem!.id, extensionDays),
     onSuccess: () => {
-      toast.success("Rental extension requested successfully! Pending approval.");
+      const updatedExisting = (extensionQuote?.pendingDays ?? 0) > 0;
+      toast.success(updatedExisting
+        ? "Extension request updated. Still waiting for vendor approval."
+        : "Rental extension requested successfully! Pending approval.");
       setExtensionDialogOpen(false);
       setExtensionQuote(null);
       queryClient.invalidateQueries({ queryKey: ["customer-order", activeItem?.id] });
@@ -1525,6 +1528,11 @@ const CustomerOrderDetail = () => {
                 />
                 <span className="text-sm text-muted-foreground">days</span>
               </div>
+              {(extensionQuote?.pendingDays ?? 0) > 0 && (
+                <p className="text-sm text-muted-foreground">
+                  A {extensionQuote?.pendingDays}-day extension is already waiting for approval. Confirming adds the days above, for {extensionQuote?.additionalDays} days in total.
+                </p>
+              )}
             </div>
 
             {!extensionQuote && quoteExtensionMut.isPending ? (
@@ -1563,7 +1571,11 @@ const CustomerOrderDetail = () => {
               onClick={() => processExtensionMut.mutate()} 
               disabled={processExtensionMut.isPending || !extensionQuote}
             >
-              {processExtensionMut.isPending ? "Processing..." : "Confirm & Pay"}
+              {processExtensionMut.isPending
+                ? "Processing..."
+                : (extensionQuote?.pendingDays ?? 0) > 0
+                  ? "Update request"
+                  : "Confirm & Pay"}
             </Button>
           </DialogFooter>
         </DialogContent>

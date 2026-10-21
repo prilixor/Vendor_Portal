@@ -6,6 +6,7 @@ class ExtensionQuoteModel {
   final double gstAmount;
   final double? gstPercent;
   final double totalAmount;
+  final int pendingDays;
 
   ExtensionQuoteModel({
     required this.additionalDays,
@@ -15,6 +16,7 @@ class ExtensionQuoteModel {
     required this.gstAmount,
     this.gstPercent,
     required this.totalAmount,
+    this.pendingDays = 0,
   });
 
   factory ExtensionQuoteModel.fromJson(Map<String, dynamic> json) {
@@ -26,6 +28,7 @@ class ExtensionQuoteModel {
       gstAmount: (json['gstAmount'] ?? 0).toDouble(),
       gstPercent: json['gstPercent'] == null ? null : (json['gstPercent'] as num).toDouble(),
       totalAmount: (json['totalAmount'] ?? 0).toDouble(),
+      pendingDays: json['pendingDays'] ?? 0,
     );
   }
 }

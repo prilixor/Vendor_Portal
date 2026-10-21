@@ -247,7 +247,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     children: [
                       Expanded(
                         child: Text(
-                          notification.title,
+                          _extensionCopy(notification.title),
                           style: TextStyle(
                             color: colors.textPrimary,
                             fontSize: 14.5,
@@ -292,7 +292,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   if (notification.body.isNotEmpty) ...[
                     const SizedBox(height: 6),
                     Text(
-                      notification.body,
+                      _extensionCopy(notification.body),
                       style: TextStyle(
                         color: context.isDarkMode ? const Color(0xFFCBD5E1) : colors.textSecondary,
                         fontSize: 13,
@@ -433,6 +433,18 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     return colors.accent;
   }
 
+  String _extensionCopy(String text) {
+    return text
+        .replaceAll('Extension Cancelled', 'Extension Rejected')
+        .replaceAllMapped(
+          RegExp(
+            r'request to extend order (.+?) has been cancelled by the (vendor|admin)',
+            caseSensitive: false,
+          ),
+          (match) => 'request to extend order ${match.group(1)} was rejected',
+        );
+  }
+
   String? _getBadgeLabel(String type) {
     final t = type.trim().toLowerCase();
     if (t.isEmpty || t == 'general') return null;
@@ -444,6 +456,8 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     if (t == 'order_in_transit' || t.contains('transit')) return 'In transit';
     if (t == 'order_delivered' || t.contains('deliver')) return 'Delivered';
     if (t.contains('payment') || t.contains('pay')) return 'Payment';
+    if (t == 'customer_extension_cancelled') return 'Rejected';
+    if (t == 'customer_extension_approved') return 'Approved';
     if (t == 'order_cancelled' || t.contains('cancel')) return 'Cancelled';
     if (t == 'order_dispatch_failed' || t.contains('fail')) return 'Action needed';
     if (t == 'order_expiring_soon' || t.contains('expir')) return 'Expiring';

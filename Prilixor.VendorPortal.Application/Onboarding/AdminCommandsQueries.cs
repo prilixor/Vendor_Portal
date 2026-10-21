@@ -1,5 +1,6 @@
 using FluentValidation;
 using MediatR;
+using Microsoft.Extensions.Options;
 using Prilixor.VendorPortal.Application.Abstractions;
 using Prilixor.VendorPortal.Application.Common;
 using Prilixor.VendorPortal.Domain.Vendors;
@@ -1691,11 +1692,13 @@ public sealed record AdminPendingContinuationDto(
 public sealed record GetAdminAllPendingContinuationsQuery() : IQuery<List<AdminPendingContinuationDto>>;
 
 internal sealed class GetAdminAllPendingContinuationsQueryHandler(
-    ICustomerRepository customers)
+    ICustomerRepository customers,
+    IOptions<CustomerPricingOptions> pricingOptions)
     : IQueryHandler<GetAdminAllPendingContinuationsQuery, List<AdminPendingContinuationDto>>
 {
     public async Task<Result<List<AdminPendingContinuationDto>>> Handle(GetAdminAllPendingContinuationsQuery request, CancellationToken cancellationToken)
     {
+        await PendingExtensionMerger.MergeAllVisibleDuplicatesAsync(customers, pricingOptions.Value, cancellationToken);
         var continuations = await customers.GetAllPendingContinuationsForAdminAsync(cancellationToken);
 
         var list = continuations.Select(c => new AdminPendingContinuationDto(
@@ -1735,13 +1738,16 @@ public sealed class GetAdminPendingContinuationListQueryValidator : AbstractVali
     }
 }
 
-internal sealed class GetAdminPendingContinuationListQueryHandler(ICustomerRepository customers)
+internal sealed class GetAdminPendingContinuationListQueryHandler(
+    ICustomerRepository customers,
+    IOptions<CustomerPricingOptions> pricingOptions)
     : IQueryHandler<GetAdminPendingContinuationListQuery, AdminPendingContinuationListResult>
 {
     public async Task<Result<AdminPendingContinuationListResult>> Handle(
         GetAdminPendingContinuationListQuery request,
         CancellationToken cancellationToken)
     {
+        await PendingExtensionMerger.MergeAllVisibleDuplicatesAsync(customers, pricingOptions.Value, cancellationToken);
         var page = Math.Max(1, request.Page);
         var pageSize = Math.Clamp(request.PageSize, 1, 100);
         var (items, totalCount) = await customers.SearchPendingContinuationsForAdminPagedAsync(

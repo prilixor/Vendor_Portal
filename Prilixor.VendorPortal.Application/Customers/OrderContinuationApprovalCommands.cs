@@ -111,8 +111,8 @@ internal sealed class CancelExtensionCommandHandler(
         await mediator.Send(new CreateCustomerNotificationCommand(
             order.CustomerId,
             "customer_extension_cancelled",
-            "Extension Cancelled",
-            $"Your request to extend order {order.OrderNumber} has been cancelled by the {request.ApproverType}.",
+            "Extension Rejected",
+            $"Your request to extend order {order.OrderNumber} was rejected.",
             order.Id
         ), cancellationToken);
 

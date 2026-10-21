@@ -643,6 +643,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                             order: activeItem ?? order,
                             onAddSerials: () => _openAssignSerials(activeItem ?? order),
                           ),
+                          const SizedBox(height: 10),
+                          _OrderTimelineCard(
+                            status: (activeItem ?? order).status,
+                            orderType: (activeItem ?? order).orderType,
+                            listingTitle: (activeItem ?? order).listingTitle,
+                          ),
                           if (provider.prescriptionLoading ||
                               provider.prescriptionFiles.isNotEmpty) ...[
                             const SizedBox(height: 10),
@@ -2289,6 +2295,145 @@ class _MetricTile extends StatelessWidget {
       ),
     );
   }
+}
+
+class _OrderTimelineCard extends StatelessWidget {
+  final String status;
+  final String orderType;
+  final String listingTitle;
+
+  const _OrderTimelineCard({
+    required this.status,
+    required this.orderType,
+    required this.listingTitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final steps = _vendorTimelineSteps(orderType, status);
+    final progress = _vendorTimelineProgress(status, orderType);
+    final colors = context.appColors;
+    final compact = status.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '_');
+
+    return _SectionCard(
+      title: 'Order timeline',
+      subtitle: 'Tracking: $listingTitle',
+      compact: true,
+      child: Column(
+        children: List.generate(steps.length, (index) {
+          final step = steps[index];
+          final isDone = index <= progress.$1;
+          final isCurrent = progress.$2 == index;
+          final isUpcoming = !isDone && !isCurrent;
+          final isLast = index == steps.length - 1;
+          final isActiveNow = !isCurrent &&
+              step.$1 == 'active' &&
+              compact == 'active' &&
+              orderType.toLowerCase() != 'buy';
+          final isBoughtNow = !isCurrent && step.$1 == 'bought_out' && compact == 'bought_out';
+
+          return Padding(
+            padding: EdgeInsets.only(bottom: isLast ? 0 : 14),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Column(
+                  children: [
+                    Container(
+                      width: 22,
+                      height: 22,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: isDone ? colors.textPrimary : (isCurrent ? colors.surface : colors.background),
+                        border: Border.all(
+                          color: isUpcoming ? colors.border : colors.textPrimary,
+                          width: 2,
+                        ),
+                      ),
+                      child: isDone
+                          ? Icon(Icons.check, size: 12, color: colors.background)
+                          : isCurrent
+                              ? Container(
+                                  width: 6,
+                                  height: 6,
+                                  decoration: BoxDecoration(color: colors.textPrimary, shape: BoxShape.circle),
+                                )
+                              : null,
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 1),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          step.$2,
+                          style: TextStyle(
+                            color: isUpcoming ? colors.textMuted : colors.textPrimary,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                          ),
+                        ),
+                        if (isCurrent)
+                          Text('In progress', style: TextStyle(color: colors.textMuted, fontSize: 11)),
+                        if (isActiveNow)
+                          Text('Current status', style: TextStyle(color: colors.success, fontSize: 11)),
+                        if (isBoughtNow)
+                          Text('Purchased by customer', style: TextStyle(color: colors.success, fontSize: 11)),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }),
+      ),
+    );
+  }
+}
+
+/// Rental timelines omit Bought Out unless this order was already bought out.
+List<(String, String)> _vendorTimelineSteps(String orderType, String status) {
+  if (orderType.toLowerCase() == 'buy') {
+    return const [
+      ('placed', 'Order Placed'),
+      ('confirmed', 'Vendor Confirmed'),
+      ('out', 'Out for Delivery'),
+      ('active', 'Delivered & Purchased'),
+    ];
+  }
+  final steps = <(String, String)>[
+    ('placed', 'Order Placed'),
+    ('confirmed', 'Vendor Confirmed'),
+    ('out', 'Out for Delivery'),
+    ('delivered', 'Delivered'),
+    ('active', 'Rental Active'),
+    ('returned', 'Returned'),
+  ];
+  final compact = status.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '_');
+  if (compact == 'bought_out') {
+    steps.add(('bought_out', 'Bought Out'));
+  }
+  return steps;
+}
+
+/// completedThrough, currentIndex
+(int, int?) _vendorTimelineProgress(String status, String orderType) {
+  final raw = status.toLowerCase().trim();
+  final compact = raw.replaceAll(RegExp(r'\s+'), '_');
+  final isBuy = orderType.toLowerCase() == 'buy';
+  if (compact == 'pending') return (0, 1);
+  if (compact == 'confirmed') return (1, 2);
+  if (compact == 'in_transit' || raw.contains('transit')) return (2, 3);
+  if (compact == 'active' || compact == 'returned' || compact == 'bought_out') {
+    return isBuy ? (3, null) : (compact == 'active' ? (4, null) : compact == 'returned' ? (5, null) : (6, null));
+  }
+  return (0, 1);
 }
 
 class _SectionCard extends StatelessWidget {

@@ -193,7 +193,7 @@ const AssignedSerialNumbersList = ({ tags }: { tags: string[] }) => {
   );
 };
 
-const getTimelineSteps = (orderType?: string) => {
+const getTimelineSteps = (orderType?: string, status?: string) => {
   const isBuy = orderType?.toLowerCase() === "buy";
   if (isBuy) {
     return [
@@ -203,15 +203,19 @@ const getTimelineSteps = (orderType?: string) => {
       { key: "active", label: "Delivered & Purchased" },
     ];
   }
-  return [
+  const steps = [
     { key: "placed", label: "Order Placed" },
     { key: "confirmed", label: "Vendor Confirmed" },
     { key: "out", label: "Out for Delivery" },
     { key: "delivered", label: "Delivered" },
     { key: "active", label: "Rental Active" },
     { key: "returned", label: "Returned" },
-    { key: "bought_out", label: "Bought Out" },
   ];
+  // Customers can no longer request a buyout. Keep the stage only for an order that was already bought out.
+  if (status?.trim().toLowerCase().replace(/\s+/g, "_") === "bought_out") {
+    steps.push({ key: "bought_out", label: "Bought Out" });
+  }
+  return steps;
 };
 
 function formatDetailDate(value?: string): string {
@@ -233,6 +237,9 @@ function timelineProgress(status: string, orderType?: string): { completedThroug
     return isBuy
       ? { completedThrough: 3, currentIndex: null }
       : { completedThrough: 4, currentIndex: null };
+  }
+  if (isBuy && (compact === "returned" || compact === "bought_out")) {
+    return { completedThrough: 3, currentIndex: null };
   }
   if (compact === "returned") return { completedThrough: 5, currentIndex: null };
   if (compact === "bought_out") return { completedThrough: 6, currentIndex: null };
@@ -270,7 +277,7 @@ function orderStatusBadgeClass(status: string): string {
 
 function OrderTimeline({ status, orderType }: { status: string; orderType?: string }) {
   const { completedThrough, currentIndex } = timelineProgress(status, orderType);
-  const steps = getTimelineSteps(orderType);
+  const steps = getTimelineSteps(orderType, status);
 
   return (
     <ol className="relative space-y-0">
@@ -1404,8 +1411,8 @@ const VendorOrderDetail = () => {
             </Card>
           )}
 
-          <div className="grid gap-4 lg:grid-cols-2 lg:items-start sm:gap-6">
-            <Card className="border-border/80 shadow-sm">
+          <div className="grid items-stretch gap-4 sm:gap-6 lg:grid-cols-2">
+            <Card className="h-full border-border/80 shadow-sm">
               <CardHeader className="p-4 pb-2 sm:p-6 sm:pb-2">
                 <p className="text-lg font-semibold">Order timeline</p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
@@ -1417,7 +1424,7 @@ const VendorOrderDetail = () => {
               </CardContent>
             </Card>
 
-            <div className="space-y-4 sm:space-y-6">
+            <div className="flex h-full flex-col gap-4 sm:gap-6">
               <Card className="border-border/80 shadow-sm">
                 <CardHeader className="p-4 pb-3 sm:p-6 sm:pb-4">
                   <p className="text-lg font-semibold">Customer</p>
@@ -1434,11 +1441,14 @@ const VendorOrderDetail = () => {
                 </CardContent>
               </Card>
 
-              <Card className="border-border/80 shadow-sm">
+              <Card className="flex flex-1 flex-col border-border/80 shadow-sm">
                 <CardHeader className="p-4 pb-3 sm:p-6 sm:pb-4">
                   <p className="text-lg font-semibold">{order.orderType?.toLowerCase() === "buy" ? "Purchase details" : "Rental details"}</p>
                 </CardHeader>
-                <CardContent className="grid grid-cols-2 gap-x-4 gap-y-4 px-4 pb-4 sm:gap-6 sm:px-6 sm:pb-6">
+                <CardContent className="flex flex-1 flex-col p-0">
+                  <div
+                    className="grid grid-cols-2 content-start gap-x-4 gap-y-4 px-4 pb-4 sm:gap-x-6 sm:px-6"
+                  >
                   {order.orderType?.toLowerCase() === "buy" ? (
                     <>
                       <div className="space-y-1">
@@ -1513,14 +1523,15 @@ const VendorOrderDetail = () => {
                         </div>
                         <p className="text-sm font-medium">{formatOrderTypeLabel(order.orderType)}</p>
                       </div>
-                      <div className="col-span-2 space-y-1 border-t border-border/70 pt-3">
-                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">Your payout</p>
-                        <p className="text-sm font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
-                          ₹{formatRupee(itemPayout(order))}
-                        </p>
-                      </div>
                     </>
                   )}
+                  </div>
+                  <div className="mt-auto flex items-center justify-between gap-3 rounded-b-lg border-t border-border/70 bg-muted/40 px-4 py-3 sm:px-6">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">Your payout</p>
+                      <p className="text-base font-semibold tabular-nums text-emerald-700 dark:text-emerald-400 sm:text-lg">
+                        ₹{formatRupee(itemPayout(order))}
+                      </p>
+                    </div>
                 </CardContent>
               </Card>
             </div>

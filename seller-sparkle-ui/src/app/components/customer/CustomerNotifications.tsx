@@ -416,11 +416,11 @@ const CustomerNotifications = () => {
                         </div>
                       </div>
 
-                      <div className="hidden w-[5.5rem] shrink-0 flex-col items-end gap-1.5 sm:flex">
+                      <div className="hidden shrink-0 flex-col items-end gap-1.5 sm:flex">
                         {typeBadge ? (
                           <span
                             className={cn(
-                              "rounded-full px-2 py-0.5 text-[10px] font-semibold leading-4",
+                              "whitespace-nowrap rounded-full px-2 py-0.5 text-[10px] font-semibold leading-4",
                               customerNotificationTypeBadgeClass(n.notificationType),
                             )}
                           >

@@ -302,6 +302,8 @@ export interface ExtensionQuoteApi {
   gstAmount: number;
   totalAmount: number;
   gstPercent?: number;
+  /** Days already waiting on an open extension. The quote total includes these. */
+  pendingDays?: number;
 }
 
 export interface BuyoutQuoteApi {

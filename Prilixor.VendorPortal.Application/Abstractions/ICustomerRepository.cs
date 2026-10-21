@@ -60,6 +60,7 @@ public interface ICustomerRepository
     Task<CustomerRentalOrderExtension?> GetCustomerRentalOrderExtensionByIdAsync(Guid extensionId, CancellationToken cancellationToken);
     Task UpdateCustomerRentalOrderExtensionAsync(CustomerRentalOrderExtension extension, CancellationToken cancellationToken);
     Task<List<CustomerRentalOrderExtension>> GetPendingCustomerRentalOrderExtensionsAsync(Guid orderId, CancellationToken cancellationToken);
+    Task<List<Guid>> GetOrderIdsWithDuplicatePendingExtensionsAsync(CancellationToken cancellationToken);
 
     Task AddCustomerRentalOrderBuyoutAsync(CustomerRentalOrderBuyout buyout, CancellationToken cancellationToken);
     Task<CustomerRentalOrderBuyout?> GetCustomerRentalOrderBuyoutByIdAsync(Guid buyoutId, CancellationToken cancellationToken);
