@@ -109,7 +109,7 @@ const DoctorPublicPage = () => {
               <p className="text-lg font-semibold text-white">Doctor not found</p>
               <p className="mt-2 text-sm text-teal-100/70">{error}</p>
               <p className="mt-3 text-xs text-teal-100/50">
-                Ask your doctor for their BlinksMed Unique ID, or scan their QR code again.
+                This link does not match a doctor profile. Orders use a prescription upload.
               </p>
               <Link
                 to="/customer/shop"
