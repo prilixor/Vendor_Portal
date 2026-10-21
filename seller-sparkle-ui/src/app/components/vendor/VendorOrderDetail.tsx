@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Check, Barcode, CheckCircle2, ImageOff, ImagePlus, Images, Info, Loader2, Pencil, Plus, Stethoscope, X } from "lucide-react";
+import { Check, Barcode, CheckCircle2, ImageOff, ImagePlus, Images, Info, Loader2, Pencil, Plus, X } from "lucide-react";
 import { formatGstRateLabel } from "@/app/helpers/gstLabel";
 import { formatOrderStatusLabel, formatOrderStatusTitle, formatOrderTypeLabel, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
 import { cn, orderPhotoTileUrl, originalUrlFromThumb, photoAtSlot, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
@@ -34,8 +34,6 @@ import {
 } from "@/app/services/vendorOnboardingApi";
 import { toast } from "sonner";
 import { BackLink } from "@/app/components/shared/BackLink";
-import { VendorDoctorLookupDialog } from "@/app/components/vendor/VendorDoctorLookupDialog";
-import { OrderMedicalReferenceCard } from "@/app/components/shared/OrderMedicalReferenceCard";
 import { OrderPrescriptionFilesCard } from "@/app/components/shared/OrderPrescriptionFilesCard";
 import type { CustomerPrescriptionFileApi } from "@/app/services/customerApi";
 
@@ -597,8 +595,6 @@ const VendorOrderDetail = () => {
   const [availableAssets, setAvailableAssets] = useState<VendorProductAssetApiDto[]>([]);
   const [loadingAssets, setLoadingAssets] = useState(false);
   const [openDropdowns, setOpenDropdowns] = useState<Record<number, boolean>>({});
-  const [doctorLookupOpen, setDoctorLookupOpen] = useState(false);
-  const [doctorLookupCode, setDoctorLookupCode] = useState("");
   const [imageRequest, setImageRequest] = useState<VendorOrderImageRequestApiDto | null>(null);
   const [imageRequestLoading, setImageRequestLoading] = useState(false);
   /** Open photo requests across the order group — for item-list badges. */
@@ -1776,35 +1772,6 @@ const VendorOrderDetail = () => {
 
           <OrderPrescriptionFilesCard files={prescriptionFiles} />
 
-          {/* Medical Reference */}
-          {(order.doctorId || order.hospitalId || order.doctorName || order.doctorUniqueCode) && (
-            <OrderMedicalReferenceCard
-              doctorName={order.doctorName}
-              doctorSpecialization={order.doctorSpecialization}
-              doctorUniqueCode={order.doctorUniqueCode}
-              doctorContactNumber={order.doctorContactNumber}
-              hospitalName={order.hospitalName}
-              hospitalCity={order.hospitalCity}
-              action={
-                order.doctorUniqueCode ? (
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-8"
-                    onClick={() => {
-                      setDoctorLookupCode(order.doctorUniqueCode || "");
-                      setDoctorLookupOpen(true);
-                    }}
-                  >
-                    <Stethoscope className="mr-1.5 h-3.5 w-3.5" />
-                    View doctor
-                  </Button>
-                ) : null
-              }
-            />
-          )}
-
           <Card className="mb-[max(4.5rem,env(safe-area-inset-bottom))] border-border/80 shadow-sm sm:mb-0">
             <CardContent className="grid grid-cols-2 gap-2 p-3 sm:grid-cols-4 sm:p-4">
               <Button
@@ -1963,11 +1930,6 @@ const VendorOrderDetail = () => {
         </DialogContent>
       </Dialog>
 
-      <VendorDoctorLookupDialog
-        open={doctorLookupOpen}
-        onOpenChange={setDoctorLookupOpen}
-        initialCode={doctorLookupCode}
-      />
     </div>
   );
 };

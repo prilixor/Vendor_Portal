@@ -70,12 +70,6 @@ interface AdminCartLine {
   isBuyEnabled?: boolean;
 }
 
-type MedicalRef = {
-  hospitalId: string;
-  doctorId: string;
-  referenceNumber: string;
-};
-
 function cartKey(listingId: string, variantId?: string) {
   return `${listingId}::${variantId || ""}`;
 }
@@ -388,7 +382,6 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
   const [saving, setSaving] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<string | undefined>(undefined);
   const [categoriesExpanded, setCategoriesExpanded] = useState(false);
-  const [medicalRefs, setMedicalRefs] = useState<Record<string, MedicalRef>>({});
   const [placeErrors, setPlaceErrors] = useState<string[]>([]);
   const [placedOrders, setPlacedOrders] = useState<{ id: string; orderNumber: string; listingTitle?: string }[]>([]);
   const [paymentLinkUrl, setPaymentLinkUrl] = useState<string | null>(null);
@@ -402,19 +395,6 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
     /** After confirm, apply buy — either on configure form or a cart line key */
     target: "configure" | { cartKey: string };
   } | null>(null);
-
-  const updateMedicalRef = (listingId: string, field: keyof MedicalRef, value: string) => {
-    setMedicalRefs((prev) => ({
-      ...prev,
-      [listingId]: {
-        hospitalId: "",
-        doctorId: "",
-        referenceNumber: "",
-        ...(prev[listingId] || {}),
-        [field]: value,
-      },
-    }));
-  };
 
   useEffect(() => {
     if (!open) return;
@@ -431,7 +411,6 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
     setSelectedPlanId("");
     setVariantId("");
     setDeliveryOption("standard");
-    setMedicalRefs({});
     setPlaceErrors([]);
     setPlacedOrders([]);
     setPaymentLinkUrl(null);
@@ -788,29 +767,21 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
         return;
       }
     }
-    // Doctor reference is optional (Admin-curated Unique ID flow). Hospital is no longer used.
-
     setSaving(true);
     setPlaceErrors([]);
     try {
       const result = await adminApi.placeOrderForCustomer(customerId, {
         customerAddressId: addressId,
         deliveryOption,
-        lines: cart.map((line) => {
-          const ref = medicalRefs[line.listingId];
-          return {
-            listingId: line.listingId,
-            quantity: line.quantity,
-            rentalDays: line.orderType === "rent" ? line.rentalDays : 0,
-            rentalPeriodUnit: line.orderType === "rent" ? line.rentalPeriodUnit : "day",
-            orderType: line.orderType,
-            ...(line.rentalPricingPlanId ? { rentalPricingPlanId: line.rentalPricingPlanId } : {}),
-            productVariantId: line.productVariantId,
-            doctorId: line.prescriptionRequired ? ref?.doctorId : undefined,
-            hospitalId: line.prescriptionRequired ? ref?.hospitalId : undefined,
-            referenceNumber: line.prescriptionRequired ? ref?.referenceNumber || undefined : undefined,
-          };
-        }),
+        lines: cart.map((line) => ({
+          listingId: line.listingId,
+          quantity: line.quantity,
+          rentalDays: line.orderType === "rent" ? line.rentalDays : 0,
+          rentalPeriodUnit: line.orderType === "rent" ? line.rentalPeriodUnit : "day",
+          orderType: line.orderType,
+          ...(line.rentalPricingPlanId ? { rentalPricingPlanId: line.rentalPricingPlanId } : {}),
+          productVariantId: line.productVariantId,
+        })),
       });
 
       const placed = result.orders ?? result.placedOrders ?? [];
@@ -1359,21 +1330,6 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
                           </div>
                         )}
 
-                        {prescriptionLines.length > 0 && (
-                          <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50/50 p-3.5 dark:border-amber-500/30 dark:bg-amber-500/10">
-                            <div className="flex items-start gap-2">
-                              <AlertCircle className="h-4 w-4 text-amber-700 shrink-0 mt-0.5" />
-                              <div>
-                                <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
-                                  Doctor reference (optional)
-                                </p>
-                                <p className="mt-0.5 text-xs text-amber-800/90 dark:text-amber-200/80">
-                                  Doctors are managed under Catalog → Doctor References. Customers will attach a doctor by Unique ID at checkout (optional). Hospital selection has been removed.
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        )}
                       </>
                     );
                   })()}

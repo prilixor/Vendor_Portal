@@ -19,7 +19,6 @@ import '../../shared/widgets/brand_page_loader.dart';
 import '../../shared/widgets/catalog_image.dart';
 import '../../shared/widgets/catalog_image_viewer_screen.dart';
 import '../../shared/widgets/struck_price.dart';
-import '../../shared/widgets/vendor_doctor_lookup_sheet.dart';
 import 'dispatch_details_sheet.dart';
 import 'order_group_utils.dart';
 
@@ -1811,7 +1810,7 @@ class _OrderPrescriptionCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           Text(
-            'Image or PDF. Doctor Unique ID is optional and separate.',
+            'Image or PDF.',
             style: TextStyle(color: context.appColors.textSecondary, fontSize: 12),
           ),
           const SizedBox(height: 10),
@@ -1919,8 +1918,6 @@ class _ItemDetailsPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isBuy = order.orderType.toLowerCase() == 'buy';
-    final hasMedical =
-        order.doctorName != null || order.hospitalName != null || order.doctorUniqueCode != null;
 
     return _SectionCard(
       title: 'Selected item details',
@@ -2009,35 +2006,6 @@ class _ItemDetailsPanel extends StatelessWidget {
               tags: order.assignedAssetTags,
               onAdd: order.assignedAssetTags.isEmpty ? onAddSerials : null,
             ),
-          ],
-          if (hasMedical) ...[
-            const SizedBox(height: 8),
-            _SubsectionLabel('Medical reference'),
-            const SizedBox(height: 4),
-            _CompactDetailList(rows: [
-              if (order.doctorName != null) ('Doctor', order.doctorName!),
-              if (order.doctorUniqueCode != null) ('Unique ID', order.doctorUniqueCode!),
-              if (order.doctorContactNumber != null)
-                ('Contact', order.doctorContactNumber!),
-              if (order.doctorSpecialization != null)
-                ('Specialization', order.doctorSpecialization!),
-              if (order.hospitalName != null) ('Hospital', order.hospitalName!),
-              if (order.hospitalCity != null) ('City', order.hospitalCity!),
-            ]),
-            if (order.doctorUniqueCode != null) ...[
-              const SizedBox(height: 8),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  onPressed: () => showVendorDoctorLookupSheet(
-                    context,
-                    initialCode: order.doctorUniqueCode,
-                  ),
-                  icon: Icon(Icons.medical_services_outlined, size: 16, color: context.appColors.success),
-                  label: Text('View doctor profile', style: TextStyle(color: context.appColors.success)),
-                ),
-              ),
-            ],
           ],
         ],
       ),

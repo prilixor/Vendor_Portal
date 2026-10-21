@@ -92,7 +92,7 @@ internal static class DoctorQrCardRenderer
         image.Mutate(ctx =>
         {
             DrawCentered(ctx, "Scan to open doctor profile on BlinksMed", scanFont, Color.ParseHex("475569"), Width / 2f, qrY + qrSize + 40);
-            DrawCentered(ctx, "Patients use this Unique ID at checkout (optional)", hintFont, Color.ParseHex("94a3b8"), Width / 2f, qrY + qrSize + 68);
+            DrawCentered(ctx, "Orders use a prescription upload", hintFont, Color.ParseHex("94a3b8"), Width / 2f, qrY + qrSize + 68);
             DrawCentered(ctx, "blinksmed · medical equipment rentals", footerFont, Color.ParseHex("99f6e1"), Width / 2f, Height - 42);
         });
 

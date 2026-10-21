@@ -16,7 +16,6 @@ import '../../shared/widgets/pending_approval_banner.dart';
 import '../../shared/widgets/phone_otp_dialog.dart';
 import '../../shared/widgets/support_fab.dart';
 import '../../shared/widgets/vendor_app_bar_badge.dart';
-import '../../shared/widgets/vendor_doctor_lookup_sheet.dart';
 import '../home/home_screen.dart';
 import '../notifications/notifications_screen.dart';
 import '../orders/order_requests_screen.dart';
@@ -252,11 +251,6 @@ class _VendorDashboardState extends State<VendorDashboard>
         centerTitle: true,
         title: Text(_titles[_index]),
         actions: [
-          IconButton(
-            tooltip: 'Find doctor by Unique ID',
-            icon: const Icon(Icons.medical_services_outlined),
-            onPressed: () => showVendorDoctorLookupSheet(context),
-          ),
           const VendorAppBarBadge(),
         ],
       ),

@@ -70,7 +70,7 @@ class _DoctorPublicScreenState extends State<DoctorPublicScreen> {
     return Scaffold(
       backgroundColor: colors.background,
       appBar: AppBar(
-        title: Text('Doctor reference', style: TextStyle(color: colors.textPrimary)),
+        title: Text('Doctor profile', style: TextStyle(color: colors.textPrimary)),
         backgroundColor: colors.background,
         iconTheme: IconThemeData(color: colors.textPrimary),
       ),
@@ -137,7 +137,7 @@ class _DoctorPublicScreenState extends State<DoctorPublicScreen> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Use this Unique ID at checkout as an optional doctor reference.',
+                          'Orders use a prescription upload. A doctor Unique ID is not collected at checkout.',
                           style: TextStyle(color: colors.textMuted, fontSize: 12),
                         ),
                       ],

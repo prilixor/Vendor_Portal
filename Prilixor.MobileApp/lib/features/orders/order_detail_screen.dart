@@ -841,11 +841,6 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                           ),
                         ),
 
-                      if (order.hasMedicalReference) ...[
-                        const SizedBox(height: _sectionGap),
-                        _MedicalReferenceCard(order: order),
-                      ],
-
                       if (rxFiles.isNotEmpty ||
                           _canUploadPrescription(order.status)) ...[
                         const SizedBox(height: _sectionGap),
@@ -2293,109 +2288,6 @@ Color _orderActionColor(BuildContext context) {
   return context.isDarkMode ? const Color(0xFF5EEAD4) : AppTheme.accent;
 }
 
-Color _uniqueIdColor(BuildContext context) {
-  return context.isDarkMode ? const Color(0xFF5EEAD4) : const Color(0xFF0F766E);
-}
-
-class _MedicalReferenceCard extends StatelessWidget {
-  final OrderModel order;
-
-  const _MedicalReferenceCard({required this.order});
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.appColors;
-    final doctorName = order.doctorName?.trim();
-    final specialization = order.doctorSpecialization?.trim();
-    final uniqueCode = order.doctorUniqueCode?.trim();
-    final contact = order.doctorContactNumber?.trim();
-    final hospitalName = order.hospitalName?.trim();
-    final hospitalCity = order.hospitalCity?.trim();
-
-    String? doctorValue;
-    if (doctorName != null && doctorName.isNotEmpty) {
-      doctorValue = specialization != null && specialization.isNotEmpty
-          ? '$doctorName — $specialization'
-          : doctorName;
-    }
-
-    String? hospitalValue;
-    if (hospitalName != null && hospitalName.isNotEmpty) {
-      hospitalValue = hospitalCity != null && hospitalCity.isNotEmpty
-          ? '$hospitalName ($hospitalCity)'
-          : hospitalName;
-    }
-
-    return Container(
-      width: double.infinity,
-      padding: EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        color: colors.surface,
-        borderRadius: BorderRadius.circular(16),
-        border: Border.all(color: colors.border),
-      ),
-      child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          Text(
-            'Medical reference',
-            style: TextStyle(color: colors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold),
-          ),
-          SizedBox(height: 16),
-          if (doctorValue != null) _labeledRow(context, 'Doctor', doctorValue),
-          if (uniqueCode != null && uniqueCode.isNotEmpty) ...[
-            if (doctorValue != null) SizedBox(height: 12),
-            _labeledRow(
-              context,
-              'Unique ID',
-              uniqueCode,
-              valueStyle: TextStyle(
-                color: _uniqueIdColor(context),
-                fontSize: 14,
-                fontWeight: FontWeight.w800,
-                fontFamily: 'monospace',
-                letterSpacing: 1.0,
-              ),
-            ),
-          ],
-          if (contact != null && contact.isNotEmpty) ...[
-            SizedBox(height: 12),
-            _labeledRow(context, 'Contact', contact),
-          ],
-          if (hospitalValue != null) ...[
-            SizedBox(height: 12),
-            _labeledRow(context, 'Hospital', hospitalValue),
-          ],
-        ],
-      ),
-    );
-  }
-
-  Widget _labeledRow(BuildContext context, String label, String value, {TextStyle? valueStyle}) {
-    final colors = context.appColors;
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        Text(
-          label.toUpperCase(),
-          style: TextStyle(
-            color: colors.textMuted,
-            fontSize: 10,
-            fontWeight: FontWeight.bold,
-            letterSpacing: 1.2,
-          ),
-        ),
-        SizedBox(height: 4),
-        Text(
-          value,
-          style: valueStyle ??
-              TextStyle(color: colors.textPrimary, fontSize: 14, fontWeight: FontWeight.w600),
-        ),
-      ],
-    );
-  }
-}
-
 class _OrderPrescriptionCard extends StatelessWidget {
   final List<PrescriptionFileModel> files;
   final bool canEdit;
@@ -2441,7 +2333,7 @@ class _OrderPrescriptionCard extends StatelessWidget {
           ),
           const SizedBox(height: 4),
           Text(
-            'Image or PDF. Doctor Unique ID is optional and separate.',
+            'Image or PDF.',
             style: TextStyle(color: colors.textSecondary, fontSize: 12),
           ),
           const SizedBox(height: 12),

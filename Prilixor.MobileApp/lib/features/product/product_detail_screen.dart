@@ -819,7 +819,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                         const SizedBox(width: 8),
                                         Expanded(
                                           child: Text(
-                                            'Doctor Unique ID can be added optionally at checkout.',
+                                            'A prescription image or PDF can be added at checkout.',
                                             style: TextStyle(
                                               color: context.isDarkMode ? Colors.amber : const Color(0xFF92400E),
                                               fontSize: 13,

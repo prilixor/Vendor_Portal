@@ -9,7 +9,6 @@ import '../../core/models/vendor_order_model.dart';
 import '../../core/providers/vendor_order_provider.dart';
 import '../../core/theme.dart';
 import '../../core/utils/debouncer.dart';
-import '../../shared/widgets/vendor_doctor_lookup_sheet.dart';
 import 'order_detail_screen.dart';
 import 'order_group_utils.dart';
 
@@ -886,82 +885,6 @@ class _RequestItemRow extends StatelessWidget {
                     ),
                   ],
                 ),
-                if (offer.doctorName != null ||
-                    offer.hospitalName != null ||
-                    offer.doctorUniqueCode != null) ...[
-                  const SizedBox(height: 6),
-                  Material(
-                    color: colors.surfaceElevated,
-                    borderRadius: BorderRadius.circular(8),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(8),
-                      onTap: offer.doctorUniqueCode != null
-                          ? () => showVendorDoctorLookupSheet(
-                                context,
-                                initialCode: offer.doctorUniqueCode,
-                              )
-                          : null,
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: colors.border.withValues(alpha: 0.7)),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.medical_services_outlined,
-                              size: 12,
-                              color: colors.textMuted,
-                            ),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    [
-                                      if (offer.doctorName != null)
-                                        'Dr. ${offer.doctorName}${offer.doctorSpecialization != null ? ' · ${offer.doctorSpecialization}' : ''}${offer.doctorUniqueCode != null ? ' · ${offer.doctorUniqueCode}' : ''}',
-                                      if (offer.hospitalName != null)
-                                        offer.hospitalName! +
-                                            (offer.hospitalCity != null
-                                                ? ' (${offer.hospitalCity})'
-                                                : ''),
-                                      if (offer.doctorName == null &&
-                                          offer.hospitalName == null &&
-                                          offer.doctorUniqueCode != null)
-                                        offer.doctorUniqueCode!,
-                                    ].join(' · '),
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      color: colors.textSecondary,
-                                      fontSize: 10,
-                                      height: 1.3,
-                                    ),
-                                  ),
-                                  if (offer.doctorUniqueCode != null) ...[
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      'Tap to view',
-                                      style: TextStyle(
-                                        color: colors.textMuted,
-                                        fontSize: 9,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
                 if (expired)
                   Padding(
                     padding: const EdgeInsets.only(top: 6),

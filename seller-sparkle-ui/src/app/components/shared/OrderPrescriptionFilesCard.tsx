@@ -49,7 +49,7 @@ export function OrderPrescriptionFilesCard({
       <CardHeader className="p-3 pb-1 sm:p-4 sm:pb-2">
         <p className="text-[13px] font-semibold sm:text-base">Prescription</p>
         <p className="text-xs text-muted-foreground">
-          Image or PDF. Doctor Unique ID is optional and separate.
+          Image or PDF.
         </p>
       </CardHeader>
       <CardContent className="space-y-3 px-3 pb-3 sm:px-4 sm:pb-4">

@@ -98,7 +98,7 @@ const DoctorPublicPage = () => {
       <div className="relative mx-auto flex min-h-screen max-w-lg flex-col px-4 py-8 sm:px-6">
         <header className="mb-8 flex items-center gap-3">
           <BrandMark size="lg" tone="onBrand" />
-          <p className="text-sm text-teal-50/70">Doctor reference</p>
+          <p className="text-sm text-teal-50/70">Doctor profile</p>
         </header>
 
         <main className="flex flex-1 flex-col justify-center">
@@ -149,7 +149,7 @@ const DoctorPublicPage = () => {
                     </button>
                   </div>
                   <p className="mt-3 text-xs leading-relaxed text-teal-800/80">
-                    Use this ID at checkout to attach this doctor as your medical reference on a BlinksMed order.
+                    Orders use a prescription upload. A doctor Unique ID is not collected at checkout.
                   </p>
                 </div>
 
@@ -184,8 +184,7 @@ const DoctorPublicPage = () => {
                 <div className="rounded-2xl bg-slate-50 px-4 py-3 text-xs leading-relaxed text-slate-600">
                   <p className="font-semibold text-slate-800">For patients</p>
                   <p className="mt-1">
-                    Continue to BlinksMed, add items to your cart, and enter this Unique ID when placing your order
-                    (optional). No hospital form is required.
+                    Continue to BlinksMed and upload a prescription image or PDF when you place an order.
                   </p>
                 </div>
 

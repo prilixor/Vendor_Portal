@@ -31,13 +31,10 @@ import {
   Package,
   RefreshCw,
   Search,
-  Stethoscope,
   X,
 } from "lucide-react";
 import { cn, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
 import { useNavigate } from "react-router-dom";
-import { VendorDoctorLookupDialog } from "@/app/components/vendor/VendorDoctorLookupDialog";
-
 const COLLAPSE_AFTER = 3;
 const PAGE_SIZE = 8;
 
@@ -112,8 +109,6 @@ const VendorOrderRequests = () => {
   const [workingOrderId, setWorkingOrderId] = useState<string | null>(null);
   const [now, setNow] = useState(Date.now());
   const [searchQuery, setSearchQuery] = useState("");
-  const [doctorLookupOpen, setDoctorLookupOpen] = useState(false);
-  const [doctorLookupCode, setDoctorLookupCode] = useState("");
   const [typeFilter, setTypeFilter] = useState<TypeFilter>("all");
   const [page, setPage] = useState(1);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
@@ -239,16 +234,6 @@ const VendorOrderRequests = () => {
         showBreadcrumbs={false}
         actions={
           <div className="flex flex-wrap gap-2">
-            <Button
-              variant="outline"
-              onClick={() => {
-                setDoctorLookupCode("");
-                setDoctorLookupOpen(true);
-              }}
-            >
-              <Stethoscope className="mr-2 h-4 w-4" />
-              Find doctor
-            </Button>
             <Button
               variant="outline"
               onClick={() => void refetch()}
@@ -436,35 +421,6 @@ const VendorOrderRequests = () => {
                               </Badge>
                             </div>
 
-                            {(offer.doctorName || offer.hospitalName || offer.doctorUniqueCode) && (
-                              <button
-                                type="button"
-                                className="mt-3 flex w-full items-start gap-2 rounded-lg border border-border/40 bg-muted/30 px-3 py-2 text-left text-sm text-muted-foreground transition hover:border-teal-300 hover:bg-teal-50/50 hover:text-foreground"
-                                onClick={() => {
-                                  if (!offer.doctorUniqueCode) return;
-                                  setDoctorLookupCode(offer.doctorUniqueCode);
-                                  setDoctorLookupOpen(true);
-                                }}
-                                disabled={!offer.doctorUniqueCode}
-                                title={offer.doctorUniqueCode ? "View doctor profile" : undefined}
-                              >
-                                <Stethoscope className="mt-0.5 h-4 w-4 shrink-0" />
-                                <span className="line-clamp-2">
-                                  {[
-                                    offer.doctorName
-                                      ? `Dr. ${offer.doctorName}${offer.doctorSpecialization ? ` · ${offer.doctorSpecialization}` : ""}${offer.doctorUniqueCode ? ` · ${offer.doctorUniqueCode}` : ""}`
-                                      : null,
-                                    offer.hospitalName
-                                      ? `${offer.hospitalName}${offer.hospitalCity ? ` (${offer.hospitalCity})` : ""}`
-                                      : null,
-                                  ]
-                                    .filter(Boolean)
-                                    .join(" · ")}
-                                  {offer.doctorUniqueCode ? " · Tap to view" : ""}
-                                </span>
-                              </button>
-                            )}
-
                             {itemExpired && (
                               <p className="mt-2 text-sm font-semibold text-destructive">
                                 {formatExpiresIn(offer.expiresAt, now)}
@@ -557,11 +513,6 @@ const VendorOrderRequests = () => {
         </AlertDialogContent>
       </AlertDialog>
 
-      <VendorDoctorLookupDialog
-        open={doctorLookupOpen}
-        onOpenChange={setDoctorLookupOpen}
-        initialCode={doctorLookupCode}
-      />
     </div>
   );
 };

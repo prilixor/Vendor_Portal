@@ -687,7 +687,7 @@ const AdminDoctors = () => {
               </div>
 
               <p className="text-center text-xs text-muted-foreground">
-                Patients scan this code to open the doctor share page and copy the Unique ID for checkout.
+                Patients scan this code to open the doctor share page. Checkout collects a prescription, not a Unique ID.
               </p>
 
               {qrDoctor.publicPageUrl && /localhost|127\.0\.0\.1/i.test(qrDoctor.publicPageUrl) && (

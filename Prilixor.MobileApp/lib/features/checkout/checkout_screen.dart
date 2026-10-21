@@ -21,8 +21,6 @@ import '../../shared/widgets/struck_price.dart';
 import '../../core/utils/gst_label.dart';
 import '../../core/utils/rental_period.dart';
 import '../profile/addresses_screen.dart';
-import 'medical_reference_screen.dart';
-
 /// Temporary: hide Vendor pickup from checkout UI (keep code for later).
 const bool kShowVendorPickupOption = false;
 
@@ -39,7 +37,6 @@ class CheckoutScreen extends StatefulWidget {
 class _CheckoutScreenState extends State<CheckoutScreen> {
   String? _selectedAddressId;
   String _deliveryOption = 'standard';
-  final Map<String, MedicalRefModel> _medicalRefs = {};
   final Map<String, List<PendingPrescriptionFile>> _prescriptionFiles = {};
   bool _authChecked = false;
   bool _acceptedLegal = false;
@@ -163,7 +160,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       cart.lines,
       addressId: _selectedAddressId,
       deliveryOption: kShowDeliverySpeedOptions ? _deliveryOption : 'standard',
-      medicalRefs: _medicalRefs,
     );
     if (!mounted) return;
     await _handleBuySuggestions();
@@ -226,27 +222,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     await _fetchQuote();
   }
 
-  // Doctor Unique ID is optional — never block place-order.
-
-  Future<void> _openMedicalRef(String listingId, String title) async {
-    final result = await Navigator.push<MedicalRefModel>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => MedicalReferenceScreen(
-          title: 'Doctor for $title',
-          initial: _medicalRefs[listingId] ?? const MedicalRefModel(),
-        ),
-      ),
-    );
-    if (result != null && mounted) {
-      setState(() => _medicalRefs[listingId] = result);
-      _fetchQuote();
-    }
-  }
-
   bool _lineHasHealth(CartLineModel line) =>
-      (_medicalRefs[line.listingId]?.hasDoctor ?? false) ||
-      (_prescriptionFiles[line.listingId]?.isNotEmpty ?? false);
+      _prescriptionFiles[line.listingId]?.isNotEmpty ?? false;
 
   Future<void> _pickPrescription(String listingId) async {
     final result = await FilePicker.platform.pickFiles(
@@ -278,20 +255,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       next.add(PendingPrescriptionFile(name: file.name, path: path, bytes: bytes));
       _prescriptionFiles[listingId] = next;
     });
-  }
-
-  void _applyMedicalRefToAll(String sourceListingId) {
-    final source = _medicalRefs[sourceListingId];
-    if (source == null) return;
-    final cart = Provider.of<CartProvider>(context, listen: false);
-    setState(() {
-      for (final line in cart.lines.where((l) => l.prescriptionRequired)) {
-        _medicalRefs[line.listingId] = source;
-      }
-    });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Applied doctor reference to all prescription items')),
-    );
   }
 
   @override
@@ -594,12 +557,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
                                           Text(
-                                            'Doctor or prescription (optional)',
+                                            'Prescription (optional)',
                                             style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.bold),
                                           ),
                                           const SizedBox(height: 4),
                                           Text(
-                                            'Add a doctor Unique ID and/or upload a prescription image or PDF. You can skip both.',
+                                            'Upload a prescription image or PDF. You can skip this.',
                                             style: TextStyle(color: colors.textSecondary, fontSize: 13),
                                           ),
                                         ],
@@ -611,48 +574,13 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                             ),
                           ),
                           ...rxLines.map((line) {
-                            final ref = _medicalRefs[line.listingId];
                             final files = _prescriptionFiles[line.listingId] ?? const <PendingPrescriptionFile>[];
-                            final doctorFilled = ref?.hasDoctor == true;
                             return Padding(
                               padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
                               child: Column(
                                 crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Row(
-                                    children: [
-                                      Expanded(
-                                        child: Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            Text(line.title, style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w600)),
-                                            const SizedBox(height: 4),
-                                            Text(
-                                              doctorFilled
-                                                  ? 'Linked · ${ref!.doctorName ?? 'Doctor'} (${ref.uniqueCode})'
-                                                  : 'No doctor linked yet',
-                                              style: TextStyle(
-                                                color: doctorFilled
-                                                    ? context.appColors.success
-                                                    : context.appColors.warning,
-                                                fontSize: 12,
-                                                fontWeight: FontWeight.w600,
-                                              ),
-                                            ),
-                                          ],
-                                        ),
-                                      ),
-                                      TextButton(
-                                        onPressed: () async {
-                                          await _openMedicalRef(line.listingId, line.title);
-                                        },
-                                        child: Text(
-                                          doctorFilled ? 'Change' : 'Add Unique ID',
-                                          style: TextStyle(color: colors.accent, fontWeight: FontWeight.bold),
-                                        ),
-                                      ),
-                                    ],
-                                  ),
+                                  Text(line.title, style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w600)),
                                   if (files.isNotEmpty) ...[
                                     const SizedBox(height: 8),
                                     ...files.asMap().entries.map((entry) => Padding(
@@ -935,7 +863,6 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                             cart.lines,
                             addressId: _selectedAddressId,
                             deliveryOption: kShowDeliverySpeedOptions ? _deliveryOption : 'standard',
-                            medicalRefs: _medicalRefs,
                             prescriptionFiles: _prescriptionFiles,
                             acceptedLegal: _acceptedLegal,
                             acceptedPrescriptionLegal: cart.lines.any((l) =>

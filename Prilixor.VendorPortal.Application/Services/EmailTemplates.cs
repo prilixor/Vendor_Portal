@@ -333,21 +333,21 @@ $@"BlinksMed — Doctor Reference ID
 
 Dear {greeting},
 
-Your doctor reference profile is now active on BlinksMed. Patients can name you as their referring doctor when they rent medical equipment.
+Your doctor profile is on file at BlinksMed. Patients upload a prescription image or PDF when they order. A doctor Unique ID and hospital reference are not collected at checkout.
 
 Doctor Reference ID: {uniqueCode}{specialty}
 
-Share this ID, or the Doctor Reference Card attached to this email, with your patients. They enter it at checkout — no hospital form is required.
+The attached card and share page are for your records. Patients do not enter this ID when they place an order.
 
 Patient share page:
 {sharePageUrl}
 
-How patients use this
-1. You share your Doctor Reference ID or the attached card.
-2. The patient places an order on BlinksMed.
-3. At checkout they enter your ID (or scan the QR) as their doctor reference.
+How patients order
+1. They place a medical equipment order on BlinksMed.
+2. They upload a prescription image or PDF if the item needs one.
+3. Checkout does not ask for a doctor Unique ID or hospital.
 
-This email does not create a BlinksMed login for you and does not share patient records. It only lets patients name you on their order.
+This email does not create a BlinksMed login for you and does not share patient records.
 
 Questions: {PublicSiteUrls.SupportEmail}
 
@@ -414,7 +414,7 @@ The BlinksMed Team";
 </head>
 <body style='margin: 0; padding: 0; background-color: #eef2f6;'>
     <div style='display: none; max-height: 0; overflow: hidden; mso-hide: all;'>
-        Your Doctor Reference ID {code} is ready. Share it with patients when they order on BlinksMed.
+        Your doctor profile is on file. Patients upload a prescription when they order. A Unique ID is not collected at checkout.
     </div>
     <table role='presentation' cellpadding='0' cellspacing='0' border='0' width='100%' style='background-color: #eef2f6;'>
       <tr>
@@ -424,7 +424,7 @@ The BlinksMed Team";
               <td bgcolor='#0f766e' style='padding: 28px 28px 24px; background-color: #0f766e;'>
                 <p style='margin: 0 0 6px; font-family: Arial, Helvetica, sans-serif; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: #ccfbf1; font-weight: bold;'>BlinksMed</p>
                 <h1 style='margin: 0; font-family: Arial, Helvetica, sans-serif; font-size: 24px; line-height: 32px; color: #ffffff; font-weight: 700;'>Your Doctor Reference ID</h1>
-                <p style='margin: 10px 0 0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; line-height: 22px; color: #ccfbf1;'>For patients to add you when they order medical equipment on BlinksMed.</p>
+                <p style='margin: 10px 0 0; font-family: Arial, Helvetica, sans-serif; font-size: 15px; line-height: 22px; color: #ccfbf1;'>Patients upload a prescription when they order. A Unique ID is not collected at checkout.</p>
               </td>
             </tr>
             <tr>
@@ -434,7 +434,7 @@ The BlinksMed Team";
             </tr>
             <tr>
               <td style='padding: 0 28px 20px; font-family: Arial, Helvetica, sans-serif; font-size: 15px; line-height: 23px; color: #334155;'>
-                Your doctor reference profile is now active. Patients can share your Unique ID or scan your QR code at checkout to name you as their referring doctor. This does not create a BlinksMed account for you and does not share patient records.
+                Your doctor profile is on file. Patients upload a prescription image or PDF when they order. Checkout does not ask for a doctor Unique ID or hospital. This does not create a BlinksMed account for you and does not share patient records.
               </td>
             </tr>
             <tr>
@@ -477,14 +477,14 @@ The BlinksMed Team";
                 <table role='presentation' cellpadding='0' cellspacing='0' border='0' width='100%' style='background-color: #f8fafc; border: 1px solid #e2e8f0;'>
                   <tr>
                     <td style='padding: 16px 18px 8px; font-family: Arial, Helvetica, sans-serif; font-size: 14px; font-weight: bold; color: #0f172a;'>
-                      How patients use this
+                      How patients order
                     </td>
                   </tr>
                   <tr>
                     <td style='padding: 0 18px 16px; font-family: Arial, Helvetica, sans-serif; font-size: 14px; line-height: 22px; color: #475569;'>
-                      1. Share your ID <strong>{code}</strong> or show them the attached card.<br>
-                      2. They place a medical equipment order on BlinksMed.<br>
-                      3. At checkout they enter your ID (or scan the QR) as their doctor reference.
+                      1. They place a medical equipment order on BlinksMed.<br>
+                      2. They upload a prescription image or PDF if the item needs one.<br>
+                      3. Checkout does not ask for a doctor Unique ID or hospital.
                     </td>
                   </tr>
                 </table>

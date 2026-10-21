@@ -13,7 +13,6 @@ import { chatApi } from "@/app/services/chatApi";
 import { Button } from "@/app/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
 import { Checkbox } from "@/app/components/ui/checkbox";
-import { OrderMedicalReferenceCard } from "@/app/components/shared/OrderMedicalReferenceCard";
 import { OrderPrescriptionFilesCard } from "@/app/components/shared/OrderPrescriptionFilesCard";
 import { LegalAgreeCheckbox } from "@/app/components/legal/LegalAgreeCheckbox";
 import { BackLink } from "@/app/components/shared/BackLink";
@@ -991,21 +990,6 @@ const CustomerOrderDetail = () => {
           )}
         </CardContent>
       </Card>
-
-      {/* Medical Reference */}
-      {(activeItem.doctorId ||
-        activeItem.hospitalId ||
-        activeItem.doctorName ||
-        activeItem.doctorUniqueCode) && (
-        <OrderMedicalReferenceCard
-          doctorName={activeItem.doctorName}
-          doctorSpecialization={activeItem.doctorSpecialization}
-          doctorUniqueCode={activeItem.doctorUniqueCode}
-          doctorContactNumber={activeItem.doctorContactNumber}
-          hospitalName={activeItem.hospitalName}
-          hospitalCity={activeItem.hospitalCity}
-        />
-      )}
 
       {(shownPrescriptionFiles.length > 0 || canUploadPrescription(activeItem.status)) && (
         <OrderPrescriptionFilesCard

@@ -17,12 +17,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/app/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogClose } from "@/app/components/ui/dialog";
 import { toast } from "sonner";
-import { Loader2, Plus, FileText, CheckCircle2, MapPin } from "lucide-react";
+import { Loader2, Plus, FileText, MapPin } from "lucide-react";
 import { cn, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
-import { CustomerMedicalReference, type DoctorRefSelection } from "./CustomerMedicalReference";
-import { Checkbox } from "@/app/components/ui/checkbox";
 import { RentExceedsBuyDialog } from "@/app/components/shared/RentExceedsBuyDialog";
 import { BackLink } from "@/app/components/shared/BackLink";
 import { StruckPrice } from "@/app/components/shared/RentalPeriodPlanDropdown";
@@ -50,13 +47,8 @@ function formatCheckoutInr(value: number): string {
   return `₹${Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 }
 
-function hasHealthData(ref?: DoctorRefSelection | null, files?: File[]) {
-  return Boolean(ref?.doctorId) || (files?.length ?? 0) > 0;
-}
-
-function healthPayload(ref?: DoctorRefSelection | null) {
-  if (!ref?.doctorId) return {};
-  return { doctorId: ref.doctorId };
+function hasPrescriptionFiles(files?: File[]) {
+  return (files?.length ?? 0) > 0;
 }
 
 const CustomerCheckout = () => {
@@ -68,9 +60,7 @@ const CustomerCheckout = () => {
   const [deliveryChoice, setDeliveryChoice] = useState<DeliveryChoice>("standard");
   const selectedDelivery: DeliveryChoice = SHOW_DELIVERY_SPEED_OPTIONS ? deliveryChoice : "standard";
   const [hasInitializedAddress, setHasInitializedAddress] = useState(false);
-  const [applyToAll, setApplyToAll] = useState(false);
   const [failedLines, setFailedLines] = useState<PlaceCustomerOrdersResultApi["failedLines"]>([]);
-  const [medicalRefs, setMedicalRefs] = useState<Record<string, DoctorRefSelection | null>>({});
   const [prescriptionFiles, setPrescriptionFiles] = useState<Record<string, File[]>>({});
   const [acceptedLegal, setAcceptedLegal] = useState(false);
   const [acceptedPrescriptionLegal, setAcceptedPrescriptionLegal] = useState(false);
@@ -89,29 +79,9 @@ const CustomerCheckout = () => {
     }
   }, [isHydrating, user, navigate]);
 
-  const setMedicalRef = (listingId: string, value: DoctorRefSelection | null) => {
-    setMedicalRefs((prev) => ({ ...prev, [listingId]: value }));
-  };
-
-  const applyMedicalRefToAll = (sourceListingId: string) => {
-    const source = medicalRefs[sourceListingId];
-    if (!source) return;
-
-    setMedicalRefs((prev) => {
-      const next = { ...prev };
-      lines
-        .filter((l) => l.prescriptionRequired && l.listingId !== sourceListingId)
-        .forEach((l) => {
-          next[l.listingId] = { ...source };
-        });
-      return next;
-    });
-    toast.success("Applied doctor reference to all prescription items");
-  };
-
   const needsPrescription = lines.some((l) => l.prescriptionRequired);
   const sharingHealthData = lines.some(
-    (l) => l.prescriptionRequired && hasHealthData(medicalRefs[l.listingId], prescriptionFiles[l.listingId]),
+    (l) => l.prescriptionRequired && hasPrescriptionFiles(prescriptionFiles[l.listingId]),
   );
 
   const addPrescriptionFiles = (listingId: string, incoming: FileList | File[]) => {
@@ -167,17 +137,16 @@ const CustomerCheckout = () => {
               rentalPricingPlanId: l.rentalPricingPlanId,
             }
           : {}),
-        ...(l.prescriptionRequired ? healthPayload(medicalRefs[l.listingId]) : {}),
         ...(l.prescriptionRequired && (prescriptionFiles[l.listingId]?.length ?? 0) > 0
           ? { hasPrescriptionFile: true }
           : {}),
       })),
     }),
-    [addressId, selectedDelivery, lines, medicalRefs, prescriptionFiles],
+    [addressId, selectedDelivery, lines, prescriptionFiles],
   );
 
   const { data: quote, isFetching: quoteLoading, error: quoteError } = useQuery({
-    queryKey: ["customer-order-quote", addressId, selectedDelivery, lines, medicalRefs],
+    queryKey: ["customer-order-quote", addressId, selectedDelivery, lines],
     queryFn: () => customerApi.quoteOrders(quotePayload),
     enabled: user?.role === "customer" && lines.length > 0,
     retry: false,
@@ -215,7 +184,6 @@ const CustomerCheckout = () => {
                 rentalPricingPlanId: l.rentalPricingPlanId,
               }
             : {}),
-          ...(l.prescriptionRequired ? healthPayload(medicalRefs[l.listingId]) : {}),
           ...(l.prescriptionRequired && (prescriptionFiles[l.listingId]?.length ?? 0) > 0
             ? { hasPrescriptionFile: true }
             : {}),
@@ -525,106 +493,20 @@ const CustomerCheckout = () => {
               <div className="flex items-start gap-3 border-b border-teal-100/70 bg-teal-50/70 px-5 py-4 dark:border-teal-500/20 dark:bg-teal-500/10">
                 <FileText className="mt-0.5 h-5 w-5 shrink-0 text-teal-700 dark:text-teal-300" />
                 <div>
-                  <h3 className="font-semibold text-teal-950 dark:text-teal-50">Doctor or prescription (optional)</h3>
+                  <h3 className="font-semibold text-teal-950 dark:text-teal-50">Prescription (optional)</h3>
                   <p className="mt-0.5 text-sm leading-relaxed text-teal-800/80 dark:text-teal-200/80">
-                    Add a doctor Unique ID and/or upload a prescription image or PDF. You can skip both and still place the order.
+                    Upload a prescription image or PDF. You can skip this and still place the order.
                   </p>
                 </div>
               </div>
               <div className="divide-y divide-border/60">
                 {lines.map((l) => {
                   if (!l.prescriptionRequired) return null;
-                  const mRef = medicalRefs[l.listingId];
                   const files = prescriptionFiles[l.listingId] || [];
-                  const hasFilled = hasHealthData(mRef, files);
-                  const hasOthers = lines.filter((x) => x.prescriptionRequired).length > 1;
 
                   return (
                     <div key={l.listingId} className="px-5 py-4 flex flex-col gap-3">
-                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                      <div>
-                        <p className="font-medium">{l.title}</p>
-                        {mRef?.doctorId ? (
-                          <div className="mt-2 space-y-1">
-                            <div className="flex w-fit items-center gap-1.5 rounded-md border border-green-200/60 bg-green-50/80 px-2.5 py-1 text-[13px] font-medium text-green-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">
-                              <CheckCircle2 className="h-3.5 w-3.5" />
-                              <span>
-                                {mRef.doctorName}
-                                <span className="ml-1 font-mono text-xs tracking-wide">({mRef.uniqueCode})</span>
-                              </span>
-                            </div>
-                            {(mRef.hospitals?.length ?? 0) > 0 && (
-                              <p className="text-[12px] text-muted-foreground pl-0.5">
-                                {(mRef.hospitals!.length === 1
-                                  ? mRef.hospitals![0].name
-                                  : `${mRef.hospitals!.length} affiliated hospitals`)}
-                                {mRef.hospitals!.length === 1 && mRef.hospitals![0].city
-                                  ? ` · ${mRef.hospitals![0].city}`
-                                  : ""}
-                              </p>
-                            )}
-                          </div>
-                        ) : (
-                          <p className="text-[13px] text-muted-foreground mt-1">No doctor linked yet</p>
-                        )}
-                      </div>
-
-                      <div className="flex items-center gap-2 shrink-0">
-                        <Dialog onOpenChange={(open) => { if (open) setApplyToAll(false); }}>
-                          <DialogTrigger asChild>
-                            <Button variant={hasFilled ? "outline" : "default"} size="sm" className="h-8">
-                              {hasFilled ? "Change" : (
-                                <>
-                                  <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Unique ID
-                                </>
-                              )}
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent className="max-h-[90vh] overflow-y-auto border-border p-0 sm:max-w-[480px]">
-                            <DialogTitle className="sr-only">Doctor Unique ID</DialogTitle>
-                            <DialogDescription className="sr-only">
-                              Look up doctor by Unique ID for {l.title}
-                            </DialogDescription>
-                            <div className="p-4 sm:p-6 pb-2">
-                              <CustomerMedicalReference
-                                title={`Doctor for ${l.title}`}
-                                value={mRef || null}
-                                onChange={(v) => setMedicalRef(l.listingId, v)}
-                              />
-                            </div>
-                            <div className="bg-muted/40 p-4 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between border-t border-border/40 gap-4">
-                              {hasOthers ? (
-                                <div className="flex items-center space-x-2">
-                                  <Checkbox
-                                    id={`apply-all-${l.listingId}`}
-                                    checked={applyToAll}
-                                    onCheckedChange={(c) => setApplyToAll(!!c)}
-                                  />
-                                  <label
-                                    htmlFor={`apply-all-${l.listingId}`}
-                                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer select-none"
-                                  >
-                                    Apply to all items
-                                  </label>
-                                </div>
-                              ) : <div />}
-                              <DialogClose asChild>
-                                <Button
-                                  className="w-full sm:w-auto shrink-0"
-                                  onClick={() => {
-                                    if (applyToAll) {
-                                      applyMedicalRefToAll(l.listingId);
-                                    }
-                                  }}
-                                >
-                                  Done
-                                </Button>
-                              </DialogClose>
-                            </div>
-                          </DialogContent>
-                        </Dialog>
-                      </div>
-                      </div>
+                      <p className="font-medium">{l.title}</p>
 
                       <div className="space-y-2">
                         {files.length > 0 && (
