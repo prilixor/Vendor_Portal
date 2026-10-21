@@ -854,16 +854,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                           canEdit: _canUploadPrescription(order.status),
                           loading: !rxReady || provider.prescriptionLoading,
                           pendingFileName: _pendingRxFile?.name,
-                          needsConsent: rxFiles.isEmpty &&
-                              !order.hasMedicalReference &&
-                              _pendingRxFile != null,
+                          needsConsent: _canUploadPrescription(order.status) && rxFiles.length < 3,
                           acceptedLegal: _acceptedRxLegal,
-                          onAcceptedLegal: (value) {
-                            setState(() => _acceptedRxLegal = value);
-                            if (value && _pendingRxFile != null) {
-                              _confirmPendingPrescription(provider);
-                            }
-                          },
+                          onAcceptedLegal: (value) => setState(() => _acceptedRxLegal = value),
                           onRemovePending: () => setState(() {
                             _pendingRxFile = null;
                             _acceptedRxLegal = false;
@@ -1248,9 +1241,13 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
   Future<void> _uploadPrescription(OrderDetailProvider provider) async {
     final order = _orderForDetails(provider);
     if (order == null) return;
-    final detailReady = provider.currentOrder?.id == order.id;
-    final needsConsent = (!detailReady || provider.prescriptionFiles.isEmpty) &&
-        !order.hasMedicalReference;
+    if (!_acceptedRxLegal) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please agree to the Privacy Policy before uploading a prescription.')),
+      );
+      return;
+    }
     final result = await FilePicker.platform.pickFiles(
       type: FileType.custom,
       allowedExtensions: const ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
@@ -1274,32 +1271,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
       );
       return;
     }
-    if (needsConsent && !_acceptedRxLegal) {
-      setState(() {
-        _pendingRxFile = PendingPrescriptionFile(name: file.name, path: path, bytes: bytes);
-      });
-      return;
-    }
     await _sendPrescription(
       provider,
       orderId: order.id,
       fileName: file.name,
       path: path,
       bytes: bytes,
-      acceptedPrescriptionLegal: true,
-    );
-  }
-
-  Future<void> _confirmPendingPrescription(OrderDetailProvider provider) async {
-    final order = _orderForDetails(provider);
-    final pending = _pendingRxFile;
-    if (order == null || pending == null) return;
-    await _sendPrescription(
-      provider,
-      orderId: order.id,
-      fileName: pending.name,
-      path: pending.path,
-      bytes: pending.bytes,
       acceptedPrescriptionLegal: true,
     );
   }
@@ -2577,13 +2554,27 @@ class _OrderPrescriptionCard extends StatelessWidget {
               prefix: 'I consent to the',
               activeColor: _orderActionColor(context),
             ),
+            if (!acceptedLegal) ...[
+              const SizedBox(height: 6),
+              Text(
+                'Agree to the Privacy Policy before this prescription can be uploaded.',
+                style: TextStyle(color: colors.textSecondary, fontSize: 12, height: 1.35),
+              ),
+            ],
           ],
           if (canEdit && files.length < 3 && pendingFileName == null)
             TextButton(
               onPressed: onUpload,
-              child: Text(
-                'Upload image or PDF',
-                style: TextStyle(color: _orderActionColor(context), fontWeight: FontWeight.w800),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.add, size: 18, color: _orderActionColor(context)),
+                  const SizedBox(width: 6),
+                  Text(
+                    'Upload image or PDF',
+                    style: TextStyle(color: _orderActionColor(context), fontWeight: FontWeight.w800),
+                  ),
+                ],
               ),
             ),
         ],

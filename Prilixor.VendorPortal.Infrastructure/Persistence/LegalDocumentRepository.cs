@@ -85,6 +85,8 @@ public sealed class LegalDocumentRepository(
                     }
                 }
 
+                changed |= AlignCustomerPrescriptionConsent(document);
+
                 if (document.Versions.Count > 0)
                     continue;
 
@@ -124,6 +126,41 @@ public sealed class LegalDocumentRepository(
         {
             logger.LogWarning("Legal document tables are not migrated yet; skipping seed.");
         }
+    }
+
+    /// <summary>
+    /// Prescription upload requires the Privacy Policy only.
+    /// Placements an admin has already edited are left alone.
+    /// </summary>
+    private static bool AlignCustomerPrescriptionConsent(LegalDocument document)
+    {
+        if (document.DocumentType is not (
+            LegalCatalog.DocumentTypes.TermsOfUse or LegalCatalog.DocumentTypes.PrivacyPolicy))
+            return false;
+
+        var changed = false;
+        foreach (var surface in new[] { LegalCatalog.Surfaces.CustomerWeb, LegalCatalog.Surfaces.CustomerMobile })
+        {
+            var placement = document.Placements.FirstOrDefault(p =>
+                !p.IsDeleted
+                && p.Surface == surface
+                && p.Screen == LegalCatalog.Screens.Prescription);
+            if (placement is null || placement.ModifiedBy is not null)
+                continue;
+
+            var defaults = LegalCatalog.DefaultPlacement(
+                document.DocumentType, surface, LegalCatalog.Screens.Prescription);
+            if (placement.IsVisible == defaults.IsVisible
+                && placement.IsRequiredToProceed == defaults.IsRequiredToProceed)
+                continue;
+
+            placement.IsVisible = defaults.IsVisible;
+            placement.IsRequiredToProceed = defaults.IsRequiredToProceed;
+            placement.ModifiedOnUtc = DateTime.UtcNow;
+            changed = true;
+        }
+
+        return changed;
     }
 
     public async Task<List<LegalDocument>> ListDocumentsAsync(CancellationToken ct = default)

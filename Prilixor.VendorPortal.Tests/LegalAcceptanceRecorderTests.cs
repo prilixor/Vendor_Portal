@@ -45,6 +45,40 @@ public class LegalAcceptanceRecorderTests
     }
 
     [Fact]
+    public async Task Prescription_upload_requires_privacy_only()
+    {
+        var recorder = CreateRecorder();
+        var missing = await recorder.BuildScreenAcceptancesAsync(
+            LegalCatalog.ActorTypes.Customer,
+            Guid.NewGuid(),
+            LegalCatalog.Surfaces.CustomerWeb,
+            LegalCatalog.Screens.Prescription,
+            acceptedLegal: false,
+            acceptedSlugs: null,
+            ipAddress: null,
+            userAgent: null);
+
+        Assert.True(missing.IsFailure);
+        Assert.Contains(missing.Errors, e => e.Code == "legal.acceptance_required");
+
+        var accepted = await recorder.BuildScreenAcceptancesAsync(
+            LegalCatalog.ActorTypes.Customer,
+            Guid.NewGuid(),
+            LegalCatalog.Surfaces.CustomerWeb,
+            LegalCatalog.Screens.Prescription,
+            acceptedLegal: true,
+            acceptedSlugs: null,
+            ipAddress: null,
+            userAgent: null);
+
+        Assert.True(accepted.IsSuccess);
+        var slugs = Slugs(accepted.Value);
+        Assert.Single(slugs);
+        Assert.Contains("privacy-policy", slugs);
+        Assert.DoesNotContain("terms-of-use", slugs);
+    }
+
+    [Fact]
     public async Task Vendor_register_records_terms_privacy_and_seller_policy()
     {
         var recorder = CreateRecorder();

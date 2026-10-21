@@ -38,6 +38,22 @@ public class LegalCatalogPlacementTests
     }
 
     [Fact]
+    public void Prescription_requires_privacy_only_for_customers()
+    {
+        foreach (var surface in new[] { LegalCatalog.Surfaces.CustomerWeb, LegalCatalog.Surfaces.CustomerMobile })
+        {
+            var privacy = LegalCatalog.DefaultPlacement(
+                LegalCatalog.DocumentTypes.PrivacyPolicy, surface, LegalCatalog.Screens.Prescription);
+            var terms = LegalCatalog.DefaultPlacement(
+                LegalCatalog.DocumentTypes.TermsOfUse, surface, LegalCatalog.Screens.Prescription);
+            Assert.True(privacy.IsVisible);
+            Assert.True(privacy.IsRequiredToProceed);
+            Assert.False(terms.IsVisible);
+            Assert.False(terms.IsRequiredToProceed);
+        }
+    }
+
+    [Fact]
     public void Checkout_requires_rental_refund_and_shipping_for_customers()
     {
         foreach (var type in new[]

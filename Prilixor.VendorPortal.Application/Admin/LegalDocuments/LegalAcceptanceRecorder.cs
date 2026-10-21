@@ -196,7 +196,7 @@ public sealed class LegalAcceptanceRecorder(ILegalDocumentRepository repository)
     private static string RequiredMessage(string screen) => screen switch
     {
         LegalCatalog.Screens.Checkout => "Please agree to the rental, cancellation, and shipping policies before placing this order.",
-        LegalCatalog.Screens.Prescription => "Please consent to the Privacy Policy before sharing prescription or health information.",
+        LegalCatalog.Screens.Prescription => "Please agree to the Privacy Policy before uploading a prescription.",
         LegalCatalog.Screens.Onboarding => "Please electronically sign the Vendor / Seller Policy to continue.",
         _ => "Please agree to the required terms and policies to continue.",
     };

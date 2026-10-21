@@ -6,6 +6,10 @@ import type { CustomerPrescriptionFileApi } from "@/app/services/customerApi";
 
 const ACCEPT = "image/jpeg,image/png,image/webp,application/pdf,.pdf,.jpg,.jpeg,.png,.webp";
 
+const BAN_CURSOR = `url("data:image/svg+xml,${encodeURIComponent(
+  `<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#dc2626" stroke-width="2.5" stroke-linecap="round"><circle cx="12" cy="12" r="9"/><path d="M6 6 18 18"/></svg>`,
+)}") 12 12, not-allowed`;
+
 function isImage(contentType?: string | null, fileName?: string | null) {
   const type = (contentType || "").toLowerCase();
   if (type.startsWith("image/")) return true;
@@ -20,6 +24,7 @@ type Props = {
   onDelete?: (fileId: string) => void;
   pendingFile?: File | null;
   onRemovePending?: () => void;
+  uploadDisabled?: boolean;
   footer?: ReactNode;
 };
 
@@ -31,6 +36,7 @@ export function OrderPrescriptionFilesCard({
   onDelete,
   pendingFile,
   onRemovePending,
+  uploadDisabled,
   footer,
 }: Props) {
   if (!canEdit && files.length === 0) return null;
@@ -113,7 +119,23 @@ export function OrderPrescriptionFilesCard({
           </ul>
         ) : null}
 
-        {showPicker ? (
+        {footer}
+
+        {showPicker && uploadDisabled ? (
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            className="h-8"
+            style={{ cursor: BAN_CURSOR }}
+            onClick={(event) => event.preventDefault()}
+          >
+            <Plus className="mr-1.5 h-3.5 w-3.5" />
+            Upload image or PDF
+          </Button>
+        ) : null}
+
+        {showPicker && !uploadDisabled ? (
           <label className="inline-flex">
             <input
               type="file"
@@ -134,8 +156,6 @@ export function OrderPrescriptionFilesCard({
             </Button>
           </label>
         ) : null}
-
-        {footer}
       </CardContent>
     </Card>
   );

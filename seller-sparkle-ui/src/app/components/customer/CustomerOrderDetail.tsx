@@ -484,21 +484,18 @@ const CustomerOrderDetail = () => {
   });
 
   const [acceptedRxLegal, setAcceptedRxLegal] = useState(false);
-  const [pendingRxFile, setPendingRxFile] = useState<File | null>(null);
 
   useEffect(() => {
-    setPendingRxFile(null);
     setAcceptedRxLegal(false);
   }, [currentItemId]);
 
   const uploadRxMut = useMutation({
     mutationFn: (file: File) =>
       customerApi.uploadOrderPrescription(currentItemId!, file, {
-        acceptedPrescriptionLegal: acceptedRxLegal || prescriptionFiles.length > 0 || !!data?.doctorId,
+        acceptedPrescriptionLegal: true,
         uploadSource: "order_detail",
       }),
     onSuccess: () => {
-      setPendingRxFile(null);
       setAcceptedRxLegal(false);
       toast.success("Prescription uploaded.");
       queryClient.invalidateQueries({ queryKey: ["customer-order-prescriptions", currentItemId] });
@@ -823,6 +820,11 @@ const CustomerOrderDetail = () => {
   }
 
   const activeItem = data;
+  const shownPrescriptionFiles = activeItem.prescriptionFiles?.length
+    ? activeItem.prescriptionFiles
+    : prescriptionFiles;
+  const canAddPrescription =
+    canUploadPrescription(activeItem.status) && shownPrescriptionFiles.length < 3;
 
   return (
     <div className="mx-auto max-w-3xl space-y-2.5 sm:space-y-4">
@@ -1005,40 +1007,37 @@ const CustomerOrderDetail = () => {
         />
       )}
 
-      {(prescriptionFiles.length > 0 || canUploadPrescription(activeItem.status)) && (
+      {(shownPrescriptionFiles.length > 0 || canUploadPrescription(activeItem.status)) && (
         <OrderPrescriptionFilesCard
-          files={data?.prescriptionFiles?.length ? data.prescriptionFiles : prescriptionFiles}
+          files={shownPrescriptionFiles}
           canEdit={canUploadPrescription(activeItem.status)}
           uploading={uploadRxMut.isPending}
-          pendingFile={pendingRxFile}
-          onRemovePending={() => {
-            setPendingRxFile(null);
-            setAcceptedRxLegal(false);
-          }}
+          uploadDisabled={canAddPrescription && !acceptedRxLegal}
           onUpload={(file) => {
-            const needsConsent = prescriptionFiles.length === 0 && !activeItem.doctorId;
-            if (needsConsent && !acceptedRxLegal) {
-              setPendingRxFile(file);
+            if (!acceptedRxLegal) {
+              toast.error("Please agree to the Privacy Policy before uploading a prescription.");
               return;
             }
             uploadRxMut.mutate(file);
           }}
           onDelete={(fileId) => deleteRxMut.mutate(fileId)}
           footer={
-            canUploadPrescription(activeItem.status) && pendingRxFile && prescriptionFiles.length === 0 && !activeItem.doctorId ? (
-              <LegalAgreeCheckbox
-                surface="customer_web"
-                screen="prescription"
-                agreed={acceptedRxLegal}
-                onAgreedChange={(value) => {
-                  setAcceptedRxLegal(value);
-                  if (value && pendingRxFile) {
-                    uploadRxMut.mutate(pendingRxFile);
-                  }
-                }}
-                prefix="I consent to the"
-                id="order-detail-privacy-health"
-              />
+            canAddPrescription ? (
+              <div className="space-y-2">
+                <LegalAgreeCheckbox
+                  surface="customer_web"
+                  screen="prescription"
+                  agreed={acceptedRxLegal}
+                  onAgreedChange={setAcceptedRxLegal}
+                  prefix="I consent to the"
+                  id="order-detail-prescription-terms"
+                />
+                {!acceptedRxLegal ? (
+                  <p className="text-xs text-muted-foreground">
+                    Agree to the Privacy Policy before this prescription can be uploaded.
+                  </p>
+                ) : null}
+              </div>
             ) : null
           }
         />

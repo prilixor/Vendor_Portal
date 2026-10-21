@@ -168,6 +168,11 @@ class _LegalAgreeCheckboxState extends State<LegalAgreeCheckbox> {
   Future<void> _load() async {
     final parsed = await _fetchLegalDocs(widget.screen, requiredOnly: true);
     if (!mounted || parsed.isEmpty) return;
+    if (widget.screen == 'prescription') {
+      final privacy = parsed.where((doc) => doc.path == AppUrls.privacyPath).toList();
+      setState(() => _docs = privacy.isEmpty ? _agreeFallbacks('prescription') : privacy);
+      return;
+    }
     setState(() => _docs = parsed);
   }
 

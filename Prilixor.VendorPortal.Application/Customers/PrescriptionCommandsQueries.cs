@@ -208,34 +208,30 @@ internal sealed class UploadCustomerOrderPrescriptionCommandHandler(
             return Result.Failure<CustomerPrescriptionFileDto>(new Error(
                 "customers.listing_not_found", "Listing not found.", ErrorCategory.NotFound));
 
-        var alreadyHasHealthData = row.Doctor is not null || existing.Count > 0;
-        if (!alreadyHasHealthData)
-        {
-            var rxGate = await legalAcceptances.BuildScreenAcceptancesAsync(
-                LegalCatalog.ActorTypes.Customer,
-                request.CustomerId,
-                request.SourceSurface,
-                LegalCatalog.Screens.Prescription,
-                request.AcceptedPrescriptionLegal,
-                null,
-                request.IpAddress,
-                request.UserAgent,
-                null,
-                cancellationToken);
-            if (!rxGate.IsSuccess)
-                return Result.Failure<CustomerPrescriptionFileDto>(rxGate.Errors);
+        var rxGate = await legalAcceptances.BuildScreenAcceptancesAsync(
+            LegalCatalog.ActorTypes.Customer,
+            request.CustomerId,
+            request.SourceSurface,
+            LegalCatalog.Screens.Prescription,
+            request.AcceptedPrescriptionLegal,
+            null,
+            request.IpAddress,
+            request.UserAgent,
+            null,
+            cancellationToken);
+        if (!rxGate.IsSuccess)
+            return Result.Failure<CustomerPrescriptionFileDto>(rxGate.Errors);
 
-            try
-            {
-                await legalAcceptances.SaveAcceptancesAsync(rxGate.Value, cancellationToken);
-            }
-            catch
-            {
-                return Result.Failure<CustomerPrescriptionFileDto>(new Error(
-                    "legal.acceptance_save_failed",
-                    "Could not record policy acceptance. Please try again.",
-                    ErrorCategory.Validation));
-            }
+        try
+        {
+            await legalAcceptances.SaveAcceptancesAsync(rxGate.Value, cancellationToken);
+        }
+        catch
+        {
+            return Result.Failure<CustomerPrescriptionFileDto>(new Error(
+                "legal.acceptance_save_failed",
+                "Could not record policy acceptance. Please try again.",
+                ErrorCategory.Validation));
         }
 
         await using var stream = new MemoryStream(request.FileBytes, writable: false);

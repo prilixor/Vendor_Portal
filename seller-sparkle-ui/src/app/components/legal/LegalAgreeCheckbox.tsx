@@ -95,9 +95,13 @@ export function LegalAgreeCheckbox({
       try {
         const list = await publicLegalApi.list(surface, screen);
         const required = list.filter((item) => item.isRequiredToProceed).sort((a, b) => a.sortOrder - b.sortOrder);
-        if (!cancelled && required.length > 0) {
-          setDocs(required);
-          for (const doc of required) {
+        const privacyOnly = required.filter((item) => item.slug === "privacy-policy" || item.documentType === "privacy-policy");
+        const next = screen === "prescription"
+          ? (privacyOnly.length > 0 ? privacyOnly : fallbacks(surface, screen))
+          : required;
+        if (!cancelled && next.length > 0) {
+          setDocs(next);
+          for (const doc of next) {
             publicLegalApi.prefetch(doc.slug, pageSurface(doc.slug));
           }
         }
