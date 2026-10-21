@@ -82,11 +82,7 @@ function matchesSearch(offer: VendorDispatchOfferApiDto, query: string): boolean
   const q = query.toLowerCase();
   return (
     offer.orderNumber.toLowerCase().includes(q) ||
-    offer.listingTitle.toLowerCase().includes(q) ||
-    (offer.doctorName?.toLowerCase().includes(q) ?? false) ||
-    (offer.doctorUniqueCode?.toLowerCase().includes(q) ?? false) ||
-    (offer.hospitalName?.toLowerCase().includes(q) ?? false) ||
-    (offer.hospitalCity?.toLowerCase().includes(q) ?? false)
+    offer.listingTitle.toLowerCase().includes(q)
   );
 }
 
@@ -277,7 +273,7 @@ const VendorOrderRequests = () => {
             <Input
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder="Search order, listing, doctor, hospital…"
+              placeholder="Search order or listing…"
               className="h-11 rounded-xl border-border/60 bg-background pl-10 text-sm"
             />
           </div>
@@ -350,7 +346,7 @@ const VendorOrderRequests = () => {
                     <p className="mt-1 text-sm text-muted-foreground">
                       Consolidated fulfillment · {group.items.length}{" "}
                       {group.items.length === 1 ? "item" : "items"}
-                      <span className="ml-2 font-semibold text-primary">Your payout ₹{groupPayout.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span>
+                      <span className="ml-2 font-semibold text-primary">Total payout ₹{groupPayout.toLocaleString("en-IN", { maximumFractionDigits: 0 })}</span>
                     </p>
                   </div>
                   <TimerPill
@@ -409,7 +405,7 @@ const VendorOrderRequests = () => {
                                   }
                                 />
                               )}
-                              <MetaChip label={`Your payout ₹${getPayoutAmount(offer).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`} highlight />
+                              <MetaChip label={`Payout ₹${getPayoutAmount(offer).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`} highlight />
                               <Badge
                                 variant="outline"
                                 className={cn(

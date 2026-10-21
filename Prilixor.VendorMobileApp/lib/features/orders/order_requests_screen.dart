@@ -233,7 +233,7 @@ class _OrderRequestsScreenState extends State<OrderRequestsScreen> {
             controller: _searchController,
             style: TextStyle(color: colors.textPrimary),
             decoration: InputDecoration(
-              hintText: 'Search order, listing, doctor, hospital…',
+              hintText: 'Search order or listing…',
               hintStyle: TextStyle(color: colors.textMuted),
               prefixIcon: Icon(Icons.search, color: colors.accent),
               suffixIcon: _searchQuery.isNotEmpty
@@ -674,7 +674,7 @@ class _RequestGroupCard extends StatelessWidget {
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            'Your payout ${formatVendorMoney(payoutTotal)}',
+                            'Total payout ${formatVendorMoney(payoutTotal)}',
                             style: TextStyle(
                               color: colors.accent,
                               fontSize: 11,
@@ -858,7 +858,7 @@ class _RequestItemRow extends StatelessWidget {
                             : '${offer.rentalDays} days',
                       ),
                     _MetaChip(
-                      label: 'Your payout ${formatVendorMoney(offer.payoutAmount)}',
+                      label: 'Payout ${formatVendorMoney(offer.payoutAmount)}',
                       highlight: true,
                     ),
                     Container(
