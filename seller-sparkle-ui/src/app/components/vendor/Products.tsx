@@ -837,9 +837,8 @@ const Products = () => {
               <tr>
                 <th className="px-3 py-3 font-semibold sm:px-4">Listing</th>
                 <th className="px-3 py-3 font-semibold sm:px-4">Category</th>
-                {activeTab === "equipment" && <th className="px-3 py-3 font-semibold text-right sm:px-4">Daily rate (Admin)</th>}
-                {activeTab === "chemical" && <th className="px-3 py-3 font-semibold text-right sm:px-4">Buy Price (Admin)</th>}
-                {activeTab === "equipment" && <th className="px-3 py-3 font-semibold text-right sm:px-4">Deposit</th>}
+                {activeTab === "equipment" && <th className="px-3 py-3 font-semibold text-right sm:px-4">Daily rate</th>}
+                {activeTab === "chemical" && <th className="px-3 py-3 font-semibold text-right sm:px-4">Buy price</th>}
                 <th className="px-3 py-3 font-semibold text-right sm:px-4">Qty</th>
                 <th className="px-3 py-3 font-semibold sm:px-4">Status</th>
                 <th className="px-3 py-3 sm:px-4" />
@@ -907,11 +906,6 @@ const Products = () => {
                       })()}
                     </td>
                   )}
-                  {activeTab === "equipment" && (
-                    <td className="px-3 py-3 text-right font-mono sm:px-4">
-                      ₹{p.securityDeposit}
-                    </td>
-                  )}
                   <td className="px-3 py-3 text-right sm:px-4">
                     {activeTab === "chemical" && (p.sizeStocks?.length ?? 0) > 0 ? (
                       <ChemStockDisclosure total={p.quantity} sizes={p.sizeStocks!} />
@@ -940,7 +934,7 @@ const Products = () => {
               ))}
               {(hasLoaded || listingPage) && filteredCount === 0 && (
                 <tr>
-                  <td colSpan={7} className="px-3 py-8 text-center text-sm text-muted-foreground sm:px-4">
+                  <td colSpan={6} className="px-3 py-8 text-center text-sm text-muted-foreground sm:px-4">
                     {statusCounts.all === 0 && !debouncedSearch && filter === "all"
                       ? "No listings created yet."
                       : "No listings match your current search/filter."}
@@ -997,19 +991,13 @@ const Products = () => {
                     </dd>
                   </div>
                   {activeTab === "equipment" ? (
-                    <>
-                      <div className="min-w-0">
-                        <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">Daily rate (Admin)</dt>
-                        <dd className="font-mono tabular-nums text-sm">₹{p.dailyRent ?? 0}/day</dd>
-                      </div>
-                      <div className="min-w-0 text-right">
-                        <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">Deposit</dt>
-                        <dd className="font-mono tabular-nums">₹{p.securityDeposit}</dd>
-                      </div>
-                    </>
+                    <div className="col-span-2 min-w-0">
+                      <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">Daily rate</dt>
+                      <dd className="font-mono tabular-nums text-sm">₹{p.dailyRent ?? 0}/day</dd>
+                    </div>
                   ) : (
                     <div className="col-span-2 min-w-0">
-                      <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">Buy Price (Admin)</dt>
+                      <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">Buy price</dt>
                       {pricing ? (
                         <dd className="mt-1">
                           <ChemPriceDisclosure label={pricing.label} count={pricing.count} sizes={pricing.sizes} align="start" />

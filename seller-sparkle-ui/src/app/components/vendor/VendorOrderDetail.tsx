@@ -1513,22 +1513,6 @@ const VendorOrderDetail = () => {
                         </div>
                         <p className="text-sm font-medium">{formatOrderTypeLabel(order.orderType)}</p>
                       </div>
-                      {order.rentalFinalPrice != null ? (
-                        <div className="space-y-1">
-                          <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">Plan price</p>
-                          <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5">
-                            {order.rentalNormalPrice != null &&
-                            Number(order.rentalNormalPrice) > Number(order.rentalFinalPrice) ? (
-                              <span className="strike-diagonal w-fit text-xs font-semibold tabular-nums text-rose-500 dark:text-rose-400">
-                                ₹{Number(order.rentalNormalPrice).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
-                              </span>
-                            ) : null}
-                            <span className="text-sm font-medium tabular-nums">
-                              ₹{Number(order.rentalFinalPrice).toLocaleString("en-IN", { maximumFractionDigits: 0 })}
-                            </span>
-                          </div>
-                        </div>
-                      ) : null}
                       <div className="col-span-2 space-y-1 border-t border-border/70 pt-3">
                         <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">Your payout</p>
                         <p className="text-sm font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">

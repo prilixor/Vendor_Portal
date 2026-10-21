@@ -18,7 +18,6 @@ import '../../core/utils/vendor_photo_picker.dart';
 import '../../shared/widgets/brand_page_loader.dart';
 import '../../shared/widgets/catalog_image.dart';
 import '../../shared/widgets/catalog_image_viewer_screen.dart';
-import '../../shared/widgets/struck_price.dart';
 import 'dispatch_details_sheet.dart';
 import 'order_group_utils.dart';
 
@@ -1972,27 +1971,6 @@ class _ItemDetailsPanel extends StatelessWidget {
                   : '${order.rentalDays} day${order.rentalDays == 1 ? '' : 's'}',
               style: TextStyle(color: context.appColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w600),
             ),
-            if (order.rentalFinalPrice != null) ...[
-              const SizedBox(height: 8),
-              _SubsectionLabel('Plan price'),
-              const SizedBox(height: 4),
-              Wrap(
-                crossAxisAlignment: WrapCrossAlignment.center,
-                spacing: 6,
-                children: [
-                  if (order.rentalNormalPrice != null &&
-                      order.rentalNormalPrice! > order.rentalFinalPrice!)
-                    StruckPrice(
-                      '₹${order.rentalNormalPrice!.toStringAsFixed(0)}',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: context.appColors.textMuted),
-                    ),
-                  Text(
-                    '₹${order.rentalFinalPrice!.toStringAsFixed(0)}',
-                    style: TextStyle(color: context.appColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w600),
-                  ),
-                ],
-              ),
-            ],
           ],
           const SizedBox(height: 8),
           _CompactDetailList(rows: [
