@@ -33,6 +33,9 @@ import { Label } from "@/app/components/ui/label";
 import { LegalPolicyLinks } from "@/app/components/legal/LegalPolicyLinks";
 import { CancelOrderConfirm } from "@/app/components/legal/CancelOrderConfirm";
 
+/** Hide Buyout Item on the customer order page. Extend Rental stays. */
+const SHOW_CUSTOMER_BUYOUT = false;
+
 function orderStatusBadgeClass(status: string): string {
   const s = status.toLowerCase().replace(/_/g, " ");
   if (s === "pending" || s === "awaiting vendor acceptance" || s === "pending vendor acceptance") {
@@ -1469,7 +1472,7 @@ const CustomerOrderDetail = () => {
         )}
 
         {activeItem.status.trim().toLowerCase() === "active" && activeItem.orderType.toLowerCase() === "rent" && (
-          <div className="col-span-2 grid grid-cols-2 gap-2 sm:contents">
+          <div className={cn("col-span-2 grid gap-2 sm:contents", SHOW_CUSTOMER_BUYOUT ? "grid-cols-2" : "grid-cols-1")}>
             <Button
               variant="default"
               className="w-full sm:w-auto"
@@ -1482,17 +1485,19 @@ const CustomerOrderDetail = () => {
             >
               Extend Rental
             </Button>
-            <Button
-              variant="secondary"
-              className="w-full sm:w-auto"
-              onClick={() => {
-                setBuyoutQuote(null);
-                setBuyoutDialogOpen(true);
-                quoteBuyoutMut.mutate();
-              }}
-            >
-              Buyout Item
-            </Button>
+            {SHOW_CUSTOMER_BUYOUT && (
+              <Button
+                variant="secondary"
+                className="w-full sm:w-auto"
+                onClick={() => {
+                  setBuyoutQuote(null);
+                  setBuyoutDialogOpen(true);
+                  quoteBuyoutMut.mutate();
+                }}
+              >
+                Buyout Item
+              </Button>
+            )}
           </div>
         )}
       </div>

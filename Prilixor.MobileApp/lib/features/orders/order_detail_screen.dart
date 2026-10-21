@@ -23,6 +23,9 @@ import '../../core/providers/chat_provider.dart';
 import '../chat/chat_detail_screen.dart';
 import '../profile/support_screen.dart';
 
+/// Hide Buyout Item on the customer order page. Extend Rental stays.
+const bool kShowCustomerBuyout = false;
+
 class OrderDetailScreen extends StatefulWidget {
   final String orderNumber;
   final List<OrderModel> ordersInGroup;
@@ -1063,21 +1066,23 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                         ),
                                       ),
                                     ),
-                                    const SizedBox(width: 10),
-                                    Expanded(
-                                      child: ElevatedButton(
-                                        style: ElevatedButton.styleFrom(
-                                          backgroundColor: colors.border,
-                                          padding: const EdgeInsets.symmetric(vertical: 12),
-                                          minimumSize: const Size.fromHeight(44),
-                                        ),
-                                        onPressed: () => _showBuyoutBottomSheet(context, provider),
-                                        child: FittedBox(
-                                          fit: BoxFit.scaleDown,
-                                          child: Text('Buyout Item', style: TextStyle(color: colors.textPrimary)),
+                                    if (kShowCustomerBuyout) ...[
+                                      const SizedBox(width: 10),
+                                      Expanded(
+                                        child: ElevatedButton(
+                                          style: ElevatedButton.styleFrom(
+                                            backgroundColor: colors.border,
+                                            padding: const EdgeInsets.symmetric(vertical: 12),
+                                            minimumSize: const Size.fromHeight(44),
+                                          ),
+                                          onPressed: () => _showBuyoutBottomSheet(context, provider),
+                                          child: FittedBox(
+                                            fit: BoxFit.scaleDown,
+                                            child: Text('Buyout Item', style: TextStyle(color: colors.textPrimary)),
+                                          ),
                                         ),
                                       ),
-                                    ),
+                                    ],
                                   ],
                                 ),
                               ],
