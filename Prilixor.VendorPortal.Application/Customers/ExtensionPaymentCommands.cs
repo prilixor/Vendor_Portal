@@ -213,6 +213,7 @@ internal sealed class VerifyExtensionPaymentCommandHandler(
     ICustomerRepository customers,
     IRazorpayPaymentService razorpay,
     IMediator mediator,
+    IEmailService email,
     ILogger<VerifyExtensionPaymentCommandHandler> logger) : ICommandHandler<VerifyExtensionPaymentCommand, bool>
 {
     public async Task<Result<bool>> Handle(VerifyExtensionPaymentCommand request, CancellationToken cancellationToken)
@@ -245,6 +246,7 @@ internal sealed class VerifyExtensionPaymentCommandHandler(
         return await ExtensionPaymentActivator.ApplyAsync(
             customers,
             mediator,
+            email,
             logger,
             session,
             request.RazorpayPaymentId,
@@ -257,6 +259,7 @@ internal static class ExtensionPaymentActivator
     public static async Task<Result<bool>> ApplyAsync(
         ICustomerRepository customers,
         IMediator mediator,
+        IEmailService email,
         ILogger logger,
         CustomerCheckoutSession session,
         string? razorpayPaymentId,
@@ -322,6 +325,15 @@ internal static class ExtensionPaymentActivator
         {
             logger.LogWarning(ex, "Extension {ExtensionId} was paid but the vendor notification failed.", extension.Id);
         }
+
+        await PaymentInvoiceMailer.SendExtensionPaymentAsync(
+            customers,
+            email,
+            logger,
+            session,
+            extension,
+            razorpayPaymentId,
+            cancellationToken);
 
         return Result.Success(true);
     }

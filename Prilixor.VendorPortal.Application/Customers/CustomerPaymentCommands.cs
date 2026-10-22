@@ -255,7 +255,9 @@ public sealed record VerifyCustomerCheckoutCommand(
 internal sealed class VerifyCustomerCheckoutCommandHandler(
     ICustomerRepository customers,
     IRazorpayPaymentService razorpay,
-    ISequentialDispatchService dispatch) : ICommandHandler<VerifyCustomerCheckoutCommand, CustomerCheckoutDto>
+    ISequentialDispatchService dispatch,
+    IEmailService email,
+    ILogger<VerifyCustomerCheckoutCommandHandler> logger) : ICommandHandler<VerifyCustomerCheckoutCommand, CustomerCheckoutDto>
 {
     public async Task<Result<CustomerCheckoutDto>> Handle(VerifyCustomerCheckoutCommand request, CancellationToken cancellationToken)
     {
@@ -277,6 +279,8 @@ internal sealed class VerifyCustomerCheckoutCommandHandler(
         await CheckoutPaymentActivator.MarkPaidAndDispatchAsync(
             customers,
             dispatch,
+            email,
+            logger,
             session,
             request.RazorpayPaymentId,
             cancellationToken);
@@ -357,6 +361,7 @@ internal sealed class ProcessRazorpayWebhookCommandHandler(
     IRazorpayPaymentService razorpay,
     IOptions<RazorpayOptions> razorpayOptions,
     IMediator mediator,
+    IEmailService email,
     ILogger<ProcessRazorpayWebhookCommandHandler> logger) : ICommandHandler<ProcessRazorpayWebhookCommand, bool>
 {
     public async Task<Result<bool>> Handle(ProcessRazorpayWebhookCommand request, CancellationToken cancellationToken)
@@ -432,14 +437,14 @@ internal sealed class ProcessRazorpayWebhookCommandHandler(
         if (string.Equals(session.Source, CheckoutSessionSources.RentalExtension, StringComparison.OrdinalIgnoreCase))
         {
             var applied = await ExtensionPaymentActivator.ApplyAsync(
-                customers, mediator, logger, session, paymentId, cancellationToken);
+                customers, mediator, email, logger, session, paymentId, cancellationToken);
             if (!applied.IsSuccess)
                 logger.LogWarning("Rental extension payment {RazorpayOrderId} was captured but not applied: {Error}", orderId, applied.Errors.FirstOrDefault()?.Description);
             return applied.IsSuccess;
         }
 
         await CheckoutPaymentActivator.MarkPaidAndDispatchAsync(
-            customers, dispatch, session, paymentId, cancellationToken);
+            customers, dispatch, email, logger, session, paymentId, cancellationToken);
         return true;
     }
 
@@ -471,7 +476,7 @@ internal sealed class ProcessRazorpayWebhookCommandHandler(
             session.RazorpayOrderId = orderId;
 
         await CheckoutPaymentActivator.MarkPaidAndDispatchAsync(
-            customers, dispatch, session, paymentId, cancellationToken);
+            customers, dispatch, email, logger, session, paymentId, cancellationToken);
     }
 }
 
@@ -480,6 +485,8 @@ internal static class CheckoutPaymentActivator
     public static async Task MarkPaidAndDispatchAsync(
         ICustomerRepository customers,
         ISequentialDispatchService dispatch,
+        IEmailService email,
+        ILogger logger,
         CustomerCheckoutSession session,
         string? razorpayPaymentId,
         CancellationToken cancellationToken)
@@ -494,6 +501,8 @@ internal static class CheckoutPaymentActivator
         session.ModifiedOnUtc = DateTime.UtcNow;
         await customers.UpdateCheckoutSessionAsync(session, cancellationToken);
         await customers.SaveChangesAsync(cancellationToken);
+
+        await PaymentInvoiceMailer.SendOrderPaymentAsync(customers, email, logger, session, cancellationToken);
 
         var orders = await customers.GetOrdersByCheckoutSessionIdAsync(session.Id, cancellationToken);
         foreach (var order in orders)
