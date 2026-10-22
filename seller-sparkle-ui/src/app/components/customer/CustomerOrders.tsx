@@ -347,6 +347,11 @@ const CustomerOrders = () => {
                               <Badge className={cn("h-5 shrink-0 whitespace-nowrap px-1.5 py-0 text-[10px] font-semibold leading-none sm:px-2", orderTypeBadgeClass(o.orderType))} variant="outline">
                                 {formatOrderTypeLabel(o.orderType)}
                               </Badge>
+                              {o.isExtended && o.orderType?.toLowerCase() !== "buy" ? (
+                                <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold leading-none text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                                  EXTENDED
+                                </span>
+                              ) : null}
                               <Badge
                                 title={formatCustomerOrderStatusTitle(o.status)}
                                 className={cn("shrink-0", orderStatusBadgeSizeClass, "px-1.5 sm:px-2", orderStatusBadgeClass(o.status))}

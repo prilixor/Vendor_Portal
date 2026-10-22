@@ -959,7 +959,8 @@ internal sealed class VendorRespondDispatchOfferCommandHandler(
             RentalNormalPrice: o.RentalNormalPrice,
             RentalDiscountType: o.RentalDiscountType,
             RentalDiscountValue: o.RentalDiscountValue,
-            RentalFinalPrice: o.RentalFinalPrice));
+            RentalFinalPrice: o.RentalFinalPrice,
+            IsExtended: o.IsExtended));
     }
 }
 

@@ -68,6 +68,7 @@ class OrderModel {
   final String? rentalDiscountType;
   final double? rentalDiscountValue;
   final double? rentalFinalPrice;
+  final bool isExtended;
 
   OrderModel({
     required this.id,
@@ -104,6 +105,7 @@ class OrderModel {
     this.rentalDiscountType,
     this.rentalDiscountValue,
     this.rentalFinalPrice,
+    this.isExtended = false,
   });
 
   bool get hasMedicalReference {
@@ -150,6 +152,7 @@ class OrderModel {
       rentalDiscountType: json['rentalDiscountType']?.toString(),
       rentalDiscountValue: (json['rentalDiscountValue'] as num?)?.toDouble(),
       rentalFinalPrice: (json['rentalFinalPrice'] as num?)?.toDouble(),
+      isExtended: json['isExtended'] == true,
     );
   }
 }

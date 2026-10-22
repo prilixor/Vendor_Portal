@@ -784,7 +784,8 @@ public sealed record CustomerOrderDto(
     string? RentalDiscountType = null,
     decimal? RentalDiscountValue = null,
     decimal? RentalFinalPrice = null,
-    IReadOnlyList<CustomerPrescriptionFileDto>? PrescriptionFiles = null);
+    IReadOnlyList<CustomerPrescriptionFileDto>? PrescriptionFiles = null,
+    bool IsExtended = false);
 
 internal static class CustomerOrderPricingRules
 {
@@ -1739,7 +1740,8 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
                 RentalNormalPrice: order.RentalNormalPrice,
                 RentalDiscountType: order.RentalDiscountType,
                 RentalDiscountValue: order.RentalDiscountValue,
-                RentalFinalPrice: order.RentalFinalPrice));
+                RentalFinalPrice: order.RentalFinalPrice,
+                IsExtended: order.IsExtended));
         }
 
         if (request.PlacedByAdminId is Guid adminId && placed.Count > 0)
@@ -1886,7 +1888,8 @@ internal sealed class GetCustomerOrdersQueryHandler(
                 RentalNormalPrice: o.RentalNormalPrice,
                 RentalDiscountType: o.RentalDiscountType,
                 RentalDiscountValue: o.RentalDiscountValue,
-                RentalFinalPrice: o.RentalFinalPrice));
+                RentalFinalPrice: o.RentalFinalPrice,
+                IsExtended: o.IsExtended));
         }
 
         return Result.Success(list);
@@ -1964,7 +1967,8 @@ internal sealed class GetCustomerOrderDetailQueryHandler(
             RentalDiscountType: o.RentalDiscountType,
             RentalDiscountValue: o.RentalDiscountValue,
             RentalFinalPrice: o.RentalFinalPrice,
-            PrescriptionFiles: files.Select(f => CustomerPrescriptionRules.ToDto(f, fileUrlResolver)).ToList()));
+            PrescriptionFiles: files.Select(f => CustomerPrescriptionRules.ToDto(f, fileUrlResolver)).ToList(),
+            IsExtended: o.IsExtended));
     }
 }
 
@@ -2165,6 +2169,7 @@ internal sealed class CancelCustomerOrderCommandHandler(
             RentalNormalPrice: o.RentalNormalPrice,
             RentalDiscountType: o.RentalDiscountType,
             RentalDiscountValue: o.RentalDiscountValue,
-            RentalFinalPrice: o.RentalFinalPrice));
+            RentalFinalPrice: o.RentalFinalPrice,
+            IsExtended: o.IsExtended));
     }
 }

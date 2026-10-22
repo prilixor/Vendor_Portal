@@ -14,7 +14,7 @@ public sealed class CustomerPricingOptions
     public int MaxDispatchVendorsPerLine { get; set; } = 5;
 
     public decimal BuyoutRentDeductionPercentage { get; set; } = 50m;
-    public decimal ExtensionServiceFee { get; set; } = 5m;
+    public decimal ExtensionServiceFee { get; set; } = 0m;
 
     /// <summary>
     /// When true, at least one active vendor service area must cover the customer location.

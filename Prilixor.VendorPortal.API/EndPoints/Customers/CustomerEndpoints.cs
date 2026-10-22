@@ -1252,6 +1252,108 @@ public sealed class RequestExtensionEndpoint(IMediator mediator)
     }
 }
 
+public sealed class GetCustomerExtensionHistoryEndpoint(IMediator mediator)
+    : Endpoint<CustomerOrderIdRequest, Results<Ok<List<CustomerExtensionHistoryDto>>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("me/orders/{OrderId}/extensions");
+        AuthSchemes(JwtBearerDefaults.AuthenticationScheme);
+        Policies("CustomerOnly");
+        Group<CustomersRouteGroup>();
+        DontAutoTag();
+        Options(x => x.WithTags("Customers"));
+    }
+
+    public override async Task<Results<Ok<List<CustomerExtensionHistoryDto>>, ProblemHttpResult>> ExecuteAsync(CustomerOrderIdRequest req, CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var customerId))
+            return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid token.", statusCode: 401);
+
+        if (!Guid.TryParse(req.OrderId, out var orderId))
+            return TypedResults.Problem(title: "customers.invalid_id", detail: "Invalid order id.", statusCode: 400);
+
+        var result = await mediator.Send(new GetCustomerExtensionHistoryQuery(customerId, orderId), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class StartExtensionPaymentEndpoint(IMediator mediator)
+    : Endpoint<ExtensionPaymentRouteRequest, Results<Ok<ExtensionPaymentDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Post("me/orders/{OrderId}/extensions/{ExtensionId}/pay");
+        AuthSchemes(JwtBearerDefaults.AuthenticationScheme);
+        Policies("CustomerOnly");
+        Group<CustomersRouteGroup>();
+        DontAutoTag();
+        Options(x => x.WithTags("Customers"));
+    }
+
+    public override async Task<Results<Ok<ExtensionPaymentDto>, ProblemHttpResult>> ExecuteAsync(ExtensionPaymentRouteRequest req, CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var customerId))
+            return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid token.", statusCode: 401);
+
+        if (!Guid.TryParse(req.OrderId, out var orderId) || !Guid.TryParse(req.ExtensionId, out var extensionId))
+            return TypedResults.Problem(title: "customers.invalid_id", detail: "Invalid order or extension id.", statusCode: 400);
+
+        var result = await mediator.Send(new StartExtensionPaymentCommand(customerId, orderId, extensionId), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class VerifyExtensionPaymentRequest
+{
+    public string OrderId { get; set; } = string.Empty;
+    public string ExtensionId { get; set; } = string.Empty;
+    public Guid CheckoutSessionId { get; set; }
+    public string RazorpayOrderId { get; set; } = string.Empty;
+    public string RazorpayPaymentId { get; set; } = string.Empty;
+    public string RazorpaySignature { get; set; } = string.Empty;
+}
+
+public sealed class VerifyExtensionPaymentEndpoint(IMediator mediator)
+    : Endpoint<VerifyExtensionPaymentRequest, Results<Ok, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Post("me/orders/{OrderId}/extensions/{ExtensionId}/verify");
+        AuthSchemes(JwtBearerDefaults.AuthenticationScheme);
+        Policies("CustomerOnly");
+        Group<CustomersRouteGroup>();
+        DontAutoTag();
+        Options(x => x.WithTags("Customers"));
+    }
+
+    public override async Task<Results<Ok, ProblemHttpResult>> ExecuteAsync(VerifyExtensionPaymentRequest req, CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var customerId))
+            return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid token.", statusCode: 401);
+
+        if (!Guid.TryParse(req.OrderId, out var orderId) || !Guid.TryParse(req.ExtensionId, out var extensionId))
+            return TypedResults.Problem(title: "customers.invalid_id", detail: "Invalid order or extension id.", statusCode: 400);
+
+        var result = await mediator.Send(new VerifyExtensionPaymentCommand(
+            customerId,
+            orderId,
+            extensionId,
+            req.CheckoutSessionId,
+            req.RazorpayOrderId,
+            req.RazorpayPaymentId,
+            req.RazorpaySignature), ct);
+
+        return result.IsSuccess ? TypedResults.Ok() : result.ToErrorResponse();
+    }
+}
+
+public sealed class ExtensionPaymentRouteRequest
+{
+    public string OrderId { get; set; } = string.Empty;
+    public string ExtensionId { get; set; } = string.Empty;
+}
+
 public sealed class QuoteBuyoutRequest
 {
     public string OrderId { get; set; } = string.Empty;

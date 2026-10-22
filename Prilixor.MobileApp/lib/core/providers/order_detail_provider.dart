@@ -33,6 +33,10 @@ class OrderDetailProvider extends ChangeNotifier {
 
   /// Open photo requests keyed by order line item id.
   final Map<String, OrderImageRequestModel> _imageRequestsByOrderId = {};
+  final Map<String, List<CustomerExtensionModel>> _extensionsByOrderId = {};
+
+  List<CustomerExtensionModel> extensionsFor(String orderId) =>
+      _extensionsByOrderId[orderId] ?? const [];
   Map<String, OrderImageRequestModel> get imageRequestsByOrderId =>
       Map.unmodifiable(_imageRequestsByOrderId);
 
@@ -312,6 +316,70 @@ class OrderDetailProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> fetchExtensionHistory(List<String> orderIds) async {
+    if (orderIds.isEmpty) return;
+    await Future.wait(orderIds.map((id) async {
+      try {
+        final response = await _apiClient.dio.get('/customers/me/orders/$id/extensions');
+        if (response.statusCode == 200 && response.data is List) {
+          _extensionsByOrderId[id] = (response.data as List)
+              .whereType<Map>()
+              .map((e) => CustomerExtensionModel.fromJson(Map<String, dynamic>.from(e)))
+              .toList();
+        }
+      } catch (_) {}
+    }));
+    notifyListeners();
+  }
+
+  Future<ExtensionPaymentSession?> startExtensionPayment(String orderId, String extensionId) async {
+    _errorMessage = null;
+    try {
+      final response = await _apiClient.dio.post(
+        '/customers/me/orders/$orderId/extensions/$extensionId/pay',
+        data: <String, dynamic>{},
+      );
+      if (response.statusCode == 200 && response.data is Map) {
+        return ExtensionPaymentSession.fromJson(Map<String, dynamic>.from(response.data as Map));
+      }
+    } catch (e) {
+      _errorMessage = 'Unable to start the extension payment.';
+    }
+    notifyListeners();
+    return null;
+  }
+
+  Future<bool> verifyExtensionPayment({
+    required String orderId,
+    required String extensionId,
+    required String checkoutSessionId,
+    required String razorpayOrderId,
+    required String razorpayPaymentId,
+    required String razorpaySignature,
+  }) async {
+    _errorMessage = null;
+    try {
+      final response = await _apiClient.dio.post(
+        '/customers/me/orders/$orderId/extensions/$extensionId/verify',
+        data: {
+          'checkoutSessionId': checkoutSessionId,
+          'razorpayOrderId': razorpayOrderId,
+          'razorpayPaymentId': razorpayPaymentId,
+          'razorpaySignature': razorpaySignature,
+        },
+      );
+      if (response.statusCode == 200) {
+        await fetchOrderDetail(orderId, silent: true);
+        await fetchExtensionHistory([orderId]);
+        return true;
+      }
+    } catch (e) {
+      _errorMessage = 'Payment verification failed. If money was taken, refresh this order before paying again.';
+    }
+    notifyListeners();
+    return false;
+  }
+
   Future<bool> processExtension(String orderId, int days) async {
     _isActionLoading = true;
     notifyListeners();
@@ -324,6 +392,7 @@ class OrderDetailProvider extends ChangeNotifier {
       if (response.statusCode == 200 || response.statusCode == 204) {
         success = true;
         await fetchOrderDetail(orderId);
+        await fetchExtensionHistory([orderId]);
       }
     } catch (e) {
       _errorMessage = 'Failed to process extension.';

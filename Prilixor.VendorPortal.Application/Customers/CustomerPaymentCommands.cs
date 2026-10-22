@@ -344,7 +344,8 @@ internal sealed class VerifyCustomerCheckoutCommandHandler(
             RentalNormalPrice: o.RentalNormalPrice,
             RentalDiscountType: o.RentalDiscountType,
             RentalDiscountValue: o.RentalDiscountValue,
-            RentalFinalPrice: o.RentalFinalPrice);
+            RentalFinalPrice: o.RentalFinalPrice,
+            IsExtended: o.IsExtended);
     }
 }
 
@@ -355,6 +356,7 @@ internal sealed class ProcessRazorpayWebhookCommandHandler(
     ISequentialDispatchService dispatch,
     IRazorpayPaymentService razorpay,
     IOptions<RazorpayOptions> razorpayOptions,
+    IMediator mediator,
     ILogger<ProcessRazorpayWebhookCommandHandler> logger) : ICommandHandler<ProcessRazorpayWebhookCommand, bool>
 {
     public async Task<Result<bool>> Handle(ProcessRazorpayWebhookCommand request, CancellationToken cancellationToken)
@@ -382,17 +384,26 @@ internal sealed class ProcessRazorpayWebhookCommandHandler(
             return Result.Success(true);
 
         if (eventName is "payment.captured" or "order.paid")
-            await TryActivateFromPaymentEntity(root, cancellationToken);
+        {
+            var applied = await TryActivateFromPaymentEntity(root, cancellationToken);
+            if (!applied)
+            {
+                return Result.Failure<bool>(new Error(
+                    "payments.extension_apply_failed",
+                    "Extension payment could not be applied.",
+                    ErrorCategory.Validation));
+            }
+        }
         else if (eventName is "payment_link.paid")
             await TryActivateFromPaymentLink(root, cancellationToken);
 
         return Result.Success(true);
     }
 
-    private async Task TryActivateFromPaymentEntity(JsonElement root, CancellationToken cancellationToken)
+    private async Task<bool> TryActivateFromPaymentEntity(JsonElement root, CancellationToken cancellationToken)
     {
         if (!root.TryGetProperty("payload", out var payload))
-            return;
+            return true;
 
         string? orderId = null;
         string? paymentId = null;
@@ -412,14 +423,24 @@ internal sealed class ProcessRazorpayWebhookCommandHandler(
         }
 
         if (string.IsNullOrWhiteSpace(orderId))
-            return;
+            return true;
 
         var session = await customers.GetCheckoutSessionByRazorpayOrderIdAsync(orderId, cancellationToken);
         if (session is null)
-            return;
+            return true;
+
+        if (string.Equals(session.Source, CheckoutSessionSources.RentalExtension, StringComparison.OrdinalIgnoreCase))
+        {
+            var applied = await ExtensionPaymentActivator.ApplyAsync(
+                customers, mediator, logger, session, paymentId, cancellationToken);
+            if (!applied.IsSuccess)
+                logger.LogWarning("Rental extension payment {RazorpayOrderId} was captured but not applied: {Error}", orderId, applied.Errors.FirstOrDefault()?.Description);
+            return applied.IsSuccess;
+        }
 
         await CheckoutPaymentActivator.MarkPaidAndDispatchAsync(
             customers, dispatch, session, paymentId, cancellationToken);
+        return true;
     }
 
     private async Task TryActivateFromPaymentLink(JsonElement root, CancellationToken cancellationToken)

@@ -820,6 +820,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         _buildOrderTypeBadge(context, order.orderType),
+                        if (order.isExtended && order.orderType.toLowerCase() != 'buy')
+                          _buildExtendedBadge(context),
                         _buildStatusBadge(context, order.status),
                       ],
                     ),
@@ -857,6 +859,26 @@ class _OrdersScreenState extends State<OrdersScreen> {
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildExtendedBadge(BuildContext context) {
+    final isDark = context.isDarkMode;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF78350F).withValues(alpha: 0.45) : const Color(0xFFFEF3C7),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        'EXTENDED',
+        style: TextStyle(
+          color: isDark ? const Color(0xFFFCD34D) : const Color(0xFF92400E),
+          fontSize: 10,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.3,
         ),
       ),
     );

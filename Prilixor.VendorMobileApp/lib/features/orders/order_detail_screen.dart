@@ -42,7 +42,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
   bool _refreshInFlight = false;
 
   /// Match Customer Mobile: keep status/photos/continuations fresh while open.
-  static const _pollInterval = Duration(seconds: 15);
+  static const _pollInterval = Duration(seconds: 5);
 
   @override
   void initState() {
@@ -388,7 +388,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(ok ? 'Extension approved.' : (provider.error ?? 'Approve failed')),
+        content: Text(ok
+            ? 'Extension approved. The customer pays before the end date changes.'
+            : (provider.error ?? 'Approve failed')),
         backgroundColor: ok ? null : Colors.redAccent,
       ),
     );
@@ -557,6 +559,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                                                     children: [
                                                       OrderTypeChip(orderType: item.orderType),
                                                       OrderMetaChip(label: 'Qty ${item.quantity}'),
+                                                      if (item.isExtended && item.orderType.toLowerCase() != 'buy')
+                                                        OrderMetaChip(label: 'EXTENDED', highlight: true),
                                                       if (item.assignedAssetTags.isNotEmpty)
                                                         OrderMetaChip(
                                                           label: item.assignedAssetTags.length == 1
@@ -944,19 +948,21 @@ class _PendingContinuationsCard extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           ...continuations.pendingExtensions.map((ext) {
+            final waitingForPayment = ext.status == 'awaiting_payment';
             return Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: _RequestBox(
-                title: 'Rent extension request',
-                subtitle: 'Customer wants to extend by ${ext.additionalDays} days.',
+                title: waitingForPayment ? 'Extension approved' : 'Rent extension request',
+                subtitle: waitingForPayment
+                    ? 'The customer still has to pay. The end date stays the same until then.'
+                    : 'Customer wants to extend by ${ext.additionalDays} days.',
                 rows: [
                   ('Original end date', formatDate(ext.originalEndDate)),
                   ('New end date', formatDate(ext.newEndDate)),
-                  ('Base extension rent', '₹${ext.extensionAmount.toStringAsFixed(2)}'),
-                  (formatGstLabel(ext.gstPercent), '₹${ext.gstAmount.toStringAsFixed(2)}'),
-                  ('Total to collect', '₹${ext.totalAmount.toStringAsFixed(2)}'),
+                  ('Your payout', '₹${ext.vendorPayout.toStringAsFixed(2)}'),
                 ],
                 busy: busy,
+                showActions: !waitingForPayment,
                 onReject: () => onRejectExtension(ext),
                 onApprove: () => onApproveExtension(ext),
               ),
@@ -991,6 +997,7 @@ class _RequestBox extends StatelessWidget {
   final String subtitle;
   final List<(String, String)> rows;
   final bool busy;
+  final bool showActions;
   final VoidCallback onReject;
   final VoidCallback onApprove;
 
@@ -999,6 +1006,7 @@ class _RequestBox extends StatelessWidget {
     required this.subtitle,
     required this.rows,
     required this.busy,
+    this.showActions = true,
     required this.onReject,
     required this.onApprove,
   });
@@ -1039,6 +1047,7 @@ class _RequestBox extends StatelessWidget {
               ),
             ),
           ),
+          if (showActions) ...[
           const SizedBox(height: 10),
           Row(
             children: [
@@ -1062,6 +1071,7 @@ class _RequestBox extends StatelessWidget {
               ),
             ],
           ),
+          ],
         ],
       ),
     );
@@ -1956,7 +1966,7 @@ class _ItemDetailsPanel extends StatelessWidget {
                         OrderStatusChip(status: order.status),
                         OrderTypeChip(orderType: order.orderType),
                         if (order.isExtended && !isBuy)
-                          OrderMetaChip(label: 'Extended', highlight: true),
+                          OrderMetaChip(label: 'EXTENDED', highlight: true),
                       ],
                     ),
                   ],
@@ -1977,6 +1987,14 @@ class _ItemDetailsPanel extends StatelessWidget {
                   : '${order.rentalDays} day${order.rentalDays == 1 ? '' : 's'}',
               style: TextStyle(color: context.appColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w600),
             ),
+            if (order.isExtended)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  'This product includes a paid extension',
+                  style: TextStyle(color: context.appColors.textMuted, fontSize: 11),
+                ),
+              ),
           ],
           const SizedBox(height: 8),
           _CompactDetailList(rows: [

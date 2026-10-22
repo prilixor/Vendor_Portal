@@ -425,6 +425,8 @@ class OrderItemMetaLine extends StatelessWidget {
                 ],
               ),
             ),
+            if (order.isExtended && order.orderType.toLowerCase() != 'buy')
+              const OrderMetaChip(label: 'EXTENDED', highlight: true),
           ],
         ),
         const SizedBox(height: 5),

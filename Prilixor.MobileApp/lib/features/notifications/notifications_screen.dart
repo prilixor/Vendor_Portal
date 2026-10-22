@@ -455,6 +455,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     if (t == 'order_dispatched' || t.contains('dispatch')) return 'Dispatched';
     if (t == 'order_in_transit' || t.contains('transit')) return 'In transit';
     if (t == 'order_delivered' || t.contains('deliver')) return 'Delivered';
+    if (t == 'customer_extension_paid') return 'Paid';
     if (t.contains('payment') || t.contains('pay')) return 'Payment';
     if (t == 'customer_extension_cancelled') return 'Rejected';
     if (t == 'customer_extension_approved') return 'Approved';

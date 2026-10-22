@@ -6,9 +6,11 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/app/components/ui/pop
 import { RadioGroup, RadioGroupItem } from "@/app/components/ui/radio-group";
 import {
   customerApi,
+  type CustomerExtensionApi,
   type CustomerOrderImageApi,
   type CustomerOrderImageRequestApi,
 } from "@/app/services/customerApi";
+import { openRazorpayCheckout } from "@/app/helpers/razorpayCheckout";
 import { chatApi } from "@/app/services/chatApi";
 import { Button } from "@/app/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
@@ -82,7 +84,7 @@ function isCustomerOrderCancellable(status: string): boolean {
 }
 
 /** Match Customer Mobile order detail polling while the page is open. */
-const CUSTOMER_ORDER_POLL_MS = 15_000;
+const CUSTOMER_ORDER_POLL_MS = 5_000;
 
 function isOrderGuid(value: string | undefined): value is string {
   return !!value && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
@@ -596,11 +598,42 @@ const CustomerOrderDetail = () => {
       setExtensionDialogOpen(false);
       setExtensionQuote(null);
       queryClient.invalidateQueries({ queryKey: ["customer-order", activeItem?.id] });
+      queryClient.invalidateQueries({ queryKey: ["customer-order-extensions"] });
       queryClient.invalidateQueries({ queryKey: ["customer-orders"] });
       queryClient.invalidateQueries({ queryKey: ["customer-order-summaries"] });
       queryClient.invalidateQueries({ queryKey: ["customer-order-group"] });
     },
     onError: (err: Error) => toast.error(err.message || "Failed to process extension.")
+  });
+
+  const payExtensionMut = useMutation({
+    mutationFn: async (ext: CustomerExtensionApi) => {
+      const order = data;
+      if (!order) throw new Error("Order not loaded.");
+      const session = await customerApi.startExtensionPayment(order.id, ext.extensionId);
+      if (!session.razorpayOrderId) throw new Error("Payment could not be started. Please try again.");
+      const payment = await openRazorpayCheckout({
+        key: session.razorpayKeyId,
+        amountPaise: Math.round(Number(session.amount) * 100),
+        currency: session.currency || "INR",
+        orderId: session.razorpayOrderId,
+        description: `Extension for ${order.listingTitle}`,
+      });
+      await customerApi.verifyExtensionPayment(order.id, ext.extensionId, {
+        checkoutSessionId: session.checkoutSessionId,
+        razorpayOrderId: payment.razorpay_order_id,
+        razorpayPaymentId: payment.razorpay_payment_id,
+        razorpaySignature: payment.razorpay_signature,
+      });
+    },
+    onSuccess: () => {
+      toast.success("Extension paid. The new end date is now on this product.");
+      queryClient.invalidateQueries({ queryKey: ["customer-order", currentItemId] });
+      queryClient.invalidateQueries({ queryKey: ["customer-order-extensions"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-order-group"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-order-summaries"] });
+    },
+    onError: (err: Error) => toast.error(err.message || "Extension payment failed."),
   });
 
   const quoteBuyoutMut = useMutation({
@@ -629,6 +662,23 @@ const CustomerOrderDetail = () => {
   }, [data, groupOrders]);
 
   const groupItemIds = useMemo(() => orderGroupItems.map((item) => item.id), [orderGroupItems]);
+
+  const extensionQueries = useQueries({
+    queries: groupItemIds.map((itemId) => ({
+      queryKey: ["customer-order-extensions", itemId],
+      queryFn: () => customerApi.getOrderExtensions(itemId),
+      enabled: groupItemIds.length > 0,
+      refetchInterval: CUSTOMER_ORDER_POLL_MS,
+    })),
+  });
+
+  const extensionsByItemId = useMemo(() => {
+    const map = new Map<string, CustomerExtensionApi[]>();
+    groupItemIds.forEach((itemId, index) => {
+      map.set(itemId, extensionQueries[index]?.data ?? []);
+    });
+    return map;
+  }, [groupItemIds, extensionQueries]);
 
   const imageRequestQueries = useQueries({
     queries: groupItemIds.map((itemId) => ({
@@ -825,6 +875,12 @@ const CustomerOrderDetail = () => {
   }
 
   const activeItem = data;
+  const activeExtensions = extensionsByItemId.get(activeItem.id) ?? [];
+  const paidExtensions = activeExtensions.filter((ext) => ext.status === "paid");
+  const awaitingExtension = activeExtensions.find((ext) => ext.status === "awaiting_payment") ?? null;
+  const pendingExtension = activeExtensions.find((ext) => ext.status === "pending_approval") ?? null;
+  const paidExtensionTotal = paidExtensions.reduce((sum, ext) => sum + (ext.totalAmount ?? 0), 0);
+  const originalRentalAmount = Math.max(0, (activeItem.totalAmount ?? 0) - paidExtensionTotal);
   const shownPrescriptionFiles = activeItem.prescriptionFiles?.length
     ? activeItem.prescriptionFiles
     : prescriptionFiles;
@@ -865,6 +921,9 @@ const CustomerOrderDetail = () => {
             <p className="text-[13px] font-semibold sm:text-base">Items in this order</p>
             {orderGroupItems.map((item) => {
               const isSelected = item.id === activeItem.id;
+              const itemExtensions = extensionsByItemId.get(item.id) ?? [];
+              const itemExtended = itemExtensions.some((ext) => ext.status === "paid");
+              const itemPaymentDue = itemExtensions.some((ext) => ext.status === "awaiting_payment");
               const imageUrl = resolveItemImageUrl(item);
               const openRequest = imageRequestsByItemId.get(item.id);
               const photoCount = openRequest?.images?.length ?? 0;
@@ -903,6 +962,16 @@ const CustomerOrderDetail = () => {
                       >
                         {formatCustomerOrderStatusLabel(item.status)}
                       </span>
+                      {itemExtended ? (
+                        <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                          EXTENDED
+                        </span>
+                      ) : null}
+                      {itemPaymentDue ? (
+                        <span className="inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-bold text-orange-900 dark:bg-orange-950/40 dark:text-orange-200">
+                          Payment due
+                        </span>
+                      ) : null}
                       {photoLabel ? (
                         <span className="text-[11px] text-muted-foreground">· {photoLabel}</span>
                       ) : null}
@@ -947,7 +1016,16 @@ const CustomerOrderDetail = () => {
           ) : (
             <>
               <DetailRow label="Start date">{formatDetailDate(activeItem.startDate)}</DetailRow>
-              <DetailRow label="End date">{formatDetailDate(activeItem.endDate)}</DetailRow>
+              <DetailRow label="End date">
+                <span className="inline-flex flex-wrap items-center justify-end gap-2 sm:justify-start">
+                  {formatDetailDate(activeItem.endDate)}
+                  {(extensionsByItemId.get(activeItem.id) ?? []).some((ext) => ext.status === "paid") ? (
+                    <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                      EXTENDED
+                    </span>
+                  ) : null}
+                </span>
+              </DetailRow>
               <DetailRow label="Quantity">{activeItem.quantity}</DetailRow>
               <DetailRow label="Order type">
                 {formatOrderTypeLabel(activeItem.orderType)}
@@ -995,6 +1073,24 @@ const CustomerOrderDetail = () => {
             </>
           )}
         </CardContent>
+        {activeItem.orderType?.toLowerCase() === "rent" && paidExtensions.length > 0 && (
+          <div className="space-y-1.5 border-t border-border/60 px-3 py-3 text-sm sm:px-4">
+            <div className="flex items-center justify-between gap-3 text-muted-foreground">
+              <span>Original rental</span>
+              <span className="tabular-nums">₹{originalRentalAmount.toFixed(2)}</span>
+            </div>
+            {paidExtensions.map((ext) => (
+              <div key={ext.extensionId} className="flex items-center justify-between gap-3">
+                <span>Extension · {ext.additionalDays} day{ext.additionalDays === 1 ? "" : "s"}</span>
+                <span className="tabular-nums">₹{ext.totalAmount.toFixed(2)}</span>
+              </div>
+            ))}
+            <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-1.5 font-semibold">
+              <span>Product total</span>
+              <span className="tabular-nums">₹{activeItem.totalAmount.toFixed(2)}</span>
+            </div>
+          </div>
+        )}
       </Card>
 
       {(shownPrescriptionFiles.length > 0 || canUploadPrescription(activeItem.status)) && (
@@ -1444,6 +1540,37 @@ const CustomerOrderDetail = () => {
         className="w-full border-t border-border/60"
       />
 
+      {awaitingExtension && (
+        <Card className="border-orange-200 bg-orange-50 shadow-sm dark:border-orange-900/50 dark:bg-orange-950/20">
+          <CardContent className="space-y-3 p-3 sm:p-4">
+            <div>
+              <p className="text-sm font-semibold text-orange-950 dark:text-orange-100">Extension approved</p>
+              <p className="mt-1 text-sm text-orange-950/80 dark:text-orange-100/80">
+                {awaitingExtension.additionalDays} day{awaitingExtension.additionalDays === 1 ? "" : "s"} for {activeItem.listingTitle}. The end date stays {formatDetailDate(activeItem.endDate)} until this payment succeeds, then it moves to {formatDetailDate(awaitingExtension.newEndDate)}.
+              </p>
+            </div>
+            <Button
+              className="w-full sm:w-auto"
+              disabled={payExtensionMut.isPending}
+              onClick={() => payExtensionMut.mutate(awaitingExtension)}
+            >
+              {payExtensionMut.isPending ? "Opening payment…" : `Pay ₹${awaitingExtension.totalAmount.toFixed(2)}`}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {pendingExtension && !awaitingExtension && (
+        <Card className="border-amber-200 bg-amber-50 shadow-sm dark:border-amber-900/50 dark:bg-amber-950/20">
+          <CardContent className="p-3 sm:p-4">
+            <p className="text-sm font-semibold text-amber-950 dark:text-amber-100">Extension waiting for vendor approval</p>
+            <p className="mt-1 text-sm text-amber-950/80 dark:text-amber-100/80">
+              {pendingExtension.additionalDays} day{pendingExtension.additionalDays === 1 ? "" : "s"} · ₹{pendingExtension.totalAmount.toFixed(2)}. This amount is not in the order total yet.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Support and Cancellation Actions for Selected Item */}
       <div className="grid grid-cols-2 gap-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:flex sm:flex-wrap sm:gap-3">
         <Button variant="outline" className="w-full justify-center sm:w-auto" asChild>
@@ -1479,6 +1606,8 @@ const CustomerOrderDetail = () => {
             <Button
               variant="default"
               className="w-full sm:w-auto"
+              disabled={Boolean(awaitingExtension)}
+              title={awaitingExtension ? "Pay the approved extension before requesting more days." : undefined}
               onClick={() => {
                 setExtensionDays(1);
                 setExtensionQuote(null);
@@ -1562,6 +1691,9 @@ const CustomerOrderDetail = () => {
                   <span>Total Amount:</span>
                   <span>₹{extensionQuote.totalAmount.toFixed(2)}</span>
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  Payment is taken on this order page after the vendor approves. The end date changes only after that payment.
+                </p>
               </div>
             ) : null}
           </div>
@@ -1575,7 +1707,7 @@ const CustomerOrderDetail = () => {
                 ? "Processing..."
                 : (extensionQuote?.pendingDays ?? 0) > 0
                   ? "Update request"
-                  : "Confirm & Pay"}
+                  : "Request extension"}
             </Button>
           </DialogFooter>
         </DialogContent>

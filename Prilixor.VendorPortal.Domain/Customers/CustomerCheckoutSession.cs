@@ -43,6 +43,8 @@ public static class CheckoutSessionSources
 {
     public const string CustomerWeb = "customer_web";
     public const string AdminPaymentLink = "admin_payment_link";
+    /// <summary>Razorpay charge for one approved rental extension. Does not place or dispatch an order.</summary>
+    public const string RentalExtension = "rental_extension";
 }
 
 public static class CheckoutSessionStatuses

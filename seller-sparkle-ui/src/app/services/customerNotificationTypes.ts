@@ -33,6 +33,7 @@ const BADGE_META: Record<string, NotificationBadgeMeta> = {
   back_in_stock: { label: "Back in stock", className: BADGE_SUCCESS },
   customer_extension_cancelled: { label: "Rejected", className: BADGE_DANGER },
   customer_extension_approved: { label: "Approved", className: BADGE_SUCCESS },
+  customer_extension_paid: { label: "Paid", className: BADGE_SUCCESS },
 };
 
 function normalizeNotificationType(notificationType: string | undefined | null): string {

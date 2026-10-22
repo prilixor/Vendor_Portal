@@ -3066,6 +3066,12 @@ public sealed class CustomerRepository(
             .Include(x => x.SessionOrders)
             .FirstOrDefaultAsync(x => x.RazorpayPaymentLinkId == paymentLinkId && !x.IsDeleted, cancellationToken);
 
+    public Task<CustomerCheckoutSession?> GetOpenCheckoutSessionByReceiptAsync(string receipt, CancellationToken cancellationToken) =>
+        customerDb.CustomerCheckoutSessions
+            .Where(x => x.Receipt == receipt && !x.IsDeleted && x.Status == CheckoutSessionStatuses.Created)
+            .OrderByDescending(x => x.CreatedOnUtc)
+            .FirstOrDefaultAsync(cancellationToken);
+
     public Task<List<CustomerRentalOrder>> GetOrdersByCheckoutSessionIdAsync(Guid sessionId, CancellationToken cancellationToken) =>
         customerDb.CustomerRentalOrders
             .Where(o => o.CheckoutSessionId == sessionId && !o.IsDeleted)
@@ -4325,6 +4331,108 @@ public sealed class CustomerRepository(
         return customerDb.CustomerRentalOrderExtensions
             .Where(x => x.CustomerRentalOrderId == orderId && !x.IsDeleted && x.Status == "pending_approval")
             .ToListAsync(cancellationToken);
+    }
+
+    public Task<List<CustomerRentalOrderExtension>> GetOpenCustomerRentalOrderExtensionsAsync(Guid orderId, CancellationToken cancellationToken)
+    {
+        return customerDb.CustomerRentalOrderExtensions
+            .Where(x => x.CustomerRentalOrderId == orderId && !x.IsDeleted
+                && (x.Status == "pending_approval" || x.Status == "awaiting_payment"))
+            .OrderBy(x => x.CreatedOnUtc)
+            .ToListAsync(cancellationToken);
+    }
+
+    public Task<List<CustomerRentalOrderExtension>> GetCustomerExtensionHistoryAsync(Guid orderId, CancellationToken cancellationToken)
+    {
+        return customerDb.CustomerRentalOrderExtensions
+            .Where(x => x.CustomerRentalOrderId == orderId && !x.IsDeleted
+                && (x.Status == "pending_approval" || x.Status == "awaiting_payment" || x.Status == "paid"))
+            .OrderBy(x => x.CreatedOnUtc)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<ExtensionPaymentApplyResult> ApplyPaidRentalExtensionAsync(
+        Guid extensionId,
+        Guid checkoutSessionId,
+        string? razorpayPaymentId,
+        decimal vendorCredit,
+        CancellationToken cancellationToken)
+    {
+        await using var tx = await customerDb.Database.BeginTransactionAsync(cancellationToken);
+
+        foreach (var entry in customerDb.ChangeTracker.Entries<CustomerRentalOrderExtension>()
+                     .Where(e => e.Entity.Id == extensionId)
+                     .ToList())
+        {
+            entry.State = EntityState.Detached;
+        }
+
+        var claimed = await customerDb.CustomerRentalOrderExtensions
+            .Where(x => x.Id == extensionId && !x.IsDeleted && x.Status == "awaiting_payment")
+            .ExecuteUpdateAsync(setters => setters
+                .SetProperty(x => x.Status, "paid")
+                .SetProperty(x => x.ModifiedOnUtc, DateTime.UtcNow), cancellationToken);
+
+        if (claimed == 0)
+        {
+            var current = await customerDb.CustomerRentalOrderExtensions
+                .AsNoTracking()
+                .FirstOrDefaultAsync(x => x.Id == extensionId && !x.IsDeleted, cancellationToken);
+            if (string.Equals(current?.Status, "paid", StringComparison.OrdinalIgnoreCase))
+            {
+                await MarkExtensionCheckoutPaidAsync(checkoutSessionId, razorpayPaymentId, cancellationToken);
+                await customerDb.SaveChangesAsync(cancellationToken);
+                await tx.CommitAsync(cancellationToken);
+                return ExtensionPaymentApplyResult.AlreadyPaid;
+            }
+
+            await tx.RollbackAsync(cancellationToken);
+            return ExtensionPaymentApplyResult.NotPayable;
+        }
+
+        var extension = await customerDb.CustomerRentalOrderExtensions
+            .AsNoTracking()
+            .FirstAsync(x => x.Id == extensionId, cancellationToken);
+
+        foreach (var entry in customerDb.ChangeTracker.Entries<CustomerRentalOrder>()
+                     .Where(e => e.Entity.Id == extension.CustomerRentalOrderId)
+                     .ToList())
+        {
+            entry.State = EntityState.Detached;
+        }
+
+        var order = await customerDb.CustomerRentalOrders
+            .FirstAsync(x => x.Id == extension.CustomerRentalOrderId && !x.IsDeleted, cancellationToken);
+
+        order.EndDate = extension.NewEndDate;
+        order.RentalDays += extension.AdditionalDays;
+        order.SubtotalAmount += extension.ExtensionAmount;
+        if (order.VendorSubtotalAmount > 0 && vendorCredit > 0)
+            order.VendorSubtotalAmount += vendorCredit;
+        order.ServiceFeeAmount += extension.ServiceFeeAmount;
+        order.GstAmount += extension.GstAmount;
+        order.TotalAmount += extension.TotalAmount;
+        order.IsExtended = true;
+        order.ModifiedOnUtc = DateTime.UtcNow;
+
+        await MarkExtensionCheckoutPaidAsync(checkoutSessionId, razorpayPaymentId, cancellationToken);
+        await customerDb.SaveChangesAsync(cancellationToken);
+        await tx.CommitAsync(cancellationToken);
+        return ExtensionPaymentApplyResult.Applied;
+    }
+
+    private async Task MarkExtensionCheckoutPaidAsync(Guid checkoutSessionId, string? razorpayPaymentId, CancellationToken cancellationToken)
+    {
+        var session = await customerDb.CustomerCheckoutSessions
+            .FirstOrDefaultAsync(x => x.Id == checkoutSessionId && !x.IsDeleted, cancellationToken);
+        if (session is null || string.Equals(session.Status, CheckoutSessionStatuses.Paid, StringComparison.OrdinalIgnoreCase))
+            return;
+
+        session.Status = CheckoutSessionStatuses.Paid;
+        session.PaidAt = DateTimeOffset.UtcNow;
+        session.ModifiedOnUtc = DateTime.UtcNow;
+        if (!string.IsNullOrWhiteSpace(razorpayPaymentId))
+            session.RazorpayPaymentId = razorpayPaymentId;
     }
 
     public async Task<List<Guid>> GetOrderIdsWithDuplicatePendingExtensionsAsync(CancellationToken cancellationToken)

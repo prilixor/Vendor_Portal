@@ -28,7 +28,7 @@ import {
   AlertDialogTrigger,
 } from "@/app/components/ui/alert-dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/app/components/ui/tooltip";
-import type { OrderContinuationsDto } from "@/app/services/vendorOnboardingApi";
+import { extensionVendorPayout, type OrderContinuationsDto } from "@/app/services/vendorOnboardingApi";
 
 const statusOptions = [
   { id: "pending", label: "Pending" },
@@ -221,6 +221,7 @@ const AdminOrderDetail = () => {
     queryKey: ["admin-order-detail", orderId],
     queryFn: () => adminApi.getAdminOrderDetail(orderId!, { quiet: true }),
     enabled: !!orderId,
+    refetchInterval: 5_000,
   });
   const orders = data?.items ?? [];
 
@@ -262,19 +263,38 @@ const AdminOrderDetail = () => {
   const baseOrderNumber = selectedOrder ? getBaseOrderNumber(selectedOrder.orderNumber) : "";
 
   useEffect(() => {
-    if (!selectedOrder) {
+    if (!selectedOrder) return;
+    setStatusUpdateLocal(selectedOrder.status);
+  }, [selectedOrder?.orderId]);
+
+  useEffect(() => {
+    const itemId = selectedOrder?.orderId;
+    if (!itemId) {
       setContinuations(null);
       return;
     }
-    setStatusUpdateLocal(selectedOrder.status);
-    adminApi
-      .getAdminOrderContinuations(selectedOrder.orderId)
-      .then(setContinuations)
-      .catch((err) => {
-        console.error("Failed to load continuations", err);
-        setContinuations(null);
-      });
-  }, [selectedOrder?.orderId]);
+
+    let cancelled = false;
+    const load = () => {
+      if (continuationsUpdating) return;
+      adminApi
+        .getAdminOrderContinuations(itemId)
+        .then((row) => {
+          if (!cancelled) setContinuations(row);
+        })
+        .catch((err) => {
+          console.error("Failed to load continuations", err);
+          if (!cancelled) setContinuations(null);
+        });
+    };
+
+    load();
+    const timer = window.setInterval(load, 5_000);
+    return () => {
+      cancelled = true;
+      window.clearInterval(timer);
+    };
+  }, [selectedOrder?.orderId, continuationsUpdating]);
 
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ["admin-order-detail"] });
@@ -465,6 +485,11 @@ const AdminOrderDetail = () => {
                   </div>
                 </div>
                 <div className="flex items-center justify-between sm:justify-end gap-3 mt-3 sm:mt-0 pl-[3.75rem] sm:pl-0">
+                  {item.isExtended ? (
+                    <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                      EXTENDED
+                    </span>
+                  ) : null}
                   <Badge
                     title={formatOrderStatusTitle(item.status)}
                     className={cn(orderStatusBadgeSizeClass, orderStatusBadgeClass(item.status))}
@@ -494,10 +519,30 @@ const AdminOrderDetail = () => {
                 key={ext.extensionId}
                 className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-md border border-amber-100 bg-white p-3 dark:border-amber-900/30 dark:bg-black/20"
               >
-                <div>
+                <div className="min-w-0 flex-1">
                   <p className="text-sm font-semibold">Rent Extension</p>
-                  <p className="text-sm text-muted-foreground">+{ext.additionalDays} days · ₹{ext.totalAmount.toFixed(2)}</p>
+                  <p className="text-sm text-muted-foreground">+{ext.additionalDays} day{ext.additionalDays === 1 ? "" : "s"}</p>
+                  <div className="mt-2 grid max-w-sm grid-cols-2 gap-x-4 gap-y-1 text-xs">
+                    <p className="text-muted-foreground">Original end</p>
+                    <p className="text-right">{formatDetailDate(ext.originalEndDate)}</p>
+                    <p className="text-muted-foreground">New end</p>
+                    <p className="text-right">{formatDetailDate(ext.newEndDate)}</p>
+                    <p className="col-span-2 my-0.5 border-t border-amber-200/70" />
+                    <p className="text-muted-foreground">Customer extension rent</p>
+                    <p className="text-right">₹{ext.extensionAmount.toFixed(2)}</p>
+                    <p className="text-muted-foreground">{formatGstRateLabel(ext.gstPercent)}</p>
+                    <p className="text-right">₹{ext.gstAmount.toFixed(2)}</p>
+                    <p className="font-semibold">Customer total</p>
+                    <p className="text-right font-semibold">₹{ext.totalAmount.toFixed(2)}</p>
+                    <p className="font-semibold text-amber-900 dark:text-amber-400">Vendor payout</p>
+                    <p className="text-right font-semibold text-amber-900 dark:text-amber-400">₹{extensionVendorPayout(ext).toFixed(2)}</p>
+                  </div>
                 </div>
+                {ext.status === "awaiting_payment" ? (
+                  <p className="text-sm text-amber-900 dark:text-amber-300 sm:max-w-[16rem] sm:text-right">
+                    Approved. The customer still has to pay. The end date stays the same until then.
+                  </p>
+                ) : (
                 <div className="flex gap-2">
                   <Button
                     variant="outline"
@@ -518,13 +563,14 @@ const AdminOrderDetail = () => {
                     onClick={() =>
                       void runContinuation(
                         () => adminApi.approveAdminExtension(selectedOrder.orderId, ext.extensionId, user?.id || ""),
-                        "Extension approved.",
+                        "Extension approved. The customer pays before the end date changes.",
                       )
                     }
                   >
                     Approve
                   </Button>
                 </div>
+                )}
               </div>
             ))}
             {continuations.pendingBuyouts.map((buy) => (
@@ -727,17 +773,27 @@ const AdminOrderDetail = () => {
             </CardHeader>
             <CardContent className="grid gap-4 text-sm">
               <div className="space-y-1">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
-                  <Calendar className="h-3.5 w-3.5" />
-                  {selectedOrder.orderType === "rent" ? "Period" : "Purchase date"}
-                </p>
+                <div className="flex flex-wrap items-center gap-2">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
+                    <Calendar className="h-3.5 w-3.5" />
+                    {selectedOrder.orderType === "rent" ? "Period" : "Purchase date"}
+                  </p>
+                  {selectedOrder.orderType === "rent" && selectedOrder.isExtended ? (
+                    <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                      EXTENDED
+                    </span>
+                  ) : null}
+                </div>
                 <p className="font-medium">
                   {selectedOrder.orderType === "rent"
                     ? `${formatDetailDate(selectedOrder.startDate)} → ${formatDetailDate(selectedOrder.endDate)}`
                     : formatDetailDate(selectedOrder.startDate)}
                 </p>
                 {selectedOrder.orderType === "rent" ? (
-                  <p className="text-xs text-muted-foreground">{selectedOrder.rentalDays} days</p>
+                  <p className="text-xs text-muted-foreground">
+                    {selectedOrder.rentalDays} days
+                    {selectedOrder.isExtended ? " · this product includes a paid extension" : ""}
+                  </p>
                 ) : null}
               </div>
               <div className="space-y-1">

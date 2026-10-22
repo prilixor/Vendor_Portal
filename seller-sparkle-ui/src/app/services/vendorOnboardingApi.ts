@@ -1231,6 +1231,8 @@ export interface PendingExtensionDto {
   originalEndDate: string;
   newEndDate: string;
   createdAtUtc: string;
+  status?: string;
+  vendorPayoutAmount?: number;
 }
 
 export interface PendingBuyoutDto {
@@ -1248,4 +1250,8 @@ export interface PendingBuyoutDto {
 export interface OrderContinuationsDto {
   pendingExtensions: PendingExtensionDto[];
   pendingBuyouts: PendingBuyoutDto[];
+}
+
+export function extensionVendorPayout(ext: Pick<PendingExtensionDto, "vendorPayoutAmount" | "extensionAmount">): number {
+  return ext.vendorPayoutAmount && ext.vendorPayoutAmount > 0 ? ext.vendorPayoutAmount : ext.extensionAmount;
 }

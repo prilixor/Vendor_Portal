@@ -5,6 +5,13 @@ using Prilixor.VendorPortal.Application.Onboarding;
 
 namespace Prilixor.VendorPortal.Application.Abstractions;
 
+public enum ExtensionPaymentApplyResult
+{
+    Applied,
+    AlreadyPaid,
+    NotPayable,
+}
+
 public interface ICustomerRepository
 {
     Task<Customer?> GetCustomerByIdAsync(Guid customerId, CancellationToken cancellationToken);
@@ -60,6 +67,9 @@ public interface ICustomerRepository
     Task<CustomerRentalOrderExtension?> GetCustomerRentalOrderExtensionByIdAsync(Guid extensionId, CancellationToken cancellationToken);
     Task UpdateCustomerRentalOrderExtensionAsync(CustomerRentalOrderExtension extension, CancellationToken cancellationToken);
     Task<List<CustomerRentalOrderExtension>> GetPendingCustomerRentalOrderExtensionsAsync(Guid orderId, CancellationToken cancellationToken);
+    Task<List<CustomerRentalOrderExtension>> GetOpenCustomerRentalOrderExtensionsAsync(Guid orderId, CancellationToken cancellationToken);
+    Task<List<CustomerRentalOrderExtension>> GetCustomerExtensionHistoryAsync(Guid orderId, CancellationToken cancellationToken);
+    Task<ExtensionPaymentApplyResult> ApplyPaidRentalExtensionAsync(Guid extensionId, Guid checkoutSessionId, string? razorpayPaymentId, decimal vendorCredit, CancellationToken cancellationToken);
     Task<List<Guid>> GetOrderIdsWithDuplicatePendingExtensionsAsync(CancellationToken cancellationToken);
 
     Task AddCustomerRentalOrderBuyoutAsync(CustomerRentalOrderBuyout buyout, CancellationToken cancellationToken);
@@ -220,6 +230,7 @@ public interface ICustomerRepository
     Task<CustomerCheckoutSession?> GetCheckoutSessionByIdAsync(Guid sessionId, CancellationToken cancellationToken);
     Task<CustomerCheckoutSession?> GetCheckoutSessionByRazorpayOrderIdAsync(string razorpayOrderId, CancellationToken cancellationToken);
     Task<CustomerCheckoutSession?> GetCheckoutSessionByPaymentLinkIdAsync(string paymentLinkId, CancellationToken cancellationToken);
+    Task<CustomerCheckoutSession?> GetOpenCheckoutSessionByReceiptAsync(string receipt, CancellationToken cancellationToken);
     Task<List<CustomerRentalOrder>> GetOrdersByCheckoutSessionIdAsync(Guid sessionId, CancellationToken cancellationToken);
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken);

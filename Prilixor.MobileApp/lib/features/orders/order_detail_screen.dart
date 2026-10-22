@@ -1,13 +1,17 @@
 import 'dart:async';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:razorpay_flutter/razorpay_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../../shared/utils/razorpay_web_checkout.dart';
 import '../../core/theme.dart';
 import 'package:provider/provider.dart';
 import '../../core/providers/order_detail_provider.dart';
 import '../../core/providers/order_provider.dart';
 import '../../core/models/order_model.dart';
+import '../../core/models/order_action_model.dart';
 import '../../core/models/medical_model.dart';
 import '../../core/models/order_image_request_model.dart';
 import '../../core/utils/platform_file_payload.dart';
@@ -49,13 +53,24 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
   late List<OrderModel> _ordersInGroup;
   Timer? _pollTimer;
   bool _refreshInFlight = false;
+  late Razorpay _razorpay;
+  String? _payOrderId;
+  String? _payExtensionId;
+  String? _payCheckoutSessionId;
+  bool _payingExtension = false;
 
   /// Keep status/photos in sync with vendor actions while this screen is open.
-  static const _pollInterval = Duration(seconds: 15);
+  static const _pollInterval = Duration(seconds: 5);
 
   @override
   void initState() {
     super.initState();
+    if (!kIsWeb) {
+      _razorpay = Razorpay();
+      _razorpay.on(Razorpay.EVENT_PAYMENT_SUCCESS, _handleExtensionPaid);
+      _razorpay.on(Razorpay.EVENT_PAYMENT_ERROR, _handleExtensionFailed);
+      _razorpay.on(Razorpay.EVENT_EXTERNAL_WALLET, _handleExtensionWallet);
+    }
     WidgetsBinding.instance.addObserver(this);
     _ordersInGroup = List<OrderModel>.from(widget.ordersInGroup);
 
@@ -74,6 +89,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _pollTimer?.cancel();
+    if (!kIsWeb) _razorpay.clear();
     super.dispose();
   }
 
@@ -85,6 +101,118 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
   }
 
   Future<void> _fetchCurrentSubOrder() => _refreshLive(silent: false);
+
+  Future<void> _startExtensionPayment(OrderDetailProvider provider, CustomerExtensionModel? ext) async {
+    if (ext == null || _payingExtension) return;
+    final orderId = _ordersInGroup[_selectedOrderIndex.clamp(0, _ordersInGroup.length - 1)].id;
+    setState(() => _payingExtension = true);
+    final session = await provider.startExtensionPayment(orderId, ext.extensionId);
+    if (!mounted) return;
+    if (session == null || (session.razorpayOrderId ?? '').isEmpty) {
+      setState(() => _payingExtension = false);
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(provider.errorMessage ?? 'Unable to start the extension payment.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
+
+    _payOrderId = orderId;
+    _payExtensionId = ext.extensionId;
+    _payCheckoutSessionId = session.checkoutSessionId;
+    final amountPaise = (session.amount * 100).round();
+    if (kIsWeb) {
+      await openRazorpayWeb(
+        key: session.razorpayKeyId,
+        amountPaise: amountPaise,
+        currency: session.currency,
+        orderId: session.razorpayOrderId ?? '',
+        name: 'BlinksMed',
+        description: 'Rental extension',
+        email: '',
+        contact: '',
+        onSuccess: (paymentId, rzpOrderId, signature) {
+          _completeExtensionPayment(paymentId, rzpOrderId, signature);
+        },
+        onError: _handleExtensionPayError,
+      );
+      return;
+    }
+
+    try {
+      _razorpay.open({
+        'key': session.razorpayKeyId,
+        'amount': amountPaise,
+        'currency': session.currency,
+        'order_id': session.razorpayOrderId,
+        'name': 'BlinksMed',
+        'description': 'Rental extension',
+      });
+    } catch (_) {
+      _handleExtensionPayError('Unable to launch Razorpay.');
+    }
+  }
+
+  void _handleExtensionPaid(PaymentSuccessResponse response) {
+    _completeExtensionPayment(
+      response.paymentId ?? '',
+      response.orderId ?? '',
+      response.signature ?? '',
+    );
+  }
+
+  void _handleExtensionFailed(PaymentFailureResponse response) {
+    _handleExtensionPayError(
+      (response.message ?? '').trim().isEmpty ? 'Payment was not completed.' : response.message!,
+    );
+  }
+
+  void _handleExtensionWallet(ExternalWalletResponse _) {
+    _handleExtensionPayError('Payment was not completed.');
+  }
+
+  Future<void> _completeExtensionPayment(String paymentId, String razorpayOrderId, String signature) async {
+    final orderId = _payOrderId;
+    final extensionId = _payExtensionId;
+    final sessionId = _payCheckoutSessionId;
+    if (!mounted || orderId == null || extensionId == null || sessionId == null) {
+      if (mounted) setState(() => _payingExtension = false);
+      return;
+    }
+    final provider = Provider.of<OrderDetailProvider>(context, listen: false);
+    final ok = await provider.verifyExtensionPayment(
+      orderId: orderId,
+      extensionId: extensionId,
+      checkoutSessionId: sessionId,
+      razorpayOrderId: razorpayOrderId,
+      razorpayPaymentId: paymentId,
+      razorpaySignature: signature,
+    );
+    if (!mounted) return;
+    setState(() => _payingExtension = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(ok
+            ? 'Extension paid. The new end date is now on this product.'
+            : (provider.errorMessage ?? 'Payment verification failed.')),
+        backgroundColor: ok ? Colors.green : Colors.redAccent,
+      ),
+    );
+    if (ok) {
+      Provider.of<OrderProvider>(context, listen: false).fetchOrders(silent: true);
+      _refreshLive(silent: true);
+    }
+  }
+
+  void _handleExtensionPayError(String message) {
+    if (!mounted) return;
+    setState(() => _payingExtension = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text(message), backgroundColor: Colors.redAccent),
+    );
+  }
 
   Future<void> _refreshLive({required bool silent}) async {
     if (!mounted) return;
@@ -128,6 +256,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
         merged.map((o) => o.id).toList(),
         silent: silent,
       );
+      await detail.fetchExtensionHistory(merged.map((o) => o.id).toList());
       if (!mounted) return;
       _syncPhotoSelection(detail);
     } finally {
@@ -254,7 +383,12 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                           SizedBox(height: 8),
                           _buildQuoteRow(context, formatGstLabel(provider.extensionQuote!.gstPercent), provider.extensionQuote!.gstAmount),
                           Divider(color: colors.border, height: 24),
-                          _buildQuoteRow(context, 'Total Due Now', provider.extensionQuote!.totalAmount, isBold: true),
+                          _buildQuoteRow(context, 'Total', provider.extensionQuote!.totalAmount, isBold: true),
+                          SizedBox(height: 8),
+                          Text(
+                            'Payment is taken on this order page after the vendor approves. The end date changes only after that payment.',
+                            style: TextStyle(color: colors.textMuted, fontSize: 12, height: 1.3),
+                          ),
                           SizedBox(height: 8),
                           Text(
                             'New End Date: ${provider.extensionQuote!.newEndDate.split('T')[0]}',
@@ -291,7 +425,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                               }
                             },
                       child: Text(
-                        (provider.extensionQuote?.pendingDays ?? 0) > 0 ? 'Update request' : 'Confirm Extension',
+                        (provider.extensionQuote?.pendingDays ?? 0) > 0 ? 'Update request' : 'Request extension',
                         style: TextStyle(fontSize: 18, color: Colors.white, fontWeight: FontWeight.bold),
                       ),
                     ),
@@ -687,6 +821,38 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                                 ),
                                               ],
                                             ),
+                                            if (provider.extensionsFor(order.id).any((ext) => ext.isPaid)) ...[
+                                              const SizedBox(height: 4),
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                                decoration: BoxDecoration(
+                                                  color: context.isDarkMode
+                                                      ? const Color(0xFF78350F).withValues(alpha: 0.45)
+                                                      : const Color(0xFFFEF3C7),
+                                                  borderRadius: BorderRadius.circular(4),
+                                                ),
+                                                child: Text(
+                                                  'EXTENDED',
+                                                  style: TextStyle(
+                                                    color: context.isDarkMode ? const Color(0xFFFCD34D) : const Color(0xFF92400E),
+                                                    fontSize: 10,
+                                                    fontWeight: FontWeight.w800,
+                                                    letterSpacing: 0.3,
+                                                  ),
+                                                ),
+                                              ),
+                                            ],
+                                            if (provider.extensionsFor(order.id).any((ext) => ext.isAwaitingPayment)) ...[
+                                              const SizedBox(height: 3),
+                                              Text(
+                                                'Payment due',
+                                                style: const TextStyle(
+                                                  color: Color(0xFFEA580C),
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.w700,
+                                                ),
+                                              ),
+                                            ],
                                             if (photoLabel != null) ...[
                                               const SizedBox(height: 3),
                                               Text(
@@ -822,10 +988,36 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                       'START DATE',
                                       _formatOrderDate(order.startDate),
                                     ),
-                                    _labeledValue(
-                                      colors,
-                                      'END DATE',
-                                      _formatOrderDate(order.endDate),
+                                    Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        _labeledValue(
+                                          colors,
+                                          'END DATE',
+                                          _formatOrderDate(order.endDate),
+                                        ),
+                                        if (provider.extensionsFor(order.id).any((ext) => ext.isPaid)) ...[
+                                          const SizedBox(height: 4),
+                                          Container(
+                                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                            decoration: BoxDecoration(
+                                              color: context.isDarkMode
+                                                  ? const Color(0xFF78350F).withValues(alpha: 0.45)
+                                                  : const Color(0xFFFEF3C7),
+                                              borderRadius: BorderRadius.circular(4),
+                                            ),
+                                            child: Text(
+                                              'EXTENDED',
+                                              style: TextStyle(
+                                                color: context.isDarkMode ? const Color(0xFFFCD34D) : const Color(0xFF92400E),
+                                                fontSize: 10,
+                                                fontWeight: FontWeight.w800,
+                                                letterSpacing: 0.3,
+                                              ),
+                                            ),
+                                          ),
+                                        ],
+                                      ],
                                     ),
                                   ],
                                 ),
@@ -855,6 +1047,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                     order,
                                   ),
                                 ),
+                                if (provider.extensionsFor(order.id).any((ext) => ext.isPaid)) ...[
+                                  const SizedBox(height: 12),
+                                  _extensionBreakdown(colors, order, provider.extensionsFor(order.id)),
+                                ],
                               ],
                             ],
                           ),
@@ -944,6 +1140,13 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                           final status = order.status.trim().toLowerCase();
                           final canCancel = status == 'pending' || status == 'awaiting vendor acceptance';
                           final canExtendBuyout = status == 'active' && order.orderType.toLowerCase() == 'rent';
+                          final lineExtensions = provider.extensionsFor(order.id);
+                          CustomerExtensionModel? awaitingExtension;
+                          CustomerExtensionModel? pendingExtension;
+                          for (final ext in lineExtensions) {
+                            if (ext.isAwaitingPayment) awaitingExtension = ext;
+                            if (ext.isPending) pendingExtension = ext;
+                          }
 
                           return Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -1061,6 +1264,62 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                         },
                                 ),
                               ],
+                              if (awaitingExtension != null) ...[
+                                const SizedBox(height: 8),
+                                Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFFF7ED),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: const Color(0xFFFDBA74)),
+                                  ),
+                                  child: Column(
+                                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                                    children: [
+                                      Text(
+                                        'Extension approved',
+                                        style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w800),
+                                      ),
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        '${awaitingExtension.additionalDays} day${awaitingExtension.additionalDays == 1 ? '' : 's'}. The end date stays ${_formatOrderDate(order.endDate)} until this payment succeeds, then it moves to ${_formatOrderDate(awaitingExtension.newEndDate)}.',
+                                        style: TextStyle(color: colors.textSecondary, fontSize: 12, height: 1.3),
+                                      ),
+                                      const SizedBox(height: 10),
+                                      ElevatedButton(
+                                        style: ElevatedButton.styleFrom(
+                                          backgroundColor: const Color(0xFFEA580C),
+                                          minimumSize: const Size.fromHeight(44),
+                                        ),
+                                        onPressed: _payingExtension
+                                            ? null
+                                            : () => _startExtensionPayment(provider, awaitingExtension),
+                                        child: Text(
+                                          _payingExtension
+                                              ? 'Opening payment…'
+                                              : 'Pay ₹${awaitingExtension.totalAmount.toStringAsFixed(2)}',
+                                          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ],
+                              if (pendingExtension != null && awaitingExtension == null) ...[
+                                const SizedBox(height: 8),
+                                Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: const Color(0xFFFFFBEB),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: const Color(0xFFFCD34D)),
+                                  ),
+                                  child: Text(
+                                    'Extension waiting for vendor approval · ${pendingExtension.additionalDays} day${pendingExtension.additionalDays == 1 ? '' : 's'} · ₹${pendingExtension.totalAmount.toStringAsFixed(2)}. This amount is not in the order total yet.',
+                                    style: TextStyle(color: colors.textSecondary, fontSize: 12, height: 1.3),
+                                  ),
+                                ),
+                              ],
                               if (canExtendBuyout) ...[
                                 const SizedBox(height: 8),
                                 Row(
@@ -1072,7 +1331,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                           padding: const EdgeInsets.symmetric(vertical: 12),
                                           minimumSize: const Size.fromHeight(44),
                                         ),
-                                        onPressed: () => _showExtensionBottomSheet(context, provider),
+                                        onPressed: awaitingExtension != null
+                                            ? null
+                                            : () => _showExtensionBottomSheet(context, provider),
                                         child: FittedBox(
                                           fit: BoxFit.scaleDown,
                                           child: Text(
@@ -1110,6 +1371,38 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                     ],
                   ),
                 ),
+    );
+  }
+
+  Widget _extensionBreakdown(AppPalette colors, OrderModel order, List<CustomerExtensionModel> extensions) {
+    final paid = extensions.where((ext) => ext.isPaid).toList();
+    final paidTotal = paid.fold<double>(0, (sum, ext) => sum + ext.totalAmount);
+    final original = (order.totalAmount - paidTotal).clamp(0, double.infinity);
+    final muted = TextStyle(color: colors.textMuted, fontSize: 12);
+    final strong = TextStyle(color: colors.textPrimary, fontSize: 13, fontWeight: FontWeight.w700);
+    Widget row(String label, String value, {bool bold = false}) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 4),
+        child: Row(
+          children: [
+            Expanded(child: Text(label, style: bold ? strong : muted)),
+            Text(value, style: bold ? strong : muted),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        row('Original rental', '₹${original.toStringAsFixed(2)}'),
+        ...paid.map((ext) => row(
+              'Extension · ${ext.additionalDays} day${ext.additionalDays == 1 ? '' : 's'}',
+              '₹${ext.totalAmount.toStringAsFixed(2)}',
+            )),
+        const SizedBox(height: 2),
+        row('Product total', '₹${order.totalAmount.toStringAsFixed(2)}', bold: true),
+      ],
     );
   }
 

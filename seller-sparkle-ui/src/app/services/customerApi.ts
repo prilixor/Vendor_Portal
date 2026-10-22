@@ -245,6 +245,8 @@ export interface CustomerOrderApi {
   rentalDiscountValue?: number | null;
   rentalFinalPrice?: number | null;
   prescriptionFiles?: CustomerPrescriptionFileApi[] | null;
+  /** True only after a paid rental extension on this product line. */
+  isExtended?: boolean;
 }
 
 export interface CustomerPrescriptionFileApi {
@@ -304,6 +306,29 @@ export interface ExtensionQuoteApi {
   gstPercent?: number;
   /** Days already waiting on an open extension. The quote total includes these. */
   pendingDays?: number;
+}
+
+export interface CustomerExtensionApi {
+  extensionId: string;
+  status: string;
+  additionalDays: number;
+  extensionAmount: number;
+  serviceFeeAmount: number;
+  gstAmount: number;
+  totalAmount: number;
+  originalEndDate: string;
+  newEndDate: string;
+  gstPercent?: number;
+}
+
+export interface ExtensionPaymentApi {
+  checkoutSessionId: string;
+  razorpayKeyId: string;
+  razorpayOrderId?: string | null;
+  amount: number;
+  currency: string;
+  extensionId: string;
+  orderId: string;
 }
 
 export interface BuyoutQuoteApi {
@@ -720,6 +745,33 @@ export const customerApi = {
     return apiClient.post<void>(`/customers/me/orders/${encodeURIComponent(orderId)}/extensions`, {
       additionalDays
     });
+  },
+
+  getOrderExtensions(orderId: string): Promise<CustomerExtensionApi[]> {
+    return apiClient.get<CustomerExtensionApi[]>(`/customers/me/orders/${encodeURIComponent(orderId)}/extensions`);
+  },
+
+  startExtensionPayment(orderId: string, extensionId: string): Promise<ExtensionPaymentApi> {
+    return apiClient.post<ExtensionPaymentApi>(
+      `/customers/me/orders/${encodeURIComponent(orderId)}/extensions/${encodeURIComponent(extensionId)}/pay`,
+      {},
+    );
+  },
+
+  verifyExtensionPayment(
+    orderId: string,
+    extensionId: string,
+    payload: {
+      checkoutSessionId: string;
+      razorpayOrderId: string;
+      razorpayPaymentId: string;
+      razorpaySignature: string;
+    },
+  ): Promise<void> {
+    return apiClient.post<void>(
+      `/customers/me/orders/${encodeURIComponent(orderId)}/extensions/${encodeURIComponent(extensionId)}/verify`,
+      payload,
+    );
   },
 
   quoteBuyout(orderId: string): Promise<BuyoutQuoteApi> {

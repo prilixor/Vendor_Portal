@@ -31,6 +31,7 @@ import {
   type VendorOrderImageRequestApiDto,
   type VendorProductAssetApiDto,
   type OrderContinuationsDto,
+  extensionVendorPayout,
 } from "@/app/services/vendorOnboardingApi";
 import { toast } from "sonner";
 import { BackLink } from "@/app/components/shared/BackLink";
@@ -581,7 +582,7 @@ function OptionNoteField({
 }
 
 /** Keep photo requests and order status in sync while vendor stays on this page. */
-const VENDOR_ORDER_POLL_MS = 15_000;
+const VENDOR_ORDER_POLL_MS = 5_000;
 
 const VendorOrderDetail = () => {
   const { orderId } = useParams();
@@ -1160,7 +1161,7 @@ const VendorOrderDetail = () => {
     try {
       setUpdating(true);
       await vendorOnboardingApi.approveVendorExtension(currentItemId, extensionId);
-      toast.success("Extension request approved.");
+      toast.success("Extension approved. The customer pays on the order page before the end date changes.");
       await Promise.all([loadOrder(currentItemId), loadAllOrders()]);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to approve request.");
@@ -1286,6 +1287,11 @@ const VendorOrderDetail = () => {
                   </div>
 
                   <div className="flex items-center justify-between sm:justify-end gap-4 mt-3 sm:mt-0">
+                    {item.isExtended ? (
+                      <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                        EXTENDED
+                      </span>
+                    ) : null}
                     <span
                       title={formatOrderStatusTitle(item.status)}
                       className={cn(
@@ -1354,25 +1360,20 @@ const VendorOrderDetail = () => {
                         <p className="text-muted-foreground">New End Date:</p>
                         <p className="font-medium text-right">{formatDetailDate(ext.newEndDate)}</p>
                         <p className="col-span-2 my-0.5 border-t border-amber-200/50"></p>
-                        <p className="text-muted-foreground">Base Extension Rent:</p>
-                        <p className="text-right">₹{ext.extensionAmount.toFixed(2)}</p>
-                        {/* Service fee UI hidden — keep for future re-enable */}
-                        {false && (
-                          <>
-                            <p className="text-muted-foreground">Service Fee:</p>
-                            <p className="text-right">₹{ext.serviceFeeAmount.toFixed(2)}</p>
-                          </>
-                        )}
-                        <p className="text-muted-foreground">{formatGstRateLabel(ext.gstPercent)}:</p>
-                        <p className="text-right">₹{ext.gstAmount.toFixed(2)}</p>
-                        <p className="font-semibold text-amber-900 dark:text-amber-400">Total to Collect:</p>
-                        <p className="font-bold text-right text-amber-900 dark:text-amber-400">₹{ext.totalAmount.toFixed(2)}</p>
+                        <p className="font-semibold text-amber-900 dark:text-amber-400">Your payout:</p>
+                        <p className="font-bold text-right text-amber-900 dark:text-amber-400">₹{extensionVendorPayout(ext).toFixed(2)}</p>
                       </div>
                     </div>
+                    {ext.status === "awaiting_payment" ? (
+                      <p className="mt-4 text-sm text-amber-900 dark:text-amber-300 sm:mt-0 sm:max-w-[14rem] sm:text-right">
+                        Approved. The customer still has to pay. The end date stays the same until then.
+                      </p>
+                    ) : (
                     <div className="mt-4 flex w-full gap-2 sm:mt-0 sm:w-auto sm:items-start">
                       <Button variant="outline" size="sm" className="flex-1 sm:flex-none" onClick={() => handleCancelExtension(ext.extensionId)} disabled={updating}>Reject</Button>
                       <Button size="sm" className="flex-1 sm:flex-none" onClick={() => handleApproveExtension(ext.extensionId)} disabled={updating}>Approve</Button>
                     </div>
+                    )}
                   </div>
                 ))}
                 {continuations.pendingBuyouts.map((buy) => (

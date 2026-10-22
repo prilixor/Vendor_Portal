@@ -42,6 +42,8 @@ class PendingExtension {
   final String? originalEndDate;
   final String? newEndDate;
   final String? createdAtUtc;
+  final String status;
+  final double vendorPayoutAmount;
 
   const PendingExtension({
     required this.extensionId,
@@ -55,7 +57,11 @@ class PendingExtension {
     this.originalEndDate,
     this.newEndDate,
     this.createdAtUtc,
+    this.status = 'pending_approval',
+    this.vendorPayoutAmount = 0,
   });
+
+  double get vendorPayout => vendorPayoutAmount > 0 ? vendorPayoutAmount : extensionAmount;
 
   factory PendingExtension.fromJson(Map<String, dynamic> json) {
     return PendingExtension(
@@ -70,6 +76,8 @@ class PendingExtension {
       originalEndDate: json['originalEndDate']?.toString(),
       newEndDate: json['newEndDate']?.toString(),
       createdAtUtc: json['createdAtUtc']?.toString(),
+      status: json['status']?.toString() ?? 'pending_approval',
+      vendorPayoutAmount: (json['vendorPayoutAmount'] as num?)?.toDouble() ?? 0,
     );
   }
 }
