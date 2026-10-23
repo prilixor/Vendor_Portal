@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { Check, Barcode, CheckCircle2, ImageOff, ImagePlus, Images, Info, Loader2, Pencil, Plus, X } from "lucide-react";
 import { formatGstRateLabel } from "@/app/helpers/gstLabel";
+import { mediaObjectKey, useStableMediaUrls } from "@/app/helpers/stableMediaUrl";
 import { formatOrderStatusLabel, formatOrderStatusTitle, formatOrderTypeLabel, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
 import { cn, orderPhotoTileUrl, originalUrlFromThumb, photoAtSlot, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
 import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
@@ -1256,6 +1257,8 @@ const VendorOrderDetail = () => {
     return null;
   }, [canMarkActive, canMarkReturned, canMarkTransit, hasPendingRequests]);
 
+  const damagePhotoUrls = useStableMediaUrls(order?.returnSettlement?.damageImageUrls ?? []);
+
   return (
     <div className="mx-auto w-full max-w-6xl space-y-4 sm:space-y-6">
       <BackLink to="/vendor/orders" label="Back to orders" />
@@ -1650,15 +1653,15 @@ const VendorOrderDetail = () => {
                         </p>
                       </div>
                     ) : null}
-                    {(order.returnSettlement?.damageImageUrls ?? []).length > 0 ? (
+                    {damagePhotoUrls.length > 0 ? (
                       <div className="space-y-1.5">
                         <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                           Photos · tap to enlarge
                         </p>
                         <div className="grid grid-cols-3 gap-2">
-                          {(order.returnSettlement?.damageImageUrls ?? []).map((url, index) => (
+                          {damagePhotoUrls.map((url, index) => (
                             <button
-                              key={url}
+                              key={mediaObjectKey(url)}
                               type="button"
                               className="aspect-square overflow-hidden rounded-lg bg-muted ring-1 ring-inset ring-black/[0.06] dark:ring-white/10"
                               onClick={() => setDamagePreviewUrl(url)}

@@ -10,6 +10,7 @@ import { formatGstRateLabel } from "@/app/helpers/gstLabel";
 import { formatOrderStatusLabel, formatOrderStatusTitle, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
 import { cn, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
 import { adminRefundChip, formatInr } from "@/app/helpers/orderReturn";
+import { mediaObjectKey, useStableMediaUrls } from "@/app/helpers/stableMediaUrl";
 import { adminCancellationChip, type OrderCancellationApi } from "@/app/helpers/orderCancellation";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
 import { toast } from "sonner";
@@ -80,7 +81,7 @@ function orderStatusBadgeClass(status: string): string {
   return "bg-muted text-foreground border-border";
 }
 
-function getTimelineSteps(orderType?: string) {
+function getTimelineSteps(orderType?: string, status?: string) {
   const isBuy = orderType?.toLowerCase() === "buy";
   if (isBuy) {
     return [
@@ -90,15 +91,19 @@ function getTimelineSteps(orderType?: string) {
       { key: "active", label: "Delivered & Purchased" },
     ];
   }
-  return [
+  const steps = [
     { key: "placed", label: "Order Placed" },
     { key: "confirmed", label: "Vendor Confirmed" },
     { key: "out", label: "Out for Delivery" },
     { key: "delivered", label: "Delivered" },
     { key: "active", label: "Rental Active" },
     { key: "returned", label: "Returned" },
-    { key: "bought_out", label: "Bought Out" },
   ];
+  // Customers can no longer request a buyout. Keep the stage only for an order that was already bought out.
+  if (status?.trim().toLowerCase().replace(/\s+/g, "_") === "bought_out") {
+    steps.push({ key: "bought_out", label: "Bought Out" });
+  }
+  return steps;
 }
 
 function getTimelineProgress(status: string, orderType?: string) {
@@ -142,7 +147,7 @@ function getAvailableStatuses(currentStatus: string, orderType?: string): string
   if (s === "pending" || s.includes("awaiting")) return ["pending", "confirmed", "cancelled"];
   if (s === "confirmed") return ["confirmed", "in_transit", "cancelled", "dispatch_failed"];
   if (s === "in_transit" || s.includes("transit")) return ["in_transit", "active", "dispatch_failed", "returned"];
-  if (s === "active") return isBuy ? ["active"] : ["active", "returned", "bought_out"];
+  if (s === "active") return isBuy ? ["active"] : ["active", "returned"];
   if (s === "bought_out") return ["bought_out"];
   if (s === "returned") return ["returned"];
   if (s === "cancelled" || s === "canceled") return ["cancelled"];
@@ -162,7 +167,7 @@ function OrderTimeline({ status, orderType }: { status: string; orderType?: stri
   if (cancelled) {
     return <p className="text-sm text-destructive font-medium">This order item was cancelled.</p>;
   }
-  const steps = getTimelineSteps(orderType);
+  const steps = getTimelineSteps(orderType, status);
   return (
     <ol className="relative space-y-0">
       {steps.map((step, i) => {
@@ -395,6 +400,7 @@ const AdminOrderDetail = () => {
     if (!currentItemId) return null;
     return orders.find((o) => o.orderId === currentItemId) ?? null;
   }, [orders, currentItemId]);
+  const damagePhotoUrls = useStableMediaUrls(selectedOrder?.returnSettlement?.damageImageUrls ?? []);
 
   const orderGroupItems = useMemo(() => {
     if (!selectedOrder) return [] as AdminOrderDto[];
@@ -1051,15 +1057,15 @@ const AdminOrderDetail = () => {
                     </p>
                   </div>
                 ) : null}
-                {(selectedOrder.returnSettlement.damageImageUrls ?? []).length > 0 ? (
+                {damagePhotoUrls.length > 0 ? (
                   <div className="space-y-1.5">
                     <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                       Damage photos · tap to enlarge
                     </p>
                     <div className="grid grid-cols-3 gap-2">
-                      {(selectedOrder.returnSettlement.damageImageUrls ?? []).map((url, index) => (
+                      {damagePhotoUrls.map((url, index) => (
                         <button
-                          key={url}
+                          key={mediaObjectKey(url)}
                           type="button"
                           className="aspect-square overflow-hidden rounded-lg bg-muted ring-1 ring-inset ring-black/[0.06] dark:ring-white/10"
                           onClick={() => setDamagePreviewUrl(url)}
