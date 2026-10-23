@@ -1377,10 +1377,12 @@ public sealed class CustomerRepository(
                 RentalNormalPrice: o.RentalNormalPrice,
                 RentalDiscountType: o.RentalDiscountType,
                 RentalDiscountValue: o.RentalDiscountValue,
-                RentalFinalPrice: o.RentalFinalPrice));
+                RentalFinalPrice: o.RentalFinalPrice,
+                IsExtended: o.IsExtended));
         }
 
-        return items;
+        var withReturns = await OrderReturnMapper.AttachAsync(this, items, cancellationToken);
+        return await OrderCancellationMapper.AttachAsync(this, withReturns, cancellationToken);
     }
 
     public async Task<CustomerRentalOrderWithListing?> GetCustomerOrderAsync(Guid customerId, Guid orderId, CancellationToken cancellationToken)
@@ -1536,11 +1538,14 @@ public sealed class CustomerRepository(
         var pageRows = searchable.Skip((page - 1) * pageSize).Take(pageSize).ToList();
         var orderIds = pageRows.ConvertAll(r => r.Order.Id);
         var assetTags = await GetCustomerOrderAssetTagsByOrderIdsAsync(orderIds, cancellationToken);
-        var items = pageRows
-            .Select(r => VendorOrderMapper.ToVendorOrderDto(
-                r,
-                assetTags.TryGetValue(r.Order.Id, out var tags) ? tags : null))
-            .ToList();
+        var items = await OrderReturnMapper.AttachAsync(
+            this,
+            pageRows
+                .Select(r => VendorOrderMapper.ToVendorOrderDto(
+                    r,
+                    assetTags.TryGetValue(r.Order.Id, out var tags) ? tags : null))
+                .ToList(),
+            cancellationToken);
 
         return new VendorOrderListResult
         {
@@ -1567,11 +1572,14 @@ public sealed class CustomerRepository(
         var assetTags = await GetCustomerOrderAssetTagsByOrderIdsAsync(
             siblings.ConvertAll(r => r.Order.Id),
             cancellationToken);
-        return siblings
-            .Select(r => VendorOrderMapper.ToVendorOrderDto(
-                r,
-                assetTags.TryGetValue(r.Order.Id, out var tags) ? tags : null))
-            .ToList();
+        return await OrderReturnMapper.AttachAsync(
+            this,
+            siblings
+                .Select(r => VendorOrderMapper.ToVendorOrderDto(
+                    r,
+                    assetTags.TryGetValue(r.Order.Id, out var tags) ? tags : null))
+                .ToList(),
+            cancellationToken);
     }
 
     public async Task<VendorExpirationListResult> SearchVendorExpirationSummariesAsync(
@@ -1636,7 +1644,6 @@ public sealed class CustomerRepository(
         var offers = (await GetPendingVendorOffersAsync(vendorId, cancellationToken))
             .Where(o => IsOpenDispatchOffer(o, now))
             .ToList();
-        var pendingCount = offers.Count;
         if (offers.Count == 0)
         {
             return new VendorDispatchOfferListResult
@@ -1667,8 +1674,11 @@ public sealed class CustomerRepository(
 
         var joined = offers
             .Select(o => orderMap.TryGetValue(o.CustomerRentalOrderId, out var order) ? (Offer: o, Order: order) : default)
-            .Where(x => x.Order is not null)
+            .Where(x => x.Order is not null
+                && string.Equals(x.Order.Status, "awaiting_vendor_acceptance", StringComparison.OrdinalIgnoreCase))
             .ToList();
+        var pendingCount = joined.Count(x =>
+            string.Equals(x.Offer.Status, "pending", StringComparison.OrdinalIgnoreCase));
 
         var q = search?.Trim() ?? string.Empty;
         if (!string.IsNullOrEmpty(q))
@@ -1749,7 +1759,11 @@ public sealed class CustomerRepository(
                 x.VendorId == vendorId &&
                 !x.IsDeleted &&
                 x.Status == "pending" &&
-                x.ExpiresAt > now,
+                x.ExpiresAt > now &&
+                customerDb.CustomerRentalOrders.Any(o =>
+                    o.Id == x.CustomerRentalOrderId &&
+                    !o.IsDeleted &&
+                    o.Status == "awaiting_vendor_acceptance"),
                 cancellationToken);
     }
 
@@ -2135,6 +2149,411 @@ public sealed class CustomerRepository(
         return Task.CompletedTask;
     }
 
+    public async Task AddOrderReturnAsync(CustomerOrderReturn row, CancellationToken cancellationToken)
+    {
+        await customerDb.CustomerOrderReturns.AddAsync(row, cancellationToken);
+    }
+
+    public Task<CustomerOrderReturn?> GetOrderReturnByOrderIdAsync(Guid orderId, CancellationToken cancellationToken)
+    {
+        return customerDb.CustomerOrderReturns
+            .FirstOrDefaultAsync(r => r.CustomerRentalOrderId == orderId && !r.IsDeleted, cancellationToken);
+    }
+
+    public Task UpdateOrderReturnAsync(CustomerOrderReturn row, CancellationToken cancellationToken)
+    {
+        customerDb.CustomerOrderReturns.Update(row);
+        return Task.CompletedTask;
+    }
+
+    public void DetachOrderReturn(CustomerOrderReturn row)
+    {
+        var local = customerDb.CustomerOrderReturns.Local.FirstOrDefault(r => r.Id == row.Id);
+        if (local is not null)
+            customerDb.Entry(local).State = EntityState.Detached;
+    }
+
+    public async Task<bool> TryClaimDepositRefundAsync(Guid returnId, CancellationToken cancellationToken)
+    {
+        var now = DateTime.UtcNow;
+        var claimed = await customerDb.CustomerOrderReturns
+            .Where(r => r.Id == returnId && !r.IsDeleted && r.Status == OrderReturnStatuses.PendingRefund)
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(r => r.Status, OrderReturnStatuses.Refunding)
+                    .SetProperty(r => r.ModifiedOnUtc, now),
+                cancellationToken);
+
+        var local = customerDb.CustomerOrderReturns.Local.FirstOrDefault(r => r.Id == returnId);
+        if (local is not null)
+            customerDb.Entry(local).State = EntityState.Detached;
+
+        return claimed == 1;
+    }
+
+    public async Task<Dictionary<Guid, OrderReturnDto>> GetOrderReturnDtosByOrderIdsAsync(
+        IReadOnlyCollection<Guid> orderIds,
+        CancellationToken cancellationToken)
+    {
+        var ids = orderIds.Where(id => id != Guid.Empty).Distinct().ToList();
+        if (ids.Count == 0)
+            return [];
+
+        var returns = await customerDb.CustomerOrderReturns.AsNoTracking()
+            .Where(r => ids.Contains(r.CustomerRentalOrderId) && !r.IsDeleted)
+            .ToListAsync(cancellationToken);
+        if (returns.Count == 0)
+            return [];
+
+        var sessionsByOrder = await customerDb.CustomerRentalOrders.AsNoTracking()
+            .Where(o => ids.Contains(o.Id) && o.CheckoutSessionId != null)
+            .Select(o => new { o.Id, SessionId = o.CheckoutSessionId!.Value })
+            .ToListAsync(cancellationToken);
+
+        var sessionIds = sessionsByOrder.Select(o => o.SessionId).Distinct().ToList();
+        var sessions = sessionIds.Count == 0
+            ? []
+            : await customerDb.CustomerCheckoutSessions.AsNoTracking()
+                .Where(s => sessionIds.Contains(s.Id) && !s.IsDeleted)
+                .Select(s => new { s.Id, s.Status, s.Source, s.RazorpayPaymentId })
+                .ToListAsync(cancellationToken);
+
+        var sessionById = sessions.ToDictionary(s => s.Id);
+        var sessionIdByOrder = sessionsByOrder.ToDictionary(o => o.Id, o => o.SessionId);
+        var map = new Dictionary<Guid, OrderReturnDto>(returns.Count);
+        foreach (var row in returns)
+        {
+            var hasOnline = false;
+            if (sessionIdByOrder.TryGetValue(row.CustomerRentalOrderId, out var sessionId)
+                && sessionById.TryGetValue(sessionId, out var session))
+            {
+                hasOnline = string.Equals(session.Status, CheckoutSessionStatuses.Paid, StringComparison.OrdinalIgnoreCase)
+                    && !string.Equals(session.Source, CheckoutSessionSources.RentalExtension, StringComparison.OrdinalIgnoreCase)
+                    && !string.IsNullOrWhiteSpace(session.RazorpayPaymentId);
+            }
+
+            var imageUrls = OrderReturns.ReadImagePaths(row.DamageImagePaths)
+                .Select(fileUrlResolver.Resolve)
+                .Where(url => !string.IsNullOrWhiteSpace(url))
+                .ToList();
+            map[row.CustomerRentalOrderId] = OrderReturnMapper.ToDto(row, hasOnline, imageUrls);
+        }
+
+        return map;
+    }
+
+    public async Task<decimal> SumRefundedAmountForCheckoutSessionAsync(
+        Guid checkoutSessionId,
+        CancellationToken cancellationToken,
+        Guid? excludeCancellationRefundId = null)
+    {
+        var orderIds = await customerDb.CustomerRentalOrders.AsNoTracking()
+            .Where(o => o.CheckoutSessionId == checkoutSessionId && !o.IsDeleted)
+            .Select(o => o.Id)
+            .ToListAsync(cancellationToken);
+        if (orderIds.Count == 0)
+            return 0;
+
+        var deposit = await customerDb.CustomerOrderReturns.AsNoTracking()
+            .Where(r => orderIds.Contains(r.CustomerRentalOrderId)
+                && !r.IsDeleted
+                && r.Status == OrderReturnStatuses.Refunded)
+            .SumAsync(r => (decimal?)r.RefundAmount, cancellationToken) ?? 0;
+
+        var cancellations = await customerDb.CustomerOrderCancellationRefunds.AsNoTracking()
+            .Where(r => orderIds.Contains(r.CustomerRentalOrderId)
+                && !r.IsDeleted
+                && (r.Status == CancellationRefundStatuses.Refunded || r.Status == CancellationRefundStatuses.Refunding))
+            .Select(r => new { r.Id, r.Status, r.RefundAmount, r.OriginalPaidAmount, r.RefundedOnlineAmount })
+            .ToListAsync(cancellationToken);
+
+        decimal cancellation = 0;
+        foreach (var row in cancellations)
+        {
+            if (excludeCancellationRefundId.HasValue && row.Id == excludeCancellationRefundId.Value)
+                continue;
+            cancellation += row.Status == CancellationRefundStatuses.Refunded
+                ? Math.Min(row.RefundAmount, row.OriginalPaidAmount)
+                : Math.Min(row.RefundedOnlineAmount, row.OriginalPaidAmount);
+        }
+
+        return deposit + cancellation;
+    }
+
+    public Task<int> CountPendingDepositRefundsAsync(CancellationToken cancellationToken)
+    {
+        return customerDb.CustomerOrderReturns.CountAsync(
+            r => !r.IsDeleted && r.Status == OrderReturnStatuses.PendingRefund,
+            cancellationToken);
+    }
+
+    public async Task<List<PendingDepositRefundRow>> ListPendingDepositRefundsAsync(
+        int take,
+        CancellationToken cancellationToken)
+    {
+        take = Math.Clamp(take, 1, 200);
+        var pending = await customerDb.CustomerOrderReturns.AsNoTracking()
+            .Where(r => !r.IsDeleted && r.Status == OrderReturnStatuses.PendingRefund)
+            .OrderByDescending(r => r.CreatedOnUtc)
+            .Take(take)
+            .Select(r => new
+            {
+                r.CustomerRentalOrderId,
+                r.RefundAmount,
+                r.DamageAmount,
+                r.DepositAmount,
+                r.CreatedOnUtc,
+            })
+            .ToListAsync(cancellationToken);
+        if (pending.Count == 0)
+            return [];
+
+        var orderIds = pending.Select(p => p.CustomerRentalOrderId).ToList();
+        var orders = await customerDb.CustomerRentalOrders.AsNoTracking()
+            .Where(o => orderIds.Contains(o.Id) && !o.IsDeleted)
+            .Select(o => new { o.Id, o.OrderNumber, o.CustomerId })
+            .ToListAsync(cancellationToken);
+        var customerIds = orders.Select(o => o.CustomerId).Distinct().ToList();
+        var names = await customerDb.Customers.AsNoTracking()
+            .Where(c => customerIds.Contains(c.Id))
+            .Select(c => new { c.Id, c.FullName })
+            .ToListAsync(cancellationToken);
+
+        var orderById = orders.ToDictionary(o => o.Id);
+        var nameById = names.ToDictionary(c => c.Id, c => c.FullName);
+        var rows = new List<PendingDepositRefundRow>(pending.Count);
+        foreach (var row in pending)
+        {
+            if (!orderById.TryGetValue(row.CustomerRentalOrderId, out var order))
+                continue;
+
+            nameById.TryGetValue(order.CustomerId, out var customerName);
+            rows.Add(new PendingDepositRefundRow(
+                order.Id,
+                order.OrderNumber,
+                string.IsNullOrWhiteSpace(customerName) ? "Customer" : customerName,
+                row.RefundAmount,
+                row.DamageAmount,
+                row.DepositAmount,
+                row.CreatedOnUtc));
+        }
+
+        return rows;
+    }
+
+    public async Task AddOrderCancellationRefundAsync(CustomerOrderCancellationRefund row, CancellationToken cancellationToken)
+    {
+        await customerDb.CustomerOrderCancellationRefunds.AddAsync(row, cancellationToken);
+    }
+
+    public Task<CustomerOrderCancellationRefund?> GetOrderCancellationRefundByOrderIdAsync(Guid orderId, CancellationToken cancellationToken)
+    {
+        return customerDb.CustomerOrderCancellationRefunds
+            .FirstOrDefaultAsync(r => r.CustomerRentalOrderId == orderId && !r.IsDeleted, cancellationToken);
+    }
+
+    public Task UpdateOrderCancellationRefundAsync(CustomerOrderCancellationRefund row, CancellationToken cancellationToken)
+    {
+        customerDb.CustomerOrderCancellationRefunds.Update(row);
+        return Task.CompletedTask;
+    }
+
+    public void DetachOrderCancellationRefund(CustomerOrderCancellationRefund row)
+    {
+        var local = customerDb.CustomerOrderCancellationRefunds.Local.FirstOrDefault(r => r.Id == row.Id);
+        if (local is not null)
+            customerDb.Entry(local).State = EntityState.Detached;
+    }
+
+    public async Task<bool> TryClaimCancellationRefundAsync(
+        Guid refundId,
+        decimal chargeAmount,
+        string? chargeReason,
+        decimal refundAmount,
+        CancellationToken cancellationToken)
+    {
+        var now = DateTime.UtcNow;
+        var claimed = await customerDb.CustomerOrderCancellationRefunds
+            .Where(r => r.Id == refundId && !r.IsDeleted && r.Status == CancellationRefundStatuses.PendingReview)
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(r => r.Status, CancellationRefundStatuses.Refunding)
+                    .SetProperty(r => r.ChargeAmount, chargeAmount)
+                    .SetProperty(r => r.ChargeReason, chargeReason)
+                    .SetProperty(r => r.RefundAmount, refundAmount)
+                    .SetProperty(r => r.ModifiedOnUtc, now),
+                cancellationToken);
+
+        var local = customerDb.CustomerOrderCancellationRefunds.Local.FirstOrDefault(r => r.Id == refundId);
+        if (local is not null)
+            customerDb.Entry(local).State = EntityState.Detached;
+
+        return claimed == 1;
+    }
+
+    public async Task<bool> TrySettleCancellationRefundAsync(
+        Guid refundId,
+        decimal chargeAmount,
+        string? chargeReason,
+        CancellationToken cancellationToken)
+    {
+        var now = DateTime.UtcNow;
+        var settled = await customerDb.CustomerOrderCancellationRefunds
+            .Where(r => r.Id == refundId && !r.IsDeleted && r.Status == CancellationRefundStatuses.PendingReview)
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(r => r.Status, CancellationRefundStatuses.Settled)
+                    .SetProperty(r => r.ChargeAmount, chargeAmount)
+                    .SetProperty(r => r.ChargeReason, chargeReason)
+                    .SetProperty(r => r.RefundAmount, 0m)
+                    .SetProperty(r => r.ModifiedOnUtc, now),
+                cancellationToken);
+
+        var local = customerDb.CustomerOrderCancellationRefunds.Local.FirstOrDefault(r => r.Id == refundId);
+        if (local is not null)
+            customerDb.Entry(local).State = EntityState.Detached;
+
+        return settled == 1;
+    }
+
+    public async Task<Dictionary<Guid, OrderCancellationRefundDto>> GetOrderCancellationRefundDtosByOrderIdsAsync(
+        IReadOnlyCollection<Guid> orderIds,
+        CancellationToken cancellationToken)
+    {
+        var ids = orderIds.Where(id => id != Guid.Empty).Distinct().ToList();
+        if (ids.Count == 0)
+            return [];
+
+        var rows = await customerDb.CustomerOrderCancellationRefunds.AsNoTracking()
+            .Where(r => ids.Contains(r.CustomerRentalOrderId) && !r.IsDeleted)
+            .ToListAsync(cancellationToken);
+
+        return rows.ToDictionary(r => r.CustomerRentalOrderId, OrderCancellationMapper.ToDto);
+    }
+
+    public Task<int> CountPendingCancellationRefundsAsync(CancellationToken cancellationToken)
+    {
+        return customerDb.CustomerOrderCancellationRefunds.CountAsync(
+            r => !r.IsDeleted && r.Status == CancellationRefundStatuses.PendingReview,
+            cancellationToken);
+    }
+
+    public async Task<List<PendingCancellationRefundRow>> ListPendingCancellationRefundsAsync(
+        int take,
+        CancellationToken cancellationToken)
+    {
+        take = Math.Clamp(take, 1, 200);
+        var pending = await customerDb.CustomerOrderCancellationRefunds.AsNoTracking()
+            .Where(r => !r.IsDeleted && r.Status == CancellationRefundStatuses.PendingReview)
+            .OrderByDescending(r => r.CreatedOnUtc)
+            .Take(take)
+            .Select(r => new
+            {
+                r.CustomerRentalOrderId,
+                r.PaidAmount,
+                r.ActorLabel,
+                r.Outcome,
+                r.CreatedOnUtc,
+            })
+            .ToListAsync(cancellationToken);
+        if (pending.Count == 0)
+            return [];
+
+        var orderIds = pending.Select(p => p.CustomerRentalOrderId).ToList();
+        var orders = await customerDb.CustomerRentalOrders.AsNoTracking()
+            .Where(o => orderIds.Contains(o.Id) && !o.IsDeleted)
+            .Select(o => new { o.Id, o.OrderNumber, o.CustomerId })
+            .ToListAsync(cancellationToken);
+        var customerIds = orders.Select(o => o.CustomerId).Distinct().ToList();
+        var names = await customerDb.Customers.AsNoTracking()
+            .Where(c => customerIds.Contains(c.Id))
+            .Select(c => new { c.Id, c.FullName })
+            .ToListAsync(cancellationToken);
+
+        var orderById = orders.ToDictionary(o => o.Id);
+        var nameById = names.ToDictionary(c => c.Id, c => c.FullName);
+        var rows = new List<PendingCancellationRefundRow>(pending.Count);
+        foreach (var row in pending)
+        {
+            if (!orderById.TryGetValue(row.CustomerRentalOrderId, out var order))
+                continue;
+
+            nameById.TryGetValue(order.CustomerId, out var customerName);
+            rows.Add(new PendingCancellationRefundRow(
+                order.Id,
+                order.OrderNumber,
+                string.IsNullOrWhiteSpace(customerName) ? "Customer" : customerName,
+                row.PaidAmount,
+                row.ActorLabel,
+                row.Outcome,
+                row.CreatedOnUtc));
+        }
+
+        return rows;
+    }
+
+    public async Task<List<CustomerRentalOrder>> ListPaidClosedOrdersMissingCancellationRefundAsync(
+        int take,
+        CancellationToken cancellationToken)
+    {
+        take = Math.Clamp(take, 1, 50);
+        var existing = customerDb.CustomerOrderCancellationRefunds
+            .Where(r => !r.IsDeleted)
+            .Select(r => r.CustomerRentalOrderId);
+        var paidSessions = customerDb.CustomerCheckoutSessions.Where(s =>
+            !s.IsDeleted
+            && s.Status == CheckoutSessionStatuses.Paid
+            && s.Source != CheckoutSessionSources.RentalExtension);
+
+        return await customerDb.CustomerRentalOrders
+            .Where(o => !o.IsDeleted
+                && (o.Status == CancellationOutcomes.Cancelled || o.Status == CancellationOutcomes.DispatchFailed)
+                && o.CheckoutSessionId != null
+                && paidSessions.Any(s => s.Id == o.CheckoutSessionId)
+                && !existing.Contains(o.Id))
+            .OrderByDescending(o => o.ModifiedOnUtc ?? o.CreatedOnUtc)
+            .Take(take)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<List<CustomerCheckoutSession>> GetPaidExtensionSessionsAsync(
+        Guid orderId,
+        CancellationToken cancellationToken)
+    {
+        var extensionIds = await customerDb.CustomerRentalOrderExtensions.AsNoTracking()
+            .Where(e => e.CustomerRentalOrderId == orderId
+                && !e.IsDeleted
+                && e.Status == RentalExtensionStatuses.Paid)
+            .OrderBy(e => e.CreatedOnUtc)
+            .Select(e => e.Id)
+            .ToListAsync(cancellationToken);
+        if (extensionIds.Count == 0)
+            return [];
+
+        var receipts = extensionIds.Select(id => "ext_" + id.ToString("N")).ToList();
+        var sessions = await customerDb.CustomerCheckoutSessions.AsNoTracking()
+            .Where(s => s.Receipt != null
+                && receipts.Contains(s.Receipt)
+                && !s.IsDeleted
+                && s.Status == CheckoutSessionStatuses.Paid
+                && s.Source == CheckoutSessionSources.RentalExtension)
+            .ToListAsync(cancellationToken);
+
+        var byReceipt = sessions
+            .Where(s => !string.IsNullOrWhiteSpace(s.Receipt))
+            .GroupBy(s => s.Receipt!, StringComparer.Ordinal)
+            .ToDictionary(g => g.Key, g => g.OrderByDescending(s => s.PaidAt).First(), StringComparer.Ordinal);
+
+        var ordered = new List<CustomerCheckoutSession>(extensionIds.Count);
+        foreach (var id in extensionIds)
+        {
+            if (byReceipt.TryGetValue("ext_" + id.ToString("N"), out var session))
+                ordered.Add(session);
+        }
+
+        return ordered;
+    }
+
     public async Task AddCustomerRentalOrderAssetAsync(CustomerRentalOrderAsset asset, CancellationToken cancellationToken)
     {
         await customerDb.CustomerRentalOrderAssets.AddAsync(asset, cancellationToken);
@@ -2437,6 +2856,31 @@ public sealed class CustomerRepository(
         ).Distinct().ToListAsync(cancellationToken);
 
         return expiredPending.Union(strandedQueued).ToList();
+    }
+
+    public async Task<List<ClosedVendorOfferNotice>> ExpireOpenOffersOnClosedOrdersAsync(
+        DateTimeOffset now,
+        CancellationToken cancellationToken)
+    {
+        var rows = await (
+            from offer in customerDb.CustomerOrderVendorOffers
+            join order in customerDb.CustomerRentalOrders on offer.CustomerRentalOrderId equals order.Id
+            where !offer.IsDeleted
+                  && (offer.Status == "pending" || offer.Status == "queued")
+                  && (order.IsDeleted || order.Status != "awaiting_vendor_acceptance")
+            select new { offer, order.OrderNumber, order.Status }
+        ).ToListAsync(cancellationToken);
+
+        var notices = new List<ClosedVendorOfferNotice>();
+        foreach (var row in rows)
+        {
+            if (string.Equals(row.offer.Status, "pending", StringComparison.OrdinalIgnoreCase))
+                notices.Add(new ClosedVendorOfferNotice(row.offer.VendorId, row.OrderNumber, row.Status));
+            row.offer.Status = "expired";
+            row.offer.RespondedAt = now;
+        }
+
+        return notices;
     }
 
     public Task<List<CustomerRentalOrder>> GetSiblingCheckoutOrdersAsync(

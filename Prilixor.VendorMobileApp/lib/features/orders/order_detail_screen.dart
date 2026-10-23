@@ -1,5 +1,6 @@
 import 'dart:async';
 
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
@@ -116,7 +117,169 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     await provider.fetchOrderDetail(vendorId, orderId);
   }
 
-  Future<void> _updateStatus(String status, {List<String>? assetTags}) async {
+  Future<void> _openReturnDialog(VendorOrder order) async {
+    var issue = false;
+    final amountCtrl = TextEditingController();
+    final reasonCtrl = TextEditingController();
+    final photos = <PlatformFile>[];
+    final confirmed = await showModalBottomSheet<({double damage, String? reason, List<PlatformFile> photos})>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setLocal) {
+            final colors = ctx.appColors;
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 16,
+                right: 16,
+                top: 16,
+                bottom: MediaQuery.viewInsetsOf(ctx).bottom + 16,
+              ),
+              child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Mark this product returned',
+                    style: TextStyle(color: colors.textPrimary, fontSize: 16, fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Security deposit ${formatVendorMoney(order.depositAmount)}. Rent and fees are not refunded.',
+                    style: TextStyle(color: colors.textMuted, fontSize: 13),
+                  ),
+                  const SizedBox(height: 12),
+                  SegmentedButton<bool>(
+                    segments: const [
+                      ButtonSegment(value: false, label: Text('Good condition')),
+                      ButtonSegment(value: true, label: Text('Issue')),
+                    ],
+                    selected: {issue},
+                    onSelectionChanged: (value) => setLocal(() => issue = value.first),
+                  ),
+                  if (issue) ...[
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: amountCtrl,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(labelText: 'Damage charge'),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: reasonCtrl,
+                      maxLength: 500,
+                      decoration: const InputDecoration(labelText: 'What is wrong'),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Damage photos (optional, up to 3)',
+                      style: TextStyle(color: colors.textMuted, fontSize: 12),
+                    ),
+                    if (photos.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      ...photos.asMap().entries.map((entry) => Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  entry.value.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(color: colors.textPrimary, fontSize: 13),
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: () => setLocal(() => photos.removeAt(entry.key)),
+                                child: const Text('Remove'),
+                              ),
+                            ],
+                          )),
+                    ],
+                    if (photos.length < 3)
+                      OutlinedButton(
+                        onPressed: () async {
+                          final source = await showVendorPhotoSourceSheet(ctx);
+                          if (source == null) return;
+                          final picked = await pickVendorPhotoFiles(
+                            source: source,
+                            maxCount: 3 - photos.length,
+                          );
+                          if (picked.isEmpty) return;
+                          setLocal(() => photos.addAll(picked.take(3 - photos.length)));
+                        },
+                        child: const Text('Add photo'),
+                      ),
+                  ] else ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      'No damage charge. The full deposit stays with BlinksMed to refund.',
+                      style: TextStyle(color: colors.textMuted, fontSize: 13),
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    onPressed: () {
+                      if (!issue) {
+                        Navigator.pop(ctx, (damage: 0.0, reason: null, photos: <PlatformFile>[]));
+                        return;
+                      }
+                      final amount = double.tryParse(amountCtrl.text.trim());
+                      if (amount == null || amount <= 0) {
+                        ScaffoldMessenger.of(ctx).showSnackBar(
+                          const SnackBar(content: Text('Enter the damage charge.')),
+                        );
+                        return;
+                      }
+                      if (amount > order.depositAmount + 0.001) {
+                        ScaffoldMessenger.of(ctx).showSnackBar(
+                          SnackBar(content: Text('Damage charge cannot be more than ${formatVendorMoney(order.depositAmount)}.')),
+                        );
+                        return;
+                      }
+                      final reason = reasonCtrl.text.trim();
+                      if (reason.isEmpty) {
+                        ScaffoldMessenger.of(ctx).showSnackBar(
+                          const SnackBar(content: Text('Add a short reason for the damage charge.')),
+                        );
+                        return;
+                      }
+                      Navigator.pop(ctx, (
+                        damage: amount,
+                        reason: reason,
+                        photos: List<PlatformFile>.from(photos),
+                      ));
+                    },
+                    child: const Text('Mark returned'),
+                  ),
+                ],
+              ),
+              ),
+            );
+          },
+        );
+      },
+    );
+    Future<void>.delayed(const Duration(milliseconds: 400), () {
+      amountCtrl.dispose();
+      reasonCtrl.dispose();
+    });
+    if (confirmed == null || !mounted) return;
+    await _updateStatus(
+      'returned',
+      damageAmount: confirmed.damage,
+      damageReason: confirmed.reason,
+      damagePhotos: confirmed.photos,
+    );
+  }
+
+  Future<void> _updateStatus(
+    String status, {
+    List<String>? assetTags,
+    double? damageAmount,
+    String? damageReason,
+    List<PlatformFile> damagePhotos = const [],
+  }) async {
     final vendorId = Provider.of<AuthProvider>(context, listen: false).vendorId;
     if (vendorId == null) return;
     final provider = Provider.of<VendorOrderProvider>(context, listen: false);
@@ -125,6 +288,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       _selectedOrderId,
       status,
       assetTags: assetTags,
+      damageAmount: damageAmount,
+      damageReason: damageReason,
+      damagePhotos: damagePhotos,
     );
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -561,6 +727,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                                                       OrderMetaChip(label: 'Qty ${item.quantity}'),
                                                       if (item.isExtended && item.orderType.toLowerCase() != 'buy')
                                                         OrderMetaChip(label: 'EXTENDED', highlight: true),
+                                                      if (item.returnSettlement?.vendorClaimLabel != null)
+                                                        OrderMetaChip(label: item.returnSettlement!.vendorClaimLabel!),
                                                       if (item.assignedAssetTags.isNotEmpty)
                                                         OrderMetaChip(
                                                           label: item.assignedAssetTags.length == 1
@@ -711,7 +879,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
               hasPendingRequests: hasPending,
               onMarkTransit: () => _openDispatchSheet(activeItem ?? order),
               onMarkActive: () => _updateStatus('active'),
-              onMarkReturned: () => _updateStatus('returned'),
+              onMarkReturned: () => _openReturnDialog(activeItem ?? order),
             ),
     );
   }
@@ -1967,6 +2135,8 @@ class _ItemDetailsPanel extends StatelessWidget {
                         OrderTypeChip(orderType: order.orderType),
                         if (order.isExtended && !isBuy)
                           OrderMetaChip(label: 'EXTENDED', highlight: true),
+                        if (order.returnSettlement?.vendorClaimLabel != null)
+                          OrderMetaChip(label: order.returnSettlement!.vendorClaimLabel!),
                       ],
                     ),
                   ],
@@ -1995,6 +2165,67 @@ class _ItemDetailsPanel extends StatelessWidget {
                   style: TextStyle(color: context.appColors.textMuted, fontSize: 11),
                 ),
               ),
+            if (order.returnSettlement != null) ...[
+              const SizedBox(height: 8),
+              _SubsectionLabel('Your return claim'),
+              const SizedBox(height: 4),
+              Text(
+                order.returnSettlement!.vendorClaimLabel ?? 'No damage',
+                style: TextStyle(color: context.appColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w600),
+              ),
+              if ((order.returnSettlement!.damageReason ?? '').trim().isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 2),
+                  child: Text(
+                    order.returnSettlement!.damageReason!,
+                    style: TextStyle(color: context.appColors.textMuted, fontSize: 12),
+                  ),
+                ),
+              if (order.returnSettlement!.damageImageUrls.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 8),
+                  child: SizedBox(
+                    height: 72,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: order.returnSettlement!.damageImageUrls.length,
+                      separatorBuilder: (_, __) => const SizedBox(width: 8),
+                      itemBuilder: (_, index) {
+                        final urls = order.returnSettlement!.damageImageUrls
+                            .map(resolveMediaUrl)
+                            .whereType<String>()
+                            .toList();
+                        final url = index < urls.length ? urls[index] : null;
+                        if (url == null) return const SizedBox.shrink();
+                        return GestureDetector(
+                          onTap: () {
+                            Navigator.of(context).push(
+                              MaterialPageRoute<void>(
+                                builder: (_) => CatalogImageViewerScreen(
+                                  imageUrls: urls,
+                                  initialIndex: index.clamp(0, urls.length - 1),
+                                  title: 'Damage photos',
+                                ),
+                              ),
+                            );
+                          },
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.network(url, width: 72, height: 72, fit: BoxFit.cover),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ),
+              Padding(
+                padding: const EdgeInsets.only(top: 2),
+                child: Text(
+                  'BlinksMed reviews this claim. You cannot change it after it is sent.',
+                  style: TextStyle(color: context.appColors.textMuted, fontSize: 11),
+                ),
+              ),
+            ],
           ],
           const SizedBox(height: 8),
           _CompactDetailList(rows: [

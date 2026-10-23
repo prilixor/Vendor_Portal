@@ -15,16 +15,19 @@ internal sealed class GetAdminAlertSummaryQueryHandler(
         GetAdminAlertSummaryQuery request,
         CancellationToken cancellationToken)
     {
-        var criticalOrders = customers.CountCriticalAdminOrdersAsync(cancellationToken);
-        var pendingVendors = vendors.CountPendingVendorsAsync(cancellationToken);
-        var listingAlerts = vendors.CountListingPricingAlertsAsync(cancellationToken);
-        await Task.WhenAll(criticalOrders, pendingVendors, listingAlerts);
+        var criticalOrders = await customers.CountCriticalAdminOrdersAsync(cancellationToken);
+        var refunds = await customers.CountPendingDepositRefundsAsync(cancellationToken);
+        var cancellationRefunds = await customers.CountPendingCancellationRefundsAsync(cancellationToken);
+        var pendingVendors = await vendors.CountPendingVendorsAsync(cancellationToken);
+        var listingAlerts = await vendors.CountListingPricingAlertsAsync(cancellationToken);
 
         return Result.Success(new AdminAlertSummaryDto
         {
-            CriticalOrderCount = criticalOrders.Result,
-            PendingVendorCount = pendingVendors.Result,
-            ListingPricingAlertCount = listingAlerts.Result,
+            CriticalOrderCount = criticalOrders,
+            PendingDepositRefundCount = refunds,
+            PendingCancellationRefundCount = cancellationRefunds,
+            PendingVendorCount = pendingVendors,
+            ListingPricingAlertCount = listingAlerts,
         });
     }
 }

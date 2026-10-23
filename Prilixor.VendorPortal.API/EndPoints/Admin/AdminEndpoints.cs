@@ -985,6 +985,66 @@ public sealed class AdminForceCancelRefundOrderEndpoint(IMediator mediator)
     }
 }
 
+public sealed class RefundAdminOrderDepositRequest : AdminUserIdRequest
+{
+    public Guid OrderId { get; set; }
+    public string? ManualReference { get; set; }
+}
+
+public sealed class RefundAdminOrderDepositEndpoint(IMediator mediator)
+    : Endpoint<RefundAdminOrderDepositRequest, Results<Ok<OrderReturnDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Post("orders/{orderId}/deposit-refund");
+        Group<AdminApiGroup>();
+        Policies("Perm:orders.manage");
+    }
+
+    public override async Task<Results<Ok<OrderReturnDto>, ProblemHttpResult>> ExecuteAsync(
+        RefundAdminOrderDepositRequest req,
+        CancellationToken ct)
+    {
+        var result = await mediator.Send(new RefundOrderDepositCommand(
+            HttpContext.ResolveAdminUserId(req.AdminUserId) ?? string.Empty,
+            req.OrderId,
+            req.ManualReference), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class RefundAdminOrderCancellationRequest : AdminUserIdRequest
+{
+    public Guid OrderId { get; set; }
+    public decimal ChargeAmount { get; set; }
+    public string? ChargeReason { get; set; }
+    public string? ManualReference { get; set; }
+}
+
+public sealed class RefundAdminOrderCancellationEndpoint(IMediator mediator)
+    : Endpoint<RefundAdminOrderCancellationRequest, Results<Ok<OrderCancellationRefundDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Post("orders/{orderId}/cancellation-refund");
+        Group<AdminApiGroup>();
+        Policies("Perm:orders.manage");
+    }
+
+    public override async Task<Results<Ok<OrderCancellationRefundDto>, ProblemHttpResult>> ExecuteAsync(
+        RefundAdminOrderCancellationRequest req,
+        CancellationToken ct)
+    {
+        var result = await mediator.Send(new RefundOrderCancellationCommand(
+            HttpContext.ResolveAdminUserId(req.AdminUserId) ?? string.Empty,
+            req.OrderId,
+            req.ChargeAmount,
+            req.ChargeReason,
+            req.ManualReference), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
 public sealed class AdminRestartOrderDispatchRequest : AdminUserIdRequest
 {
     public Guid OrderId { get; set; }

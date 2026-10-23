@@ -14,6 +14,7 @@ import { toast } from "sonner";
 import { ChevronRight, RefreshCw, User } from "lucide-react";
 import { formatOrderStatusLabel, formatOrderStatusTitle, formatOrderTypeLabel, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
 import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
+import { vendorClaimLabel } from "@/app/helpers/orderReturn";
 import {
   ActiveFilterChips,
   FilterPanel,
@@ -335,6 +336,11 @@ const VendorOrders = () => {
                             {order.isExtended ? (
                               <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
                                 EXTENDED
+                              </span>
+                            ) : null}
+                            {vendorClaimLabel(order.returnSettlement) ? (
+                              <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold text-sky-900 dark:bg-sky-950/50 dark:text-sky-200">
+                                {vendorClaimLabel(order.returnSettlement)}
                               </span>
                             ) : null}
                             <Badge

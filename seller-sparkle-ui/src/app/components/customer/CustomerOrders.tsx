@@ -10,6 +10,8 @@ import { ListingThumb } from "@/app/components/shared/ListingThumb";
 import { toast } from "sonner";
 import { formatCustomerOrderStatusTitle, formatCustomerOrderStatusLabel, formatOrderTypeLabel, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
 import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
+import { customerRefundChip } from "@/app/helpers/orderReturn";
+import { customerCancellationChip } from "@/app/helpers/orderCancellation";
 import { Badge } from "@/app/components/ui/badge";
 import { CancelOrderConfirm } from "@/app/components/legal/CancelOrderConfirm";
 import {
@@ -350,6 +352,16 @@ const CustomerOrders = () => {
                               {o.isExtended && o.orderType?.toLowerCase() !== "buy" ? (
                                 <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold leading-none text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
                                   EXTENDED
+                                </span>
+                              ) : null}
+                              {customerRefundChip(o.returnSettlement) ? (
+                                <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold leading-none text-sky-900 dark:bg-sky-950/50 dark:text-sky-200">
+                                  {customerRefundChip(o.returnSettlement)}
+                                </span>
+                              ) : null}
+                              {customerCancellationChip(o.cancellationRefund) ? (
+                                <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold leading-none text-sky-900 dark:bg-sky-950/50 dark:text-sky-200">
+                                  {customerCancellationChip(o.cancellationRefund)}
                                 </span>
                               ) : null}
                               <Badge

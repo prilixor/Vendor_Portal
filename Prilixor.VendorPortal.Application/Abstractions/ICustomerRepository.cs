@@ -76,6 +76,31 @@ public interface ICustomerRepository
     Task<CustomerRentalOrderBuyout?> GetCustomerRentalOrderBuyoutByIdAsync(Guid buyoutId, CancellationToken cancellationToken);
     Task UpdateCustomerRentalOrderBuyoutAsync(CustomerRentalOrderBuyout buyout, CancellationToken cancellationToken);
     Task<List<CustomerRentalOrderBuyout>> GetPendingCustomerRentalOrderBuyoutsAsync(Guid orderId, CancellationToken cancellationToken);
+
+    Task AddOrderReturnAsync(CustomerOrderReturn row, CancellationToken cancellationToken);
+    Task<CustomerOrderReturn?> GetOrderReturnByOrderIdAsync(Guid orderId, CancellationToken cancellationToken);
+    Task UpdateOrderReturnAsync(CustomerOrderReturn row, CancellationToken cancellationToken);
+    void DetachOrderReturn(CustomerOrderReturn row);
+    Task<bool> TryClaimDepositRefundAsync(Guid returnId, CancellationToken cancellationToken);
+    Task<Dictionary<Guid, OrderReturnDto>> GetOrderReturnDtosByOrderIdsAsync(IReadOnlyCollection<Guid> orderIds, CancellationToken cancellationToken);
+    Task<decimal> SumRefundedAmountForCheckoutSessionAsync(
+        Guid checkoutSessionId,
+        CancellationToken cancellationToken,
+        Guid? excludeCancellationRefundId = null);
+    Task<int> CountPendingDepositRefundsAsync(CancellationToken cancellationToken);
+    Task<List<PendingDepositRefundRow>> ListPendingDepositRefundsAsync(int take, CancellationToken cancellationToken);
+
+    Task AddOrderCancellationRefundAsync(CustomerOrderCancellationRefund row, CancellationToken cancellationToken);
+    Task<CustomerOrderCancellationRefund?> GetOrderCancellationRefundByOrderIdAsync(Guid orderId, CancellationToken cancellationToken);
+    Task UpdateOrderCancellationRefundAsync(CustomerOrderCancellationRefund row, CancellationToken cancellationToken);
+    void DetachOrderCancellationRefund(CustomerOrderCancellationRefund row);
+    Task<bool> TryClaimCancellationRefundAsync(Guid refundId, decimal chargeAmount, string? chargeReason, decimal refundAmount, CancellationToken cancellationToken);
+    Task<bool> TrySettleCancellationRefundAsync(Guid refundId, decimal chargeAmount, string? chargeReason, CancellationToken cancellationToken);
+    Task<Dictionary<Guid, OrderCancellationRefundDto>> GetOrderCancellationRefundDtosByOrderIdsAsync(IReadOnlyCollection<Guid> orderIds, CancellationToken cancellationToken);
+    Task<int> CountPendingCancellationRefundsAsync(CancellationToken cancellationToken);
+    Task<List<PendingCancellationRefundRow>> ListPendingCancellationRefundsAsync(int take, CancellationToken cancellationToken);
+    Task<List<CustomerRentalOrder>> ListPaidClosedOrdersMissingCancellationRefundAsync(int take, CancellationToken cancellationToken);
+    Task<List<CustomerCheckoutSession>> GetPaidExtensionSessionsAsync(Guid orderId, CancellationToken cancellationToken);
     
     Task<List<PendingContinuationAggregate>> GetAllPendingContinuationsForAdminAsync(CancellationToken cancellationToken);
     Task<(List<PendingContinuationAggregate> Items, int TotalCount)> SearchPendingContinuationsForAdminPagedAsync(
@@ -120,6 +145,7 @@ public interface ICustomerRepository
     Task<List<CustomerOrderVendorOffer>> GetPendingVendorOffersAsync(Guid vendorId, CancellationToken cancellationToken);
     Task UpdateCustomerOrderVendorOfferAsync(CustomerOrderVendorOffer offer, CancellationToken cancellationToken);
     Task<List<Guid>> GetAwaitingOrderIdsWithExpiredPendingOffersAsync(DateTimeOffset now, CancellationToken cancellationToken);
+    Task<List<ClosedVendorOfferNotice>> ExpireOpenOffersOnClosedOrdersAsync(DateTimeOffset now, CancellationToken cancellationToken);
     Task<List<CustomerRentalOrder>> GetSiblingCheckoutOrdersAsync(Guid customerId, string orderNumber, Guid exceptOrderId, CancellationToken cancellationToken);
     Task<List<ExpiringOrderAggregate>> GetExpiringOrdersForCustomerAsync(Guid customerId, DateOnly fromDate, DateOnly toDate, CancellationToken cancellationToken);
     Task<List<ExpiringOrderAggregate>> GetExpiringOrdersForVendorAsync(Guid vendorId, DateOnly fromDate, DateOnly toDate, CancellationToken cancellationToken);

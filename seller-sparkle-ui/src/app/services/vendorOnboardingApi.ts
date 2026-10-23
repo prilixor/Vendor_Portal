@@ -555,6 +555,7 @@ export interface VendorOrderApiDto {
   customerState?: string;
   createdAtUtc: string;
   isExtended?: boolean;
+  returnSettlement?: import("@/app/helpers/orderReturn").OrderReturnApi | null;
   doctorId?: string;
   doctorName?: string;
   doctorSpecialization?: string;
@@ -1115,8 +1116,33 @@ export const vendorOnboardingApi = {
     );
   },
 
-  updateVendorOrderStatus(vendorId: string, orderId: string, status: string, assetTags?: string[]) {
-    return apiClient.patch(`/vendors/${vendorId}/orders/${orderId}/status`, { status, assetTags });
+  markProductReturned(
+    vendorId: string,
+    orderId: string,
+    damageAmount: number,
+    damageReason: string,
+    photos: File[] = [],
+  ) {
+    const formData = new FormData();
+    formData.append("damageAmount", String(damageAmount));
+    formData.append("damageReason", damageReason);
+    for (const photo of photos.slice(0, 3)) formData.append("files", photo);
+    return apiClient.postForm(`/vendors/${vendorId}/orders/${orderId}/return`, formData);
+  },
+
+  updateVendorOrderStatus(
+    vendorId: string,
+    orderId: string,
+    status: string,
+    assetTags?: string[],
+    returnClaim?: { damageAmount: number; damageReason?: string | null },
+  ) {
+    return apiClient.patch(`/vendors/${vendorId}/orders/${orderId}/status`, {
+      status,
+      assetTags,
+      damageAmount: returnClaim?.damageAmount ?? 0,
+      damageReason: returnClaim?.damageReason ?? null,
+    });
   },
 
   assignVendorOrderAssets(vendorId: string, orderId: string, assetTags: string[]) {

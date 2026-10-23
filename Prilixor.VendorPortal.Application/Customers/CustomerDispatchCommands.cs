@@ -79,7 +79,8 @@ public sealed record VendorOrderDto(
     decimal? RentalFinalPrice = null,
     IReadOnlyList<CustomerPrescriptionFileDto>? PrescriptionFiles = null,
     decimal DepositAmount = 0,
-    decimal GstAmount = 0);
+    decimal GstAmount = 0,
+    OrderReturnDto? ReturnSettlement = null);
 
 public sealed record GetVendorOrdersQuery(string VendorId, string? Status) : IQuery<List<VendorOrderDto>>;
 
@@ -124,7 +125,7 @@ internal sealed class GetVendorOrdersQueryHandler(
                 assetTagsMap.TryGetValue(r.Order.Id, out var tags) ? tags : null))
             .OrderByDescending(x => x.OrderNumber)
             .ToList();
-        return Result.Success(result);
+        return Result.Success(await OrderReturnMapper.AttachAsync(customers, result, cancellationToken));
     }
 }
 
@@ -156,11 +157,20 @@ internal sealed class GetVendorOrderByIdQueryHandler(
 
         var assetTagsMap = await customers.GetCustomerOrderAssetTagsByOrderIdsAsync([row.Order.Id], cancellationToken);
         assetTagsMap.TryGetValue(row.Order.Id, out var assignedTags);
-        return Result.Success(VendorOrderMapper.ToVendorOrderDto(row, assignedTags));
+        var dto = VendorOrderMapper.ToVendorOrderDto(row, assignedTags);
+        return Result.Success(await OrderReturnMapper.AttachAsync(customers, dto, cancellationToken));
     }
 }
 
-public sealed record UpdateVendorOrderStatusCommand(string VendorId, Guid OrderId, string Status, List<string>? AssetTags = null) : ICommand<CustomerOrderDto>;
+public sealed record UpdateVendorOrderStatusCommand(
+    string VendorId,
+    Guid OrderId,
+    string Status,
+    List<string>? AssetTags = null,
+    decimal DamageAmount = 0,
+    string? DamageReason = null,
+    IReadOnlyList<ReturnDamagePhoto>? DamagePhotos = null,
+    Uri? RequestPublicBaseUri = null) : ICommand<CustomerOrderDto>;
 
 internal sealed class UpdateVendorOrderStatusCommandHandler(
     ICustomerRepository customers,
@@ -189,6 +199,44 @@ internal sealed class UpdateVendorOrderStatusCommandHandler(
 
         if (!IsValidVendorStatusTransition(order, current, target))
             return Result.Failure<CustomerOrderDto>(new Error("vendors.order.invalid_transition", $"Cannot move order from {current} to {target}.", ErrorCategory.Validation));
+
+        CustomerOrderReturn? openedReturn = null;
+        var uploadedDamagePhotos = new List<string>();
+        if (target == "returned")
+        {
+            var existingReturn = await customers.GetOrderReturnByOrderIdAsync(order.Id, cancellationToken);
+            if (existingReturn is null && request.DamagePhotos is { Count: > 0 })
+            {
+                if (request.RequestPublicBaseUri is null)
+                {
+                    return Result.Failure<CustomerOrderDto>(new Error(
+                        "orders.return.photo_upload",
+                        "Damage photos could not be saved.",
+                        ErrorCategory.Validation));
+                }
+
+                var stored = await StoreDamagePhotosAsync(
+                    vendorId, request.DamagePhotos, request.RequestPublicBaseUri, cancellationToken);
+                if (stored.IsFailure)
+                    return Result.Failure<CustomerOrderDto>(stored.Errors[0]);
+                uploadedDamagePhotos = stored.Value;
+            }
+
+            var opened = await OrderReturns.TryOpenAsync(
+                customers,
+                order,
+                request.DamageAmount,
+                request.DamageReason,
+                cancellationToken,
+                uploadedDamagePhotos);
+            if (opened.IsFailure)
+            {
+                await DeleteStoredDamagePhotosAsync(uploadedDamagePhotos, cancellationToken);
+                return Result.Failure<CustomerOrderDto>(opened.Errors[0]);
+            }
+
+            openedReturn = opened.Value;
+        }
 
         var inventory = await vendors.GetVendorInventoryByListingIdAsync(listing.Id, cancellationToken);
         var now = DateTimeOffset.UtcNow;
@@ -435,7 +483,7 @@ internal sealed class UpdateVendorOrderStatusCommandHandler(
         {
             "in_transit" => "Your order is now out for delivery.",
             "active" => order.OrderType == "buy" ? "Your purchase is delivered." : "Your rental order has been delivered and is now active.",
-            "returned" => "Return completed for your rental order.",
+            "returned" => OrderReturns.CustomerMessage(openedReturn),
             "bought_out" => "Buyout completed for your rental order.",
             _ => "Order status has been updated."
         };
@@ -461,6 +509,73 @@ internal sealed class UpdateVendorOrderStatusCommandHandler(
         await customers.SaveChangesAsync(cancellationToken);
         await vendors.SaveChangesAsync(cancellationToken);
         return await VendorRespondDispatchOfferCommandHandler.BuildOrderDto(customers, order.Id, cancellationToken);
+    }
+
+    private async Task<Result<List<string>>> StoreDamagePhotosAsync(
+        Guid vendorId,
+        IReadOnlyList<ReturnDamagePhoto> photos,
+        Uri publicBase,
+        CancellationToken cancellationToken)
+    {
+        if (photos.Count > OrderReturns.MaxDamageImages)
+        {
+            return Result.Failure<List<string>>(new Error(
+                "orders.return.too_many_photos",
+                "You can add up to 3 damage photos.",
+                ErrorCategory.Validation));
+        }
+
+        var stored = new List<string>();
+        foreach (var photo in photos)
+        {
+            if (photo.Bytes.LongLength <= 0 || photo.Bytes.LongLength > OrderReturns.MaxDamageImageBytes)
+            {
+                await DeleteStoredDamagePhotosAsync(stored, cancellationToken);
+                return Result.Failure<List<string>>(new Error(
+                    "orders.return.photo_too_large",
+                    "Each damage photo must be under 5 MB.",
+                    ErrorCategory.Validation));
+            }
+
+            if (!OrderReturns.IsDamagePhoto(photo.ContentType, photo.FileName))
+            {
+                await DeleteStoredDamagePhotosAsync(stored, cancellationToken);
+                return Result.Failure<List<string>>(new Error(
+                    "orders.return.photo_type",
+                    "Damage photos must be JPG, PNG, or WebP.",
+                    ErrorCategory.Validation));
+            }
+
+            await using var stream = new MemoryStream(photo.Bytes, writable: false);
+            var persist = await uploadStorage.PersistVendorUploadAsync(
+                vendorId.ToString(),
+                string.IsNullOrWhiteSpace(photo.FileName) ? "damage.jpg" : photo.FileName,
+                photo.ContentType,
+                stream,
+                publicBase,
+                cancellationToken,
+                VendorFileFolderType.OrderImages);
+            stored.Add(persist.StoredReference);
+        }
+
+        return Result.Success(stored);
+    }
+
+    private async Task DeleteStoredDamagePhotosAsync(IReadOnlyList<string> stored, CancellationToken cancellationToken)
+    {
+        foreach (var path in stored)
+        {
+            if (string.IsNullOrWhiteSpace(path))
+                continue;
+            try
+            {
+                await uploadStorage.DeleteStoredFileAsync(path, cancellationToken);
+            }
+            catch (Exception)
+            {
+                // A failed cleanup must not hide the validation error.
+            }
+        }
     }
 
     private static bool IsValidVendorStatusTransition(CustomerRentalOrder order, string current, string target) =>
@@ -586,7 +701,8 @@ internal sealed class AssignVendorOrderAssetsCommandHandler(
 
         var assetTagsMap = await customers.GetCustomerOrderAssetTagsByOrderIdsAsync([row.Order.Id], cancellationToken);
         assetTagsMap.TryGetValue(row.Order.Id, out var assignedTags);
-        return Result.Success(VendorOrderMapper.ToVendorOrderDto(row, assignedTags));
+        var dto = VendorOrderMapper.ToVendorOrderDto(row, assignedTags);
+        return Result.Success(await OrderReturnMapper.AttachAsync(customers, dto, cancellationToken));
     }
 }
 
@@ -932,7 +1048,7 @@ internal sealed class VendorRespondDispatchOfferCommandHandler(
             title += $" ({row.VariantDescription})";
         }
 
-        return Result.Success(new CustomerOrderDto(
+        var dto = new CustomerOrderDto(
             o.Id,
             o.OrderNumber,
             o.VendorProductListingId,
@@ -960,7 +1076,9 @@ internal sealed class VendorRespondDispatchOfferCommandHandler(
             RentalDiscountType: o.RentalDiscountType,
             RentalDiscountValue: o.RentalDiscountValue,
             RentalFinalPrice: o.RentalFinalPrice,
-            IsExtended: o.IsExtended));
+            IsExtended: o.IsExtended);
+        var withReturn = await OrderReturnMapper.AttachAsync(customers, dto, cancellationToken);
+        return Result.Success(await OrderCancellationMapper.AttachAsync(customers, withReturn, cancellationToken));
     }
 }
 

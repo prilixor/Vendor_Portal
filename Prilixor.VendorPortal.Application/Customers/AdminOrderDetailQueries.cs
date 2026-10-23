@@ -32,9 +32,12 @@ internal sealed class GetAdminOrderDetailQueryHandler(
             .ToList();
         var customPricedListings = await vendors.GetListingIdsWithCustomVendorPricingAsync(listingIds, cancellationToken);
 
+        await OrderCancellationRefunds.EnsureForOrdersAsync(customers, rows.Select(r => r.Order), cancellationToken);
+        var items = rows.Select(r => ToDto(r, customPricedListings.Contains(r.Order.VendorProductListingId))).ToList();
+        var withReturns = await OrderReturnMapper.AttachAsync(customers, items, cancellationToken);
         return Result.Success(new AdminOrderDetailResult
         {
-            Items = rows.Select(r => ToDto(r, customPricedListings.Contains(r.Order.VendorProductListingId))).ToList(),
+            Items = await OrderCancellationMapper.AttachAsync(customers, withReturns, cancellationToken),
         });
     }
 

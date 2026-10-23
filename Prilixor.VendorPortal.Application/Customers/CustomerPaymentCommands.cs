@@ -515,6 +515,13 @@ internal static class CheckoutPaymentActivator
             {
                 order.Status = "dispatch_failed";
                 await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
+                await OrderCancellationRefunds.TryOpenAsync(
+                    customers,
+                    order,
+                    CancellationOutcomes.DispatchFailed,
+                    CancellationActors.System,
+                    null,
+                    cancellationToken);
                 await customers.SaveChangesAsync(cancellationToken);
                 continue;
             }
@@ -536,6 +543,13 @@ internal static class CheckoutPaymentActivator
             {
                 order.Status = "dispatch_failed";
                 await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
+                await OrderCancellationRefunds.TryOpenAsync(
+                    customers,
+                    order,
+                    CancellationOutcomes.DispatchFailed,
+                    CancellationActors.System,
+                    null,
+                    cancellationToken);
                 await customers.AddCustomerNotificationAsync(
                     new CustomerNotification
                     {

@@ -69,6 +69,8 @@ class OrderModel {
   final double? rentalDiscountValue;
   final double? rentalFinalPrice;
   final bool isExtended;
+  final OrderReturnInfo? returnSettlement;
+  final OrderCancellationInfo? cancellationRefund;
 
   OrderModel({
     required this.id,
@@ -106,6 +108,8 @@ class OrderModel {
     this.rentalDiscountValue,
     this.rentalFinalPrice,
     this.isExtended = false,
+    this.returnSettlement,
+    this.cancellationRefund,
   });
 
   bool get hasMedicalReference {
@@ -153,6 +157,100 @@ class OrderModel {
       rentalDiscountValue: (json['rentalDiscountValue'] as num?)?.toDouble(),
       rentalFinalPrice: (json['rentalFinalPrice'] as num?)?.toDouble(),
       isExtended: json['isExtended'] == true,
+      returnSettlement: OrderReturnInfo.fromJson(json['returnSettlement']),
+      cancellationRefund: OrderCancellationInfo.fromJson(json['cancellationRefund']),
     );
+  }
+}
+
+class OrderReturnInfo {
+  final double depositAmount;
+  final double damageAmount;
+  final String? damageReason;
+  final double refundAmount;
+  final String status;
+  final String? refundedAt;
+
+  const OrderReturnInfo({
+    required this.depositAmount,
+    required this.damageAmount,
+    this.damageReason,
+    required this.refundAmount,
+    required this.status,
+    this.refundedAt,
+  });
+
+  static OrderReturnInfo? fromJson(dynamic raw) {
+    if (raw is! Map) return null;
+    final json = Map<String, dynamic>.from(raw);
+    return OrderReturnInfo(
+      depositAmount: (json['depositAmount'] as num?)?.toDouble() ?? 0,
+      damageAmount: (json['damageAmount'] as num?)?.toDouble() ?? 0,
+      damageReason: json['damageReason']?.toString(),
+      refundAmount: (json['refundAmount'] as num?)?.toDouble() ?? 0,
+      status: json['status']?.toString() ?? '',
+      refundedAt: json['refundedAt']?.toString(),
+    );
+  }
+
+  static String format(num value) {
+    final rounded = (value * 100).round() / 100;
+    final whole = rounded == rounded.roundToDouble();
+    return '₹${whole ? rounded.toStringAsFixed(0) : rounded.toStringAsFixed(2)}';
+  }
+
+  String money(num value) => format(value);
+
+  String? get chipLabel {
+    if (refundAmount > 0) {
+      final amount = 'Refund ${money(refundAmount)}';
+      return status == 'refunded' ? amount : '$amount processing';
+    }
+    if (damageAmount > 0) return 'Damage ${money(damageAmount)}';
+    return null;
+  }
+}
+
+class OrderCancellationInfo {
+  final double paidAmount;
+  final double chargeAmount;
+  final String? chargeReason;
+  final double refundAmount;
+  final String status;
+  final String actorLabel;
+  final String? refundedAt;
+
+  const OrderCancellationInfo({
+    required this.paidAmount,
+    required this.chargeAmount,
+    this.chargeReason,
+    required this.refundAmount,
+    required this.status,
+    required this.actorLabel,
+    this.refundedAt,
+  });
+
+  static OrderCancellationInfo? fromJson(dynamic raw) {
+    if (raw is! Map) return null;
+    final json = Map<String, dynamic>.from(raw);
+    return OrderCancellationInfo(
+      paidAmount: (json['paidAmount'] as num?)?.toDouble() ?? 0,
+      chargeAmount: (json['chargeAmount'] as num?)?.toDouble() ?? 0,
+      chargeReason: json['chargeReason']?.toString(),
+      refundAmount: (json['refundAmount'] as num?)?.toDouble() ?? 0,
+      status: json['status']?.toString() ?? '',
+      actorLabel: json['actorLabel']?.toString() ?? '',
+      refundedAt: json['refundedAt']?.toString(),
+    );
+  }
+
+  String money(num value) => OrderReturnInfo.format(value);
+
+  String? get chipLabel {
+    if (status == 'pending_review') return 'Refund in review';
+    if (status == 'refunding') return 'Refund ${money(refundAmount)} processing';
+    if (status == 'refunded' && refundAmount > 0) return 'Refund ${money(refundAmount)}';
+    if (chargeAmount > 0 && refundAmount <= 0) return 'Charge ${money(chargeAmount)}';
+    return null;
   }
 }

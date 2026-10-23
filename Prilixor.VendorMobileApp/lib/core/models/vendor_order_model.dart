@@ -43,6 +43,7 @@ class VendorOrder {
   final String? rentalDiscountType;
   final double? rentalDiscountValue;
   final double? rentalFinalPrice;
+  final OrderReturnInfo? returnSettlement;
 
   const VendorOrder({
     required this.orderId,
@@ -80,6 +81,7 @@ class VendorOrder {
     this.rentalDiscountType,
     this.rentalDiscountValue,
     this.rentalFinalPrice,
+    this.returnSettlement,
   });
 
   double get payoutAmount =>
@@ -147,6 +149,53 @@ class VendorOrder {
       rentalDiscountType: json['rentalDiscountType']?.toString(),
       rentalDiscountValue: (json['rentalDiscountValue'] as num?)?.toDouble(),
       rentalFinalPrice: (json['rentalFinalPrice'] as num?)?.toDouble(),
+      returnSettlement: OrderReturnInfo.fromJson(json['returnSettlement']),
     );
+  }
+}
+
+class OrderReturnInfo {
+  final double depositAmount;
+  final double damageAmount;
+  final String? damageReason;
+  final double refundAmount;
+  final String status;
+  final List<String> damageImageUrls;
+
+  const OrderReturnInfo({
+    required this.depositAmount,
+    required this.damageAmount,
+    this.damageReason,
+    required this.refundAmount,
+    required this.status,
+    this.damageImageUrls = const [],
+  });
+
+  static OrderReturnInfo? fromJson(dynamic raw) {
+    if (raw is! Map) return null;
+    final json = Map<String, dynamic>.from(raw);
+    return OrderReturnInfo(
+      depositAmount: (json['depositAmount'] as num?)?.toDouble() ?? 0,
+      damageAmount: (json['damageAmount'] as num?)?.toDouble() ?? 0,
+      damageReason: json['damageReason']?.toString(),
+      damageImageUrls: (json['damageImageUrls'] as List?)
+              ?.map((e) => e.toString())
+              .where((e) => e.trim().isNotEmpty)
+              .toList() ??
+          const [],
+      refundAmount: (json['refundAmount'] as num?)?.toDouble() ?? 0,
+      status: json['status']?.toString() ?? '',
+    );
+  }
+
+  String? get vendorClaimLabel {
+    if (damageAmount > 0) {
+      final claim = 'Damage claim ${formatVendorMoney(damageAmount)}';
+      if (status == 'pending_refund' || status == 'refunding') {
+        return '$claim · with admin';
+      }
+      return claim;
+    }
+    return 'No damage';
   }
 }

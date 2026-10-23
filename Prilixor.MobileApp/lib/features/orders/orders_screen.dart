@@ -822,6 +822,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
                         _buildOrderTypeBadge(context, order.orderType),
                         if (order.isExtended && order.orderType.toLowerCase() != 'buy')
                           _buildExtendedBadge(context),
+                        if (order.returnSettlement?.chipLabel != null)
+                          _buildRefundBadge(context, order.returnSettlement!.chipLabel!),
+                        if (order.cancellationRefund?.chipLabel != null)
+                          _buildRefundBadge(context, order.cancellationRefund!.chipLabel!),
                         _buildStatusBadge(context, order.status),
                       ],
                     ),
@@ -879,6 +883,25 @@ class _OrdersScreenState extends State<OrdersScreen> {
           fontSize: 10,
           fontWeight: FontWeight.w800,
           letterSpacing: 0.3,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRefundBadge(BuildContext context, String label) {
+    final isDark = context.isDarkMode;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF0C4A6E).withValues(alpha: 0.55) : const Color(0xFFE0F2FE),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: isDark ? const Color(0xFFBAE6FD) : const Color(0xFF0C4A6E),
+          fontSize: 10,
+          fontWeight: FontWeight.w800,
         ),
       ),
     );

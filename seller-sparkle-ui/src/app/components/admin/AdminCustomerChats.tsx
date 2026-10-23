@@ -35,6 +35,7 @@ export default function AdminCustomerChats() {
   const [search, setSearch] = useState("");
   const [appliedSearch, setAppliedSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [manualRefresh, setManualRefresh] = useState(false);
   const [replyText, setReplyText] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
@@ -50,7 +51,6 @@ export default function AdminCustomerChats() {
     data: sessionPage,
     isLoading: loadingSessions,
     refetch: refetchSessions,
-    isFetching: fetchingSessions,
     isPlaceholderData,
   } = useQuery({
     queryKey: ["admin-customer-chat-session-summaries", page, appliedSearch],
@@ -155,13 +155,16 @@ export default function AdminCustomerChats() {
           </p>
         </div>
         <Button
-          onClick={() => void refetchSessions()}
+          onClick={() => {
+            setManualRefresh(true);
+            void refetchSessions().finally(() => setManualRefresh(false));
+          }}
           variant="outline"
           size="sm"
           className="shrink-0 gap-2 font-bold shadow-sm sm:h-10 sm:px-4"
-          disabled={fetchingSessions}
+          disabled={loadingSessions || manualRefresh}
         >
-          <RefreshCw className={cn("h-4 w-4", fetchingSessions && "animate-spin")} />
+          <RefreshCw className={cn("h-4 w-4", manualRefresh && "animate-spin")} />
           <span className="hidden sm:inline">Refresh</span>
         </Button>
       </div>

@@ -785,7 +785,9 @@ public sealed record CustomerOrderDto(
     decimal? RentalDiscountValue = null,
     decimal? RentalFinalPrice = null,
     IReadOnlyList<CustomerPrescriptionFileDto>? PrescriptionFiles = null,
-    bool IsExtended = false);
+    bool IsExtended = false,
+    OrderReturnDto? ReturnSettlement = null,
+    OrderCancellationRefundDto? CancellationRefund = null);
 
 internal static class CustomerOrderPricingRules
 {
@@ -1677,6 +1679,13 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
                 {
                     order.Status = "dispatch_failed";
                     await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
+                    await OrderCancellationRefunds.TryOpenAsync(
+                        customers,
+                        order,
+                        CancellationOutcomes.DispatchFailed,
+                        CancellationActors.System,
+                        null,
+                        cancellationToken);
                     await customers.SaveChangesAsync(cancellationToken);
 
                     failed.Add(new FailedCustomerOrderLineDto(
@@ -1892,7 +1901,8 @@ internal sealed class GetCustomerOrdersQueryHandler(
                 IsExtended: o.IsExtended));
         }
 
-        return Result.Success(list);
+        var withReturns = await OrderReturnMapper.AttachAsync(customers, list, cancellationToken);
+        return Result.Success(await OrderCancellationMapper.AttachAsync(customers, withReturns, cancellationToken));
     }
 }
 
@@ -1930,7 +1940,7 @@ internal sealed class GetCustomerOrderDetailQueryHandler(
             title += $" ({row.VariantDescription})";
         }
         var files = await customers.GetCustomerOrderPrescriptionFilesAsync(o.Id, cancellationToken);
-        return Result.Success(new CustomerOrderDto(
+        var dto = new CustomerOrderDto(
             o.Id,
             o.OrderNumber,
             o.VendorProductListingId,
@@ -1968,7 +1978,9 @@ internal sealed class GetCustomerOrderDetailQueryHandler(
             RentalDiscountValue: o.RentalDiscountValue,
             RentalFinalPrice: o.RentalFinalPrice,
             PrescriptionFiles: files.Select(f => CustomerPrescriptionRules.ToDto(f, fileUrlResolver)).ToList(),
-            IsExtended: o.IsExtended));
+            IsExtended: o.IsExtended);
+        var withReturn = await OrderReturnMapper.AttachAsync(customers, dto, cancellationToken);
+        return Result.Success(await OrderCancellationMapper.AttachAsync(customers, withReturn, cancellationToken));
     }
 }
 
@@ -2097,10 +2109,26 @@ internal sealed class CancelCustomerOrderCommandHandler(
         }
 
         o.Status = "cancelled";
+        await DispatchOfferClosing.CloseForOrderAsync(
+            customers,
+            vendors,
+            o.Id,
+            o.OrderNumber,
+            $"The customer cancelled {o.OrderNumber} before it was accepted. This request is closed.",
+            cancellationToken);
         // Customer cancel: close photo request + delete images from S3.
         await CustomerOrderImageLifecycle.CloseAndPurgeForOrderAsync(
             customers, uploadStorage, o.Id, closedReason: "cancelled", deletedBy: request.CustomerId, cancellationToken);
         await customers.UpdateCustomerRentalOrderAsync(o, cancellationToken);
+        var openedCancel = await OrderCancellationRefunds.TryOpenAsync(
+            customers,
+            o,
+            CancellationOutcomes.Cancelled,
+            CancellationActors.Customer,
+            o.Customer?.FullName,
+            cancellationToken);
+        if (openedCancel.IsFailure)
+            return Result.Failure<CustomerOrderDto>(openedCancel.Errors[0]);
 
         var listingTitleForNotif = row.Listing?.ListingTitle ?? agg.ListingTitle ?? "Listing unavailable";
         if (!string.IsNullOrEmpty(row.VariantDescription))
@@ -2113,7 +2141,9 @@ internal sealed class CancelCustomerOrderCommandHandler(
                 Id = Guid.NewGuid(),
                 CustomerId = request.CustomerId,
                 Title = $"Order {o.OrderNumber} cancelled",
-                Body = $"Your rental request for \"{listingTitleForNotif}\" was cancelled.",
+                Body = openedCancel.Value is null
+                    ? $"Your rental request for \"{listingTitleForNotif}\" was cancelled."
+                    : $"Your rental request for \"{listingTitleForNotif}\" was cancelled. BlinksMed will review the payment for this product.",
                 NotificationType = CustomerNotificationTypes.OrderCancelled,
                 RelatedOrderId = o.Id,
             },
@@ -2133,7 +2163,7 @@ internal sealed class CancelCustomerOrderCommandHandler(
         {
             listingTitle += $" ({row.VariantDescription})";
         }
-        return Result.Success(new CustomerOrderDto(
+        var cancelledDto = new CustomerOrderDto(
             o.Id,
             o.OrderNumber,
             o.VendorProductListingId,
@@ -2170,6 +2200,8 @@ internal sealed class CancelCustomerOrderCommandHandler(
             RentalDiscountType: o.RentalDiscountType,
             RentalDiscountValue: o.RentalDiscountValue,
             RentalFinalPrice: o.RentalFinalPrice,
-            IsExtended: o.IsExtended));
+            IsExtended: o.IsExtended);
+        var withReturn = await OrderReturnMapper.AttachAsync(customers, cancelledDto, cancellationToken);
+        return Result.Success(await OrderCancellationMapper.AttachAsync(customers, withReturn, cancellationToken));
     }
 }

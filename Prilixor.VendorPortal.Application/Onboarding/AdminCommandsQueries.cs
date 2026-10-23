@@ -1344,7 +1344,42 @@ internal sealed class UpdateAdminOrderStatusCommandHandler(
             }
         }
 
+        CustomerOrderReturn? openedReturn = null;
+        if (target == "returned")
+        {
+            var opened = await OrderReturns.TryOpenAsync(customers, order, 0, null, cancellationToken);
+            if (opened.IsFailure)
+                return Result.Failure<AdminOrderDto>(opened.Errors[0]);
+            openedReturn = opened.Value;
+        }
+
         order.Status = target;
+        CustomerOrderCancellationRefund? openedCancel = null;
+        if (target is "cancelled" or "dispatch_failed")
+        {
+            var adminName = (await vendors.GetAdminUserByIdAsync(adminUserId, cancellationToken))?.FullName;
+            var openedCancelResult = await OrderCancellationRefunds.TryOpenAsync(
+                customers,
+                order,
+                target,
+                CancellationActors.Admin,
+                adminName,
+                cancellationToken);
+            if (openedCancelResult.IsFailure)
+                return Result.Failure<AdminOrderDto>(openedCancelResult.Errors[0]);
+            openedCancel = openedCancelResult.Value;
+            var vendorMessage = target == "dispatch_failed"
+                ? $"BlinksMed marked {order.OrderNumber} dispatch failed. This request is closed."
+                : $"BlinksMed cancelled {order.OrderNumber}. This request is closed.";
+            await DispatchOfferClosing.CloseForOrderAsync(
+                customers,
+                vendors,
+                order.Id,
+                order.OrderNumber,
+                vendorMessage,
+                cancellationToken);
+        }
+
         // Admin marked delivered → close photo request + delete images from S3.
         if (target == "active")
         {
@@ -1365,7 +1400,13 @@ internal sealed class UpdateAdminOrderStatusCommandHandler(
                 {
                     "in_transit" => "Your order is now out for delivery.",
                     "active" => order.OrderType == "buy" ? "Your purchase is delivered." : "Your rental order has been delivered and is now active.",
-                    "returned" => "Return completed for your rental order.",
+                    "returned" => OrderReturns.CustomerMessage(openedReturn),
+                    "cancelled" => openedCancel is null
+                        ? "This product was cancelled."
+                        : "This product was cancelled. BlinksMed will review the payment before anything is sent back.",
+                    "dispatch_failed" => openedCancel is null
+                        ? "We could not assign a vendor for this product."
+                        : "No vendor could take this product. BlinksMed will review the payment before anything is sent back.",
                     _ => "Order status has been updated."
                 },
             },
@@ -1475,6 +1516,14 @@ internal sealed class AdminReassignVendorOrderCommandHandler(
             await CustomerOrderImageLifecycle.CloseAndPurgeForOrderAsync(
                 customers, uploadStorage, order.Id, closedReason: "dispatch_failed", deletedBy: adminUserId, cancellationToken);
             await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
+            var adminName = (await vendors.GetAdminUserByIdAsync(adminUserId, cancellationToken))?.FullName;
+            await OrderCancellationRefunds.TryOpenAsync(
+                customers,
+                order,
+                CancellationOutcomes.DispatchFailed,
+                CancellationActors.Admin,
+                adminName,
+                cancellationToken);
             await dispatch.PersistAsync(cancellationToken);
             await customers.SaveChangesAsync(cancellationToken);
             return Result.Failure<AdminOrderDto>(new Error("admin.reassign.no_vendor", "No other eligible vendors available right now.", ErrorCategory.Validation));
@@ -1539,9 +1588,38 @@ internal sealed class AdminForceCancelRefundOrderCommandHandler(
             return Result.Failure<AdminOrderDto>(new Error("admin.invalid_order_status", "Order is already cancelled or returned.", ErrorCategory.Validation));
 
         o.Status = "cancelled";
+        await DispatchOfferClosing.CloseForOrderAsync(
+            customers,
+            vendors,
+            o.Id,
+            o.OrderNumber,
+            $"BlinksMed cancelled {o.OrderNumber}. This request is closed.",
+            cancellationToken);
         await CustomerOrderImageLifecycle.CloseAndPurgeForOrderAsync(
             customers, uploadStorage, o.Id, closedReason: "cancelled", deletedBy: adminUserId, cancellationToken);
         await customers.UpdateCustomerRentalOrderAsync(o, cancellationToken);
+        var cancellingAdmin = await vendors.GetAdminUserByIdAsync(adminUserId, cancellationToken);
+        var openedCancel = await OrderCancellationRefunds.TryOpenAsync(
+            customers,
+            o,
+            CancellationOutcomes.Cancelled,
+            CancellationActors.Admin,
+            cancellingAdmin?.FullName,
+            cancellationToken);
+        if (openedCancel.IsSuccess && openedCancel.Value is not null)
+        {
+            await customers.AddCustomerNotificationAsync(
+                new CustomerNotification
+                {
+                    Id = Guid.NewGuid(),
+                    CustomerId = o.CustomerId,
+                    RelatedOrderId = o.Id,
+                    NotificationType = "order_status_updated",
+                    Title = $"Order {o.OrderNumber} cancelled",
+                    Body = "This product was cancelled. BlinksMed will review the payment before anything is sent back.",
+                },
+                cancellationToken);
+        }
 
         var auditLog = new AdminAuditLog
         {
@@ -1623,6 +1701,14 @@ internal sealed class AdminRestartOrderDispatchCommandHandler(
             await CustomerOrderImageLifecycle.CloseAndPurgeForOrderAsync(
                 customers, uploadStorage, order.Id, closedReason: "dispatch_failed", deletedBy: adminUserId, cancellationToken);
             await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
+            var adminName = (await vendors.GetAdminUserByIdAsync(adminUserId, cancellationToken))?.FullName;
+            await OrderCancellationRefunds.TryOpenAsync(
+                customers,
+                order,
+                CancellationOutcomes.DispatchFailed,
+                CancellationActors.Admin,
+                adminName,
+                cancellationToken);
             await dispatch.PersistAsync(cancellationToken);
             await customers.SaveChangesAsync(cancellationToken);
             return Result.Failure<AdminOrderDto>(new Error("admin.restart.no_vendor", "Cannot restart dispatch: No eligible vendors found with sufficient stock or within delivery range.", ErrorCategory.Validation));

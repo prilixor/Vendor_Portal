@@ -14,6 +14,8 @@ public sealed class CustomerPortalDbContext(DbContextOptions<CustomerPortalDbCon
     public DbSet<CustomerAddress> CustomerAddresses => Set<CustomerAddress>();
     public DbSet<CustomerRentalOrder> CustomerRentalOrders => Set<CustomerRentalOrder>();
     public DbSet<CustomerRentalOrderExtension> CustomerRentalOrderExtensions => Set<CustomerRentalOrderExtension>();
+    public DbSet<CustomerOrderReturn> CustomerOrderReturns => Set<CustomerOrderReturn>();
+    public DbSet<CustomerOrderCancellationRefund> CustomerOrderCancellationRefunds => Set<CustomerOrderCancellationRefund>();
     public DbSet<CustomerRentalOrderBuyout> CustomerRentalOrderBuyouts => Set<CustomerRentalOrderBuyout>();
     public DbSet<CustomerRentalOrderAsset> CustomerRentalOrderAssets => Set<CustomerRentalOrderAsset>();
     public DbSet<CustomerOrderVendorOffer> CustomerOrderVendorOffers => Set<CustomerOrderVendorOffer>();
@@ -353,6 +355,76 @@ public sealed class CustomerPortalDbContext(DbContextOptions<CustomerPortalDbCon
             entity.Property(x => x.DeletedAt).HasColumnName("deleted_at");
             entity.Property(x => x.DeletedBy).HasColumnName("deleted_by");
             
+            entity.HasOne(x => x.CustomerRentalOrder)
+                .WithMany()
+                .HasForeignKey(x => x.CustomerRentalOrderId);
+        });
+
+        modelBuilder.Entity<CustomerOrderReturn>(entity =>
+        {
+            entity.ToTable("customer_order_returns");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.CustomerRentalOrderId).HasColumnName("customer_rental_order_id");
+            entity.Property(x => x.DepositAmount).HasColumnName("deposit_amount").HasPrecision(12, 2);
+            entity.Property(x => x.DamageAmount).HasColumnName("damage_amount").HasPrecision(12, 2);
+            entity.Property(x => x.DamageReason).HasColumnName("damage_reason").HasMaxLength(500);
+            entity.Property(x => x.DamageImagePaths).HasColumnName("damage_image_paths").HasColumnType("text");
+            entity.Property(x => x.RefundAmount).HasColumnName("refund_amount").HasPrecision(12, 2);
+            entity.Property(x => x.Status).HasColumnName("status").HasMaxLength(32);
+            entity.Property(x => x.RefundMethod).HasColumnName("refund_method").HasMaxLength(20);
+            entity.Property(x => x.RazorpayPaymentId).HasColumnName("razorpay_payment_id").HasMaxLength(64);
+            entity.Property(x => x.RazorpayRefundId).HasColumnName("razorpay_refund_id").HasMaxLength(64);
+            entity.Property(x => x.RefundReference).HasColumnName("refund_reference").HasMaxLength(120);
+            entity.Property(x => x.RefundedAt).HasColumnName("refunded_at");
+            entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
+            entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
+            entity.Property(x => x.CreatedBy).HasColumnName("created_by");
+            entity.Property(x => x.ModifiedBy).HasColumnName("updated_by");
+            entity.Property(x => x.IsDeleted).HasColumnName("is_deleted");
+            entity.Property(x => x.DeletedAt).HasColumnName("deleted_at");
+            entity.Property(x => x.DeletedBy).HasColumnName("deleted_by");
+            entity.HasIndex(x => x.CustomerRentalOrderId)
+                .IsUnique()
+                .HasFilter("is_deleted = false");
+            entity.HasOne(x => x.CustomerRentalOrder)
+                .WithMany()
+                .HasForeignKey(x => x.CustomerRentalOrderId);
+        });
+
+        modelBuilder.Entity<CustomerOrderCancellationRefund>(entity =>
+        {
+            entity.ToTable("customer_order_cancellation_refunds");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.CustomerRentalOrderId).HasColumnName("customer_rental_order_id");
+            entity.Property(x => x.Outcome).HasColumnName("outcome").HasMaxLength(32);
+            entity.Property(x => x.ActorRole).HasColumnName("actor_role").HasMaxLength(20);
+            entity.Property(x => x.ActorLabel).HasColumnName("actor_label").HasMaxLength(240);
+            entity.Property(x => x.PaidAmount).HasColumnName("paid_amount").HasPrecision(12, 2);
+            entity.Property(x => x.OriginalPaidAmount).HasColumnName("original_paid_amount").HasPrecision(12, 2);
+            entity.Property(x => x.ExtensionPaidAmount).HasColumnName("extension_paid_amount").HasPrecision(12, 2);
+            entity.Property(x => x.ChargeAmount).HasColumnName("charge_amount").HasPrecision(12, 2);
+            entity.Property(x => x.ChargeReason).HasColumnName("charge_reason").HasMaxLength(500);
+            entity.Property(x => x.RefundAmount).HasColumnName("refund_amount").HasPrecision(12, 2);
+            entity.Property(x => x.RefundedOnlineAmount).HasColumnName("refunded_online_amount").HasPrecision(12, 2);
+            entity.Property(x => x.Status).HasColumnName("status").HasMaxLength(32);
+            entity.Property(x => x.HasOnlinePayment).HasColumnName("has_online_payment");
+            entity.Property(x => x.RefundMethod).HasColumnName("refund_method").HasMaxLength(20);
+            entity.Property(x => x.RazorpayPaymentId).HasColumnName("razorpay_payment_id").HasMaxLength(64);
+            entity.Property(x => x.RazorpayRefundId).HasColumnName("razorpay_refund_id").HasMaxLength(240);
+            entity.Property(x => x.RefundReference).HasColumnName("refund_reference").HasMaxLength(240);
+            entity.Property(x => x.RefundedAt).HasColumnName("refunded_at");
+            entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
+            entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
+            entity.Property(x => x.CreatedBy).HasColumnName("created_by");
+            entity.Property(x => x.ModifiedBy).HasColumnName("updated_by");
+            entity.Property(x => x.IsDeleted).HasColumnName("is_deleted");
+            entity.Property(x => x.DeletedAt).HasColumnName("deleted_at");
+            entity.Property(x => x.DeletedBy).HasColumnName("deleted_by");
+            entity.HasIndex(x => x.CustomerRentalOrderId)
+                .IsUnique()
+                .HasFilter("is_deleted = false");
             entity.HasOne(x => x.CustomerRentalOrder)
                 .WithMany()
                 .HasForeignKey(x => x.CustomerRentalOrderId);

@@ -107,6 +107,33 @@ public sealed class RazorpayPaymentService(
         return new RazorpayPaymentLinkCreateResult(linkId, shortUrl, orderId);
     }
 
+    public async Task<string> RefundPaymentAsync(
+        string paymentId,
+        long amountPaise,
+        IReadOnlyDictionary<string, string>? notes,
+        CancellationToken cancellationToken)
+    {
+        EnsureConfigured();
+        if (string.IsNullOrWhiteSpace(paymentId))
+            throw new InvalidOperationException("Razorpay payment id is required for a refund.");
+        if (amountPaise <= 0)
+            throw new InvalidOperationException("Refund amount must be greater than zero.");
+
+        var payload = new Dictionary<string, object?>
+        {
+            ["amount"] = amountPaise,
+        };
+        if (notes is { Count: > 0 })
+            payload["notes"] = notes;
+
+        var url = $"https://api.razorpay.com/v1/payments/{Uri.EscapeDataString(paymentId.Trim())}/refund";
+        using var doc = await SendJsonAsync(HttpMethod.Post, url, payload, cancellationToken);
+        var refundId = doc.RootElement.GetProperty("id").GetString();
+        if (string.IsNullOrWhiteSpace(refundId))
+            throw new InvalidOperationException("Razorpay refund response missing id.");
+        return refundId;
+    }
+
     public bool VerifyPaymentSignature(string razorpayOrderId, string razorpayPaymentId, string razorpaySignature)
     {
         if (!IsConfigured || string.IsNullOrWhiteSpace(razorpaySignature))

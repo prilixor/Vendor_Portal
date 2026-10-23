@@ -33,6 +33,7 @@ import {
   type OrderContinuationsDto,
   extensionVendorPayout,
 } from "@/app/services/vendorOnboardingApi";
+import { formatInr, vendorClaimLabel } from "@/app/helpers/orderReturn";
 import { toast } from "sonner";
 import { BackLink } from "@/app/components/shared/BackLink";
 import { OrderPrescriptionFilesCard } from "@/app/components/shared/OrderPrescriptionFilesCard";
@@ -598,6 +599,14 @@ const VendorOrderDetail = () => {
   const [continuations, setContinuations] = useState<OrderContinuationsDto | null>(null);
 
   const [dispatchDialogOpen, setDispatchDialogOpen] = useState(false);
+  const [returnDialogOpen, setReturnDialogOpen] = useState(false);
+  const [returnIssue, setReturnIssue] = useState(false);
+  const [returnDamage, setReturnDamage] = useState("");
+  const [returnReason, setReturnReason] = useState("");
+  const [returnPhotos, setReturnPhotos] = useState<File[]>([]);
+  const [returnPhotoPreviews, setReturnPhotoPreviews] = useState<string[]>([]);
+  const [damagePreviewUrl, setDamagePreviewUrl] = useState<string | null>(null);
+  const returnPhotoInputRef = useRef<HTMLInputElement>(null);
   const [serialDialogMode, setSerialDialogMode] = useState<"dispatch" | "assign">("dispatch");
   const [dispatchAssetTags, setDispatchAssetTags] = useState<string[]>([]);
   const [availableAssets, setAvailableAssets] = useState<VendorProductAssetApiDto[]>([]);
@@ -619,7 +628,7 @@ const VendorOrderDetail = () => {
     optionId: string;
     label: string;
   } | null>(null);
-  const [isLiveSyncing, setIsLiveSyncing] = useState(false);
+  const liveRefreshInFlight = useRef(false);
   const orderImageInputRef = useRef<HTMLInputElement>(null);
   const orderImageUploadTargetRef = useRef<{ optionId: string; slotIndex: number } | null>(null);
 
@@ -767,8 +776,8 @@ const VendorOrderDetail = () => {
   }, [user?.id, groupPhotoKey]);
 
   const refreshLive = useCallback(async () => {
-    if (!user?.id || !currentItemId) return;
-    setIsLiveSyncing(true);
+    if (!user?.id || !currentItemId || liveRefreshInFlight.current) return;
+    liveRefreshInFlight.current = true;
     try {
       await Promise.all([
         loadOrder(currentItemId, { silent: true }),
@@ -777,7 +786,7 @@ const VendorOrderDetail = () => {
         loadGroupPhotoMeta(),
       ]);
     } finally {
-      setIsLiveSyncing(false);
+      liveRefreshInFlight.current = false;
     }
   }, [user?.id, currentItemId, loadImageRequest, loadGroupPhotoMeta]);
 
@@ -897,7 +906,10 @@ const VendorOrderDetail = () => {
     setSelectedItemId(itemId);
   };
 
-  const handleStatusChange = async (status: "in_transit" | "active" | "returned") => {
+  const handleStatusChange = async (
+    status: "in_transit" | "active" | "returned",
+    returnClaim?: { damageAmount: number; damageReason?: string | null },
+  ) => {
     const dispatchOrder = activeOrder ?? order;
     if (!dispatchOrder) return;
 
@@ -931,9 +943,26 @@ const VendorOrderDetail = () => {
             ? undefined
             : tagsToAssign
           : undefined;
-      await vendorOnboardingApi.updateVendorOrderStatus(user.id, currentItemId, status, assetTagsToSubmit);
-      toast.success("Order status updated.");
+      if (status === "returned" && (returnClaim?.damageAmount ?? 0) > 0) {
+        await vendorOnboardingApi.markProductReturned(
+          user.id,
+          currentItemId,
+          returnClaim!.damageAmount,
+          returnClaim?.damageReason ?? "",
+          returnPhotos,
+        );
+      } else {
+        await vendorOnboardingApi.updateVendorOrderStatus(
+          user.id,
+          currentItemId,
+          status,
+          assetTagsToSubmit,
+          status === "returned" ? (returnClaim ?? { damageAmount: 0 }) : undefined,
+        );
+      }
+      toast.success(status === "returned" ? "Product marked returned." : "Order status updated.");
       handleDispatchDialogChange(false);
+      setReturnDialogOpen(false);
       await Promise.all([loadOrder(currentItemId), loadAllOrders(), loadImageRequest(currentItemId)]);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to update status.";
@@ -1170,9 +1199,58 @@ const VendorOrderDetail = () => {
     }
   };
 
+  const resetReturnForm = () => {
+    setReturnIssue(false);
+    setReturnDamage("");
+    setReturnReason("");
+    setReturnPhotos([]);
+    setReturnPhotoPreviews((current) => {
+      current.forEach((url) => URL.revokeObjectURL(url));
+      return [];
+    });
+  };
+
+  const addReturnPhotos = (list: FileList | null) => {
+    if (!list || list.length === 0) return;
+    const next = [...returnPhotos];
+    for (const file of Array.from(list)) {
+      if (next.length >= 3) {
+        toast.error("You can add up to 3 damage photos.");
+        break;
+      }
+      const type = file.type.toLowerCase();
+      if (!["image/jpeg", "image/jpg", "image/png", "image/webp"].includes(type)) {
+        toast.error("Damage photos must be JPG, PNG, or WebP.");
+        continue;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error("Each damage photo must be under 5 MB.");
+        continue;
+      }
+      next.push(file);
+    }
+    setReturnPhotoPreviews((current) => {
+      current.forEach((url) => URL.revokeObjectURL(url));
+      return next.map((file) => URL.createObjectURL(file));
+    });
+    setReturnPhotos(next);
+  };
+
+  const removeReturnPhoto = (index: number) => {
+    const next = returnPhotos.filter((_, i) => i !== index);
+    setReturnPhotoPreviews((current) => {
+      current.forEach((url) => URL.revokeObjectURL(url));
+      return next.map((file) => URL.createObjectURL(file));
+    });
+    setReturnPhotos(next);
+  };
+
   const nextAction = useMemo(() => {
     if (hasPendingRequests) return { label: "Review customer request", disabled: true };
-    if (canMarkReturned) return { label: "Mark returned", action: () => handleStatusChange("returned") };
+    if (canMarkReturned) return { label: "Mark returned", action: () => {
+      resetReturnForm();
+      setReturnDialogOpen(true);
+    } };
     if (canMarkActive) return { label: "Mark delivered", action: () => handleStatusChange("active") };
     if (canMarkTransit) return { label: "Mark out for delivery", action: () => handleStatusChange("in_transit") };
     return null;
@@ -1180,14 +1258,7 @@ const VendorOrderDetail = () => {
 
   return (
     <div className="mx-auto w-full max-w-6xl space-y-4 sm:space-y-6">
-      <div className="flex items-center justify-between gap-3">
-        <BackLink to="/vendor/orders" label="Back to orders" />
-        {isLiveSyncing ? (
-          <span className="text-[11px] font-medium text-muted-foreground" aria-live="polite">
-            Updating…
-          </span>
-        ) : null}
-      </div>
+      <BackLink to="/vendor/orders" label="Back to orders" />
 
       <Card className="overflow-hidden border-border/80 shadow-sm">
         {!order && !hasLoadedOrder ? (
@@ -1290,6 +1361,11 @@ const VendorOrderDetail = () => {
                     {item.isExtended ? (
                       <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
                         EXTENDED
+                      </span>
+                    ) : null}
+                    {vendorClaimLabel(item.returnSettlement) ? (
+                      <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold text-sky-900 dark:bg-sky-950/50 dark:text-sky-200">
+                        {vendorClaimLabel(item.returnSettlement)}
                       </span>
                     ) : null}
                     <span
@@ -1535,6 +1611,68 @@ const VendorOrderDetail = () => {
                     </div>
                 </CardContent>
               </Card>
+              {vendorClaimLabel(order.returnSettlement) ? (
+                <Card className="border-border/80 shadow-sm">
+                  <CardHeader className="pb-2">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-lg font-semibold">Your return claim</p>
+                        <p className="mt-1 text-sm text-muted-foreground">
+                          Sent with this product. You cannot change it.
+                        </p>
+                      </div>
+                      <span
+                        className={cn(
+                          "shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold",
+                          order.returnSettlement?.status === "refunded" || order.returnSettlement?.status === "settled"
+                            ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
+                            : "bg-amber-100 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200",
+                        )}
+                      >
+                        {order.returnSettlement?.status === "refunded" || order.returnSettlement?.status === "settled"
+                          ? "Reviewed"
+                          : "With BlinksMed"}
+                      </span>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3 text-sm">
+                    <div className="flex items-center justify-between gap-3 rounded-lg bg-muted/50 px-3 py-2.5">
+                      <p className="text-muted-foreground">Damage claim</p>
+                      <p className="font-semibold tabular-nums">
+                        ₹{formatInr(order.returnSettlement?.damageAmount ?? 0)}
+                      </p>
+                    </div>
+                    {order.returnSettlement?.damageReason ? (
+                      <div className="space-y-1">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">What you reported</p>
+                        <p className="rounded-lg border border-border/70 px-3 py-2 leading-relaxed">
+                          {order.returnSettlement.damageReason}
+                        </p>
+                      </div>
+                    ) : null}
+                    {(order.returnSettlement?.damageImageUrls ?? []).length > 0 ? (
+                      <div className="space-y-1.5">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                          Photos · tap to enlarge
+                        </p>
+                        <div className="grid grid-cols-3 gap-2">
+                          {(order.returnSettlement?.damageImageUrls ?? []).map((url, index) => (
+                            <button
+                              key={url}
+                              type="button"
+                              className="aspect-square overflow-hidden rounded-lg bg-muted ring-1 ring-inset ring-black/[0.06] dark:ring-white/10"
+                              onClick={() => setDamagePreviewUrl(url)}
+                              aria-label={`Damage photo ${index + 1}`}
+                            >
+                              <img src={url} alt="" className="h-full w-full object-cover" />
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    ) : null}
+                  </CardContent>
+                </Card>
+              ) : null}
             </div>
           </div>
 
@@ -1768,6 +1906,159 @@ const VendorOrderDetail = () => {
 
           <OrderPrescriptionFilesCard files={prescriptionFiles} />
 
+          <Dialog open={returnDialogOpen} onOpenChange={setReturnDialogOpen}>
+            <DialogContent className="flex max-h-[min(92dvh,820px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-md">
+              <DialogHeader className="border-b border-border px-4 py-4 pr-12">
+                <DialogTitle>Mark this product returned</DialogTitle>
+              </DialogHeader>
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 text-sm">
+                <p className="rounded-lg bg-muted/60 px-3 py-2.5 text-muted-foreground">
+                  Security deposit on this product: ₹{formatInr((activeOrder ?? order)?.depositAmount ?? 0)}. Rent and fees stay with the order.
+                </p>
+                <div className="grid grid-cols-2 gap-2">
+                  <Button
+                    type="button"
+                    variant={returnIssue ? "outline" : "default"}
+                    className="h-auto whitespace-normal px-3 py-2.5"
+                    onClick={() => setReturnIssue(false)}
+                  >
+                    Good condition
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={returnIssue ? "default" : "outline"}
+                    className="h-auto whitespace-normal px-3 py-2.5"
+                    onClick={() => setReturnIssue(true)}
+                  >
+                    There is an issue
+                  </Button>
+                </div>
+                {returnIssue ? (
+                  <div className="space-y-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="return-damage">Damage charge</Label>
+                      <Input
+                        id="return-damage"
+                        inputMode="decimal"
+                        value={returnDamage}
+                        onChange={(event) => setReturnDamage(event.target.value)}
+                        placeholder="Amount in ₹"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Cannot be more than this product&apos;s deposit.
+                      </p>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="return-reason">What is wrong</Label>
+                      <Textarea
+                        id="return-reason"
+                        value={returnReason}
+                        maxLength={500}
+                        rows={3}
+                        onChange={(event) => setReturnReason(event.target.value)}
+                        placeholder="Example: torn corner, stain, missing part"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <Label htmlFor="return-photos">Damage photos</Label>
+                        <span className="text-xs tabular-nums text-muted-foreground">{returnPhotoPreviews.length} of 3</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Optional. JPG, PNG, or WebP, each under 5 MB. BlinksMed uses these to check the charge.
+                      </p>
+                      <input
+                        ref={returnPhotoInputRef}
+                        id="return-photos"
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        multiple
+                        className="hidden"
+                        onChange={(event) => {
+                          addReturnPhotos(event.target.files);
+                          event.target.value = "";
+                        }}
+                      />
+                      <div className="grid grid-cols-3 gap-2">
+                        {returnPhotoPreviews.map((url, index) => (
+                          <div key={url} className="relative aspect-square overflow-hidden rounded-lg bg-muted ring-1 ring-inset ring-black/[0.06]">
+                            <img src={url} alt="" className="h-full w-full object-cover" />
+                            <button
+                              type="button"
+                              className="absolute right-1.5 top-1.5 rounded-full bg-black/70 p-1 text-white"
+                              onClick={() => removeReturnPhoto(index)}
+                              aria-label={`Remove photo ${index + 1}`}
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                        {returnPhotoPreviews.length < 3 ? (
+                          <button
+                            type="button"
+                            className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-border bg-muted/30 text-xs font-medium text-muted-foreground hover:bg-muted/60"
+                            onClick={() => returnPhotoInputRef.current?.click()}
+                          >
+                            <ImagePlus className="h-4 w-4" />
+                            Add photo
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground">No damage charge. BlinksMed refunds the full deposit for this product.</p>
+                )}
+              </div>
+              <DialogFooter className="mt-0 border-t border-border px-4 py-3">
+                <Button type="button" variant="outline" onClick={() => setReturnDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  disabled={updating}
+                  onClick={() => {
+                    const deposit = (activeOrder ?? order)?.depositAmount ?? 0;
+                    if (!returnIssue) {
+                      void handleStatusChange("returned", { damageAmount: 0 });
+                      return;
+                    }
+                    const amount = Number(returnDamage);
+                    if (!Number.isFinite(amount) || amount <= 0) {
+                      toast.error("Enter the damage charge.");
+                      return;
+                    }
+                    if (amount > deposit + 0.001) {
+                      toast.error(`Damage charge cannot be more than this product's deposit of ₹${formatInr(deposit)}.`);
+                      return;
+                    }
+                    if (!returnReason.trim()) {
+                      toast.error("Add a short reason for the damage charge.");
+                      return;
+                    }
+                    void handleStatusChange("returned", {
+                      damageAmount: Math.round(amount * 100) / 100,
+                      damageReason: returnReason.trim(),
+                    });
+                  }}
+                >
+                  {updating ? "Saving…" : "Mark returned"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+
+          <Dialog open={!!damagePreviewUrl} onOpenChange={(open) => !open && setDamagePreviewUrl(null)}>
+            <DialogContent className="flex max-h-[min(92dvh,880px)] w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl">
+              <DialogHeader className="border-b border-border px-4 py-3 pr-12">
+                <DialogTitle className="text-sm font-semibold">Damage photo</DialogTitle>
+              </DialogHeader>
+              {damagePreviewUrl ? (
+                <ZoomableImageStage src={damagePreviewUrl} alt="Damage photo" resetKey={damagePreviewUrl} />
+              ) : null}
+            </DialogContent>
+          </Dialog>
+
           <Card className="mb-[max(4.5rem,env(safe-area-inset-bottom))] border-border/80 shadow-sm sm:mb-0">
             <CardContent className="grid grid-cols-2 gap-2 p-3 sm:grid-cols-4 sm:p-4">
               <Button
@@ -1790,7 +2081,10 @@ const VendorOrderDetail = () => {
                 variant="outline"
                 className="h-11 w-full px-2 text-xs sm:h-10 sm:px-3 sm:text-sm disabled:opacity-100 disabled:border-border disabled:bg-muted/60 disabled:text-foreground/70"
                 disabled={!canMarkReturned || actionsLocked}
-                onClick={() => void handleStatusChange("returned")}
+                onClick={() => {
+                  resetReturnForm();
+                  setReturnDialogOpen(true);
+                }}
               >
                 Mark Returned
               </Button>

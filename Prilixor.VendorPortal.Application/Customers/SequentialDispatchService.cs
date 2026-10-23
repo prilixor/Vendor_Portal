@@ -64,8 +64,26 @@ internal sealed class SequentialDispatchService(
     public async Task CascadeExpiredOffersAsync(CancellationToken cancellationToken)
     {
         var now = DateTimeOffset.UtcNow;
+        var closed = await customers.ExpireOpenOffersOnClosedOrdersAsync(now, cancellationToken);
+        if (closed.Count > 0)
+        {
+            foreach (var notice in closed)
+            {
+                await DispatchOfferClosing.NotifyClosedAsync(
+                    vendors,
+                    notice.VendorId,
+                    notice.OrderNumber,
+                    DispatchOfferClosing.MessageForClosedOrder(notice.OrderNumber, notice.OrderStatus),
+                    now,
+                    cancellationToken);
+            }
+
+            customersDirty = true;
+            vendorsDirty = true;
+        }
+
         var orderIds = await customers.GetAwaitingOrderIdsWithExpiredPendingOffersAsync(now, cancellationToken);
-        var changed = false;
+        var changed = closed.Count > 0;
         foreach (var orderId in orderIds)
         {
             cancellationToken.ThrowIfCancellationRequested();
@@ -220,6 +238,13 @@ internal sealed class SequentialDispatchService(
                 NotificationType = "order_dispatch_failed",
                 RelatedOrderId = order.Id,
             },
+            cancellationToken);
+        await OrderCancellationRefunds.TryOpenAsync(
+            customers,
+            order,
+            CancellationOutcomes.DispatchFailed,
+            actorId.HasValue ? CancellationActors.Vendor : CancellationActors.System,
+            null,
             cancellationToken);
         customersDirty = true;
 

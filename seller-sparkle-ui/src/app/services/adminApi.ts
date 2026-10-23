@@ -48,6 +48,8 @@ export interface AdminVerificationListResult {
 
 export interface AdminAlertSummaryDto {
   criticalOrderCount: number;
+  pendingDepositRefundCount?: number;
+  pendingCancellationRefundCount?: number;
   pendingVendorCount: number;
   listingPricingAlertCount: number;
 }
@@ -963,6 +965,8 @@ export interface AdminOrderDto {
   endDate?: string | null;
   primaryImageUrl?: string | null;
   isExtended?: boolean;
+  returnSettlement?: import("@/app/helpers/orderReturn").OrderReturnApi | null;
+  cancellationRefund?: import("@/app/helpers/orderCancellation").OrderCancellationApi | null;
   productVariantId?: string | null;
   doctorId?: string;
   doctorName?: string;
@@ -1577,6 +1581,27 @@ export const adminApi = {
 
   async forceCancelRefundOrder(data: AdminForceCancelRefundOrderRequest): Promise<AdminOrderDto> {
     return apiClient.post<AdminOrderDto>(`/admin/orders/${data.orderId}/cancel-refund`, data);
+  },
+
+  async refundOrderCancellation(
+    orderId: string,
+    chargeAmount: number,
+    chargeReason?: string,
+    manualReference?: string,
+  ): Promise<import("@/app/helpers/orderCancellation").OrderCancellationApi> {
+    return apiClient.post(`/admin/orders/${orderId}/cancellation-refund`, {
+      orderId,
+      chargeAmount,
+      chargeReason: chargeReason?.trim() || null,
+      manualReference: manualReference?.trim() || null,
+    });
+  },
+
+  async refundOrderDeposit(orderId: string, manualReference?: string): Promise<import("@/app/helpers/orderReturn").OrderReturnApi> {
+    return apiClient.post(`/admin/orders/${orderId}/deposit-refund`, {
+      orderId,
+      manualReference: manualReference?.trim() || null,
+    });
   },
 
   async restartOrderDispatch(data: AdminRestartOrderDispatchRequest): Promise<AdminOrderDto> {

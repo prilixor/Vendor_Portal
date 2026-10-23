@@ -5,6 +5,7 @@ using Prilixor.Shared.Extensions;
 using Prilixor.Shared.Models;
 using Prilixor.VendorPortal.Application.Abstractions;
 using Prilixor.VendorPortal.Application.Customers;
+using Prilixor.VendorPortal.Domain.Customers;
 
 namespace Prilixor.VendorPortal.Application.Onboarding;
 
@@ -44,14 +45,17 @@ internal sealed class GetAdminAlertFeedQueryHandler(
         var listingCount = await vendors.CountListingPricingAlertsAsync(cancellationToken);
         var logCount = await vendors.CountAdminAuditLogsAsync(cancellationToken);
         var orderCount = await orderCountTask;
+        await OrderCancellationRefunds.EnsureRecentAsync(customers, cancellationToken);
+        var refundCount = await customers.CountPendingDepositRefundsAsync(cancellationToken);
+        var cancellationCount = await customers.CountPendingCancellationRefundsAsync(cancellationToken);
 
         var counts = new AdminAlertFeedCounts
         {
-            Orders = orderCount,
+            Orders = orderCount + refundCount + cancellationCount,
             Vendors = vendorCount,
             Listings = listingCount,
             Logs = logCount,
-            All = orderCount + vendorCount + listingCount,
+            All = orderCount + refundCount + cancellationCount + vendorCount + listingCount,
         };
 
         List<AdminAlertFeedItem> items;
@@ -61,16 +65,26 @@ internal sealed class GetAdminAlertFeedQueryHandler(
         {
             case "orders":
             {
+                var take = page * pageSize;
                 var orders = await customers.SearchAdminOrderSummariesAsync(
                     new AdminOrderListQuerySpec
                     {
                         Status = "critical",
-                        Page = page,
-                        PageSize = pageSize,
+                        Page = 1,
+                        PageSize = take,
                     },
                     cancellationToken);
-                items = orders.Items.Select(MapOrder).ToList();
-                totalCount = orders.TotalCount;
+                var refunds = await customers.ListPendingDepositRefundsAsync(take, cancellationToken);
+                var cancellationRefunds = await customers.ListPendingCancellationRefundsAsync(take, cancellationToken);
+                var merged = orders.Items.Select(MapOrder)
+                    .Concat(refunds.Select(MapDepositRefund))
+                    .Concat(cancellationRefunds.Select(MapCancellationRefund))
+                    .OrderByDescending(x => x.Timestamp)
+                    .Skip((page - 1) * pageSize)
+                    .Take(pageSize)
+                    .ToList();
+                items = merged;
+                totalCount = counts.Orders;
                 break;
             }
             case "vendors":
@@ -112,8 +126,12 @@ internal sealed class GetAdminAlertFeedQueryHandler(
                 var vendorsTask = vendors.SearchPendingVendorAlertsAsync(take, cancellationToken);
                 var listingsTask = vendors.SearchAdminAlertAuditLogsAsync("listing", 1, take, cancellationToken);
                 await Task.WhenAll(ordersTask, vendorsTask, listingsTask);
+                var refunds = await customers.ListPendingDepositRefundsAsync(take, cancellationToken);
+                var cancellationRefunds = await customers.ListPendingCancellationRefundsAsync(take, cancellationToken);
 
                 var merged = ordersTask.Result.Items.Select(MapOrder)
+                    .Concat(refunds.Select(MapDepositRefund))
+                    .Concat(cancellationRefunds.Select(MapCancellationRefund))
                     .Concat(vendorsTask.Result.Select(MapVendor))
                     .Concat(listingsTask.Result.Items.Select(MapListing))
                     .OrderByDescending(x => x.Timestamp)
@@ -153,6 +171,47 @@ internal sealed class GetAdminAlertFeedQueryHandler(
             CustomerName = order.CustomerName,
             VendorName = order.VendorName,
             Amount = order.TotalAmount,
+        };
+    }
+
+    private static AdminAlertFeedItem MapDepositRefund(PendingDepositRefundRow row)
+    {
+        var shortNumber = string.Join("-", row.OrderNumber.Split('-').Take(3));
+        var damage = row.DamageAmount > 0
+            ? $" The vendor claimed {OrderReturnMapper.Money(row.DamageAmount)} for damage."
+            : " The vendor reported no damage.";
+        return new AdminAlertFeedItem
+        {
+            Id = $"deposit-refund-{row.OrderId}",
+            Type = "order",
+            Title = $"Deposit refund due · {shortNumber}",
+            Description = $"Send {OrderReturnMapper.Money(row.RefundAmount)} back to {row.CustomerName}.{damage} Open the order to see the photos and send the refund.",
+            Status = OrderReturnStatuses.PendingRefund,
+            Timestamp = row.CreatedOnUtc.ToSafeDateTimeOffset(),
+            Link = $"/admin/orders/{row.OrderId}",
+            OrderId = row.OrderId.ToString(),
+            OrderNumber = row.OrderNumber,
+            CustomerName = row.CustomerName,
+            Amount = row.RefundAmount,
+        };
+    }
+
+    private static AdminAlertFeedItem MapCancellationRefund(PendingCancellationRefundRow row)
+    {
+        var shortNumber = string.Join("-", row.OrderNumber.Split('-').Take(3));
+        return new AdminAlertFeedItem
+        {
+            Id = $"cancellation-refund-{row.OrderId}",
+            Type = "order",
+            Title = $"Cancellation refund due · {shortNumber}",
+            Description = $"{row.ActorLabel} Paid {OrderReturnMapper.Money(row.PaidAmount)} by {row.CustomerName}.",
+            Status = CancellationRefundStatuses.PendingReview,
+            Timestamp = row.CreatedOnUtc.ToSafeDateTimeOffset(),
+            Link = $"/admin/orders/{row.OrderId}",
+            OrderId = row.OrderId.ToString(),
+            OrderNumber = row.OrderNumber,
+            CustomerName = row.CustomerName,
+            Amount = row.PaidAmount,
         };
     }
 

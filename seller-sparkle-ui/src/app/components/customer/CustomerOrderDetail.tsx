@@ -11,6 +11,8 @@ import {
   type CustomerOrderImageRequestApi,
 } from "@/app/services/customerApi";
 import { openRazorpayCheckout } from "@/app/helpers/razorpayCheckout";
+import { customerRefundChip, formatInr } from "@/app/helpers/orderReturn";
+import { combinedRefundSummary, customerCancellationChip } from "@/app/helpers/orderCancellation";
 import { chatApi } from "@/app/services/chatApi";
 import { Button } from "@/app/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
@@ -467,7 +469,7 @@ const CustomerOrderDetail = () => {
   // Fetch current selected item details
   const currentItemId = selectedItemId || (routeIsGuid ? orderId : undefined);
 
-  const { data, isLoading, isFetching, error } = useQuery({
+  const { data, isLoading, error } = useQuery({
     queryKey: ["customer-order", currentItemId],
     queryFn: () => customerApi.getOrder(currentItemId!),
     enabled: !!currentItemId,
@@ -690,9 +692,6 @@ const CustomerOrderDetail = () => {
   });
 
   const imageRequestLoading = imageRequestQueries.some((q) => q.isLoading);
-  const isBackgroundSync =
-    (isFetching && Boolean(data)) ||
-    imageRequestQueries.some((q) => q.isFetching && q.data !== undefined);
   /** True until every item's request status has been fetched at least once (avoid treating "unknown" as eligible). */
   const imageRequestsReady =
     groupItemIds.length === 0 ||
@@ -825,6 +824,14 @@ const CustomerOrderDetail = () => {
     return orderGroupItems.reduce((sum, item) => sum + (item?.depositAmount ?? 0), 0);
   }, [orderGroupItems]);
 
+  const refundSummary = useMemo(
+    () => combinedRefundSummary(
+      orderGroupItems.map((item) => item.returnSettlement),
+      orderGroupItems.map((item) => item.cancellationRefund),
+    ),
+    [orderGroupItems],
+  );
+
   const baseOrderNumber = useMemo(() => {
     if (!data || !data.orderNumber) return "";
     return data.orderNumber.split('-').slice(0, 3).join('-');
@@ -875,6 +882,12 @@ const CustomerOrderDetail = () => {
   }
 
   const activeItem = data;
+  const activeReturn = activeItem.returnSettlement
+    ?? orderGroupItems.find((item) => item.id === activeItem.id)?.returnSettlement
+    ?? null;
+  const activeCancellation = activeItem.cancellationRefund
+    ?? orderGroupItems.find((item) => item.id === activeItem.id)?.cancellationRefund
+    ?? null;
   const activeExtensions = extensionsByItemId.get(activeItem.id) ?? [];
   const paidExtensions = activeExtensions.filter((ext) => ext.status === "paid");
   const awaitingExtension = activeExtensions.find((ext) => ext.status === "awaiting_payment") ?? null;
@@ -889,14 +902,7 @@ const CustomerOrderDetail = () => {
 
   return (
     <div className="mx-auto max-w-3xl space-y-2.5 sm:space-y-4">
-      <div className="flex items-center justify-between gap-3">
-        <BackLink to="/customer/orders" label="Back to orders" />
-        {isBackgroundSync ? (
-          <span className="text-[11px] font-medium text-muted-foreground" aria-live="polite">
-            Updating…
-          </span>
-        ) : null}
-      </div>
+      <BackLink to="/customer/orders" label="Back to orders" />
 
       <Card className="overflow-hidden border-border/80 shadow-sm">
         <CardContent className="p-3 sm:p-4">
@@ -914,6 +920,11 @@ const CustomerOrderDetail = () => {
               <p className="mt-0.5 text-[11px] tabular-nums text-muted-foreground">
                 + ₹{groupDepositAmount.toFixed(0)} deposit
               </p>
+              {refundSummary ? (
+                <p className="mt-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
+                  {refundSummary}
+                </p>
+              ) : null}
             </div>
           </div>
 
@@ -972,6 +983,16 @@ const CustomerOrderDetail = () => {
                           Payment due
                         </span>
                       ) : null}
+                      {customerRefundChip(item.returnSettlement) ? (
+                        <span className="inline-flex items-center rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-bold text-sky-900 dark:bg-sky-950/50 dark:text-sky-200">
+                          {customerRefundChip(item.returnSettlement)}
+                        </span>
+                      ) : null}
+                      {customerCancellationChip(item.cancellationRefund) ? (
+                        <span className="inline-flex items-center rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-bold text-sky-900 dark:bg-sky-950/50 dark:text-sky-200">
+                          {customerCancellationChip(item.cancellationRefund)}
+                        </span>
+                      ) : null}
                       {photoLabel ? (
                         <span className="text-[11px] text-muted-foreground">· {photoLabel}</span>
                       ) : null}
@@ -983,6 +1004,101 @@ const CustomerOrderDetail = () => {
           </div>
         </CardContent>
       </Card>
+
+      {activeReturn ? (
+        <Card className="border-border/80 shadow-sm">
+          <CardHeader className="p-3 pb-1 sm:p-4 sm:pb-2">
+            <p className="text-[13px] font-semibold sm:text-base">
+              Deposit refund
+              <span className="ml-1.5 font-normal text-muted-foreground">· {activeItem.listingTitle}</span>
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-2 px-3 pb-3 text-sm sm:px-4 sm:pb-4">
+            <div className="grid gap-2 sm:grid-cols-3">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Deposit</p>
+                <p className="font-medium tabular-nums">₹{formatInr(activeReturn.depositAmount)}</p>
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Damage charge</p>
+                <p className="font-medium tabular-nums">₹{formatInr(activeReturn.damageAmount)}</p>
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Refund</p>
+                <p className="font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
+                  ₹{formatInr(activeReturn.refundAmount)}
+                  {activeReturn.refundAmount > 0
+                    ? activeReturn.status === "refunded"
+                      ? " received"
+                      : " processing"
+                    : ""}
+                </p>
+              </div>
+            </div>
+            {activeReturn.damageReason ? <p className="text-muted-foreground">{activeReturn.damageReason}</p> : null}
+            {activeReturn.status === "refunded" && activeReturn.refundedAt ? (
+              <p className="text-xs text-muted-foreground">
+                Received {new Date(activeReturn.refundedAt).toLocaleString()}
+              </p>
+            ) : activeReturn.refundAmount <= 0 ? (
+              <p className="text-xs text-muted-foreground">
+                {activeReturn.damageAmount > 0
+                  ? "The damage charge uses this product's full deposit, so nothing is refunded."
+                  : "No security deposit is due back on this product."}
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">BlinksMed is sending this refund to your original payment.</p>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {activeCancellation ? (
+        <Card className="border-border/80 shadow-sm">
+          <CardHeader className="p-3 pb-1 sm:p-4 sm:pb-2">
+            <p className="text-[13px] font-semibold sm:text-base">
+              Cancellation refund
+              <span className="ml-1.5 font-normal text-muted-foreground">· {activeItem.listingTitle}</span>
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-2 px-3 pb-3 text-sm sm:px-4 sm:pb-4">
+            <p className="text-muted-foreground">{activeCancellation.actorLabel}</p>
+            <div className="grid gap-2 sm:grid-cols-3">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Paid</p>
+                <p className="font-medium tabular-nums">₹{formatInr(activeCancellation.paidAmount)}</p>
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Charge</p>
+                <p className="font-medium tabular-nums">₹{formatInr(activeCancellation.chargeAmount)}</p>
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Refund</p>
+                <p className="font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
+                  ₹{formatInr(activeCancellation.refundAmount)}
+                  {activeCancellation.refundAmount > 0
+                    ? activeCancellation.status === "refunded"
+                      ? " received"
+                      : " processing"
+                    : ""}
+                </p>
+              </div>
+            </div>
+            {activeCancellation.chargeReason ? <p className="text-muted-foreground">{activeCancellation.chargeReason}</p> : null}
+            {activeCancellation.status === "refunded" && activeCancellation.refundedAt ? (
+              <p className="text-xs text-muted-foreground">
+                Received {new Date(activeCancellation.refundedAt).toLocaleString()}
+              </p>
+            ) : activeCancellation.status === "pending_review" ? (
+              <p className="text-xs text-muted-foreground">BlinksMed is reviewing this payment before anything is sent back.</p>
+            ) : activeCancellation.refundAmount <= 0 ? (
+              <p className="text-xs text-muted-foreground">The charge uses the full payment for this product, so nothing is refunded.</p>
+            ) : (
+              <p className="text-xs text-muted-foreground">BlinksMed is sending this refund to your original payment.</p>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card className="border-border/80 shadow-sm">
         <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 p-3 pb-2 sm:p-4 sm:pb-2">

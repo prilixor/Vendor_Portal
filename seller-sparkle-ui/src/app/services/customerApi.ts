@@ -247,6 +247,8 @@ export interface CustomerOrderApi {
   prescriptionFiles?: CustomerPrescriptionFileApi[] | null;
   /** True only after a paid rental extension on this product line. */
   isExtended?: boolean;
+  returnSettlement?: import("@/app/helpers/orderReturn").OrderReturnApi | null;
+  cancellationRefund?: import("@/app/helpers/orderCancellation").OrderCancellationApi | null;
 }
 
 export interface CustomerPrescriptionFileApi {

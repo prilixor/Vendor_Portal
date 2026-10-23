@@ -596,8 +596,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
     AppPalette colors,
     String orderNumber,
     double total,
-    double deposit,
-  ) {
+    double deposit, {
+    String? refundSummary,
+  }) {
     return Row(
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
@@ -643,6 +644,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
               style: TextStyle(color: colors.textMuted, fontSize: 11, height: 1.2),
               textAlign: TextAlign.right,
             ),
+            if (refundSummary != null) ...[
+              const SizedBox(height: 2),
+              Text(
+                refundSummary,
+                style: const TextStyle(color: Color(0xFF15803D), fontSize: 11, fontWeight: FontWeight.w700, height: 1.2),
+                textAlign: TextAlign.right,
+              ),
+            ],
           ],
         ),
       ],
@@ -691,6 +700,34 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
     final rxFiles = rxReady ? provider.prescriptionFiles : const <PrescriptionFileModel>[];
     final groupTotal = _ordersInGroup.fold<double>(0, (sum, o) => sum + o.totalAmount);
     final groupDeposit = _ordersInGroup.fold<double>(0, (sum, o) => sum + o.depositAmount);
+    var refundReceived = 0.0;
+    var refundProcessing = 0.0;
+    for (final item in _ordersInGroup) {
+      final row = item.returnSettlement;
+      if (row != null && row.refundAmount > 0) {
+        if (row.status == 'refunded') {
+          refundReceived += row.refundAmount;
+        } else if (row.status == 'pending_refund' || row.status == 'refunding') {
+          refundProcessing += row.refundAmount;
+        }
+      }
+      final cancel = item.cancellationRefund;
+      if (cancel != null && cancel.refundAmount > 0) {
+        if (cancel.status == 'refunded') {
+          refundReceived += cancel.refundAmount;
+        } else if (cancel.status == 'pending_review' || cancel.status == 'refunding') {
+          refundProcessing += cancel.refundAmount;
+        }
+      }
+    }
+    String? refundSummary;
+    if (refundReceived > 0 && refundProcessing > 0) {
+      refundSummary = 'Refunds ${OrderReturnInfo.format(refundReceived)} received · ${OrderReturnInfo.format(refundProcessing)} processing';
+    } else if (refundReceived > 0) {
+      refundSummary = 'Refunds ${OrderReturnInfo.format(refundReceived)} received';
+    } else if (refundProcessing > 0) {
+      refundSummary = 'Refunds ${OrderReturnInfo.format(refundProcessing)} processing';
+    }
     final cleanOrderGroupNumber = _ordersInGroup.first.orderNumber.replaceAll(RegExp(r'-\d{2}$'), '');
 
     return Scaffold(
@@ -719,6 +756,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                               cleanOrderGroupNumber,
                               groupTotal,
                               groupDeposit,
+                              refundSummary: refundSummary,
                             ),
                             Padding(
                               padding: const EdgeInsets.symmetric(vertical: 10),
@@ -839,6 +877,28 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                                     fontWeight: FontWeight.w800,
                                                     letterSpacing: 0.3,
                                                   ),
+                                                ),
+                                              ),
+                                            ],
+                                            if (order.returnSettlement?.chipLabel != null) ...[
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                order.returnSettlement!.chipLabel!,
+                                                style: TextStyle(
+                                                  color: context.isDarkMode ? const Color(0xFFBAE6FD) : const Color(0xFF0C4A6E),
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.w800,
+                                                ),
+                                              ),
+                                            ],
+                                            if (order.cancellationRefund?.chipLabel != null) ...[
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                order.cancellationRefund!.chipLabel!,
+                                                style: TextStyle(
+                                                  color: context.isDarkMode ? const Color(0xFFBAE6FD) : const Color(0xFF0C4A6E),
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.w800,
                                                 ),
                                               ),
                                             ],
@@ -1050,6 +1110,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                 if (provider.extensionsFor(order.id).any((ext) => ext.isPaid)) ...[
                                   const SizedBox(height: 12),
                                   _extensionBreakdown(colors, order, provider.extensionsFor(order.id)),
+                                ],
+                                if (order.returnSettlement != null) ...[
+                                  const SizedBox(height: 12),
+                                  _depositRefundCard(colors, order.returnSettlement!),
+                                ],
+                                if (order.cancellationRefund != null) ...[
+                                  const SizedBox(height: 12),
+                                  _cancellationRefundCard(colors, order.cancellationRefund!),
                                 ],
                               ],
                             ],
@@ -1371,6 +1439,100 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                     ],
                   ),
                 ),
+    );
+  }
+
+  Widget _cancellationRefundCard(AppPalette colors, OrderCancellationInfo row) {
+    final received = row.status == 'refunded';
+    final refundText = row.refundAmount <= 0
+        ? row.money(0)
+        : '${row.money(row.refundAmount)}${received ? ' received' : ' processing'}';
+    final note = row.status == 'pending_review'
+        ? 'BlinksMed is reviewing this payment before anything is sent back.'
+        : row.refundAmount <= 0
+            ? 'The charge uses the full payment for this product, so nothing is refunded.'
+            : received
+                ? 'This refund was sent to your original payment.'
+                : 'BlinksMed is sending this refund to your original payment.';
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: colors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Cancellation refund',
+            style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w700, fontSize: 14),
+          ),
+          if (row.actorLabel.trim().isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(row.actorLabel, style: TextStyle(color: colors.textMuted, fontSize: 12)),
+          ],
+          const SizedBox(height: 8),
+          Text('Paid  ${row.money(row.paidAmount)}', style: TextStyle(color: colors.textPrimary, fontSize: 13)),
+          const SizedBox(height: 2),
+          Text('Charge  ${row.money(row.chargeAmount)}', style: TextStyle(color: colors.textPrimary, fontSize: 13)),
+          const SizedBox(height: 2),
+          Text('Refund  $refundText', style: TextStyle(color: colors.textPrimary, fontSize: 13, fontWeight: FontWeight.w700)),
+          if ((row.chargeReason ?? '').trim().isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(row.chargeReason!, style: TextStyle(color: colors.textMuted, fontSize: 12)),
+          ],
+          const SizedBox(height: 6),
+          Text(note, style: TextStyle(color: colors.textMuted, fontSize: 12)),
+        ],
+      ),
+    );
+  }
+
+  Widget _depositRefundCard(AppPalette colors, OrderReturnInfo row) {
+    final received = row.status == 'refunded';
+    final refundText = row.refundAmount <= 0
+        ? row.money(0)
+        : '${row.money(row.refundAmount)}${received ? ' received' : ' processing'}';
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: colors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Deposit refund',
+            style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w700, fontSize: 14),
+          ),
+          const SizedBox(height: 8),
+          Text('Deposit  ${row.money(row.depositAmount)}', style: TextStyle(color: colors.textPrimary, fontSize: 13)),
+          const SizedBox(height: 2),
+          Text('Damage charge  ${row.money(row.damageAmount)}', style: TextStyle(color: colors.textPrimary, fontSize: 13)),
+          const SizedBox(height: 2),
+          Text('Refund  $refundText', style: TextStyle(color: colors.textPrimary, fontSize: 13, fontWeight: FontWeight.w700)),
+          if ((row.damageReason ?? '').trim().isNotEmpty) ...[
+            const SizedBox(height: 6),
+            Text(row.damageReason!, style: TextStyle(color: colors.textMuted, fontSize: 12)),
+          ],
+          const SizedBox(height: 6),
+          Text(
+            row.refundAmount <= 0
+                ? (row.damageAmount > 0
+                    ? 'The damage charge uses this product\'s full deposit, so nothing is refunded.'
+                    : 'No security deposit is due back on this product.')
+                : (received
+                    ? 'This refund was sent to your original payment.'
+                    : 'BlinksMed is sending this refund to your original payment.'),
+            style: TextStyle(color: colors.textMuted, fontSize: 12),
+          ),
+        ],
+      ),
     );
   }
 

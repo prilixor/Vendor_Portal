@@ -103,7 +103,8 @@ export const AdminOrders = () => {
   }, [urlTab]);
   const [page, setPage] = useState(1);
 
-  const { data, isLoading, refetch, isFetching, isPlaceholderData } = useQuery({
+  const [manualRefresh, setManualRefresh] = useState(false);
+  const { data, isLoading, refetch, isPlaceholderData } = useQuery({
     queryKey: ["admin-order-summaries", page, debouncedSearch, activeTab],
     queryFn: () =>
       adminApi.getAdminOrderSummaries({
@@ -200,8 +201,16 @@ export const AdminOrders = () => {
         title="Customer Orders Tracking"
         description="Comprehensive dashboard to check status transitions, split orders, and vendor fulfillment statistics."
         actions={
-          <Button variant="outline" size="sm" onClick={() => void refetch()} disabled={isFetching || isLoading}>
-            <RefreshCw className={cn("mr-2 h-4 w-4", isFetching && "animate-spin")} />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setManualRefresh(true);
+              void refetch().finally(() => setManualRefresh(false));
+            }}
+            disabled={manualRefresh || isLoading}
+          >
+            <RefreshCw className={cn("mr-2 h-4 w-4", manualRefresh && "animate-spin")} />
             Refresh
           </Button>
         }

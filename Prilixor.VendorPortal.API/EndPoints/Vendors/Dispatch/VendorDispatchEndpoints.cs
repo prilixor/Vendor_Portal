@@ -26,6 +26,8 @@ public sealed class VendorUpdateOrderStatusRequest : VendorIdRequest
 {
     public Guid OrderId { get; set; }
     public string Status { get; set; } = string.Empty;
+    public decimal DamageAmount { get; set; }
+    public string? DamageReason { get; set; }
     public List<string>? AssetTags { get; set; }
 }
 
@@ -213,7 +215,68 @@ public sealed class VendorUpdateOrderStatusEndpoint(IMediator mediator)
 
     public override async Task<Results<Ok<CustomerOrderDto>, ProblemHttpResult>> ExecuteAsync(VendorUpdateOrderStatusRequest req, CancellationToken ct)
     {
-        var result = await mediator.Send(new UpdateVendorOrderStatusCommand(req.VendorId, req.OrderId, req.Status, req.AssetTags), ct);
+        var result = await mediator.Send(new UpdateVendorOrderStatusCommand(
+            req.VendorId,
+            req.OrderId,
+            req.Status,
+            req.AssetTags,
+            req.DamageAmount,
+            req.DamageReason), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class VendorMarkReturnedRequest : VendorIdRequest
+{
+    public Guid OrderId { get; set; }
+    public decimal DamageAmount { get; set; }
+    public string? DamageReason { get; set; }
+}
+
+public sealed class VendorMarkReturnedEndpoint(IMediator mediator)
+    : Endpoint<VendorMarkReturnedRequest, Results<Ok<CustomerOrderDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Post("{vendorId}/orders/{orderId}/return");
+        Group<VendorOnboardingGroup>();
+        AllowFileUploads();
+    }
+
+    public override async Task<Results<Ok<CustomerOrderDto>, ProblemHttpResult>> ExecuteAsync(VendorMarkReturnedRequest req, CancellationToken ct)
+    {
+        if (req.DamageAmount <= 0
+            && decimal.TryParse(HttpContext.Request.Form["damageAmount"], System.Globalization.NumberStyles.Number, System.Globalization.CultureInfo.InvariantCulture, out var parsedAmount))
+            req.DamageAmount = parsedAmount;
+        if (string.IsNullOrWhiteSpace(req.DamageReason))
+            req.DamageReason = HttpContext.Request.Form["damageReason"].ToString();
+
+        var uploads = Files.Where(file => file.Length > 0).ToList();
+        if (uploads.Count > OrderReturns.MaxDamageImages)
+        {
+            return TypedResults.Problem(
+                title: "orders.return.too_many_photos",
+                detail: "You can add up to 3 damage photos.",
+                statusCode: 400);
+        }
+
+        var photos = new List<ReturnDamagePhoto>(uploads.Count);
+        foreach (var file in uploads)
+        {
+            await using var ms = new MemoryStream();
+            await file.CopyToAsync(ms, ct);
+            photos.Add(new ReturnDamagePhoto(file.FileName, file.ContentType, ms.ToArray()));
+        }
+
+        var publicBase = new Uri($"{HttpContext.Request.Scheme}://{HttpContext.Request.Host}");
+        var result = await mediator.Send(new UpdateVendorOrderStatusCommand(
+            req.VendorId,
+            req.OrderId,
+            "returned",
+            DamageAmount: req.DamageAmount,
+            DamageReason: req.DamageReason,
+            DamagePhotos: photos,
+            RequestPublicBaseUri: publicBase), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }

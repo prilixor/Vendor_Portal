@@ -854,18 +854,44 @@ class VendorOrderProvider extends ChangeNotifier {
     String orderId,
     String status, {
     List<String>? assetTags,
+    double? damageAmount,
+    String? damageReason,
+    List<PlatformFile> damagePhotos = const [],
   }) async {
     _actionLoading = true;
     _error = null;
     notifyListeners();
     try {
-      await _api.dio.patch(
-        '/vendors/$vendorId/orders/$orderId/status',
-        data: {
-          'status': status,
-          'assetTags': ?assetTags,
-        },
-      );
+      if (status == 'returned' && (damageAmount ?? 0) > 0) {
+        final files = <MultipartFile>[];
+        for (final photo in damagePhotos.take(3)) {
+          final part = await multipartFromPlatformFile(photo);
+          if (part != null) files.add(part);
+        }
+        final formData = FormData.fromMap({
+          'damageAmount': damageAmount ?? 0,
+          'damageReason': damageReason ?? '',
+          if (files.isNotEmpty) 'files': files,
+        });
+        await _api.dio.post(
+          '/vendors/$vendorId/orders/$orderId/return',
+          data: formData,
+          options: Options(
+            sendTimeout: const Duration(seconds: 60),
+            receiveTimeout: const Duration(seconds: 60),
+          ),
+        );
+      } else {
+        await _api.dio.patch(
+          '/vendors/$vendorId/orders/$orderId/status',
+          data: {
+            'status': status,
+            'assetTags': ?assetTags,
+            if (status == 'returned') 'damageAmount': damageAmount ?? 0,
+            if (status == 'returned' && damageReason != null) 'damageReason': damageReason,
+          },
+        );
+      }
       await fetchOrderDetail(vendorId, orderId);
       await fetchOrders(vendorId, silent: true);
       return true;

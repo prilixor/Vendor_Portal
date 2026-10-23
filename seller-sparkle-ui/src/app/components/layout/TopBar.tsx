@@ -72,11 +72,13 @@ export const TopBar = ({ onMenuClick, variant = "vendor" }: TopBarProps) => {
 
   const unreadAdminCount = useMemo(() => {
     const criticalOrders = adminAlertSummary?.criticalOrderCount ?? 0;
+    const pendingRefunds = (adminAlertSummary?.pendingDepositRefundCount ?? 0)
+      + (adminAlertSummary?.pendingCancellationRefundCount ?? 0);
     const pendingVendors = adminAlertSummary?.pendingVendorCount ?? 0;
     const listingPricingAlerts = adminAlertSummary?.listingPricingAlertCount ?? 0;
     const chatUnread = adminChatUnread?.count ?? 0;
     const supportUnread = adminSupportUnread?.count ?? 0;
-    return criticalOrders + pendingVendors + listingPricingAlerts + chatUnread + supportUnread;
+    return criticalOrders + pendingRefunds + pendingVendors + listingPricingAlerts + chatUnread + supportUnread;
   }, [adminAlertSummary, adminChatUnread, adminSupportUnread]);
 
   useEffect(() => {

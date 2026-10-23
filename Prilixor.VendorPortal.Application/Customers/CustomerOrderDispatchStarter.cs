@@ -152,6 +152,13 @@ internal static class CustomerOrderDispatchStarter
         {
             order.Status = "dispatch_failed";
             await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
+            await OrderCancellationRefunds.TryOpenAsync(
+                customers,
+                order,
+                CancellationOutcomes.DispatchFailed,
+                CancellationActors.System,
+                null,
+                cancellationToken);
             await customers.SaveChangesAsync(cancellationToken);
             return false;
         }
@@ -176,6 +183,13 @@ internal static class CustomerOrderDispatchStarter
         {
             order.Status = "dispatch_failed";
             await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
+            await OrderCancellationRefunds.TryOpenAsync(
+                customers,
+                order,
+                CancellationOutcomes.DispatchFailed,
+                CancellationActors.System,
+                null,
+                cancellationToken);
             await customers.SaveChangesAsync(cancellationToken);
 
             await customers.AddCustomerNotificationAsync(

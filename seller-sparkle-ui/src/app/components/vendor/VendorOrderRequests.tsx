@@ -109,13 +109,14 @@ const VendorOrderRequests = () => {
   const [page, setPage] = useState(1);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
   const [rejectOffer, setRejectOffer] = useState<VendorDispatchOfferApiDto | null>(null);
+  const [manualRefresh, setManualRefresh] = useState(false);
 
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedSearch(searchQuery.trim()), 350);
     return () => window.clearTimeout(t);
   }, [searchQuery]);
 
-  const { data, isLoading, isPlaceholderData, isFetching, isError, error, refetch } = useQuery({
+  const { data, isLoading, isPlaceholderData, isError, error, refetch } = useQuery({
     queryKey: ["vendor-dispatch-offer-summaries", user?.id, page, debouncedSearch, typeFilter],
     queryFn: () =>
       vendorOnboardingApi.getVendorDispatchOfferSummaries(user!.id, {
@@ -232,10 +233,13 @@ const VendorOrderRequests = () => {
           <div className="flex flex-wrap gap-2">
             <Button
               variant="outline"
-              onClick={() => void refetch()}
-              disabled={isLoading || isFetching}
+              onClick={() => {
+                setManualRefresh(true);
+                void refetch().finally(() => setManualRefresh(false));
+              }}
+              disabled={isLoading || manualRefresh}
             >
-              {isFetching && !isLoading ? (
+              {manualRefresh ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
                 <RefreshCw className="mr-2 h-4 w-4" />

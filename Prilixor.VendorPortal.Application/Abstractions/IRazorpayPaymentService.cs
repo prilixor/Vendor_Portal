@@ -31,6 +31,12 @@ public interface IRazorpayPaymentService
         IReadOnlyDictionary<string, string>? notes,
         CancellationToken cancellationToken);
 
+    Task<string> RefundPaymentAsync(
+        string paymentId,
+        long amountPaise,
+        IReadOnlyDictionary<string, string>? notes,
+        CancellationToken cancellationToken);
+
     bool VerifyPaymentSignature(string razorpayOrderId, string razorpayPaymentId, string razorpaySignature);
 
     bool VerifyWebhookSignature(string rawBody, string signatureHeader);

@@ -44,6 +44,7 @@ function mapFeedItemToAlert(item: AdminAlertFeedItem) {
       vendorName: item.vendorName,
       amount: item.amount ?? 0,
       orderId: item.orderId,
+      orderNumber: item.orderNumber,
       company: item.company,
       name: item.ownerName,
       email: item.email,
@@ -91,7 +92,7 @@ export const AdminNotifications = () => {
   const feedTab = activeTab === "chats" || activeTab === "support" ? "all" : activeTab;
   const feedPage = activeTab === "chats" || activeTab === "support" ? 1 : page;
 
-  const { data: feed, isLoading: isLoadingFeed, refetch: refetchFeed, isFetching: isFetchingFeed, isPlaceholderData } = useQuery({
+  const { data: feed, isLoading: isLoadingFeed, refetch: refetchFeed, isPlaceholderData } = useQuery({
     queryKey: ["admin-alert-feed", feedTab, feedPage],
     queryFn: () => adminApi.getAdminAlertFeed({
       tab: feedTab,
@@ -103,7 +104,7 @@ export const AdminNotifications = () => {
   });
   const isFeedPageChanging = isPlaceholderData && !isLoadingFeed && activeTab !== "chats" && activeTab !== "support";
 
-  const { data: continuationPage, isLoading: isLoadingContinuations, refetch: refetchContinuations, isFetching: isFetchingContinuations } = useQuery({
+  const { data: continuationPage, isLoading: isLoadingContinuations, refetch: refetchContinuations } = useQuery({
     queryKey: ["admin-pending-continuation-summaries", 1, PAGE_SIZE],
     queryFn: () => adminApi.getAdminPendingContinuationSummaries({
       page: 1,
@@ -122,7 +123,6 @@ export const AdminNotifications = () => {
     data: chatPageData,
     isLoading: isLoadingChats,
     refetch: refetchChats,
-    isFetching: isFetchingChats,
     isPlaceholderData: isChatPlaceholder,
   } = useQuery({
     queryKey: ["admin-unread-chat-session-summaries", chatListPage, PAGE_SIZE],
@@ -143,7 +143,6 @@ export const AdminNotifications = () => {
     data: supportPageData,
     isLoading: isLoadingSupport,
     refetch: refetchSupport,
-    isFetching: isFetchingSupport,
     isPlaceholderData: isSupportPlaceholder,
   } = useQuery({
     queryKey: ["admin-unread-support-ticket-summaries", supportListPage, PAGE_SIZE],
@@ -165,15 +164,20 @@ export const AdminNotifications = () => {
     || isLoadingContinuations
     || (activeTab === "chats" && isLoadingChats && !chatPageData)
     || (activeTab === "support" && isLoadingSupport && !supportPageData);
-  const isFetching = isFetchingFeed || isFetchingContinuations || isFetchingChats || isFetchingSupport;
+  const [manualRefresh, setManualRefresh] = useState(false);
 
   const handleRefreshAll = async () => {
-    await Promise.all([
-      refetchFeed(),
-      refetchContinuations(),
-      refetchChats(),
-      refetchSupport(),
-    ]);
+    setManualRefresh(true);
+    try {
+      await Promise.all([
+        refetchFeed(),
+        refetchContinuations(),
+        refetchChats(),
+        refetchSupport(),
+      ]);
+    } finally {
+      setManualRefresh(false);
+    }
   };
 
   const continuationAlerts = useMemo(() => {
@@ -371,8 +375,8 @@ export const AdminNotifications = () => {
         title="Admin Notifications Center"
         description="Consolidated monitoring, critical order alarms, pending onboarding verifications, and real-time activity stream."
         actions={
-          <Button variant="outline" size="sm" onClick={handleRefreshAll} disabled={isFetching || isLoading}>
-            <RefreshCw className={cn("mr-2 h-4 w-4", isFetching && "animate-spin")} />
+          <Button variant="outline" size="sm" onClick={() => void handleRefreshAll()} disabled={manualRefresh || isLoading}>
+            <RefreshCw className={cn("mr-2 h-4 w-4", manualRefresh && "animate-spin")} />
             Refresh
           </Button>
         }
@@ -435,8 +439,8 @@ export const AdminNotifications = () => {
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-950/40">
                   <CheckCircle2 className="h-6 w-6" />
                 </div>
-                <h3 className="mt-4 text-base font-bold text-foreground">Zero Dispatch Failures</h3>
-                <p className="mt-1 text-sm text-muted-foreground">All orders have been successfully confirmed or dispatched to vendors.</p>
+                <h3 className="mt-4 text-base font-bold text-foreground">No order alerts</h3>
+                <p className="mt-1 text-sm text-muted-foreground">No dispatch failures or refunds are waiting for you.</p>
               </Card>
             ) : (
               <div>
@@ -625,19 +629,29 @@ const AlertCard = ({
   };
   navigate: (path: string) => void;
 }) => {
+  const isDepositRefund = alert.id.startsWith("deposit-refund-") || alert.title.startsWith("Deposit refund due");
+  const isCancellationRefund = alert.id.startsWith("cancellation-refund-") || alert.title.startsWith("Cancellation refund due");
+  const isRefund = isDepositRefund || isCancellationRefund;
+  const statusLabel = isDepositRefund
+    ? "Refund due"
+    : isCancellationRefund
+      ? "Review refund"
+      : alert.status.replaceAll("_", " ").toUpperCase();
   return (
     <div className="flex min-w-0 flex-col gap-4 rounded-xl border border-border/80 bg-card p-4 shadow-sm transition-all hover:border-border/100 hover:shadow-md sm:p-6 md:flex-row md:items-center md:justify-between">
       <div className="flex min-w-0 items-start gap-3 sm:gap-4">
         <div className={cn(
           "rounded-lg p-2.5 shrink-0 mt-0.5",
-          alert.type === "order" ? "bg-destructive/10 text-destructive" 
+          isRefund ? "bg-amber-50 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300"
+          : alert.type === "order" ? "bg-destructive/10 text-destructive" 
           : alert.type === "extension" ? "bg-blue-50 text-blue-700 dark:bg-blue-500/15 dark:text-blue-300"
           : alert.type === "buyout" ? "bg-fuchsia-50 text-fuchsia-700 dark:bg-fuchsia-500/15 dark:text-fuchsia-300"
           : alert.type === "listing" ? "bg-indigo-50 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300"
           : alert.type === "chat" || alert.type === "support" ? "bg-primary/10 text-primary"
           : "bg-amber-50 text-amber-800 dark:bg-amber-500/15 dark:text-amber-300"
         )}>
-          {alert.type === "order" ? <AlertTriangle className="h-5 w-5" /> 
+          {isRefund ? <RefreshCw className="h-5 w-5" />
+           : alert.type === "order" ? <AlertTriangle className="h-5 w-5" /> 
            : alert.type === "extension" ? <Clock className="h-5 w-5" />
            : alert.type === "buyout" || alert.type === "listing" ? <Package className="h-5 w-5" />
            : alert.type === "chat" || alert.type === "support" ? <MessageSquare className="h-5 w-5" />
@@ -648,7 +662,9 @@ const AlertCard = ({
             <h4 className="text-base font-bold text-foreground">{alert.title}</h4>
             <Badge variant="outline" className={cn(
               "text-[10px] font-semibold uppercase tracking-wider py-0 px-2",
-              alert.type === "order"
+              isRefund
+                ? "bg-amber-100 text-amber-950 border-amber-500/20 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-500/30"
+                : alert.type === "order"
                 ? "bg-destructive/15 text-destructive border-destructive/20"
                 : alert.type === "extension"
                 ? "bg-blue-100 text-blue-800 border-blue-500/20 dark:bg-blue-900/30 dark:text-blue-300"
@@ -660,7 +676,7 @@ const AlertCard = ({
                 ? "bg-primary/15 text-primary border-primary/20"
                 : "bg-amber-100 text-amber-950 border-amber-500/20 dark:bg-amber-950/40 dark:text-amber-200 dark:border-amber-500/30"
             )}>
-              {alert.status.replace("_", " ").toUpperCase()}
+              {statusLabel}
             </Badge>
           </div>
           <p className="text-sm text-muted-foreground">{alert.description}</p>
@@ -669,9 +685,14 @@ const AlertCard = ({
           <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs font-medium text-muted-foreground pt-1.5">
             {alert.type === "order" || alert.type === "extension" || alert.type === "buyout" ? (
               <>
-                <p>Listing: <span className="text-foreground">{alert.meta.listingTitle}</span></p>
+                {alert.meta.listingTitle ? (
+                  <p>Listing: <span className="text-foreground">{alert.meta.listingTitle}</span></p>
+                ) : null}
+                {alert.meta.orderNumber ? (
+                  <p>Order: <span className="text-foreground font-mono">{alert.meta.orderNumber}</span></p>
+                ) : null}
                 <p>Customer: <span className="text-foreground">{alert.meta.customerName}</span></p>
-                <p>Total Amount: <span className="text-primary font-bold">₹{alert.meta.amount.toFixed(0)}</span></p>
+                <p>{isRefund ? "Amount" : "Total Amount"}: <span className="text-primary font-bold">₹{alert.meta.amount.toFixed(0)}</span></p>
               </>
             ) : alert.type === "listing" ? (
               <>
@@ -723,7 +744,9 @@ const AlertCard = ({
             navigate(alert.link);
           }
         }}>
-          {alert.type === "listing"
+          {isRefund
+            ? "Open refund"
+            : alert.type === "listing"
             ? "Open Catalog"
             : alert.type === "chat" || alert.type === "support"
               ? "Open Chat"

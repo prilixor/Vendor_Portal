@@ -2,11 +2,15 @@ import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Check, Building, Calendar, DollarSign, Package, User } from "lucide-react";
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
+import { ZoomableImageStage } from "@/app/components/shared/ZoomableImageStage";
 import { adminApi, type AdminOrderDto } from "@/app/services/adminApi";
 import { useAuth } from "@/app/guards/AuthContext";
 import { formatGstRateLabel } from "@/app/helpers/gstLabel";
 import { formatOrderStatusLabel, formatOrderStatusTitle, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
 import { cn, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
+import { adminRefundChip, formatInr } from "@/app/helpers/orderReturn";
+import { adminCancellationChip, type OrderCancellationApi } from "@/app/helpers/orderCancellation";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
 import { toast } from "sonner";
 import { BackLink } from "@/app/components/shared/BackLink";
@@ -16,6 +20,8 @@ import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
 import { OrderPrescriptionFilesCard } from "@/app/components/shared/OrderPrescriptionFilesCard";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
+import { Input } from "@/app/components/ui/input";
+import { Textarea } from "@/app/components/ui/textarea";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -200,6 +206,154 @@ function OrderTimeline({ status, orderType }: { status: string; orderType?: stri
   );
 }
 
+function CancellationRefundBody({
+  row,
+  chargeText,
+  reason,
+  manual,
+  pending,
+  onCharge,
+  onReason,
+  onManual,
+  onSubmit,
+}: {
+  row: OrderCancellationApi;
+  chargeText: string;
+  reason: string;
+  manual: string;
+  pending: boolean;
+  onCharge: (value: string) => void;
+  onReason: (value: string) => void;
+  onManual: (value: string) => void;
+  onSubmit: (reference?: string) => void;
+}) {
+  const charge = Number(chargeText || 0);
+  const chargeInvalid = !Number.isFinite(charge) || charge < 0 || charge - row.paidAmount > 0.009;
+  const preview = Math.max(0, Math.round((row.paidAmount - (chargeInvalid ? 0 : charge)) * 100) / 100);
+  const reasonMissing = charge > 0 && !reason.trim();
+  const locked = row.status === "refunded" || row.status === "settled";
+  const shownCharge = locked || row.status === "refunding" ? row.chargeAmount : chargeInvalid ? 0 : charge;
+  const shownRefund = locked || row.status === "refunding" ? row.refundAmount : preview;
+  const canSendOnline = row.hasOnlinePayment && preview > 0 && !chargeInvalid && !reasonMissing;
+  const manualBlocked = pending || !manual.trim() || (row.status === "pending_review" && (chargeInvalid || reasonMissing));
+
+  return (
+    <>
+      <div className="space-y-2 rounded-lg border border-border/80 bg-muted/30 px-3 py-2.5">
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Customer paid</p>
+          <p className="font-medium tabular-nums">₹{formatInr(row.paidAmount)}</p>
+        </div>
+        <div className="flex items-center justify-between gap-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Charge</p>
+          <p className="font-medium tabular-nums">₹{formatInr(shownCharge)}</p>
+        </div>
+        <div className="flex items-center justify-between gap-3 border-t border-border/80 pt-2">
+          <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Refund to customer</p>
+          <p className="font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">₹{formatInr(shownRefund)}</p>
+        </div>
+      </div>
+      {row.status === "refunded" ? (
+        <p>
+          Refunded
+          {row.refundedAt ? ` on ${new Date(row.refundedAt).toLocaleString()}` : ""}
+          {row.refundReference ? ` · ${row.refundReference}` : ""}
+        </p>
+      ) : row.status === "settled" ? (
+        <p className="text-muted-foreground">
+          {row.chargeAmount > 0
+            ? "No refund. The charge uses the full payment for this product."
+            : "No refund is due on this product."}
+        </p>
+      ) : pending ? (
+        <p className="text-muted-foreground">Sending this refund…</p>
+      ) : (
+        <div className="space-y-4">
+          {row.status === "pending_review" ? (
+            <div className="space-y-2">
+              <div className="space-y-1">
+                <p className="text-sm font-medium">Charge to deduct</p>
+                <p className="text-xs text-muted-foreground">Optional. Leave 0 to refund the full amount paid for this product.</p>
+                <Input
+                  inputMode="decimal"
+                  value={chargeText}
+                  placeholder="0"
+                  onChange={(event) => onCharge(event.target.value)}
+                />
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm font-medium">Reason {charge > 0 ? "" : "(only if you deduct a charge)"}</p>
+                <Textarea
+                  value={reason}
+                  maxLength={500}
+                  rows={2}
+                  placeholder="Why this charge is deducted"
+                  onChange={(event) => onReason(event.target.value)}
+                />
+              </div>
+              {chargeInvalid ? <p className="text-destructive">Enter a charge from ₹0 up to the amount paid.</p> : null}
+              {reasonMissing ? <p className="text-destructive">Add a reason before deducting this charge.</p> : null}
+            </div>
+          ) : (
+            <p className="text-muted-foreground">
+              Part of this refund may already have been sent. Send the rest, or record a reference if you paid the customer yourself.
+              {row.chargeReason ? ` Charge: ${row.chargeReason}` : ""}
+            </p>
+          )}
+
+          {row.status === "pending_review" && preview <= 0 && !chargeInvalid ? (
+            <Button type="button" className="w-full" disabled={pending || reasonMissing} onClick={() => onSubmit(undefined)}>
+              Apply charge and close
+            </Button>
+          ) : null}
+
+          {preview > 0 && row.hasOnlinePayment ? (
+            <div className="space-y-2">
+              <Button
+                type="button"
+                className="w-full"
+                disabled={pending || !canSendOnline}
+                onClick={() => onSubmit(undefined)}
+              >
+                {row.status === "refunding" ? "Send the rest through Razorpay" : `Refund ₹${formatInr(preview)} through Razorpay`}
+              </Button>
+              <p className="text-xs text-muted-foreground">
+                Sends only this product back to the original payment. Other products in the checkout stay as they are.
+              </p>
+            </div>
+          ) : null}
+
+          {preview > 0 ? (
+            <div className="space-y-2 rounded-lg border border-dashed border-border px-3 py-3">
+              <p className="text-sm font-medium">Already paid the customer another way?</p>
+              <p className="text-xs text-muted-foreground">
+                {row.hasOnlinePayment
+                  ? "Use this after a UPI, bank, or Razorpay dashboard refund. This does not send money."
+                  : "Razorpay cannot send this refund from here. Pay the customer, then save the reference."}
+              </p>
+              <Input
+                value={manual}
+                maxLength={120}
+                onChange={(event) => onManual(event.target.value)}
+                placeholder="UPI, bank, or Razorpay reference"
+              />
+              <Button
+                type="button"
+                variant="outline"
+                className="w-full"
+                disabled={manualBlocked}
+                onClick={() => onSubmit(manual.trim())}
+              >
+                Save manual refund
+              </Button>
+            </div>
+          ) : null}
+        </div>
+      )}
+    </>
+  );
+}
+
 const AdminOrderDetail = () => {
   const { orderId } = useParams<{ orderId: string }>();
   const navigate = useNavigate();
@@ -208,6 +362,12 @@ const AdminOrderDetail = () => {
 
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [statusUpdateLocal, setStatusUpdateLocal] = useState("");
+  const [manualReference, setManualReference] = useState("");
+  const [showManualRefund, setShowManualRefund] = useState(false);
+  const [cancelCharge, setCancelCharge] = useState("");
+  const [cancelChargeReason, setCancelChargeReason] = useState("");
+  const [cancelManual, setCancelManual] = useState("");
+  const [damagePreviewUrl, setDamagePreviewUrl] = useState<string | null>(null);
   const [continuations, setContinuations] = useState<OrderContinuationsDto | null>(null);
   const [continuationsUpdating, setContinuationsUpdating] = useState(false);
 
@@ -265,7 +425,13 @@ const AdminOrderDetail = () => {
   useEffect(() => {
     if (!selectedOrder) return;
     setStatusUpdateLocal(selectedOrder.status);
-  }, [selectedOrder?.orderId]);
+    setShowManualRefund(false);
+    setManualReference("");
+    const review = selectedOrder.cancellationRefund;
+    setCancelCharge(review && review.chargeAmount > 0 ? String(review.chargeAmount) : "");
+    setCancelChargeReason(review?.chargeReason ?? "");
+    setCancelManual("");
+  }, [selectedOrder?.orderId, selectedOrder?.cancellationRefund?.status]);
 
   useEffect(() => {
     const itemId = selectedOrder?.orderId;
@@ -301,7 +467,41 @@ const AdminOrderDetail = () => {
     queryClient.invalidateQueries({ queryKey: ["admin-orders"] });
     queryClient.invalidateQueries({ queryKey: ["admin-order-summaries"] });
     queryClient.invalidateQueries({ queryKey: ["admin-alert-summary"] });
+    queryClient.invalidateQueries({ queryKey: ["admin-alert-feed"] });
   };
+
+  const cancellationRefundMutation = useMutation({
+    mutationFn: (reference?: string) => {
+      if (!selectedOrder) throw new Error("Select a product first.");
+      const charge = Number(cancelCharge || 0);
+      return adminApi.refundOrderCancellation(
+        selectedOrder.orderId,
+        Number.isFinite(charge) ? charge : 0,
+        cancelChargeReason,
+        reference,
+      );
+    },
+    onSuccess: () => {
+      toast.success("Cancellation refund recorded for this product.");
+      setCancelManual("");
+      invalidate();
+    },
+    onError: (err: Error) => toast.error(err.message || "Refund failed."),
+  });
+
+  const refundMutation = useMutation({
+    mutationFn: (reference?: string) => {
+      if (!selectedOrder) throw new Error("Select a product first.");
+      return adminApi.refundOrderDeposit(selectedOrder.orderId, reference);
+    },
+    onSuccess: () => {
+      toast.success("Deposit refund recorded for this product.");
+      setManualReference("");
+      setShowManualRefund(false);
+      invalidate();
+    },
+    onError: (err: Error) => toast.error(err.message || "Refund failed."),
+  });
 
   const updateStatusMutation = useMutation({
     mutationFn: (newStatus: string) =>
@@ -490,6 +690,16 @@ const AdminOrderDetail = () => {
                       EXTENDED
                     </span>
                   ) : null}
+                  {adminRefundChip(item.returnSettlement) ? (
+                    <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold text-sky-900 dark:bg-sky-950/50 dark:text-sky-200">
+                      {adminRefundChip(item.returnSettlement)}
+                    </span>
+                  ) : null}
+                  {adminCancellationChip(item.cancellationRefund) ? (
+                    <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold text-sky-900 dark:bg-sky-950/50 dark:text-sky-200">
+                      {adminCancellationChip(item.cancellationRefund)}
+                    </span>
+                  ) : null}
                   <Badge
                     title={formatOrderStatusTitle(item.status)}
                     className={cn(orderStatusBadgeSizeClass, orderStatusBadgeClass(item.status))}
@@ -675,14 +885,14 @@ const AdminOrderDetail = () => {
                           </AlertDialogTrigger>
                         </TooltipTrigger>
                         <TooltipContent className="max-w-xs text-center" side="top">
-                          Cancels the order and issues a full refund to the customer.
+                          Cancels this product. If the customer already paid, refund it from the cancellation card.
                         </TooltipContent>
                       </Tooltip>
                       <AlertDialogContent>
                         <AlertDialogHeader>
-                          <AlertDialogTitle>Force Cancel & Refund?</AlertDialogTitle>
+                          <AlertDialogTitle>Force cancel this product?</AlertDialogTitle>
                           <AlertDialogDescription>
-                            This permanently cancels the order and refunds the customer. It cannot be undone.
+                            This cancels the product. If the customer already paid, you review the payment next and choose any charge before the refund is sent.
                           </AlertDialogDescription>
                         </AlertDialogHeader>
                         <AlertDialogFooter>
@@ -764,6 +974,199 @@ const AdminOrderDetail = () => {
               </div>
             </CardContent>
           </Card>
+
+          {selectedOrder.returnSettlement ? (
+            <Card className="border-border/80 shadow-sm">
+              <CardHeader className="pb-2">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0">
+                    <p className="text-lg font-semibold">Deposit refund</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      This product only. Rent, GST, and fees stay with the order.
+                    </p>
+                  </div>
+                  <span
+                    className={cn(
+                      "shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold",
+                      selectedOrder.returnSettlement.status === "refunded"
+                        ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
+                        : selectedOrder.returnSettlement.refundAmount > 0
+                          ? "bg-amber-100 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200"
+                          : "bg-muted text-muted-foreground",
+                    )}
+                  >
+                    {selectedOrder.returnSettlement.status === "refunded"
+                      ? "Refund sent"
+                      : selectedOrder.returnSettlement.refundAmount > 0
+                        ? "Waiting for refund"
+                        : "No refund"}
+                  </span>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                {selectedOrder.returnSettlement.status === "refunded" ? (
+                  <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-emerald-950 dark:border-emerald-500/30 dark:bg-emerald-950/30 dark:text-emerald-100">
+                    <p className="font-semibold">Refund sent to the customer</p>
+                    <p className="mt-1 text-xs leading-relaxed">
+                      ₹{formatInr(selectedOrder.returnSettlement.refundAmount)}
+                      {selectedOrder.returnSettlement.refundedAt
+                        ? ` on ${new Date(selectedOrder.returnSettlement.refundedAt).toLocaleString()}`
+                        : ""}
+                      {selectedOrder.returnSettlement.refundReference
+                        ? ` · ${selectedOrder.returnSettlement.refundReference}`
+                        : ""}
+                    </p>
+                  </div>
+                ) : selectedOrder.returnSettlement.refundAmount > 0 ? (
+                  <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-amber-950 dark:border-amber-500/30 dark:bg-amber-950/30 dark:text-amber-100">
+                    <p className="font-semibold">
+                      Waiting for you to refund ₹{formatInr(selectedOrder.returnSettlement.refundAmount)}
+                    </p>
+                    <p className="mt-1 text-xs leading-relaxed">
+                      The vendor marked this product returned. Check the reason and photos, then send this amount back.
+                    </p>
+                  </div>
+                ) : null}
+                <div className="divide-y divide-border overflow-hidden rounded-lg border border-border">
+                  <div className="flex items-center justify-between gap-3 px-3 py-2">
+                    <p className="text-muted-foreground">Deposit</p>
+                    <p className="font-medium tabular-nums">₹{formatInr(selectedOrder.returnSettlement.depositAmount)}</p>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 px-3 py-2">
+                    <p className="text-muted-foreground">Damage claim</p>
+                    <p className="font-medium tabular-nums">₹{formatInr(selectedOrder.returnSettlement.damageAmount)}</p>
+                  </div>
+                  <div className="flex items-center justify-between gap-3 bg-muted/40 px-3 py-2">
+                    <p className="font-medium">Refund to customer</p>
+                    <p className="font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
+                      ₹{formatInr(selectedOrder.returnSettlement.refundAmount)}
+                    </p>
+                  </div>
+                </div>
+                {selectedOrder.returnSettlement.damageReason ? (
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Vendor wrote</p>
+                    <p className="rounded-lg border border-border/70 px-3 py-2 leading-relaxed">
+                      {selectedOrder.returnSettlement.damageReason}
+                    </p>
+                  </div>
+                ) : null}
+                {(selectedOrder.returnSettlement.damageImageUrls ?? []).length > 0 ? (
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Damage photos · tap to enlarge
+                    </p>
+                    <div className="grid grid-cols-3 gap-2">
+                      {(selectedOrder.returnSettlement.damageImageUrls ?? []).map((url, index) => (
+                        <button
+                          key={url}
+                          type="button"
+                          className="aspect-square overflow-hidden rounded-lg bg-muted ring-1 ring-inset ring-black/[0.06] dark:ring-white/10"
+                          onClick={() => setDamagePreviewUrl(url)}
+                          aria-label={`Damage photo ${index + 1}`}
+                        >
+                          <img src={url} alt="" className="h-full w-full object-cover" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : selectedOrder.returnSettlement.damageAmount > 0 ? (
+                  <p className="text-xs text-muted-foreground">The vendor did not add photos with this claim.</p>
+                ) : null}
+                {selectedOrder.returnSettlement.status === "refunded" ? null : selectedOrder.returnSettlement.refundAmount <= 0 ? (
+                  <p className="text-muted-foreground">
+                    {selectedOrder.returnSettlement.damageAmount > 0
+                      ? "No refund. The damage charge uses this product's full deposit."
+                      : "No security deposit on this product."}
+                  </p>
+                ) : refundMutation.isPending ? (
+                  <p className="text-muted-foreground">Sending this refund…</p>
+                ) : (
+                  <div className="space-y-3">
+                    {selectedOrder.returnSettlement.status === "refunding" ? (
+                      <p className="text-muted-foreground">
+                        This refund was started. If the customer was already paid, mark it paid with the reference.
+                      </p>
+                    ) : null}
+                    {selectedOrder.returnSettlement.hasOnlinePayment
+                      && selectedOrder.returnSettlement.status !== "refunding"
+                      && !showManualRefund ? (
+                      <Button
+                        type="button"
+                        className="w-full"
+                        disabled={refundMutation.isPending}
+                        onClick={() => refundMutation.mutate(undefined)}
+                      >
+                        Refund ₹{formatInr(selectedOrder.returnSettlement.refundAmount)} through Razorpay
+                      </Button>
+                    ) : null}
+                    {showManualRefund || !selectedOrder.returnSettlement.hasOnlinePayment || selectedOrder.returnSettlement.status === "refunding" ? (
+                      <div className="space-y-2 rounded-lg border border-dashed border-border px-3 py-3">
+                        <p className="text-sm font-medium">Already paid the customer another way?</p>
+                        <p className="text-xs text-muted-foreground">
+                          Use this after a UPI, bank, or Razorpay dashboard refund. This does not send money.
+                        </p>
+                        <Input
+                          value={manualReference}
+                          onChange={(event) => setManualReference(event.target.value)}
+                          placeholder="UPI, bank, or Razorpay reference"
+                        />
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="w-full"
+                          disabled={refundMutation.isPending || !manualReference.trim()}
+                          onClick={() => refundMutation.mutate(manualReference.trim())}
+                        >
+                          Save manual refund
+                        </Button>
+                      </div>
+                    ) : (
+                      <Button type="button" variant="ghost" className="h-auto px-0" onClick={() => setShowManualRefund(true)}>
+                        Already paid another way?
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          ) : null}
+
+          <Dialog open={!!damagePreviewUrl} onOpenChange={(open) => !open && setDamagePreviewUrl(null)}>
+            <DialogContent className="flex max-h-[min(92dvh,880px)] w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl">
+              <DialogHeader className="border-b border-border px-4 py-3 pr-12">
+                <DialogTitle className="text-sm font-semibold">Damage photo</DialogTitle>
+              </DialogHeader>
+              {damagePreviewUrl ? (
+                <ZoomableImageStage src={damagePreviewUrl} alt="Damage photo" resetKey={damagePreviewUrl} />
+              ) : null}
+            </DialogContent>
+          </Dialog>
+
+          {selectedOrder.cancellationRefund ? (
+            <Card className="border-border/80 shadow-sm">
+              <CardHeader className="pb-2">
+                <p className="text-lg font-semibold">Cancellation refund</p>
+                <p className="text-sm text-muted-foreground">{selectedOrder.cancellationRefund.actorLabel}</p>
+                <p className="text-sm text-muted-foreground">
+                  Deduct a charge only if needed, then refund this product.
+                </p>
+              </CardHeader>
+              <CardContent className="space-y-3 text-sm">
+                <CancellationRefundBody
+                  row={selectedOrder.cancellationRefund}
+                  chargeText={cancelCharge}
+                  reason={cancelChargeReason}
+                  manual={cancelManual}
+                  pending={cancellationRefundMutation.isPending}
+                  onCharge={setCancelCharge}
+                  onReason={setCancelChargeReason}
+                  onManual={setCancelManual}
+                  onSubmit={(reference) => cancellationRefundMutation.mutate(reference)}
+                />
+              </CardContent>
+            </Card>
+          ) : null}
 
           <Card className="border-border/80 shadow-sm">
             <CardHeader className="pb-4">

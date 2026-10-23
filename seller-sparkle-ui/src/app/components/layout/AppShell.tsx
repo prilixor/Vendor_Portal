@@ -298,9 +298,11 @@ export const AppShell = ({ variant }: AppShellProps) => {
 
   const unreadAdminCount = useMemo(() => {
     const criticalOrders = adminAlertSummary?.criticalOrderCount ?? 0;
+    const pendingRefunds = (adminAlertSummary?.pendingDepositRefundCount ?? 0)
+      + (adminAlertSummary?.pendingCancellationRefundCount ?? 0);
     const pendingVendors = adminAlertSummary?.pendingVendorCount ?? 0;
     const listingPricingAlerts = adminAlertSummary?.listingPricingAlertCount ?? 0;
-    return criticalOrders + pendingVendors + listingPricingAlerts + customerChatUnread + vendorSupportUnread;
+    return criticalOrders + pendingRefunds + pendingVendors + listingPricingAlerts + customerChatUnread + vendorSupportUnread;
   }, [adminAlertSummary, customerChatUnread, vendorSupportUnread]);
 
 
