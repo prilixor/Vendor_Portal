@@ -149,14 +149,11 @@ export function CustomerStoreHeader() {
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
                 {navItems
-                  .filter((item) => item.to !== "/customer/notifications")
+                  .filter((item) => item.to !== "/customer/notifications" && item.to !== "/customer/cart")
                   .map((item) => (
                   <DropdownMenuItem key={item.to} onClick={() => navigate(item.to)}>
                     <item.icon className="mr-2 h-4 w-4" />
                     {item.label}
-                    {item.label === "Cart" && cartCount > 0 ? (
-                      <span className="ml-auto text-xs text-muted-foreground">{cartCount}</span>
-                    ) : null}
                     {item.label === "Notifications" && unreadCustomerCount > 0 ? (
                       <span className="ml-auto text-xs text-muted-foreground">
                         {unreadCustomerCount}

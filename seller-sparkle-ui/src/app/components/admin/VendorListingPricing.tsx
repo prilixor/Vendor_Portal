@@ -1,15 +1,14 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { useParams } from "react-router-dom";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import { adminApi, type VendorListingPricingDto } from "@/app/services/adminApi";
+import { adminApi, type AdminVendorListingInventoryDto, type VendorListingPricingDto } from "@/app/services/adminApi";
 import { PageHeader } from "@/app/components/shared/PageHeader";
 import { BackLink } from "@/app/components/shared/BackLink";
 import { PageContentGate } from "@/app/components/shared/PageLoader";
 import { Card, CardContent } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
-import { Label } from "@/app/components/ui/label";
 import { Switch } from "@/app/components/ui/switch";
 import { Badge } from "@/app/components/ui/badge";
 import { useAuth } from "@/app/guards/AuthContext";
@@ -64,6 +63,13 @@ const VendorListingPricing = () => {
     enabled: Boolean(vendorId && listingId),
   });
 
+  const { data: stockRows } = useQuery({
+    queryKey: ["vendor-inventory-summaries", vendorId],
+    queryFn: () => adminApi.getVendorInventorySummaries(vendorId),
+    enabled: Boolean(vendorId),
+  });
+  const stock = stockRows?.find((row) => row.listingId.toLowerCase() === listingId.toLowerCase());
+
   useEffect(() => {
     if (data) setForm(toForm(data));
   }, [data]);
@@ -109,6 +115,12 @@ const VendorListingPricing = () => {
             ? `${data.vendorName} · ${data.categoryName}${data.brandName ? ` · ${data.brandName}` : ""}`
             : "Review this vendor's listing and set a price only if it should differ from the catalog."
         }
+        breadcrumbs={[
+          { label: "Admin", href: "/admin" },
+          { label: "Vendors", href: "/admin/vendors" },
+          { label: data?.vendorName ?? "Vendor", href: `/admin/vendors/${vendorId}?tab=${backTab}` },
+          { label: data?.productName ?? "Product" },
+        ]}
       />
 
       {isError && (
@@ -122,13 +134,13 @@ const VendorListingPricing = () => {
 
       <PageContentGate loading={isLoading && !data}>
         {data && form && (
-          <div className="grid gap-4 lg:grid-cols-[280px_minmax(0,1fr)]">
+          <div className="grid gap-4 lg:grid-cols-[260px_minmax(0,1fr)]">
             <Card className="border-border/60">
               <CardContent className="space-y-3 p-4">
                 {data.imageUrl ? (
-                  <img src={data.imageUrl} alt="" className="h-40 w-full rounded-lg object-cover" />
+                  <img src={data.imageUrl} alt="" className="h-44 w-full rounded-lg bg-muted/40 object-contain p-2" />
                 ) : (
-                  <div className="flex h-40 items-center justify-center rounded-lg bg-muted text-sm text-muted-foreground">
+                  <div className="flex h-44 items-center justify-center rounded-lg bg-muted text-sm text-muted-foreground">
                     No image
                   </div>
                 )}
@@ -137,23 +149,24 @@ const VendorListingPricing = () => {
                   {data.modelName && <p className="text-muted-foreground">{data.modelName}</p>}
                   <div className="flex flex-wrap gap-1.5 pt-1">
                     <Badge variant="outline">{data.isChemical ? "Chemical" : "Equipment"}</Badge>
-                    <Badge variant="outline">{data.listingStatus.replace(/_/g, " ")}</Badge>
+                    <Badge variant="outline">{statusLabel(data.listingStatus)}</Badge>
                   </div>
-                  <p className="pt-2 text-muted-foreground">Qty {data.availableQuantity}</p>
                 </div>
               </CardContent>
             </Card>
 
             <Card className="border-border/60">
-              <CardContent className="space-y-5 p-4 sm:p-6">
-                <div className="flex flex-wrap items-center justify-between gap-3">
-                  <div>
-                    <h2 className="text-sm font-semibold">Vendor payout for this product</h2>
-                    <p className="text-xs text-muted-foreground">
-                      Customers keep paying the catalog price. Turn this on only when this vendor should earn a different payout for this product.
+              <CardContent className="space-y-5 p-4 sm:p-5">
+                <div className="flex flex-col gap-3 border-b border-border pb-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div className="min-w-0">
+                    <h2 className="text-sm font-semibold">Vendor payout</h2>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      {form.isCustomPricing
+                        ? "Custom price is on. These amounts apply only to this vendor."
+                        : "Custom price is off. This vendor earns the catalog payout."}
                     </p>
                   </div>
-                  <label className="flex items-center gap-2 text-sm">
+                  <label className="flex w-fit shrink-0 items-center gap-2 rounded-full border border-border bg-muted/40 px-3 py-1.5 text-sm">
                     <Switch
                       checked={form.isCustomPricing}
                       disabled={!canSetPrice}
@@ -171,83 +184,100 @@ const VendorListingPricing = () => {
 
                 {!data.isChemical && (
                   <div className="space-y-4">
-                    <div className="grid gap-3 rounded-xl border border-border bg-muted/30 p-3 sm:grid-cols-3">
-                      <CatalogAmount label="Customer daily rate" value={money(data.catalogDailyRent)} />
-                      <CatalogAmount label="Security deposit" value={money(data.catalogSecurityDeposit)} />
-                      <CatalogAmount label="Customer buy price" value={money(data.catalogBuyPrice)} />
+                    <div>
+                      <p className="mb-2 text-xs font-medium text-muted-foreground">Customer pays</p>
+                      <div className="grid gap-2 sm:grid-cols-3">
+                        <CatalogAmount label="Daily rate" value={money(data.catalogDailyRent)} />
+                        <CatalogAmount label="Security deposit" value={money(data.catalogSecurityDeposit)} />
+                        <CatalogAmount label="Buy price" value={money(data.catalogBuyPrice)} />
+                      </div>
                     </div>
-                    <div className="grid gap-4 sm:grid-cols-2">
-                      <MoneyField
-                        label="Vendor daily payout"
-                        catalog={money(data.catalogVendorDailyRent)}
-                        value={form.vendorDailyRent}
-                        disabled={!canSetPrice || !form.isCustomPricing}
-                        onChange={(vendorDailyRent) => setForm({ ...form, vendorDailyRent })}
-                      />
-                      <MoneyField
-                        label="Vendor buy payout"
-                        catalog={money(data.catalogVendorBuyPrice)}
-                        value={form.vendorBuyPrice}
-                        disabled={!canSetPrice || !form.isCustomPricing}
-                        onChange={(vendorBuyPrice) => setForm({ ...form, vendorBuyPrice })}
-                      />
+                    <QuantitySummary
+                      available={stock?.availableQuantity ?? data.availableQuantity}
+                      total={stock?.totalQuantity ?? data.availableQuantity}
+                    />
+                    <div>
+                      <p className="mb-2 text-xs font-medium text-muted-foreground">This vendor earns</p>
+                      <div className="divide-y divide-border overflow-hidden rounded-xl border border-border">
+                        <PayoutRow label="Daily payout" hint="Per rental day">
+                          <PayoutInput
+                            label="Vendor daily payout"
+                            value={form.vendorDailyRent}
+                            disabled={!canSetPrice || !form.isCustomPricing}
+                            onChange={(vendorDailyRent) => setForm({ ...form, vendorDailyRent })}
+                          />
+                        </PayoutRow>
+                        <PayoutRow label="Buy payout" hint="If the customer buys this product">
+                          <PayoutInput
+                            label="Vendor buy payout"
+                            value={form.vendorBuyPrice}
+                            disabled={!canSetPrice || !form.isCustomPricing}
+                            onChange={(vendorBuyPrice) => setForm({ ...form, vendorBuyPrice })}
+                          />
+                        </PayoutRow>
+                      </div>
                     </div>
                   </div>
                 )}
 
                 {data.isChemical && (
-                  <div className="overflow-x-auto rounded-xl border border-border">
-                    <table className="w-full min-w-[640px] text-sm">
-                      <thead className="bg-muted/40 text-left text-xs text-muted-foreground">
-                        <tr>
-                          <th className="px-3 py-2 font-medium">Size</th>
-                          <th className="px-3 py-2 font-medium">Customer price</th>
-                          <th className="px-3 py-2 font-medium">Catalog payout</th>
-                          <th className="px-3 py-2 font-medium">Vendor payout</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {data.variants.map((variant) => {
-                          const row = form.variants.find((v) => v.variantId === variant.variantId);
-                          return (
-                            <tr key={variant.variantId} className="border-t border-border/70">
-                              <td className="px-3 py-2">
-                                <p className="font-medium">{variant.sizeValue} {variant.sizeUnit}</p>
-                                <p className="font-mono text-[11px] text-muted-foreground">{variant.sku}</p>
-                              </td>
-                              <td className="px-3 py-2 tabular-nums">{money(variant.catalogBuyPrice)}</td>
-                              <td className="px-3 py-2 tabular-nums">{money(variant.catalogVendorPrice)}</td>
-                              <td className="px-3 py-2">
-                                <Input
-                                  type="number"
-                                  min={0}
-                                  className="h-9"
-                                  value={row?.vendorPrice ?? ""}
-                                  disabled={!canSetPrice || !form.isCustomPricing}
-                                  onChange={(e) =>
-                                    setForm({
-                                      ...form,
-                                      variants: form.variants.map((v) =>
-                                        v.variantId === variant.variantId ? { ...v, vendorPrice: e.target.value } : v
-                                      ),
-                                    })
-                                  }
-                                />
-                              </td>
-                            </tr>
-                          );
-                        })}
-                      </tbody>
-                    </table>
+                  <div className="space-y-4">
+                  <QuantitySummary
+                    available={stock?.availableQuantity ?? data.availableQuantity}
+                    total={stock?.totalQuantity ?? data.availableQuantity}
+                  />
+                  <div className="overflow-hidden rounded-xl border border-border">
+                    <div className="hidden grid-cols-[minmax(0,1fr)_4.5rem_8rem_10rem] items-center gap-3 bg-muted/40 px-3 py-2 text-xs font-medium text-muted-foreground sm:grid">
+                      <span>Size</span>
+                      <span className="text-right">Qty</span>
+                      <span className="text-right">Customer price</span>
+                      <span className="text-right">Vendor payout</span>
+                    </div>
+                    {data.variants.length === 0 ? (
+                      <p className="px-3 py-4 text-sm text-muted-foreground">This chemical has no sizes yet.</p>
+                    ) : (
+                      data.variants.map((variant, index) => {
+                        const row = form.variants.find((v) => v.variantId === variant.variantId);
+                        return (
+                          <div
+                            key={variant.variantId}
+                            className={`grid grid-cols-1 items-center gap-2 px-3 py-3 sm:grid-cols-[minmax(0,1fr)_4.5rem_8rem_10rem] sm:gap-3 sm:py-2.5 ${index === 0 ? "sm:border-t" : "border-t"} border-border`}
+                          >
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium">{variant.sizeValue} {variant.sizeUnit}</p>
+                              <p className="truncate font-mono text-[11px] text-muted-foreground" title={variant.sku}>{variant.sku}</p>
+                            </div>
+                            <SizeQty variant={variant} stock={stock} />
+                            <p className="text-sm font-medium tabular-nums sm:text-right">
+                              <span className="mr-2 text-xs font-normal text-muted-foreground sm:hidden">Customer price</span>
+                              {money(variant.catalogBuyPrice)}
+                            </p>
+                            <div className="sm:justify-self-end">
+                              <p className="mb-1 text-xs text-muted-foreground sm:hidden">Vendor payout</p>
+                              <PayoutInput
+                                label={`Vendor payout for ${variant.sizeValue} ${variant.sizeUnit}`}
+                                value={row?.vendorPrice ?? ""}
+                                disabled={!canSetPrice || !form.isCustomPricing}
+                                onChange={(vendorPrice) =>
+                                  setForm({
+                                    ...form,
+                                    variants: form.variants.map((v) =>
+                                      v.variantId === variant.variantId ? { ...v, vendorPrice } : v
+                                    ),
+                                  })
+                                }
+                              />
+                            </div>
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
                   </div>
                 )}
 
-                <p className="text-xs text-muted-foreground">
-                  Customer rent, buy, and deposit stay on the catalog. This page changes only what this vendor earns.
-                </p>
-
                 {canSetPrice && (
-                  <div className="flex justify-end">
+                  <div className="flex justify-end border-t border-border pt-4">
                     <Button onClick={() => void save()} disabled={saving}>
                       {saving ? "Saving…" : "Save vendor price"}
                     </Button>
@@ -262,30 +292,88 @@ const VendorListingPricing = () => {
   );
 };
 
-const CatalogAmount = ({ label, value }: { label: string; value: string }) => (
+const statusLabel = (status: string) => {
+  const normalized = status.replace(/_/g, " ").trim();
+  if (normalized === "approved" || normalized === "active") return "Active";
+  return normalized.replace(/\b\w/g, (c) => c.toUpperCase());
+};
+
+const QuantitySummary = ({ available, total }: { available: number; total: number }) => (
   <div>
+    <p className="mb-2 text-xs font-medium text-muted-foreground">Quantity</p>
+    <div className="grid gap-2 sm:grid-cols-2">
+      <CatalogAmount label="Available" value={String(available)} />
+      <CatalogAmount label="Total" value={String(total)} />
+    </div>
+  </div>
+);
+
+const SizeQty = ({
+  variant,
+  stock,
+}: {
+  variant: VendorListingPricingDto["variants"][number];
+  stock?: AdminVendorListingInventoryDto;
+}) => {
+  const sku = variant.sku.trim().toLowerCase();
+  const label = `${variant.sizeValue} ${variant.sizeUnit}`.trim().toLowerCase();
+  const row = stock?.sizes?.find((size) => size.sku.trim().toLowerCase() === sku)
+    ?? stock?.sizes?.find((size) => size.label.trim().toLowerCase() === label);
+  const available = row?.available;
+  const total = row?.total;
+  return (
+    <div className="sm:text-right">
+      <p className="text-sm font-semibold tabular-nums">
+        <span className="mr-2 text-xs font-normal text-muted-foreground sm:hidden">Qty</span>
+        {available ?? "—"}
+      </p>
+      {available != null && total != null && total !== available && (
+        <p className="text-[11px] text-muted-foreground tabular-nums">{total} total</p>
+      )}
+    </div>
+  );
+};
+
+const CatalogAmount = ({ label, value }: { label: string; value: string }) => (
+  <div className="rounded-lg border border-border bg-muted/30 px-3 py-2.5">
     <p className="text-[11px] text-muted-foreground">{label}</p>
     <p className="font-mono text-sm font-semibold tabular-nums">{value}</p>
   </div>
 );
 
-const MoneyField = ({
+const PayoutRow = ({ label, hint, children }: { label: string; hint: string; children: ReactNode }) => (
+  <div className="flex flex-col gap-2 px-3 py-3 sm:flex-row sm:items-center sm:justify-between">
+    <div>
+      <p className="text-sm font-medium">{label}</p>
+      <p className="text-xs text-muted-foreground">{hint}</p>
+    </div>
+    {children}
+  </div>
+);
+
+const PayoutInput = ({
   label,
-  catalog,
   value,
   disabled,
   onChange,
 }: {
   label: string;
-  catalog: string;
   value: string;
   disabled: boolean;
   onChange: (value: string) => void;
 }) => (
-  <div className="space-y-1.5">
-    <Label>{label}</Label>
-    <Input type="number" min={0} value={value} disabled={disabled} onChange={(e) => onChange(e.target.value)} />
-    <p className="text-[11px] text-muted-foreground">Catalog: {catalog}</p>
+  <div className="relative w-full sm:w-36">
+    <span className="pointer-events-none absolute left-3 top-1/2 -translate-y-1/2 text-sm text-muted-foreground">₹</span>
+    <Input
+      type="number"
+      min={0}
+      inputMode="decimal"
+      aria-label={label}
+      className="h-9 pl-7 text-right tabular-nums"
+      value={value}
+      disabled={disabled}
+      onChange={(e) => onChange(e.target.value)}
+    />
   </div>
 );
 
