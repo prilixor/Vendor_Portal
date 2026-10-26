@@ -76,6 +76,11 @@ function customerBrowseAndCartPaths(pathname: string): boolean {
 
 }
 
+function shellContentClass(pathname: string) {
+  const wideOrder = /\/orders\/[^/]+/.test(pathname);
+  return cn("mx-auto w-full min-w-0", wideOrder ? "max-w-[1600px]" : "max-w-7xl");
+}
+
 
 
 function VendorShellContent({
@@ -96,6 +101,7 @@ function VendorShellContent({
 
 }) {
 
+  const { pathname } = useLocation();
   const { unreadCount: unreadVendorCount } = useNotificationContext();
   const { pendingCount: pendingOrderRequestsCount } = useVendorDispatchOffersContext();
 
@@ -173,7 +179,7 @@ function VendorShellContent({
 
         <main className="relative z-0 min-w-0 flex-1 overflow-x-clip px-3 py-4 pb-24 sm:px-6 sm:py-6 lg:px-8">
 
-          <div className="mx-auto w-full min-w-0 max-w-7xl">
+          <div className={shellContentClass(pathname)}>
 
             {user.impersonation && (
 
@@ -493,7 +499,7 @@ export const AppShell = ({ variant }: AppShellProps) => {
 
               <main className="relative z-0 min-w-0 flex-1 overflow-x-clip px-3 py-4 sm:px-6 lg:px-8">
 
-                <div className="mx-auto w-full min-w-0 max-w-7xl">
+                <div className={shellContentClass(location.pathname)}>
 
                   <PortalGlobalLoader placement="main" />
 

@@ -143,6 +143,16 @@ public static class OrderCancellationRefunds
 
         await EnsureForOrdersAsync(customers, orders, cancellationToken);
     }
+
+    /// <summary>
+    /// A refund that has been sent, is sending, or was closed with no refund
+    /// must not be followed by another vendor offer.
+    /// </summary>
+    public static bool BlocksRedispatch(CustomerOrderCancellationRefund? row) =>
+        row is not null && (
+            string.Equals(row.Status, CancellationRefundStatuses.Refunded, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(row.Status, CancellationRefundStatuses.Refunding, StringComparison.OrdinalIgnoreCase)
+            || string.Equals(row.Status, CancellationRefundStatuses.Settled, StringComparison.OrdinalIgnoreCase));
 }
 
 public sealed record RefundOrderCancellationCommand(

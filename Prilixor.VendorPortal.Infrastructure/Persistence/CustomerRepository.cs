@@ -1020,9 +1020,42 @@ public sealed class CustomerRepository(
 
 
 
+    /// <summary>
+    /// A dispatch failure that was later renamed to cancelled, with no vendor ever accepting,
+    /// is put back to dispatch_failed so the pages keep one status.
+    /// </summary>
+    private async Task RestoreDispatchFailedLabelsAsync(CancellationToken cancellationToken)
+    {
+        var ids = await customerDb.CustomerRentalOrders
+            .Where(o => !o.IsDeleted && (o.Status == "cancelled" || o.Status == "canceled"))
+            .Where(o => customerDb.CustomerOrderCancellationRefunds.Any(r =>
+                r.CustomerRentalOrderId == o.Id
+                && !r.IsDeleted
+                && r.Outcome == CancellationOutcomes.DispatchFailed))
+            .Where(o => !customerDb.CustomerOrderVendorOffers.Any(f =>
+                f.CustomerRentalOrderId == o.Id
+                && !f.IsDeleted
+                && f.Status == SequentialDispatchRules.Accepted))
+            .Select(o => o.Id)
+            .ToListAsync(cancellationToken);
+
+        if (ids.Count == 0)
+            return;
+
+        var now = DateTime.UtcNow;
+        await customerDb.CustomerRentalOrders
+            .Where(o => ids.Contains(o.Id))
+            .ExecuteUpdateAsync(
+                setters => setters
+                    .SetProperty(o => o.Status, "dispatch_failed")
+                    .SetProperty(o => o.ModifiedOnUtc, now),
+                cancellationToken);
+    }
+
     public async Task<List<CustomerRentalOrderWithListing>> GetCustomerOrdersAsync(Guid customerId, CancellationToken cancellationToken)
 
     {
+        await RestoreDispatchFailedLabelsAsync(cancellationToken);
 
         var orders = await customerDb.CustomerRentalOrders
 
@@ -1386,8 +1419,8 @@ public sealed class CustomerRepository(
     }
 
     public async Task<CustomerRentalOrderWithListing?> GetCustomerOrderAsync(Guid customerId, Guid orderId, CancellationToken cancellationToken)
-
     {
+        await RestoreDispatchFailedLabelsAsync(cancellationToken);
 
         var order = await customerDb.CustomerRentalOrders
 
@@ -1412,6 +1445,7 @@ public sealed class CustomerRepository(
     public async Task<CustomerRentalOrderWithListing?> GetCustomerOrderByNumberAsync(Guid customerId, string orderNumber, CancellationToken cancellationToken)
 
     {
+        await RestoreDispatchFailedLabelsAsync(cancellationToken);
 
         var n = orderNumber.Trim();
 
@@ -1437,6 +1471,7 @@ public sealed class CustomerRepository(
 
     public async Task<List<CustomerRentalOrderWithListing>> GetVendorOrdersAsync(Guid vendorId, string? status, CancellationToken cancellationToken)
     {
+        await RestoreDispatchFailedLabelsAsync(cancellationToken);
         var now = DateTimeOffset.UtcNow;
         var query = customerDb.CustomerRentalOrders
             .AsNoTracking()
@@ -1789,6 +1824,7 @@ public sealed class CustomerRepository(
         Guid vendorId,
         CancellationToken cancellationToken)
     {
+        await RestoreDispatchFailedLabelsAsync(cancellationToken);
         var listingIds = await vendorDb.VendorProductListings
             .AsNoTracking()
             .Where(l => l.VendorId == vendorId && !l.IsDeleted)
@@ -1887,6 +1923,7 @@ public sealed class CustomerRepository(
 
     public async Task<CustomerRentalOrderWithListing?> GetVendorOrderAsync(Guid vendorId, Guid orderId, CancellationToken cancellationToken)
     {
+        await RestoreDispatchFailedLabelsAsync(cancellationToken);
         var order = await customerDb.CustomerRentalOrders
             .AsNoTracking()
             .Include(o => o.Customer)
@@ -1983,6 +2020,7 @@ public sealed class CustomerRepository(
         Guid orderId,
         CancellationToken cancellationToken)
     {
+        await RestoreDispatchFailedLabelsAsync(cancellationToken);
         var seed = await customerDb.CustomerRentalOrders
             .AsNoTracking()
             .FirstOrDefaultAsync(o => o.Id == orderId && !o.IsDeleted, cancellationToken);
@@ -2024,6 +2062,7 @@ public sealed class CustomerRepository(
         AdminOrderListQuerySpec spec,
         CancellationToken cancellationToken)
     {
+        await RestoreDispatchFailedLabelsAsync(cancellationToken);
         var page = Math.Max(1, spec.Page);
         var pageSize = Math.Clamp(spec.PageSize, 1, 200);
         var search = spec.Search?.Trim() ?? string.Empty;

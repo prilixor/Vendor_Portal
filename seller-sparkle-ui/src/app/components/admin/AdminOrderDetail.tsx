@@ -1,13 +1,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link, useNavigate, useParams } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { Check, Building, Calendar, DollarSign, Package, User } from "lucide-react";
+import { Check, Building, Package, User } from "lucide-react";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
 import { ZoomableImageStage } from "@/app/components/shared/ZoomableImageStage";
 import { adminApi, type AdminOrderDto } from "@/app/services/adminApi";
 import { useAuth } from "@/app/guards/AuthContext";
 import { formatGstRateLabel } from "@/app/helpers/gstLabel";
-import { formatOrderStatusLabel, formatOrderStatusTitle, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
+import { formatOrderStatusLabel, formatOrderStatusTitle, orderShowsVendorPayout, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
 import { cn, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
 import { adminRefundChip, formatInr } from "@/app/helpers/orderReturn";
 import { mediaObjectKey, useStableMediaUrls } from "@/app/helpers/stableMediaUrl";
@@ -110,34 +110,35 @@ function getTimelineProgress(status: string, orderType?: string) {
   const raw = status.toLowerCase().trim();
   const compact = raw.replace(/\s+/g, "_");
   const isBuy = orderType?.toLowerCase() === "buy";
+  const open = { cancelled: false, dispatchFailed: false };
 
   if (compact === "cancelled" || compact === "canceled") {
-    return { cancelled: true, completedThrough: -1, currentIndex: null as number | null };
+    return { cancelled: true, dispatchFailed: false, completedThrough: -1, currentIndex: null as number | null };
   }
   if (compact === "dispatch_failed" || raw.includes("dispatch failed")) {
-    return { cancelled: false, completedThrough: 0, currentIndex: null as number | null };
+    return { cancelled: false, dispatchFailed: true, completedThrough: -1, currentIndex: null as number | null };
   }
   if (compact === "pending" || compact.includes("awaiting")) {
-    return { cancelled: false, completedThrough: 0, currentIndex: 1 };
+    return { ...open, completedThrough: 0, currentIndex: 1 };
   }
   if (compact === "confirmed") {
-    return { cancelled: false, completedThrough: 1, currentIndex: 2 };
+    return { ...open, completedThrough: 1, currentIndex: 2 };
   }
   if (compact === "in_transit" || raw.includes("transit")) {
-    return { cancelled: false, completedThrough: 2, currentIndex: 3 };
+    return { ...open, completedThrough: 2, currentIndex: 3 };
   }
   if (compact === "active") {
     return isBuy
-      ? { cancelled: false, completedThrough: 3, currentIndex: null as number | null }
-      : { cancelled: false, completedThrough: 4, currentIndex: null as number | null };
+      ? { ...open, completedThrough: 3, currentIndex: null as number | null }
+      : { ...open, completedThrough: 4, currentIndex: null as number | null };
   }
   if (compact === "bought_out") {
-    return { cancelled: false, completedThrough: 6, currentIndex: null as number | null };
+    return { ...open, completedThrough: 6, currentIndex: null as number | null };
   }
   if (compact === "returned") {
-    return { cancelled: false, completedThrough: 5, currentIndex: null as number | null };
+    return { ...open, completedThrough: 5, currentIndex: null as number | null };
   }
-  return { cancelled: false, completedThrough: 0, currentIndex: 1 };
+  return { ...open, completedThrough: 0, currentIndex: 1 };
 }
 
 function getAvailableStatuses(currentStatus: string, orderType?: string): string[] {
@@ -151,7 +152,7 @@ function getAvailableStatuses(currentStatus: string, orderType?: string): string
   if (s === "bought_out") return ["bought_out"];
   if (s === "returned") return ["returned"];
   if (s === "cancelled" || s === "canceled") return ["cancelled"];
-  if (s === "dispatch_failed" || s.includes("dispatch failed")) return ["dispatch_failed", "cancelled"];
+  if (s === "dispatch_failed" || s.includes("dispatch failed")) return ["dispatch_failed"];
   return ["pending", "confirmed", "in_transit", "active", "returned", "cancelled", "dispatch_failed"];
 }
 
@@ -163,7 +164,10 @@ function formatDetailDate(value?: string | null): string {
 }
 
 function OrderTimeline({ status, orderType }: { status: string; orderType?: string }) {
-  const { cancelled, completedThrough, currentIndex } = getTimelineProgress(status, orderType);
+  const { cancelled, dispatchFailed, completedThrough, currentIndex } = getTimelineProgress(status, orderType);
+  if (dispatchFailed) {
+    return <p className="text-sm font-medium text-destructive">No vendor accepted this product.</p>;
+  }
   if (cancelled) {
     return <p className="text-sm text-destructive font-medium">This order item was cancelled.</p>;
   }
@@ -175,7 +179,7 @@ function OrderTimeline({ status, orderType }: { status: string; orderType?: stri
         const isCurrent = currentIndex === i;
         const isUpcoming = !isDone && !isCurrent;
         return (
-          <li key={step.key} className="relative flex gap-4 pb-8 last:pb-0">
+          <li key={step.key} className="relative flex gap-3 pb-5 last:pb-0 sm:gap-4 sm:pb-8">
             {i < steps.length - 1 ? (
               <div
                 className={cn(
@@ -243,7 +247,7 @@ function CancellationRefundBody({
   const manualBlocked = pending || !manual.trim() || (row.status === "pending_review" && (chargeInvalid || reasonMissing));
 
   return (
-    <>
+    <div className="grid gap-4 lg:grid-cols-2 lg:items-start">
       <div className="space-y-2 rounded-lg border border-border/80 bg-muted/30 px-3 py-2.5">
         <div className="flex items-center justify-between gap-3">
           <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Customer paid</p>
@@ -258,6 +262,7 @@ function CancellationRefundBody({
           <p className="font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">₹{formatInr(shownRefund)}</p>
         </div>
       </div>
+      <div className="space-y-3">
       {row.status === "refunded" ? (
         <p>
           Refunded
@@ -355,7 +360,8 @@ function CancellationRefundBody({
           ) : null}
         </div>
       )}
-    </>
+      </div>
+    </div>
   );
 }
 
@@ -421,9 +427,14 @@ const AdminOrderDetail = () => {
     [orderGroupItems],
   );
 
-  const groupVendorPayout = useMemo(
-    () => orderGroupItems.reduce((sum, item) => sum + (item.vendorSubtotalAmount ?? 0), 0),
+  const payableGroupItems = useMemo(
+    () => orderGroupItems.filter((item) => orderShowsVendorPayout(item.status)),
     [orderGroupItems],
+  );
+
+  const groupVendorPayout = useMemo(
+    () => payableGroupItems.reduce((sum, item) => sum + (item.vendorSubtotalAmount ?? 0), 0),
+    [payableGroupItems],
   );
 
   const baseOrderNumber = selectedOrder ? getBaseOrderNumber(selectedOrder.orderNumber) : "";
@@ -523,19 +534,6 @@ const AdminOrderDetail = () => {
     onError: (error) => toast.error(getUserFriendlyMessage(error) || "Failed to update status"),
   });
 
-  const cancelRefundMutation = useMutation({
-    mutationFn: () =>
-      adminApi.forceCancelRefundOrder({
-        adminUserId: user?.id || "",
-        orderId: selectedOrder?.orderId || "",
-      }),
-    onSuccess: () => {
-      toast.success("Order cancelled and refunded.");
-      invalidate();
-    },
-    onError: (error) => toast.error(getUserFriendlyMessage(error) || "Failed to force cancel"),
-  });
-
   const restartDispatchMutation = useMutation({
     mutationFn: () =>
       adminApi.restartOrderDispatch({
@@ -595,7 +593,7 @@ const AdminOrderDetail = () => {
 
   if (!selectedOrder) {
     return (
-      <div className="mx-auto max-w-5xl space-y-4">
+      <div className="w-full min-w-0 space-y-4">
         <BackLink to="/admin/orders" label="Back to orders" />
         <p className="text-sm text-muted-foreground">Order not found.</p>
       </div>
@@ -606,9 +604,16 @@ const AdminOrderDetail = () => {
     continuations &&
       (continuations.pendingExtensions.length > 0 || continuations.pendingBuyouts.length > 0),
   );
+  const refundAlreadySent = ["refunded", "refunding", "settled"].includes(
+    selectedOrder.cancellationRefund?.status ?? "",
+  );
+  const canChangeStatus = getAvailableStatuses(selectedOrder.status, selectedOrder.orderType)
+    .some((id) => id !== selectedOrder.status);
+  const canReassign = selectedOrder.status === "dispatch_failed" && !refundAlreadySent;
+  const showAdminActions = canChangeStatus || canReassign;
 
   return (
-    <div className="mx-auto max-w-5xl space-y-6">
+    <div className="w-full min-w-0 space-y-4 sm:space-y-6">
       <BackLink to="/admin/orders" label="Back to orders" />
 
       {/* Group header */}
@@ -631,9 +636,11 @@ const AdminOrderDetail = () => {
               <p className="mt-0.5 text-xs text-muted-foreground tabular-nums">
                 + ₹{groupDepositAmount.toFixed(0)} deposit
               </p>
-              <p className="mt-1 text-sm font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
-                Vendor payout ₹{groupVendorPayout.toLocaleString("en-IN", { maximumFractionDigits: 2 })}
-              </p>
+              {payableGroupItems.length > 0 ? (
+                <p className="mt-1 text-sm font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
+                  Vendor payout ₹{groupVendorPayout.toLocaleString("en-IN", { maximumFractionDigits: 2 })}
+                </p>
+              ) : null}
               {orderGroupItems.some((item) => item.vendorPriceSetByAdmin === false) ? (
                 <span className="mt-2 inline-flex w-fit rounded-full bg-orange-100 px-2 py-0.5 text-[11px] font-semibold text-orange-800 dark:bg-orange-950/50 dark:text-orange-300">
                   Vendor price not set
@@ -646,13 +653,13 @@ const AdminOrderDetail = () => {
 
       {/* Items picker */}
       <Card className="border-border/80 shadow-sm">
-        <CardHeader className="pb-4">
+        <CardHeader className="p-4 pb-3 sm:p-6 sm:pb-4">
           <p className="text-lg font-semibold">Items in this Order</p>
           <p className="text-xs text-muted-foreground">
             Select an item to view its timeline, vendor assignment, and admin actions.
           </p>
         </CardHeader>
-        <CardContent className="space-y-3">
+        <CardContent className="space-y-3 px-4 pb-4 sm:px-6 sm:pb-6">
           {orderGroupItems.map((item) => {
             const isSelected = item.orderId === selectedOrder.orderId;
             const imageUrl = resolveItemImageUrl(item);
@@ -662,7 +669,7 @@ const AdminOrderDetail = () => {
                 type="button"
                 onClick={() => setSelectedItemId(item.orderId)}
                 className={cn(
-                  "w-full text-left flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 rounded-lg border transition-all",
+                  "flex w-full min-w-0 flex-col overflow-hidden rounded-lg border p-3 text-left transition-all sm:flex-row sm:items-center sm:justify-between",
                   isSelected
                     ? "bg-accent/40 border-foreground/60 shadow-sm"
                     : "bg-transparent border-border/60 hover:bg-accent/20",
@@ -683,37 +690,39 @@ const AdminOrderDetail = () => {
                   )}
                   <div className="min-w-0">
                     <p className="text-sm font-semibold text-foreground truncate">{item.listingTitle}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5">
-                      Qty: {item.quantity}
-                      <span className="ml-2 tabular-nums">· {item.orderNumber}</span>
-                      <span className="ml-2">· {item.vendorName}</span>
+                    <p className="mt-0.5 break-words text-xs text-muted-foreground">
+                      <span>Qty: {item.quantity}</span>
+                      <span className="mt-0.5 block break-all tabular-nums sm:ml-2 sm:mt-0 sm:inline">· {item.orderNumber}</span>
+                      <span className="mt-0.5 block break-words sm:ml-2 sm:mt-0 sm:inline">· {item.vendorName}</span>
                     </p>
                   </div>
                 </div>
-                <div className="flex items-center justify-between sm:justify-end gap-3 mt-3 sm:mt-0 pl-[3.75rem] sm:pl-0">
+                <div className="mt-3 flex w-full min-w-0 items-center justify-between gap-2 sm:mt-0 sm:w-auto sm:justify-end sm:gap-3">
+                  <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                   {item.isExtended ? (
                     <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
                       EXTENDED
                     </span>
                   ) : null}
                   {adminRefundChip(item.returnSettlement) ? (
-                    <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold text-sky-900 dark:bg-sky-950/50 dark:text-sky-200">
+                    <span className="max-w-full whitespace-normal rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold leading-snug text-sky-900 dark:bg-sky-950/50 dark:text-sky-200">
                       {adminRefundChip(item.returnSettlement)}
                     </span>
                   ) : null}
                   {adminCancellationChip(item.cancellationRefund) ? (
-                    <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold text-sky-900 dark:bg-sky-950/50 dark:text-sky-200">
+                    <span className="max-w-full whitespace-normal rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold leading-snug text-sky-900 dark:bg-sky-950/50 dark:text-sky-200">
                       {adminCancellationChip(item.cancellationRefund)}
                     </span>
                   ) : null}
                   <Badge
                     title={formatOrderStatusTitle(item.status)}
-                    className={cn(orderStatusBadgeSizeClass, orderStatusBadgeClass(item.status))}
+                    className={cn("shrink-0", orderStatusBadgeSizeClass, orderStatusBadgeClass(item.status))}
                     variant="outline"
                   >
                     {formatOrderStatusLabel(item.status)}
                   </Badge>
-                  <span className="font-semibold tabular-nums text-xs sm:w-16 sm:text-right">
+                  </div>
+                  <span className="shrink-0 text-sm font-semibold tabular-nums">
                     ₹{item.totalAmount.toFixed(0)}
                   </span>
                 </div>
@@ -831,91 +840,45 @@ const AdminOrderDetail = () => {
         </Card>
       )}
 
-      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_minmax(280px,340px)] lg:items-start">
-        <div className="space-y-6">
-          <Card className="border-border/80 shadow-sm">
-            <CardHeader className="pb-2">
-              <p className="text-lg font-semibold">Order timeline</p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                Tracking: <span className="font-semibold text-foreground">{selectedOrder.listingTitle}</span>
-              </p>
-            </CardHeader>
-            <CardContent className="pt-2">
-              <OrderTimeline status={selectedOrder.status} orderType={selectedOrder.orderType} />
-            </CardContent>
-          </Card>
-
+      {showAdminActions ? (
           <Card className="border-border/80 shadow-sm">
             <CardHeader className="pb-4">
               <p className="text-lg font-semibold">Admin actions</p>
               <p className="text-xs text-muted-foreground">Applies to the selected item only.</p>
             </CardHeader>
             <CardContent className="space-y-4">
-              {selectedOrder.status === "dispatch_failed" && (
+              {selectedOrder.status === "dispatch_failed" && !refundAlreadySent && (
                 <TooltipProvider>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                    <AlertDialog>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <AlertDialogTrigger asChild>
-                            <Button className="w-full" disabled={restartDispatchMutation.isPending}>
-                              {restartDispatchMutation.isPending ? "Reassigning..." : "Reassign Order"}
-                            </Button>
-                          </AlertDialogTrigger>
-                        </TooltipTrigger>
-                        <TooltipContent className="max-w-xs text-center" side="top">
-                          Broadcasts a new dispatch offer to the next nearest eligible vendor.
-                        </TooltipContent>
-                      </Tooltip>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Reassign Order?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            The system will send a new offer to the nearest eligible vendor, then the next if they do not accept.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Cancel</AlertDialogCancel>
-                          <AlertDialogAction onClick={() => restartDispatchMutation.mutate()}>Reassign</AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-
-                    <AlertDialog>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <AlertDialogTrigger asChild>
-                            <Button variant="destructive" className="w-full" disabled={cancelRefundMutation.isPending}>
-                              {cancelRefundMutation.isPending ? "Cancelling..." : "Force Cancel"}
-                            </Button>
-                          </AlertDialogTrigger>
-                        </TooltipTrigger>
-                        <TooltipContent className="max-w-xs text-center" side="top">
-                          Cancels this product. If the customer already paid, refund it from the cancellation card.
-                        </TooltipContent>
-                      </Tooltip>
-                      <AlertDialogContent>
-                        <AlertDialogHeader>
-                          <AlertDialogTitle>Force cancel this product?</AlertDialogTitle>
-                          <AlertDialogDescription>
-                            This cancels the product. If the customer already paid, you review the payment next and choose any charge before the refund is sent.
-                          </AlertDialogDescription>
-                        </AlertDialogHeader>
-                        <AlertDialogFooter>
-                          <AlertDialogCancel>Keep Order</AlertDialogCancel>
-                          <AlertDialogAction
-                            className="bg-destructive hover:bg-destructive/90 text-destructive-foreground"
-                            onClick={() => cancelRefundMutation.mutate()}
-                          >
-                            Force Cancel
-                          </AlertDialogAction>
-                        </AlertDialogFooter>
-                      </AlertDialogContent>
-                    </AlertDialog>
-                  </div>
+                  <AlertDialog>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <AlertDialogTrigger asChild>
+                          <Button className="w-full sm:w-auto" disabled={restartDispatchMutation.isPending}>
+                            {restartDispatchMutation.isPending ? "Reassigning..." : "Reassign Order"}
+                          </Button>
+                        </AlertDialogTrigger>
+                      </TooltipTrigger>
+                      <TooltipContent className="max-w-xs text-center" side="top">
+                        Sends a new offer before the refund is paid. The open refund review is closed if a vendor is found.
+                      </TooltipContent>
+                    </Tooltip>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Reassign Order?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          The system will send a new offer to the nearest eligible vendor, then the next if they do not accept.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancel</AlertDialogCancel>
+                        <AlertDialogAction onClick={() => restartDispatchMutation.mutate()}>Reassign</AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
                 </TooltipProvider>
               )}
 
+              {canChangeStatus ? (
               <div
                 className={cn(
                   "flex flex-col sm:flex-row sm:items-end gap-4 p-4 rounded-lg border",
@@ -955,25 +918,39 @@ const AdminOrderDetail = () => {
                   {updateStatusMutation.isPending ? "Updating..." : "Update Status"}
                 </Button>
               </div>
+              ) : null}
             </CardContent>
           </Card>
-        </div>
+          ) : null}
 
-        <div className="space-y-6">
+      <div className="grid items-start gap-4 sm:gap-6 lg:grid-cols-[minmax(260px,420px)_minmax(0,1fr)]">
+        <Card className="border-border/80 shadow-sm">
+          <CardHeader className="pb-2">
+            <p className="text-lg font-semibold">Order timeline</p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              Tracking: <span className="font-semibold text-foreground">{selectedOrder.listingTitle}</span>
+            </p>
+          </CardHeader>
+          <CardContent className="pt-2">
+            <OrderTimeline status={selectedOrder.status} orderType={selectedOrder.orderType} />
+          </CardContent>
+        </Card>
+
+        <div className="flex flex-col gap-4 sm:gap-6">
           <Card className="border-border/80 shadow-sm">
             <CardHeader className="pb-4">
               <p className="text-lg font-semibold">Customer</p>
             </CardHeader>
-            <CardContent className="space-y-4 text-sm">
+            <CardContent className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
               <div className="space-y-1">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
+                <p className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   <User className="h-3.5 w-3.5" /> Name
                 </p>
                 <p className="font-medium">{selectedOrder.customerName}</p>
                 <p className="text-xs text-muted-foreground">{selectedOrder.customerEmail}</p>
               </div>
               <div className="space-y-1">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
+                <p className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   <Building className="h-3.5 w-3.5" /> Assigned vendor
                 </p>
                 <p className="font-medium">{selectedOrder.vendorName || "Unassigned"}</p>
@@ -981,10 +958,98 @@ const AdminOrderDetail = () => {
             </CardContent>
           </Card>
 
+          <Card className="border-border/80 shadow-sm">
+            <CardHeader className="pb-4">
+              <p className="text-lg font-semibold">
+                {selectedOrder.orderType?.toLowerCase() === "buy" ? "Purchase details" : "Rental details"}
+              </p>
+            </CardHeader>
+            <CardContent className="flex flex-col p-0">
+              <div className="grid grid-cols-2 gap-x-6 gap-y-4 px-6 pb-4 text-sm">
+                {selectedOrder.orderType?.toLowerCase() === "buy" ? (
+                  <>
+                    <div className="space-y-1">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Purchase date</p>
+                      <p className="font-medium tabular-nums">{formatDetailDate(selectedOrder.startDate)}</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Order type</p>
+                      <p className="font-medium">Buy</p>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="space-y-1">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Start date</p>
+                      <p className="font-medium tabular-nums">{formatDetailDate(selectedOrder.startDate)}</p>
+                    </div>
+                    <div className="space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">End date</p>
+                        {selectedOrder.isExtended ? (
+                          <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                            EXTENDED
+                          </span>
+                        ) : null}
+                      </div>
+                      <p className="font-medium tabular-nums">{formatDetailDate(selectedOrder.endDate)}</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Rental period</p>
+                      <p className="font-medium">
+                        {selectedOrder.rentalDurationLabel?.trim() || `${selectedOrder.rentalDays} days`}
+                      </p>
+                      {selectedOrder.rentalDurationLabel?.trim() && selectedOrder.rentalDurationDays ? (
+                        <p className="text-xs text-muted-foreground">
+                          {selectedOrder.rentalDurationDays} day{selectedOrder.rentalDurationDays === 1 ? "" : "s"}
+                        </p>
+                      ) : null}
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Order type</p>
+                      <p className="font-medium">Rent</p>
+                    </div>
+                  </>
+                )}
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Quantity</p>
+                  <p className="font-medium">{selectedOrder.quantity}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Amount</p>
+                  <p className="font-semibold tabular-nums">₹{selectedOrder.totalAmount.toFixed(0)}</p>
+                  <p className="text-xs text-muted-foreground tabular-nums">
+                    + ₹{selectedOrder.depositAmount.toFixed(0)} deposit
+                  </p>
+                  <p className="text-xs text-muted-foreground tabular-nums">
+                    {formatGstRateLabel(selectedOrder.gstPercent)} ₹{(selectedOrder.gstAmount ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}
+                  </p>
+                </div>
+              </div>
+              {orderShowsVendorPayout(selectedOrder.status) ? (
+                <div className="mt-auto flex items-center justify-between gap-3 border-t border-border/70 bg-muted/40 px-6 py-3">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Vendor payout</p>
+                  <p className="text-lg font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
+                    ₹{(selectedOrder.vendorSubtotalAmount ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}
+                  </p>
+                </div>
+              ) : null}
+              {selectedOrder.vendorPriceSetByAdmin === false ? (
+                <div className="px-6 pb-4">
+                  <span className="inline-flex w-fit rounded-full bg-orange-100 px-2 py-0.5 text-[11px] font-semibold text-orange-800 dark:bg-orange-950/50 dark:text-orange-300">
+                    Vendor price not set
+                  </span>
+                </div>
+              ) : null}
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
           {selectedOrder.returnSettlement ? (
-            <Card className="border-border/80 shadow-sm">
-              <CardHeader className="pb-2">
-                <div className="flex items-start justify-between gap-3">
+            <Card className="min-w-0 overflow-hidden border-border/80 shadow-sm">
+              <CardHeader className="p-4 pb-2 sm:p-6 sm:pb-2">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
                   <div className="min-w-0">
                     <p className="text-lg font-semibold">Deposit refund</p>
                     <p className="mt-1 text-sm text-muted-foreground">
@@ -993,7 +1058,7 @@ const AdminOrderDetail = () => {
                   </div>
                   <span
                     className={cn(
-                      "shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold",
+                      "w-fit shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold",
                       selectedOrder.returnSettlement.status === "refunded"
                         ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
                         : selectedOrder.returnSettlement.refundAmount > 0
@@ -1009,7 +1074,7 @@ const AdminOrderDetail = () => {
                   </span>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-3 text-sm">
+              <CardContent className="space-y-3 p-4 pt-0 text-sm sm:p-6">
                 {selectedOrder.returnSettlement.status === "refunded" ? (
                   <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2.5 text-emerald-950 dark:border-emerald-500/30 dark:bg-emerald-950/30 dark:text-emerald-100">
                     <p className="font-semibold">Refund sent to the customer</p>
@@ -1033,52 +1098,57 @@ const AdminOrderDetail = () => {
                     </p>
                   </div>
                 ) : null}
-                <div className="divide-y divide-border overflow-hidden rounded-lg border border-border">
-                  <div className="flex items-center justify-between gap-3 px-3 py-2">
-                    <p className="text-muted-foreground">Deposit</p>
+                <div className="grid gap-2 sm:grid-cols-3">
+                  <div className="rounded-lg border border-border px-3 py-2">
+                    <p className="text-xs text-muted-foreground">Deposit</p>
                     <p className="font-medium tabular-nums">₹{formatInr(selectedOrder.returnSettlement.depositAmount)}</p>
                   </div>
-                  <div className="flex items-center justify-between gap-3 px-3 py-2">
-                    <p className="text-muted-foreground">Damage claim</p>
+                  <div className="rounded-lg border border-border px-3 py-2">
+                    <p className="text-xs text-muted-foreground">Damage claim</p>
                     <p className="font-medium tabular-nums">₹{formatInr(selectedOrder.returnSettlement.damageAmount)}</p>
                   </div>
-                  <div className="flex items-center justify-between gap-3 bg-muted/40 px-3 py-2">
-                    <p className="font-medium">Refund to customer</p>
+                  <div className="rounded-lg border border-border bg-muted/40 px-3 py-2">
+                    <p className="text-xs font-medium">Refund to customer</p>
                     <p className="font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
                       ₹{formatInr(selectedOrder.returnSettlement.refundAmount)}
                     </p>
                   </div>
                 </div>
-                {selectedOrder.returnSettlement.damageReason ? (
-                  <div className="space-y-1">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Vendor wrote</p>
-                    <p className="rounded-lg border border-border/70 px-3 py-2 leading-relaxed">
-                      {selectedOrder.returnSettlement.damageReason}
-                    </p>
-                  </div>
-                ) : null}
-                {damagePhotoUrls.length > 0 ? (
-                  <div className="space-y-1.5">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Damage photos · tap to enlarge
-                    </p>
-                    <div className="grid grid-cols-3 gap-2">
-                      {damagePhotoUrls.map((url, index) => (
-                        <button
-                          key={mediaObjectKey(url)}
-                          type="button"
-                          className="aspect-square overflow-hidden rounded-lg bg-muted ring-1 ring-inset ring-black/[0.06] dark:ring-white/10"
-                          onClick={() => setDamagePreviewUrl(url)}
-                          aria-label={`Damage photo ${index + 1}`}
-                        >
-                          <img src={url} alt="" className="h-full w-full object-cover" />
-                        </button>
-                      ))}
+                <div className={cn(
+                  "grid gap-4",
+                  selectedOrder.returnSettlement.damageReason && damagePhotoUrls.length > 0 && "lg:grid-cols-2 lg:items-start",
+                )}>
+                  {selectedOrder.returnSettlement.damageReason ? (
+                    <div className="space-y-1">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Vendor wrote</p>
+                      <p className="rounded-lg border border-border/70 px-3 py-2 leading-relaxed">
+                        {selectedOrder.returnSettlement.damageReason}
+                      </p>
                     </div>
-                  </div>
-                ) : selectedOrder.returnSettlement.damageAmount > 0 ? (
-                  <p className="text-xs text-muted-foreground">The vendor did not add photos with this claim.</p>
-                ) : null}
+                  ) : null}
+                  {damagePhotoUrls.length > 0 ? (
+                    <div className="space-y-1.5">
+                      <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                        Damage photos · tap to enlarge
+                      </p>
+                      <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap">
+                        {damagePhotoUrls.map((url, index) => (
+                          <button
+                            key={mediaObjectKey(url)}
+                            type="button"
+                            className="aspect-square w-full min-w-0 overflow-hidden rounded-lg bg-muted ring-1 ring-inset ring-black/[0.06] dark:ring-white/10 sm:aspect-auto sm:h-28 sm:w-28"
+                            onClick={() => setDamagePreviewUrl(url)}
+                            aria-label={`Damage photo ${index + 1}`}
+                          >
+                            <img src={url} alt="" className="h-full w-full object-cover" />
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  ) : selectedOrder.returnSettlement.damageAmount > 0 ? (
+                    <p className="text-xs text-muted-foreground">The vendor did not add photos with this claim.</p>
+                  ) : null}
+                </div>
                 {selectedOrder.returnSettlement.status === "refunded" ? null : selectedOrder.returnSettlement.refundAmount <= 0 ? (
                   <p className="text-muted-foreground">
                     {selectedOrder.returnSettlement.damageAmount > 0
@@ -1099,7 +1169,7 @@ const AdminOrderDetail = () => {
                       && !showManualRefund ? (
                       <Button
                         type="button"
-                        className="w-full"
+                        className="w-full sm:w-auto"
                         disabled={refundMutation.isPending}
                         onClick={() => refundMutation.mutate(undefined)}
                       >
@@ -1107,7 +1177,7 @@ const AdminOrderDetail = () => {
                       </Button>
                     ) : null}
                     {showManualRefund || !selectedOrder.returnSettlement.hasOnlinePayment || selectedOrder.returnSettlement.status === "refunding" ? (
-                      <div className="space-y-2 rounded-lg border border-dashed border-border px-3 py-3">
+                      <div className="max-w-xl space-y-2 rounded-lg border border-dashed border-border px-3 py-3">
                         <p className="text-sm font-medium">Already paid the customer another way?</p>
                         <p className="text-xs text-muted-foreground">
                           Use this after a UPI, bank, or Razorpay dashboard refund. This does not send money.
@@ -1174,93 +1244,7 @@ const AdminOrderDetail = () => {
             </Card>
           ) : null}
 
-          <Card className="border-border/80 shadow-sm">
-            <CardHeader className="pb-4">
-              <p className="text-lg font-semibold">
-                {selectedOrder.orderType?.toLowerCase() === "buy" ? "Purchase details" : "Rental details"}
-              </p>
-            </CardHeader>
-            <CardContent className="grid gap-4 text-sm">
-              <div className="space-y-1">
-                <div className="flex flex-wrap items-center gap-2">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
-                    <Calendar className="h-3.5 w-3.5" />
-                    {selectedOrder.orderType === "rent" ? "Period" : "Purchase date"}
-                  </p>
-                  {selectedOrder.orderType === "rent" && selectedOrder.isExtended ? (
-                    <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
-                      EXTENDED
-                    </span>
-                  ) : null}
-                </div>
-                <p className="font-medium">
-                  {selectedOrder.orderType === "rent"
-                    ? `${formatDetailDate(selectedOrder.startDate)} → ${formatDetailDate(selectedOrder.endDate)}`
-                    : formatDetailDate(selectedOrder.startDate)}
-                </p>
-                {selectedOrder.orderType === "rent" ? (
-                  <p className="text-xs text-muted-foreground">
-                    {selectedOrder.rentalDays} days
-                    {selectedOrder.isExtended ? " · this product includes a paid extension" : ""}
-                  </p>
-                ) : null}
-              </div>
-              <div className="space-y-1">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
-                  <Package className="h-3.5 w-3.5" /> Quantity
-                </p>
-                <p className="font-medium">{selectedOrder.quantity}</p>
-              </div>
-              <div className="space-y-1">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-1">
-                  <DollarSign className="h-3.5 w-3.5" /> Amount
-                </p>
-                <p className="font-bold tabular-nums">₹{selectedOrder.totalAmount.toFixed(0)}</p>
-                <p className="text-xs text-muted-foreground tabular-nums">
-                  + ₹{selectedOrder.depositAmount.toFixed(0)} deposit
-                </p>
-                <p className="text-xs text-muted-foreground tabular-nums">
-                  {formatGstRateLabel(selectedOrder.gstPercent)} ₹{(selectedOrder.gstAmount ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}
-                </p>
-                <p className="text-sm font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
-                  Vendor payout ₹{(selectedOrder.vendorSubtotalAmount ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}
-                </p>
-                {selectedOrder.vendorPriceSetByAdmin === false ? (
-                  <span className="inline-flex w-fit rounded-full bg-orange-100 px-2 py-0.5 text-[11px] font-semibold text-orange-800 dark:bg-orange-950/50 dark:text-orange-300">
-                    Vendor price not set
-                  </span>
-                ) : null}
-              </div>
-              <div className="space-y-1">
-                <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Status</p>
-                <Badge
-                  title={formatOrderStatusTitle(selectedOrder.status)}
-                  className={cn(orderStatusBadgeSizeClass, orderStatusBadgeClass(selectedOrder.status))}
-                  variant="outline"
-                >
-                  {formatOrderStatusLabel(selectedOrder.status)}
-                </Badge>
-              </div>
-            </CardContent>
-          </Card>
-
           <OrderPrescriptionFilesCard files={prescriptionFiles} />
-          {prescriptionFiles.length === 0 ? (
-            <Card className="border-border/80 shadow-sm">
-              <CardHeader className="p-3 pb-1 sm:p-4 sm:pb-2">
-                <p className="text-[13px] font-semibold sm:text-base">Prescription</p>
-                <p className="text-xs text-muted-foreground">
-                  Image or PDF.
-                </p>
-              </CardHeader>
-              <CardContent className="px-3 pb-3 sm:px-4 sm:pb-4">
-                <p className="text-sm text-muted-foreground">No prescription uploaded yet.</p>
-              </CardContent>
-            </Card>
-          ) : null}
-
-        </div>
-      </div>
     </div>
   );
 };

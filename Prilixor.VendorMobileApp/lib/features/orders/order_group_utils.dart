@@ -19,8 +19,22 @@ class OrderGroup {
         .reduce((a, b) => a.isAfter(b) ? a : b);
   }
 
-  double get totalPayout =>
-      items.fold(0.0, (sum, order) => sum + order.payoutAmount);
+  double get totalPayout => items
+      .where((order) => vendorEarnsPayout(order.status))
+      .fold(0.0, (sum, order) => sum + order.payoutAmount);
+
+  bool get showsPayout => items.any((order) => vendorEarnsPayout(order.status));
+}
+
+/// Payout is shown only after a vendor has accepted the product.
+bool vendorEarnsPayout(String status) {
+  final compact = status.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '_');
+  return compact == 'confirmed' ||
+      compact == 'in_transit' ||
+      compact == 'active' ||
+      compact == 'returned' ||
+      compact == 'bought_out' ||
+      compact == 'completed';
 }
 
 String getBaseOrderNumber(String orderNumber) {
@@ -134,24 +148,23 @@ String formatDetailDate(String? value) {
 List<(String, String)> orderDetailRows(VendorOrder order) {
   final isBuy = order.orderType.toLowerCase() == 'buy';
   final payout = formatVendorMoney(order.payoutAmount);
-
-  if (isBuy) {
-    return [
-      ('Purchase date', formatDetailDate(order.startDate)),
-      ('Order type', orderTypeLabel(order.orderType)),
-      ('Quantity', '${order.quantity}'),
-      ('Vendor payout', payout),
-    ];
+  final rows = isBuy
+      ? <(String, String)>[
+          ('Purchase date', formatDetailDate(order.startDate)),
+          ('Order type', orderTypeLabel(order.orderType)),
+          ('Quantity', '${order.quantity}'),
+        ]
+      : <(String, String)>[
+          ('Start date', formatDetailDate(order.startDate)),
+          ('End date', formatDetailDate(order.endDate)),
+          ('Rental days', '${order.rentalDays}'),
+          ('Order type', orderTypeLabel(order.orderType)),
+          ('Quantity', '${order.quantity}'),
+        ];
+  if (vendorEarnsPayout(order.status)) {
+    rows.add(('Vendor payout', payout));
   }
-
-  return [
-    ('Start date', formatDetailDate(order.startDate)),
-    ('End date', formatDetailDate(order.endDate)),
-    ('Rental days', '${order.rentalDays}'),
-    ('Order type', orderTypeLabel(order.orderType)),
-    ('Quantity', '${order.quantity}'),
-    ('Vendor payout', payout),
-  ];
+  return rows;
 }
 
 class OrderStatusChip extends StatelessWidget {
@@ -414,17 +427,18 @@ class OrderItemMetaLine extends StatelessWidget {
                 ],
               ),
             ),
-            Text.rich(
-              TextSpan(
-                children: [
-                  TextSpan(text: 'Payout: ', style: muted),
-                  TextSpan(
-                    text: formatVendorMoney(order.payoutAmount),
-                    style: value,
-                  ),
-                ],
+            if (vendorEarnsPayout(order.status))
+              Text.rich(
+                TextSpan(
+                  children: [
+                    TextSpan(text: 'Payout: ', style: muted),
+                    TextSpan(
+                      text: formatVendorMoney(order.payoutAmount),
+                      style: value,
+                    ),
+                  ],
+                ),
               ),
-            ),
             if (order.isExtended && order.orderType.toLowerCase() != 'buy')
               const OrderMetaChip(label: 'EXTENDED', highlight: true),
             if (order.returnSettlement?.vendorClaimLabel != null)
@@ -498,16 +512,18 @@ class OrderGroupCardHeader extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: 10),
-              Text(
-                formatVendorMoney(group.totalPayout),
-                style: const TextStyle(
-                  color: AppTheme.accent,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 15,
-                  height: 1.25,
+              if (group.showsPayout) ...[
+                const SizedBox(width: 10),
+                Text(
+                  formatVendorMoney(group.totalPayout),
+                  style: const TextStyle(
+                    color: AppTheme.accent,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 15,
+                    height: 1.25,
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
           const SizedBox(height: 6),

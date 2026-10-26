@@ -13,18 +13,12 @@ export function formatOrderStatusTitle(status: string): string {
  */
 export function formatCustomerOrderStatusTitle(status: string): string {
   const normalized = normalizeOrderStatus(status);
-  if (normalized === "dispatch failed") {
-    return "Cancelled";
-  }
+  if (normalized === "dispatch failed") return "Dispatch failed";
   return formatOrderStatusTitle(status).replace(/\bvendors?\b/gi, "BlinksMed");
 }
 
-/** Compact customer badge — exhausted dispatch looks cancelled, not “Failed”. */
+/** Compact customer badge. Dispatch failed stays distinct from a real cancellation. */
 export function formatCustomerOrderStatusLabel(status: string): string {
-  const normalized = normalizeOrderStatus(status);
-  if (normalized === "dispatch failed") {
-    return "Cancelled";
-  }
   return formatOrderStatusLabel(status);
 }
 
@@ -39,9 +33,22 @@ export function formatOrderStatusLabel(status: string): string {
     return "Awaiting";
   }
   if (normalized === "dispatch failed") {
-    return "Failed";
+    return "Dispatch failed";
   }
   return formatOrderStatusTitle(status);
+}
+
+/** Payout is the vendor's earning only after they have accepted the product. */
+export function orderShowsVendorPayout(status: string): boolean {
+  const normalized = normalizeOrderStatus(status);
+  return (
+    normalized === "confirmed" ||
+    normalized === "in transit" ||
+    normalized === "active" ||
+    normalized === "returned" ||
+    normalized === "bought out" ||
+    normalized === "completed"
+  );
 }
 
 /** Order type pill: Rent / Buy (never RENT / BUY). */

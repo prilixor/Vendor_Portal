@@ -3,7 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { Check, Barcode, CheckCircle2, ImageOff, ImagePlus, Images, Info, Loader2, Pencil, Plus, X } from "lucide-react";
 import { formatGstRateLabel } from "@/app/helpers/gstLabel";
 import { mediaObjectKey, useStableMediaUrls } from "@/app/helpers/stableMediaUrl";
-import { formatOrderStatusLabel, formatOrderStatusTitle, formatOrderTypeLabel, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
+import { formatOrderStatusLabel, formatOrderStatusTitle, formatOrderTypeLabel, orderShowsVendorPayout, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
 import { cn, orderPhotoTileUrl, originalUrlFromThumb, photoAtSlot, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
 import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
@@ -279,6 +279,14 @@ function orderStatusBadgeClass(status: string): string {
 }
 
 function OrderTimeline({ status, orderType }: { status: string; orderType?: string }) {
+  const raw = status.toLowerCase().trim();
+  const compact = raw.replace(/\s+/g, "_");
+  if (compact === "cancelled" || compact === "canceled") {
+    return <p className="text-sm text-muted-foreground">This product was cancelled.</p>;
+  }
+  if (compact === "dispatch_failed" || raw.includes("dispatch failed")) {
+    return <p className="text-sm text-muted-foreground">No vendor accepted this product.</p>;
+  }
   const { completedThrough, currentIndex } = timelineProgress(status, orderType);
   const steps = getTimelineSteps(orderType, status);
 
@@ -817,7 +825,7 @@ const VendorOrderDetail = () => {
   }, [user?.id, currentItemId, refreshLive]);
 
   const groupPayoutAmount = useMemo(
-    () => orderGroupItems.reduce((sum, item) => sum + itemPayout(item), 0),
+    () => orderGroupItems.reduce((sum, item) => sum + (orderShowsVendorPayout(item.status) ? itemPayout(item) : 0), 0),
     [orderGroupItems],
   );
 
@@ -1260,7 +1268,7 @@ const VendorOrderDetail = () => {
   const damagePhotoUrls = useStableMediaUrls(order?.returnSettlement?.damageImageUrls ?? []);
 
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-4 sm:space-y-6">
+    <div className="w-full min-w-0 space-y-4 sm:space-y-6">
       <BackLink to="/vendor/orders" label="Back to orders" />
 
       <Card className="overflow-hidden border-border/80 shadow-sm">
@@ -1276,14 +1284,16 @@ const VendorOrderDetail = () => {
                 <h1 className="break-all text-xl font-bold tracking-tight tabular-nums sm:text-2xl lg:text-3xl">{baseOrderNumber}</h1>
                 <p className="text-xs text-muted-foreground sm:text-sm">Consolidated fulfillment overview</p>
               </div>
-              <div className="flex shrink-0 flex-col items-start border-t border-border pt-4 sm:pt-6 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0">
-                <p className="text-2xl font-bold tabular-nums tracking-tight sm:text-3xl">
-                  ₹{formatRupee(groupPayoutAmount)}
-                </p>
-                <p className="mt-1 text-[11px] text-muted-foreground uppercase font-semibold tracking-wider sm:text-xs">
-                  Estimated Vendor Payout{orderGroupItems.length > 1 ? " (Combined)" : ""}
-                </p>
-              </div>
+              {orderGroupItems.some((item) => orderShowsVendorPayout(item.status)) ? (
+                <div className="flex shrink-0 flex-col items-start border-t border-border pt-4 sm:pt-6 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0">
+                  <p className="text-2xl font-bold tabular-nums tracking-tight sm:text-3xl">
+                    ₹{formatRupee(groupPayoutAmount)}
+                  </p>
+                  <p className="mt-1 text-[11px] text-muted-foreground uppercase font-semibold tracking-wider sm:text-xs">
+                    Estimated Vendor Payout{orderGroupItems.length > 1 ? " (Combined)" : ""}
+                  </p>
+                </div>
+              ) : null}
             </div>
           </CardContent>
         )}
@@ -1310,7 +1320,7 @@ const VendorOrderDetail = () => {
                   type="button"
                   onClick={() => handleSelectItem(item.orderId)}
                   className={cn(
-                    "w-full text-left flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 rounded-lg border transition-all",
+                    "flex w-full min-w-0 flex-col overflow-hidden rounded-lg border p-3 text-left transition-all sm:flex-row sm:items-center sm:justify-between",
                     isSelected
                       ? "bg-accent/40 border-foreground/60 shadow-sm"
                       : "bg-transparent border-border/60 hover:bg-accent/20",
@@ -1331,10 +1341,10 @@ const VendorOrderDetail = () => {
                     )}
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold text-foreground">{item.listingTitle}</p>
-                      <p className="mt-0.5 text-xs text-muted-foreground">
-                        Qty: {item.quantity}
+                      <p className="mt-0.5 break-words text-xs text-muted-foreground">
+                        <span>Qty: {item.quantity}</span>
                         {item.orderNumber.includes("-") ? (
-                          <span className="ml-2 break-all tabular-nums">· {item.orderNumber}</span>
+                          <span className="mt-0.5 block break-all tabular-nums sm:ml-2 sm:mt-0 sm:inline">· {item.orderNumber}</span>
                         ) : null}
                       </p>
                       {item.assignedAssetTags && item.assignedAssetTags.length > 0 ? (
@@ -1360,30 +1370,34 @@ const VendorOrderDetail = () => {
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between sm:justify-end gap-4 mt-3 sm:mt-0">
+                  <div className="mt-3 flex w-full min-w-0 items-center justify-between gap-2 sm:mt-0 sm:w-auto sm:justify-end sm:gap-3">
+                    <div className="flex min-w-0 flex-wrap items-center gap-1.5">
                     {item.isExtended ? (
                       <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
                         EXTENDED
                       </span>
                     ) : null}
                     {vendorClaimLabel(item.returnSettlement) ? (
-                      <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold text-sky-900 dark:bg-sky-950/50 dark:text-sky-200">
+                      <span className="max-w-full whitespace-normal rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold leading-snug text-sky-900 dark:bg-sky-950/50 dark:text-sky-200">
                         {vendorClaimLabel(item.returnSettlement)}
                       </span>
                     ) : null}
                     <span
                       title={formatOrderStatusTitle(item.status)}
                       className={cn(
-                        "inline-flex items-center rounded-full",
+                        "inline-flex shrink-0 items-center rounded-full",
                         orderStatusBadgeSizeClass,
                         orderStatusBadgeClass(item.status),
                       )}
                     >
                       {formatOrderStatusLabel(item.status)}
                     </span>
-                    <span className="font-semibold tabular-nums text-xs sm:w-20 sm:text-right">
-                      ₹{formatRupee(itemPayout(item))}
-                    </span>
+                    </div>
+                    {orderShowsVendorPayout(item.status) ? (
+                      <span className="shrink-0 text-sm font-semibold tabular-nums">
+                        ₹{formatRupee(itemPayout(item))}
+                      </span>
+                    ) : null}
                   </div>
                 </button>
               );
@@ -1392,7 +1406,7 @@ const VendorOrderDetail = () => {
         </Card>
       )}
 
-      {order && (
+      {order && (nextAction || hasPendingRequests) ? (
         <Card className="border-border/80 shadow-sm">
           <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-4">
             <div className="min-w-0">
@@ -1416,7 +1430,7 @@ const VendorOrderDetail = () => {
             )}
           </CardContent>
         </Card>
-      )}
+      ) : null}
 
       {order && (
         <>
@@ -1491,8 +1505,8 @@ const VendorOrderDetail = () => {
             </Card>
           )}
 
-          <div className="grid items-stretch gap-4 sm:gap-6 lg:grid-cols-2">
-            <Card className="h-full border-border/80 shadow-sm">
+          <div className="grid items-start gap-4 sm:gap-6 lg:grid-cols-[minmax(260px,420px)_minmax(0,1fr)]">
+            <Card className="border-border/80 shadow-sm">
               <CardHeader className="p-4 pb-2 sm:p-6 sm:pb-2">
                 <p className="text-lg font-semibold">Order timeline</p>
                 <p className="mt-0.5 text-xs text-muted-foreground">
@@ -1504,7 +1518,7 @@ const VendorOrderDetail = () => {
               </CardContent>
             </Card>
 
-            <div className="flex h-full flex-col gap-4 sm:gap-6">
+            <div className="flex flex-col gap-4 sm:gap-6">
               <Card className="border-border/80 shadow-sm">
                 <CardHeader className="p-4 pb-3 sm:p-6 sm:pb-4">
                   <p className="text-lg font-semibold">Customer</p>
@@ -1521,7 +1535,7 @@ const VendorOrderDetail = () => {
                 </CardContent>
               </Card>
 
-              <Card className="flex flex-1 flex-col border-border/80 shadow-sm">
+              <Card className="border-border/80 shadow-sm">
                 <CardHeader className="p-4 pb-3 sm:p-6 sm:pb-4">
                   <p className="text-lg font-semibold">{order.orderType?.toLowerCase() === "buy" ? "Purchase details" : "Rental details"}</p>
                 </CardHeader>
@@ -1606,78 +1620,84 @@ const VendorOrderDetail = () => {
                     </>
                   )}
                   </div>
-                  <div className="mt-auto flex items-center justify-between gap-3 rounded-b-lg border-t border-border/70 bg-muted/40 px-4 py-3 sm:px-6">
+                  {orderShowsVendorPayout(order.status) ? (
+                    <div className="mt-auto flex items-center justify-between gap-3 rounded-b-lg border-t border-border/70 bg-muted/40 px-4 py-3 sm:px-6">
                       <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">Your payout</p>
                       <p className="text-base font-semibold tabular-nums text-emerald-700 dark:text-emerald-400 sm:text-lg">
                         ₹{formatRupee(itemPayout(order))}
                       </p>
                     </div>
+                  ) : null}
                 </CardContent>
               </Card>
-              {vendorClaimLabel(order.returnSettlement) ? (
-                <Card className="border-border/80 shadow-sm">
-                  <CardHeader className="pb-2">
-                    <div className="flex items-start justify-between gap-3">
-                      <div className="min-w-0">
-                        <p className="text-lg font-semibold">Your return claim</p>
-                        <p className="mt-1 text-sm text-muted-foreground">
-                          Sent with this product. You cannot change it.
-                        </p>
-                      </div>
-                      <span
-                        className={cn(
-                          "shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold",
-                          order.returnSettlement?.status === "refunded" || order.returnSettlement?.status === "settled"
-                            ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
-                            : "bg-amber-100 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200",
-                        )}
-                      >
-                        {order.returnSettlement?.status === "refunded" || order.returnSettlement?.status === "settled"
-                          ? "Reviewed"
-                          : "With BlinksMed"}
-                      </span>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-3 text-sm">
-                    <div className="flex items-center justify-between gap-3 rounded-lg bg-muted/50 px-3 py-2.5">
-                      <p className="text-muted-foreground">Damage claim</p>
-                      <p className="font-semibold tabular-nums">
-                        ₹{formatInr(order.returnSettlement?.damageAmount ?? 0)}
-                      </p>
-                    </div>
-                    {order.returnSettlement?.damageReason ? (
-                      <div className="space-y-1">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">What you reported</p>
-                        <p className="rounded-lg border border-border/70 px-3 py-2 leading-relaxed">
-                          {order.returnSettlement.damageReason}
-                        </p>
-                      </div>
-                    ) : null}
-                    {damagePhotoUrls.length > 0 ? (
-                      <div className="space-y-1.5">
-                        <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                          Photos · tap to enlarge
-                        </p>
-                        <div className="grid grid-cols-3 gap-2">
-                          {damagePhotoUrls.map((url, index) => (
-                            <button
-                              key={mediaObjectKey(url)}
-                              type="button"
-                              className="aspect-square overflow-hidden rounded-lg bg-muted ring-1 ring-inset ring-black/[0.06] dark:ring-white/10"
-                              onClick={() => setDamagePreviewUrl(url)}
-                              aria-label={`Damage photo ${index + 1}`}
-                            >
-                              <img src={url} alt="" className="h-full w-full object-cover" />
-                            </button>
-                          ))}
-                        </div>
-                      </div>
-                    ) : null}
-                  </CardContent>
-                </Card>
-              ) : null}
             </div>
           </div>
+
+          {vendorClaimLabel(order.returnSettlement) ? (
+            <Card className="min-w-0 overflow-hidden border-border/80 shadow-sm">
+              <CardHeader className="p-4 pb-2 sm:p-6 sm:pb-2">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-lg font-semibold">Your return claim</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Sent with this product. You cannot change it.
+                    </p>
+                  </div>
+                  <span
+                    className={cn(
+                      "w-fit shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold",
+                      order.returnSettlement?.status === "refunded" || order.returnSettlement?.status === "settled"
+                        ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
+                        : "bg-amber-100 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200",
+                    )}
+                  >
+                    {order.returnSettlement?.status === "refunded" || order.returnSettlement?.status === "settled"
+                      ? "Reviewed"
+                      : "With BlinksMed"}
+                  </span>
+                </div>
+              </CardHeader>
+              <CardContent className={cn(
+                "grid gap-4 p-4 pt-0 text-sm sm:p-6",
+                order.returnSettlement?.damageReason && "lg:grid-cols-[minmax(220px,280px)_minmax(0,1fr)] lg:items-start",
+              )}>
+                <div className="flex items-center justify-between gap-3 rounded-lg bg-muted/50 px-3 py-2.5">
+                  <p className="text-muted-foreground">Damage claim</p>
+                  <p className="font-semibold tabular-nums">
+                    ₹{formatInr(order.returnSettlement?.damageAmount ?? 0)}
+                  </p>
+                </div>
+                {order.returnSettlement?.damageReason ? (
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">What you reported</p>
+                    <p className="rounded-lg border border-border/70 px-3 py-2 leading-relaxed">
+                      {order.returnSettlement.damageReason}
+                    </p>
+                  </div>
+                ) : null}
+                {damagePhotoUrls.length > 0 ? (
+                  <div className="space-y-1.5 lg:col-span-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Damage photos · tap to enlarge
+                    </p>
+                    <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap">
+                      {damagePhotoUrls.map((url, index) => (
+                        <button
+                          key={mediaObjectKey(url)}
+                          type="button"
+                          className="aspect-square w-full min-w-0 overflow-hidden rounded-lg bg-muted ring-1 ring-inset ring-black/[0.06] dark:ring-white/10 sm:aspect-auto sm:h-28 sm:w-28"
+                          onClick={() => setDamagePreviewUrl(url)}
+                          aria-label={`Damage photo ${index + 1}`}
+                        >
+                          <img src={url} alt="" className="h-full w-full object-cover" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </CardContent>
+            </Card>
+          ) : null}
 
           {(order.assignedAssetTags && order.assignedAssetTags.length > 0) || canAssignOrderSerials(order.status) ? (
             <AssignedSerialNumbersCard
@@ -2062,6 +2082,7 @@ const VendorOrderDetail = () => {
             </DialogContent>
           </Dialog>
 
+          {(canMarkTransit || canMarkActive || canMarkReturned || canCancel) ? (
           <Card className="mb-[max(4.5rem,env(safe-area-inset-bottom))] border-border/80 shadow-sm sm:mb-0">
             <CardContent className="grid grid-cols-2 gap-2 p-3 sm:grid-cols-4 sm:p-4">
               <Button
@@ -2101,6 +2122,7 @@ const VendorOrderDetail = () => {
               </Button>
             </CardContent>
           </Card>
+          ) : null}
         </>
       )}
 

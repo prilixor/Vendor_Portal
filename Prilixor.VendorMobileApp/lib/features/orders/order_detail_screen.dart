@@ -632,8 +632,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
             (item) => item.orderId == _selectedOrderId,
             orElse: () => order,
           );
-    final groupPayout =
-        groupItems.fold(0.0, (sum, item) => sum + item.payoutAmount);
+    final groupPayout = groupItems.fold(
+      0.0,
+      (sum, item) => sum + (vendorEarnsPayout(item.status) ? item.payoutAmount : 0),
+    );
+    final showGroupPayout = groupItems.any((item) => vendorEarnsPayout(item.status));
     final baseOrderNumber =
         order == null ? '' : getBaseOrderNumber(order.orderNumber);
 
@@ -666,6 +669,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                             baseOrderNumber: baseOrderNumber,
                             itemCount: groupItems.length,
                             groupPayout: groupPayout,
+                            showPayout: showGroupPayout,
                           ),
                           const SizedBox(height: 10),
                           _SectionCard(
@@ -790,15 +794,17 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                                               crossAxisAlignment: CrossAxisAlignment.end,
                                               children: [
                                                 OrderStatusChip(status: item.status),
-                                                const SizedBox(height: 4),
-                                                Text(
-                                                  formatVendorMoney(item.payoutAmount),
-                                                  style: TextStyle(
-                                                    color: context.appColors.textPrimary,
-                                                    fontWeight: FontWeight.w700,
-                                                    fontSize: 11,
+                                                if (vendorEarnsPayout(item.status)) ...[
+                                                  const SizedBox(height: 4),
+                                                  Text(
+                                                    formatVendorMoney(item.payoutAmount),
+                                                    style: TextStyle(
+                                                      color: context.appColors.textPrimary,
+                                                      fontWeight: FontWeight.w700,
+                                                      fontSize: 11,
+                                                    ),
                                                   ),
-                                                ),
+                                                ],
                                               ],
                                             ),
                                           ],
@@ -906,11 +912,13 @@ class _GroupHeroCard extends StatelessWidget {
   final String baseOrderNumber;
   final int itemCount;
   final double groupPayout;
+  final bool showPayout;
 
   const _GroupHeroCard({
     required this.baseOrderNumber,
     required this.itemCount,
     required this.groupPayout,
+    required this.showPayout,
   });
 
   @override
@@ -953,26 +961,27 @@ class _GroupHeroCard extends StatelessWidget {
               ],
             ),
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                formatVendorMoney(groupPayout),
-                style: TextStyle(
-                  color: context.appColors.textPrimary,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 18,
+          if (showPayout)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  formatVendorMoney(groupPayout),
+                  style: TextStyle(
+                    color: context.appColors.textPrimary,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 18,
+                  ),
                 ),
-              ),
-              Text(
-                itemCount > 1 ? 'Estimated payout (combined)' : 'Estimated payout',
-                style: TextStyle(
-                  color: context.appColors.textMuted,
-                  fontSize: 10,
+                Text(
+                  itemCount > 1 ? 'Estimated payout (combined)' : 'Estimated payout',
+                  style: TextStyle(
+                    color: context.appColors.textMuted,
+                    fontSize: 10,
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
         ],
       ),
     );
@@ -2435,6 +2444,7 @@ class _MetricStrip extends StatelessWidget {
   Widget build(BuildContext context) {
     final isBuy = order.orderType.toLowerCase() == 'buy';
     final payout = formatVendorMoney(order.payoutAmount);
+    final showPayout = vendorEarnsPayout(order.status);
 
     if (isBuy) {
       return Row(
@@ -2447,8 +2457,10 @@ class _MetricStrip extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           Expanded(child: _MetricTile(label: 'Qty', value: '${order.quantity}')),
-          const SizedBox(width: 8),
-          Expanded(child: _MetricTile(label: 'Payout', value: payout, highlight: true)),
+          if (showPayout) ...[
+            const SizedBox(width: 8),
+            Expanded(child: _MetricTile(label: 'Payout', value: payout, highlight: true)),
+          ],
         ],
       );
     }
@@ -2480,10 +2492,12 @@ class _MetricStrip extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             Expanded(child: _MetricTile(label: 'Qty', value: '${order.quantity}')),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _MetricTile(label: 'Payout', value: payout, highlight: true),
-            ),
+            if (showPayout) ...[
+              const SizedBox(width: 8),
+              Expanded(
+                child: _MetricTile(label: 'Payout', value: payout, highlight: true),
+              ),
+            ],
           ],
         ),
       ],
@@ -2559,10 +2573,28 @@ class _OrderTimelineCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.appColors;
+    final raw = status.toLowerCase().trim();
+    final compact = raw.replaceAll(RegExp(r'\s+'), '_');
+    final closedMessage = (compact == 'cancelled' || compact == 'canceled')
+        ? 'This product was cancelled.'
+        : (compact == 'dispatch_failed' || raw.contains('dispatch failed'))
+            ? 'No vendor accepted this product.'
+            : null;
+    if (closedMessage != null) {
+      return _SectionCard(
+        title: 'Order timeline',
+        subtitle: 'Tracking: $listingTitle',
+        compact: true,
+        child: Text(
+          closedMessage,
+          style: TextStyle(color: colors.textMuted, fontSize: 13, height: 1.35),
+        ),
+      );
+    }
+
     final steps = _vendorTimelineSteps(orderType, status);
     final progress = _vendorTimelineProgress(status, orderType);
-    final colors = context.appColors;
-    final compact = status.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '_');
 
     return _SectionCard(
       title: 'Order timeline',

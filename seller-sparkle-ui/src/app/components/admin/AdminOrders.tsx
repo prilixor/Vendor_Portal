@@ -20,6 +20,8 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { formatOrderStatusLabel, formatOrderStatusTitle, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
+import { adminRefundChip } from "@/app/helpers/orderReturn";
+import { adminCancellationChip } from "@/app/helpers/orderCancellation";
 import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
 import {
   ActiveFilterChips,
@@ -347,11 +349,11 @@ export const AdminOrders = () => {
                     <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Order Group</span>
                     <h4 className="break-all text-base font-bold text-foreground">{group.baseOrderNumber}</h4>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-xs text-muted-foreground md:flex md:gap-6">
-                    <p>Customer: <span className="font-semibold text-foreground truncate block sm:inline">{group.customerName}</span></p>
-                    <p>Email: <span className="font-semibold text-foreground break-all sm:break-normal">{group.customerEmail}</span></p>
-                    <p>Placed: <span className="font-semibold text-foreground">{new Date(group.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span></p>
-                    <p>Combined Total: <span className="font-bold text-primary">₹{group.totalAmount.toFixed(0)}</span></p>
+                  <div className="grid grid-cols-1 gap-1 text-xs text-muted-foreground sm:grid-cols-2 sm:gap-x-6 sm:gap-y-2 md:flex md:gap-6">
+                    <p className="truncate"><span className="font-semibold text-foreground">{group.customerName}</span></p>
+                    <p className="truncate">{group.customerEmail}</p>
+                    <p>{new Date(group.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                    <p>Total <span className="font-bold text-primary">₹{group.totalAmount.toFixed(0)}</span></p>
                   </div>
                 </div>
 
@@ -360,30 +362,35 @@ export const AdminOrders = () => {
                   {group.items.map((item) => {
                     const imageUrl = resolveItemImageUrl(item);
                     return (
-                    <div key={item.orderId} className="flex min-w-0 flex-col gap-4 rounded-xl border border-border/50 bg-card p-3 shadow-sm transition-all duration-300 hover:border-border hover:bg-accent/10 sm:flex-row sm:items-center sm:justify-between sm:p-4">
+                    <div key={item.orderId}
+                      role="link"
+                      tabIndex={0}
+                      onClick={() => navigate(`/admin/orders/${encodeURIComponent(item.orderId)}`)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          navigate(`/admin/orders/${encodeURIComponent(item.orderId)}`);
+                        }
+                      }}
+                      className="flex min-w-0 cursor-pointer flex-col gap-3 rounded-xl border border-border/50 bg-card p-3 shadow-sm transition-all duration-300 hover:border-border hover:bg-accent/10 sm:flex-row sm:items-center sm:justify-between sm:p-4"
+                    >
                       <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
                         <ListingThumb src={imageUrl} size="lg" className="border border-border shadow-sm" />
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-semibold text-foreground truncate">{item.listingTitle}</p>
-                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground mt-1">
-                            <span className="flex items-center gap-1"><Building className="h-3.5 w-3.5 shrink-0 opacity-60" /> {item.vendorName}</span>
-                            <span>Qty: <strong className="text-foreground font-medium">{item.quantity}</strong></span>
-                            <span>{item.orderType === "rent" ? `${item.rentalDays} days rental` : "Buyout"}</span>
-                          </div>
+                          <p className="truncate text-sm font-semibold text-foreground">{item.listingTitle}</p>
+                          <p className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                            <span className="inline-flex min-w-0 items-center gap-1">
+                              <Building className="h-3.5 w-3.5 shrink-0 opacity-60" />
+                              <span className="truncate">{item.vendorName}</span>
+                            </span>
+                            <span>Qty {item.quantity}</span>
+                            <span>{item.orderType === "rent" ? `${item.rentalDays} days` : "Buy"}</span>
+                          </p>
                         </div>
                       </div>
 
-                      <div className="flex w-full min-w-0 flex-nowrap items-center justify-between gap-1 border-t border-border/20 pt-3 sm:w-auto sm:justify-end sm:gap-3 sm:border-none sm:pt-0">
-                        <div className="flex min-w-0 flex-nowrap items-center gap-1">
-                          <Badge className={cn("h-5 shrink-0 whitespace-nowrap px-1.5 py-0 text-[10px] font-semibold leading-none sm:px-2", orderTypeBadgeClass(item.orderType))} variant="outline">
-                            {item.orderType.toUpperCase()}
-                          </Badge>
-                          {item.isExtended && (
-                            <Badge className="h-5 shrink-0 whitespace-nowrap px-1.5 py-0 text-[10px] font-bold leading-none sm:px-2 bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-800/50" variant="outline">
-                              <span className="sm:hidden">EXT</span>
-                              <span className="hidden sm:inline">EXTENDED</span>
-                            </Badge>
-                          )}
+                      <div className="flex w-full min-w-0 items-center justify-between gap-2 border-t border-border/40 pt-2.5 sm:w-auto sm:justify-end sm:gap-3 sm:border-none sm:pt-0">
+                        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
                           <Badge
                             title={formatOrderStatusTitle(item.status)}
                             className={cn("shrink-0", orderStatusBadgeSizeClass, orderStatusBadgeClass(item.status))}
@@ -391,19 +398,32 @@ export const AdminOrders = () => {
                           >
                             {formatOrderStatusLabel(item.status)}
                           </Badge>
+                          <Badge className={cn("h-5 shrink-0 whitespace-nowrap px-2 py-0 text-[10px] font-semibold leading-none", orderTypeBadgeClass(item.orderType))} variant="outline">
+                            {item.orderType.toUpperCase()}
+                          </Badge>
+                          {item.isExtended ? (
+                            <Badge className="h-5 shrink-0 whitespace-nowrap border-amber-200 bg-amber-100 px-2 py-0 text-[10px] font-bold leading-none text-amber-800 dark:border-amber-800/50 dark:bg-amber-900/40 dark:text-amber-300" variant="outline">
+                              EXTENDED
+                            </Badge>
+                          ) : null}
+                          {adminRefundChip(item.returnSettlement) ? (
+                            <span className="shrink-0 whitespace-nowrap rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold leading-none text-sky-900 dark:bg-sky-950/50 dark:text-sky-200">
+                              {adminRefundChip(item.returnSettlement)}
+                            </span>
+                          ) : null}
+                          {adminCancellationChip(item.cancellationRefund) ? (
+                            <span className="shrink-0 whitespace-nowrap rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold leading-none text-sky-900 dark:bg-sky-950/50 dark:text-sky-200">
+                              {adminCancellationChip(item.cancellationRefund)}
+                            </span>
+                          ) : null}
                         </div>
-                        <div className="flex shrink-0 flex-nowrap items-center gap-1 sm:gap-3">
+                        <div className="flex shrink-0 items-center gap-0.5">
                           <span className="text-xs font-semibold tabular-nums text-foreground sm:text-sm">₹{item.totalAmount.toFixed(0)}</span>
-                          <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 shrink-0 px-1.5 text-xs font-semibold text-primary transition-colors hover:bg-accent sm:h-8 sm:px-2"
-                          onClick={() => navigate(`/admin/orders/${encodeURIComponent(item.orderId)}`)}
-                        >
-                          <span className="sm:hidden">Details</span>
-                          <span className="hidden sm:inline">View details</span>
-                          <ChevronRight className="h-3.5 w-3.5" />
-                        </Button>
+                          <span className="inline-flex h-8 shrink-0 items-center px-1 text-xs font-semibold text-primary">
+                            <span className="sm:hidden">Details</span>
+                            <span className="hidden sm:inline">View details</span>
+                            <ChevronRight className="h-3.5 w-3.5" />
+                          </span>
                         </div>
                       </div>
                     </div>

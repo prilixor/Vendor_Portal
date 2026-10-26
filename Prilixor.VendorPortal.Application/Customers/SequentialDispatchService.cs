@@ -222,8 +222,14 @@ internal sealed class SequentialDispatchService(
         string customerBody,
         CancellationToken cancellationToken)
     {
-        var now = DateTimeOffset.UtcNow;
-        await ExpireOpenOffersAsync(order.Id, now, cancellationToken);
+        await DispatchOfferClosing.CloseForOrderAsync(
+            customers,
+            vendors,
+            order.Id,
+            order.OrderNumber,
+            DispatchOfferClosing.MessageForClosedOrder(order.OrderNumber, "dispatch_failed"),
+            cancellationToken);
+        vendorsDirty = true;
         order.Status = "dispatch_failed";
         await CustomerOrderImageLifecycle.CloseAndPurgeForOrderAsync(
             customers, uploadStorage, order.Id, closedReason: "dispatch_failed", deletedBy: actorId, cancellationToken);
@@ -233,7 +239,7 @@ internal sealed class SequentialDispatchService(
             {
                 Id = Guid.NewGuid(),
                 CustomerId = order.CustomerId,
-                Title = $"Order {order.OrderNumber} cancelled",
+                Title = $"Order {order.OrderNumber} dispatch failed",
                 Body = customerBody,
                 NotificationType = "order_dispatch_failed",
                 RelatedOrderId = order.Id,

@@ -1841,6 +1841,13 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
     final colors = context.appColors;
     final progress = _timelineProgress(status, orderType);
 
+    if (progress.dispatchFailed) {
+      return Text(
+        'No vendor accepted this product.',
+        style: TextStyle(color: colors.textMuted, fontSize: 13, height: 1.35),
+      );
+    }
+
     if (progress.cancelled) {
       return Text(
         'This order was cancelled — steps shown may have completed before cancellation.',
@@ -1954,11 +1961,13 @@ class _TimelineStepData {
 
 class _TimelineProgress {
   final bool cancelled;
+  final bool dispatchFailed;
   final int completedThrough;
   final int? currentIndex;
 
   const _TimelineProgress({
     required this.cancelled,
+    this.dispatchFailed = false,
     required this.completedThrough,
     required this.currentIndex,
   });
@@ -1996,8 +2005,16 @@ _TimelineProgress _timelineProgress(String status, String orderType) {
   final compact = raw.replaceAll(RegExp(r'\s+'), '_');
   final isBuy = orderType.toLowerCase() == 'buy';
 
-  if (compact == 'cancelled' || compact == 'canceled' || compact == 'dispatch_failed' || raw.contains('dispatch failed')) {
+  if (compact == 'cancelled' || compact == 'canceled') {
     return const _TimelineProgress(cancelled: true, completedThrough: -1, currentIndex: null);
+  }
+  if (compact == 'dispatch_failed' || raw.contains('dispatch failed')) {
+    return const _TimelineProgress(
+      cancelled: false,
+      dispatchFailed: true,
+      completedThrough: -1,
+      currentIndex: null,
+    );
   }
   if (compact == 'pending') {
     return const _TimelineProgress(cancelled: false, completedThrough: 0, currentIndex: 1);

@@ -180,34 +180,39 @@ const getTimelineSteps = (orderType?: string) => {
 /** Last step index fully completed (inclusive). `currentIndex` is the active step if any. */
 function getTimelineProgress(status: string, orderType?: string): {
   cancelled: boolean;
+  dispatchFailed: boolean;
   completedThrough: number;
   currentIndex: number | null;
 } {
   const raw = status.toLowerCase().trim();
   const compact = raw.replace(/\s+/g, "_");
   const isBuy = orderType?.toLowerCase() === "buy";
+  const open = { cancelled: false, dispatchFailed: false };
 
-  if (compact === "cancelled" || compact === "canceled" || compact === "dispatch_failed" || raw.includes("dispatch failed")) {
-    return { cancelled: true, completedThrough: -1, currentIndex: null };
+  if (compact === "cancelled" || compact === "canceled") {
+    return { cancelled: true, dispatchFailed: false, completedThrough: -1, currentIndex: null };
+  }
+  if (compact === "dispatch_failed" || raw.includes("dispatch failed")) {
+    return { cancelled: false, dispatchFailed: true, completedThrough: -1, currentIndex: null };
   }
   if (compact === "pending") {
-    return { cancelled: false, completedThrough: 0, currentIndex: 1 };
+    return { ...open, completedThrough: 0, currentIndex: 1 };
   }
   if (compact === "confirmed") {
-    return { cancelled: false, completedThrough: 1, currentIndex: 2 };
+    return { ...open, completedThrough: 1, currentIndex: 2 };
   }
   if (compact === "in_transit" || raw.includes("transit")) {
-    return { cancelled: false, completedThrough: 2, currentIndex: 3 };
+    return { ...open, completedThrough: 2, currentIndex: 3 };
   }
   if (compact === "active") {
     return isBuy
-      ? { cancelled: false, completedThrough: 3, currentIndex: null }
-      : { cancelled: false, completedThrough: 3, currentIndex: 4 };
+      ? { ...open, completedThrough: 3, currentIndex: null }
+      : { ...open, completedThrough: 3, currentIndex: 4 };
   }
   if (compact === "returned") {
-    return { cancelled: false, completedThrough: 5, currentIndex: null };
+    return { ...open, completedThrough: 5, currentIndex: null };
   }
-  return { cancelled: false, completedThrough: 0, currentIndex: 1 };
+  return { ...open, completedThrough: 0, currentIndex: 1 };
 }
 
 function TimelineDot({
@@ -313,7 +318,11 @@ function DetailRow({
 }
 
 function OrderTimeline({ status, orderType }: { status: string; orderType?: string }) {
-  const { cancelled, completedThrough, currentIndex } = getTimelineProgress(status, orderType);
+  const { cancelled, dispatchFailed, completedThrough, currentIndex } = getTimelineProgress(status, orderType);
+
+  if (dispatchFailed) {
+    return <p className="text-sm text-muted-foreground">No vendor accepted this product.</p>;
+  }
 
   if (cancelled) {
     return (

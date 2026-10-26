@@ -1132,6 +1132,20 @@ internal static class AdminNotificationMessageBuilder
 
         return $"{baseMessage} Reason: {notes.Trim()}";
     }
+
+    public static string ClosedOrderCustomerBody(CustomerOrderCancellationRefund? row, bool dispatchFailed)
+    {
+        if (row is not null && !OrderCancellationRefunds.BlocksRedispatch(row))
+        {
+            return dispatchFailed
+                ? "No vendor could take this product. BlinksMed will review the payment before anything is sent back."
+                : "This product was cancelled. BlinksMed will review the payment before anything is sent back.";
+        }
+
+        return dispatchFailed
+            ? "No vendor could take this product."
+            : "This product was cancelled.";
+    }
 }
 
 public sealed record UpdateAdminOrderStatusCommand(string AdminId, Guid OrderId, string Status, List<string>? AssetTags = null) : ICommand<AdminOrderDto>;
@@ -1174,6 +1188,14 @@ internal sealed class UpdateAdminOrderStatusCommandHandler(
         
         if (current == target)
             return await BuildOrderDto(customers, order.Id, cancellationToken);
+
+        if (current == "dispatch_failed")
+        {
+            return Result.Failure<AdminOrderDto>(new Error(
+                "admin.dispatch_failed_stays",
+                "Dispatch failed stays dispatch failed. Refund the payment from the cancellation card, or reassign before that refund is sent.",
+                ErrorCategory.Validation));
+        }
 
         var listing = await customers.GetListingForCustomerAsync(order.VendorProductListingId, cancellationToken);
         if (listing is null)
@@ -1401,12 +1423,8 @@ internal sealed class UpdateAdminOrderStatusCommandHandler(
                     "in_transit" => "Your order is now out for delivery.",
                     "active" => order.OrderType == "buy" ? "Your purchase is delivered." : "Your rental order has been delivered and is now active.",
                     "returned" => OrderReturns.CustomerMessage(openedReturn),
-                    "cancelled" => openedCancel is null
-                        ? "This product was cancelled."
-                        : "This product was cancelled. BlinksMed will review the payment before anything is sent back.",
-                    "dispatch_failed" => openedCancel is null
-                        ? "We could not assign a vendor for this product."
-                        : "No vendor could take this product. BlinksMed will review the payment before anything is sent back.",
+                    "cancelled" => AdminNotificationMessageBuilder.ClosedOrderCustomerBody(openedCancel, dispatchFailed: false),
+                    "dispatch_failed" => AdminNotificationMessageBuilder.ClosedOrderCustomerBody(openedCancel, dispatchFailed: true),
                     _ => "Order status has been updated."
                 },
             },
@@ -1496,6 +1514,14 @@ internal sealed class AdminReassignVendorOrderCommandHandler(
         if (order.Status != "dispatch_failed" && order.Status != "confirmed")
             return Result.Failure<AdminOrderDto>(new Error("admin.invalid_order_status", "Only dispatch_failed or confirmed orders can be reassigned.", ErrorCategory.Validation));
 
+        var wasDispatchFailed = string.Equals(order.Status, "dispatch_failed", StringComparison.OrdinalIgnoreCase);
+        var existingRefund = await customers.GetOrderCancellationRefundByOrderIdAsync(order.Id, cancellationToken);
+        if (OrderCancellationRefunds.BlocksRedispatch(existingRefund))
+            return Result.Failure<AdminOrderDto>(new Error(
+                "admin.redispatch.refund_sent",
+                "This payment was already refunded, so this product cannot be offered to a vendor again.",
+                ErrorCategory.Validation));
+
         var oldVendorId = orderRow.Listing?.VendorId;
         // Reassignment ends the previous vendor fulfillment — hide/purge any photo request.
         await CustomerOrderImageLifecycle.CloseAndPurgeForOrderAsync(
@@ -1530,6 +1556,15 @@ internal sealed class AdminReassignVendorOrderCommandHandler(
         }
 
         await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
+        if (wasDispatchFailed
+            && existingRefund is not null
+            && string.Equals(existingRefund.Status, CancellationRefundStatuses.PendingReview, StringComparison.OrdinalIgnoreCase))
+        {
+            existingRefund.IsDeleted = true;
+            existingRefund.DeletedAt = DateTimeOffset.UtcNow;
+            existingRefund.ModifiedOnUtc = DateTime.UtcNow;
+            await customers.UpdateOrderCancellationRefundAsync(existingRefund, cancellationToken);
+        }
         
         var auditLog = new AdminAuditLog
         {
@@ -1584,6 +1619,12 @@ internal sealed class AdminForceCancelRefundOrderCommandHandler(
             return Result.Failure<AdminOrderDto>(new Error("customers.order_not_found", "Order not found.", ErrorCategory.NotFound));
 
         var o = row.Order;
+        if (string.Equals(o.Status, "dispatch_failed", StringComparison.OrdinalIgnoreCase))
+            return Result.Failure<AdminOrderDto>(new Error(
+                "admin.dispatch_failed_stays",
+                "Dispatch failed stays dispatch failed. Refund the payment from the cancellation card.",
+                ErrorCategory.Validation));
+
         if (o.Status == "cancelled" || o.Status == "returned")
             return Result.Failure<AdminOrderDto>(new Error("admin.invalid_order_status", "Order is already cancelled or returned.", ErrorCategory.Validation));
 
@@ -1616,7 +1657,7 @@ internal sealed class AdminForceCancelRefundOrderCommandHandler(
                     RelatedOrderId = o.Id,
                     NotificationType = "order_status_updated",
                     Title = $"Order {o.OrderNumber} cancelled",
-                    Body = "This product was cancelled. BlinksMed will review the payment before anything is sent back.",
+                    Body = AdminNotificationMessageBuilder.ClosedOrderCustomerBody(openedCancel.Value, dispatchFailed: false),
                 },
                 cancellationToken);
         }
@@ -1678,6 +1719,13 @@ internal sealed class AdminRestartOrderDispatchCommandHandler(
         if (order.Status != "dispatch_failed")
             return Result.Failure<AdminOrderDto>(new Error("admin.invalid_order_status", "Only dispatch_failed orders can be restarted.", ErrorCategory.Validation));
 
+        var existingRefund = await customers.GetOrderCancellationRefundByOrderIdAsync(order.Id, cancellationToken);
+        if (OrderCancellationRefunds.BlocksRedispatch(existingRefund))
+            return Result.Failure<AdminOrderDto>(new Error(
+                "admin.redispatch.refund_sent",
+                "This payment was already refunded, so this product cannot be offered to a vendor again.",
+                ErrorCategory.Validation));
+
         order.Status = "awaiting_vendor_acceptance";
         
         var agg = await customers.GetListingForCustomerAsync(order.VendorProductListingId, cancellationToken);
@@ -1715,6 +1763,14 @@ internal sealed class AdminRestartOrderDispatchCommandHandler(
         }
 
         await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
+        if (existingRefund is not null
+            && string.Equals(existingRefund.Status, CancellationRefundStatuses.PendingReview, StringComparison.OrdinalIgnoreCase))
+        {
+            existingRefund.IsDeleted = true;
+            existingRefund.DeletedAt = DateTimeOffset.UtcNow;
+            existingRefund.ModifiedOnUtc = DateTime.UtcNow;
+            await customers.UpdateOrderCancellationRefundAsync(existingRefund, cancellationToken);
+        }
         
         await customers.AddCustomerNotificationAsync(
             new Prilixor.VendorPortal.Domain.Customers.CustomerNotification
