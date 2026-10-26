@@ -731,8 +731,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                                                       OrderMetaChip(label: 'Qty ${item.quantity}'),
                                                       if (item.isExtended && item.orderType.toLowerCase() != 'buy')
                                                         OrderMetaChip(label: 'EXTENDED', highlight: true),
-                                                      if (item.returnSettlement?.vendorClaimLabel != null)
-                                                        OrderMetaChip(label: item.returnSettlement!.vendorClaimLabel!),
+                                                      if (item.returnSettlement?.listDamageLabel != null)
+                                                        OrderMetaChip(label: item.returnSettlement!.listDamageLabel!),
                                                       if (item.assignedAssetTags.isNotEmpty)
                                                         OrderMetaChip(
                                                           label: item.assignedAssetTags.length == 1
@@ -2144,8 +2144,8 @@ class _ItemDetailsPanel extends StatelessWidget {
                         OrderTypeChip(orderType: order.orderType),
                         if (order.isExtended && !isBuy)
                           OrderMetaChip(label: 'EXTENDED', highlight: true),
-                        if (order.returnSettlement?.vendorClaimLabel != null)
-                          OrderMetaChip(label: order.returnSettlement!.vendorClaimLabel!),
+                        if (order.returnSettlement?.listDamageLabel != null)
+                          OrderMetaChip(label: order.returnSettlement!.listDamageLabel!),
                       ],
                     ),
                   ],
@@ -2175,65 +2175,8 @@ class _ItemDetailsPanel extends StatelessWidget {
                 ),
               ),
             if (order.returnSettlement != null) ...[
-              const SizedBox(height: 8),
-              _SubsectionLabel('Your return claim'),
-              const SizedBox(height: 4),
-              Text(
-                order.returnSettlement!.vendorClaimLabel ?? 'No damage',
-                style: TextStyle(color: context.appColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w600),
-              ),
-              if ((order.returnSettlement!.damageReason ?? '').trim().isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 2),
-                  child: Text(
-                    order.returnSettlement!.damageReason!,
-                    style: TextStyle(color: context.appColors.textMuted, fontSize: 12),
-                  ),
-                ),
-              if (order.returnSettlement!.damageImageUrls.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 8),
-                  child: SizedBox(
-                    height: 72,
-                    child: ListView.separated(
-                      scrollDirection: Axis.horizontal,
-                      itemCount: order.returnSettlement!.damageImageUrls.length,
-                      separatorBuilder: (_, __) => const SizedBox(width: 8),
-                      itemBuilder: (_, index) {
-                        final urls = order.returnSettlement!.damageImageUrls
-                            .map(resolveMediaUrl)
-                            .whereType<String>()
-                            .toList();
-                        final url = index < urls.length ? urls[index] : null;
-                        if (url == null) return const SizedBox.shrink();
-                        return GestureDetector(
-                          onTap: () {
-                            Navigator.of(context).push(
-                              MaterialPageRoute<void>(
-                                builder: (_) => CatalogImageViewerScreen(
-                                  imageUrls: urls,
-                                  initialIndex: index.clamp(0, urls.length - 1),
-                                  title: 'Damage photos',
-                                ),
-                              ),
-                            );
-                          },
-                          child: ClipRRect(
-                            borderRadius: BorderRadius.circular(8),
-                            child: Image.network(url, width: 72, height: 72, fit: BoxFit.cover),
-                          ),
-                        );
-                      },
-                    ),
-                  ),
-                ),
-              Padding(
-                padding: const EdgeInsets.only(top: 2),
-                child: Text(
-                  'BlinksMed reviews this claim. You cannot change it after it is sent.',
-                  style: TextStyle(color: context.appColors.textMuted, fontSize: 11),
-                ),
-              ),
+              const SizedBox(height: 10),
+              _ReturnClaimCard(settlement: order.returnSettlement!),
             ],
           ],
           const SizedBox(height: 8),
@@ -2247,6 +2190,153 @@ class _ItemDetailsPanel extends StatelessWidget {
             _AssignedSerialNumbersBlock(
               tags: order.assignedAssetTags,
               onAdd: order.assignedAssetTags.isEmpty ? onAddSerials : null,
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+}
+
+class _ReturnClaimCard extends StatelessWidget {
+  final OrderReturnInfo settlement;
+
+  const _ReturnClaimCard({required this.settlement});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+    final reviewed = settlement.claimReviewed;
+    final reason = settlement.damageReason?.trim() ?? '';
+    final urls = settlement.damageImageUrls.map(resolveMediaUrl).whereType<String>().toList();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: colors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Your return claim',
+                      style: TextStyle(color: colors.textPrimary, fontSize: 16, fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Sent with this product. You cannot change it.',
+                      style: TextStyle(color: colors.textMuted, fontSize: 12, height: 1.35),
+                    ),
+                  ],
+                ),
+              ),
+              const SizedBox(width: 8),
+              OrderMetaChip(
+                label: reviewed ? 'Reviewed' : 'With BlinksMed',
+                highlight: !reviewed,
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: colors.surfaceElevated.withValues(alpha: 0.65),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text('Damage claim', style: TextStyle(color: colors.textMuted, fontSize: 13)),
+                ),
+                Text(
+                  formatVendorMoney(settlement.damageAmount),
+                  style: TextStyle(color: colors.textPrimary, fontSize: 14, fontWeight: FontWeight.w700),
+                ),
+              ],
+            ),
+          ),
+          if (reason.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              'WHAT YOU REPORTED',
+              style: TextStyle(
+                color: colors.textMuted,
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.4,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: colors.border),
+              ),
+              child: Text(
+                reason,
+                style: TextStyle(color: colors.textPrimary, fontSize: 13, height: 1.4),
+              ),
+            ),
+          ],
+          if (urls.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              'DAMAGE PHOTOS · TAP TO ENLARGE',
+              style: TextStyle(
+                color: colors.textMuted,
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.4,
+              ),
+            ),
+            const SizedBox(height: 6),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                const gap = 8.0;
+                final tile = (constraints.maxWidth - gap * 2) / 3;
+                return Wrap(
+                  spacing: gap,
+                  runSpacing: gap,
+                  children: [
+                    for (var index = 0; index < urls.length; index++)
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => CatalogImageViewerScreen(
+                                imageUrls: urls,
+                                initialIndex: index,
+                                title: 'Damage photos',
+                              ),
+                            ),
+                          );
+                        },
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.network(
+                            urls[index],
+                            width: tile,
+                            height: tile,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      ),
+                  ],
+                );
+              },
             ),
           ],
         ],

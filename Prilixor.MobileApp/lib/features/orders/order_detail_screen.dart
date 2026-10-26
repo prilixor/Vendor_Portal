@@ -149,6 +149,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
         'order_id': session.razorpayOrderId,
         'name': 'BlinksMed',
         'description': 'Rental extension',
+        'theme': {'color': AppTheme.razorpayThemeColor},
       });
     } catch (_) {
       _handleExtensionPayError('Unable to launch Razorpay.');
@@ -1102,11 +1103,19 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                   colors,
                                   'RENTAL PERIOD',
                                   _rentalPeriodTitle(order),
-                                  subtitleWidget: _buildRentalPeriodMeta(
-                                    colors,
-                                    order,
-                                  ),
                                 ),
+                                if (_rentalDurationText(order) != null) ...[
+                                  const SizedBox(height: 10),
+                                  _labeledValue(
+                                    colors,
+                                    'DURATION',
+                                    _rentalDurationText(order)!,
+                                  ),
+                                ],
+                                if (order.rentalFinalPrice != null) ...[
+                                  const SizedBox(height: 10),
+                                  _planPriceValue(colors, order),
+                                ],
                                 if (provider.extensionsFor(order.id).any((ext) => ext.isPaid)) ...[
                                   const SizedBox(height: 12),
                                   _extensionBreakdown(colors, order, provider.extensionsFor(order.id)),
@@ -1356,7 +1365,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                       const SizedBox(height: 10),
                                       ElevatedButton(
                                         style: ElevatedButton.styleFrom(
-                                          backgroundColor: const Color(0xFFEA580C),
+                                          backgroundColor: colors.accent,
+                                          foregroundColor: Colors.white,
+                                          disabledBackgroundColor: colors.accent.withValues(alpha: 0.45),
                                           minimumSize: const Size.fromHeight(44),
                                         ),
                                         onPressed: _payingExtension
@@ -1444,16 +1455,19 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
 
   Widget _cancellationRefundCard(AppPalette colors, OrderCancellationInfo row) {
     final received = row.status == 'refunded';
+    final receivedAt = _formatReceivedAt(row.refundedAt);
     final refundText = row.refundAmount <= 0
         ? row.money(0)
         : '${row.money(row.refundAmount)}${received ? ' received' : ' processing'}';
-    final note = row.status == 'pending_review'
-        ? 'BlinksMed is reviewing this payment before anything is sent back.'
-        : row.refundAmount <= 0
-            ? 'The charge uses the full payment for this product, so nothing is refunded.'
-            : received
-                ? 'This refund was sent to your original payment.'
-                : 'BlinksMed is sending this refund to your original payment.';
+    final note = received && receivedAt != null
+        ? 'Received $receivedAt'
+        : row.status == 'pending_review'
+            ? 'BlinksMed is reviewing this payment before anything is sent back.'
+            : row.refundAmount <= 0
+                ? 'The charge uses the full payment for this product, so nothing is refunded.'
+                : received
+                    ? 'This refund was sent to your original payment.'
+                    : 'BlinksMed is sending this refund to your original payment.';
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
@@ -1492,9 +1506,19 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
 
   Widget _depositRefundCard(AppPalette colors, OrderReturnInfo row) {
     final received = row.status == 'refunded';
+    final receivedAt = _formatReceivedAt(row.refundedAt);
     final refundText = row.refundAmount <= 0
         ? row.money(0)
         : '${row.money(row.refundAmount)}${received ? ' received' : ' processing'}';
+    final note = received && receivedAt != null
+        ? 'Received $receivedAt'
+        : row.refundAmount <= 0
+            ? (row.damageAmount > 0
+                ? 'The damage charge uses this product\'s full deposit, so nothing is refunded.'
+                : 'No security deposit is due back on this product.')
+            : received
+                ? 'This refund was sent to your original payment.'
+                : 'BlinksMed is sending this refund to your original payment.';
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
@@ -1521,16 +1545,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
             Text(row.damageReason!, style: TextStyle(color: colors.textMuted, fontSize: 12)),
           ],
           const SizedBox(height: 6),
-          Text(
-            row.refundAmount <= 0
-                ? (row.damageAmount > 0
-                    ? 'The damage charge uses this product\'s full deposit, so nothing is refunded.'
-                    : 'No security deposit is due back on this product.')
-                : (received
-                    ? 'This refund was sent to your original payment.'
-                    : 'BlinksMed is sending this refund to your original payment.'),
-            style: TextStyle(color: colors.textMuted, fontSize: 12),
-          ),
+          Text(note, style: TextStyle(color: colors.textMuted, fontSize: 12)),
         ],
       ),
     );
@@ -1566,6 +1581,18 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
         row('Product total', '₹${order.totalAmount.toStringAsFixed(2)}', bold: true),
       ],
     );
+  }
+
+  String? _formatReceivedAt(String? raw) {
+    if (raw == null || raw.trim().isEmpty) return null;
+    final parsed = DateTime.tryParse(raw);
+    if (parsed == null) return null;
+    final local = parsed.toLocal();
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    final hour12 = local.hour % 12 == 0 ? 12 : local.hour % 12;
+    final minute = local.minute.toString().padLeft(2, '0');
+    final suffix = local.hour >= 12 ? 'PM' : 'AM';
+    return '${months[local.month - 1]} ${local.day}, ${local.year}, $hour12:$minute $suffix';
   }
 
   String _formatOrderDate(String? raw) {
@@ -1628,39 +1655,51 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
     return formatRentalDuration(order.rentalDays, order.rentalPeriodUnit);
   }
 
-  Widget? _buildRentalPeriodMeta(AppPalette colors, OrderModel order) {
+  String? _rentalDurationText(OrderModel order) {
     if (order.orderType.toLowerCase() != 'rent') return null;
-
-    final days = order.rentalDurationDays;
     final hasPlanLabel = order.rentalDurationLabel?.trim().isNotEmpty == true;
-    final showDays = hasPlanLabel && days != null && days > 0;
-    final showPrice = order.rentalFinalPrice != null;
-    final hasDiscount = order.rentalNormalPrice != null &&
-        showPrice &&
-        order.rentalNormalPrice! > order.rentalFinalPrice!;
+    final days = order.rentalDurationDays;
+    if (!hasPlanLabel || days == null || days <= 0) return null;
+    return '$days day${days == 1 ? '' : 's'}';
+  }
 
-    if (!showDays && !showPrice) return null;
-
-    final muted = TextStyle(color: colors.textMuted, fontSize: 11, height: 1.25);
-
-    return Wrap(
-      crossAxisAlignment: WrapCrossAlignment.center,
-      spacing: 6,
-      runSpacing: 2,
+  Widget _planPriceValue(AppPalette colors, OrderModel order) {
+    final finalPrice = order.rentalFinalPrice ?? 0;
+    final normal = order.rentalNormalPrice;
+    final hasDiscount = normal != null && normal > finalPrice;
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
       children: [
-        if (showDays) Text('$days day${days == 1 ? '' : 's'}', style: muted),
-        if (showDays && (hasDiscount || showPrice))
-          Text('·', style: muted.copyWith(color: colors.textMuted.withValues(alpha: 0.5))),
-        if (hasDiscount)
-          StruckPrice(
-            '₹${order.rentalNormalPrice!.toStringAsFixed(0)}',
-            style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
+        Text(
+          'PLAN PRICE',
+          style: TextStyle(
+            color: colors.textMuted,
+            fontSize: 10,
+            fontWeight: FontWeight.w700,
+            letterSpacing: 0.6,
           ),
-        if (showPrice)
-          Text(
-            'Plan price ₹${order.rentalFinalPrice!.toStringAsFixed(0)}',
-            style: muted,
-          ),
+        ),
+        const SizedBox(height: 4),
+        Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          crossAxisAlignment: WrapCrossAlignment.center,
+          children: [
+            if (hasDiscount)
+              StruckPrice(
+                '₹${normal.toStringAsFixed(0)}',
+                style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600),
+              ),
+            Text(
+              '₹${finalPrice.toStringAsFixed(0)}',
+              style: TextStyle(
+                color: colors.textPrimary,
+                fontSize: 13,
+                fontWeight: FontWeight.w700,
+              ),
+            ),
+          ],
+        ),
       ],
     );
   }

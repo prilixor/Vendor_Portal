@@ -35,6 +35,74 @@ internal static class PaymentInvoiceMailer
         SendSafeAsync(logger, extension.Id, () => SendExtensionPaymentCoreAsync(
             customers, email, session, extension, razorpayPaymentId, cancellationToken));
 
+    /// <summary>
+    /// Asks the customer to pay, using the same branded mail as the payment receipt.
+    /// A mail failure must not undo the payment link.
+    /// </summary>
+    public static async Task SendPaymentLinkAsync(
+        IEmailService email,
+        ILogger logger,
+        Customer customer,
+        string paymentUrl,
+        decimal amount,
+        IReadOnlyList<CustomerOrderDto> orders,
+        CancellationToken cancellationToken)
+    {
+        if (!HasEmail(customer.Email) || string.IsNullOrWhiteSpace(paymentUrl))
+        {
+            logger.LogWarning(
+                "Payment link was created for customer {CustomerId} but no email was sent.",
+                customer.Id);
+            return;
+        }
+
+        try
+        {
+            var model = new PaymentRequestDocument(customer, paymentUrl.Trim(), amount, orders);
+            await email.SendEmailAsync(
+                customer.Email!.Trim(),
+                orders.Count == 1
+                    ? $"Complete payment for order {orders[0].OrderNumber}"
+                    : "Complete payment for your BlinksMed order",
+                PaymentRequestHtml.Render(model),
+                PaymentRequestHtml.RenderPlain(model),
+                null,
+                null,
+                cancellationToken,
+                "BlinksMed");
+        }
+        catch (Exception ex)
+        {
+            logger.LogWarning(ex, "Payment link for customer {CustomerId} was created but the email was not sent.", customer.Id);
+        }
+    }
+
+    /// <summary>
+    /// Receipt after admin sends a cancellation refund. A mail failure must not undo the refund.
+    /// </summary>
+    public static Task SendCancellationRefundAsync(
+        ICustomerRepository customers,
+        IEmailService email,
+        ILogger logger,
+        CustomerRentalOrder order,
+        CustomerOrderCancellationRefund refund,
+        CancellationToken cancellationToken) =>
+        SendSafeAsync(logger, refund.Id, () => SendCancellationRefundCoreAsync(
+            customers, email, logger, order, refund, cancellationToken));
+
+    /// <summary>
+    /// Receipt after admin sends a deposit refund. A mail failure must not undo the refund.
+    /// </summary>
+    public static Task SendDepositRefundAsync(
+        ICustomerRepository customers,
+        IEmailService email,
+        ILogger logger,
+        CustomerRentalOrder order,
+        CustomerOrderReturn refund,
+        CancellationToken cancellationToken) =>
+        SendSafeAsync(logger, refund.Id, () => SendDepositRefundCoreAsync(
+            customers, email, logger, order, refund, cancellationToken));
+
     private static async Task SendSafeAsync(ILogger logger, Guid referenceId, Func<Task> send)
     {
         try
@@ -93,9 +161,12 @@ internal static class PaymentInvoiceMailer
             amountPaid,
             IsExtension: false);
 
+        var orderSubject = lines.Count == 1
+            ? $"Payment received · order {lines[0].OrderNumber}"
+            : $"Payment received · {lines.Count} items";
         await email.SendEmailAsync(
             customer!.Email!.Trim(),
-            $"BlinksMed invoice {invoiceNo}",
+            orderSubject,
             PaymentInvoiceHtml.Render(model),
             PaymentInvoiceHtml.RenderPlain(model),
             null,
@@ -146,15 +217,158 @@ internal static class PaymentInvoiceMailer
             extension.TotalAmount > 0 ? extension.TotalAmount : session.Amount,
             IsExtension: true);
 
+        var extensionSubject = string.IsNullOrWhiteSpace(order.OrderNumber)
+            ? "Payment received · rental extension"
+            : $"Payment received · extension for {order.OrderNumber}";
         await email.SendEmailAsync(
             customer!.Email!.Trim(),
-            $"BlinksMed invoice {invoiceNo}",
+            extensionSubject,
             PaymentInvoiceHtml.Render(model),
             PaymentInvoiceHtml.RenderPlain(model),
             null,
             null,
             cancellationToken,
             "BlinksMed");
+    }
+
+    private static async Task SendCancellationRefundCoreAsync(
+        ICustomerRepository customers,
+        IEmailService email,
+        ILogger logger,
+        CustomerRentalOrder order,
+        CustomerOrderCancellationRefund refund,
+        CancellationToken cancellationToken)
+    {
+        if (refund.RefundAmount <= 0)
+            return;
+
+        var customer = await customers.GetCustomerByIdAsync(order.CustomerId, cancellationToken);
+        if (!HasEmail(customer?.Email))
+        {
+            logger.LogWarning(
+                "Refund for order {OrderNumber} was sent but the customer has no email.",
+                order.OrderNumber);
+            return;
+        }
+
+        var title = await ProductTitleAsync(customers, order.Id, cancellationToken);
+        var sentAt = refund.RefundedAt ?? DateTimeOffset.UtcNow;
+        var reference = FirstReference(refund.RazorpayRefundId, refund.RefundReference);
+        var cancelledByCustomer = string.Equals(refund.ActorRole, CancellationActors.Customer, StringComparison.OrdinalIgnoreCase)
+            && !string.Equals(refund.Outcome, CancellationOutcomes.DispatchFailed, StringComparison.OrdinalIgnoreCase);
+        var dispatchFailed = string.Equals(refund.Outcome, CancellationOutcomes.DispatchFailed, StringComparison.OrdinalIgnoreCase);
+        var intro = dispatchFailed
+            ? "No vendor accepted this product, so it was not fulfilled. Your refund has been sent. This email is your receipt."
+            : cancelledByCustomer
+                ? "You cancelled this order. Your refund has been sent. This email is your receipt."
+                : "This order was cancelled. Your refund has been sent. This email is your receipt.";
+        var model = new RefundReceiptDocument(
+            InvoiceNumber("RFD", sentAt, refund.Id),
+            "Order refund",
+            intro,
+            customer!,
+            order.OrderNumber,
+            title,
+            "Amount paid",
+            refund.PaidAmount,
+            refund.ExtensionPaidAmount > 0 ? refund.ExtensionPaidAmount : null,
+            refund.ChargeAmount > 0 ? "Charge kept" : null,
+            refund.ChargeAmount,
+            refund.ChargeAmount > 0 ? refund.ChargeReason : null,
+            refund.RefundAmount,
+            sentAt,
+            reference,
+            MethodNote(refund.RefundMethod));
+
+        await email.SendEmailAsync(
+            customer!.Email!.Trim(),
+            string.IsNullOrWhiteSpace(order.OrderNumber)
+                ? "Refund sent for your BlinksMed order"
+                : $"Refund sent · order {order.OrderNumber}",
+            RefundReceiptHtml.Render(model),
+            RefundReceiptHtml.RenderPlain(model),
+            null,
+            null,
+            cancellationToken,
+            "BlinksMed");
+    }
+
+    private static async Task SendDepositRefundCoreAsync(
+        ICustomerRepository customers,
+        IEmailService email,
+        ILogger logger,
+        CustomerRentalOrder order,
+        CustomerOrderReturn refund,
+        CancellationToken cancellationToken)
+    {
+        if (refund.RefundAmount <= 0)
+            return;
+
+        var customer = await customers.GetCustomerByIdAsync(order.CustomerId, cancellationToken);
+        if (!HasEmail(customer?.Email))
+        {
+            logger.LogWarning(
+                "Deposit refund for order {OrderNumber} was sent but the customer has no email.",
+                order.OrderNumber);
+            return;
+        }
+
+        var title = await ProductTitleAsync(customers, order.Id, cancellationToken);
+        var sentAt = refund.RefundedAt ?? DateTimeOffset.UtcNow;
+        var model = new RefundReceiptDocument(
+            InvoiceNumber("DEP", sentAt, refund.Id),
+            "Deposit refund",
+            "Your item has been returned. The deposit refund below has been sent. This email is your receipt.",
+            customer!,
+            order.OrderNumber,
+            title,
+            "Deposit held",
+            refund.DepositAmount,
+            null,
+            refund.DamageAmount > 0 ? "Damage charge" : null,
+            refund.DamageAmount,
+            refund.DamageAmount > 0 ? refund.DamageReason : null,
+            refund.RefundAmount,
+            sentAt,
+            FirstReference(refund.RazorpayRefundId, refund.RefundReference),
+            MethodNote(refund.RefundMethod));
+
+        await email.SendEmailAsync(
+            customer!.Email!.Trim(),
+            string.IsNullOrWhiteSpace(order.OrderNumber)
+                ? "Deposit refund sent for your BlinksMed order"
+                : $"Deposit refund sent · order {order.OrderNumber}",
+            RefundReceiptHtml.Render(model),
+            RefundReceiptHtml.RenderPlain(model),
+            null,
+            null,
+            cancellationToken,
+            "BlinksMed");
+    }
+
+    private static async Task<string> ProductTitleAsync(
+        ICustomerRepository customers,
+        Guid orderId,
+        CancellationToken cancellationToken)
+    {
+        var row = await customers.GetCustomerOrderByIdAsync(orderId, cancellationToken);
+        var title = row?.Listing?.ListingTitle;
+        if (!string.IsNullOrWhiteSpace(row?.VariantDescription))
+            title = string.IsNullOrWhiteSpace(title) ? row!.VariantDescription : $"{title} ({row.VariantDescription})";
+        return string.IsNullOrWhiteSpace(title) ? "Item" : title.Trim();
+    }
+
+    private static string? FirstReference(string? primary, string? fallback)
+    {
+        var value = string.IsNullOrWhiteSpace(primary) ? fallback : primary;
+        return string.IsNullOrWhiteSpace(value) ? null : value.Trim();
+    }
+
+    private static string MethodNote(string? method)
+    {
+        if (string.Equals(method, OrderRefundMethods.Manual, StringComparison.OrdinalIgnoreCase))
+            return "This refund was paid outside the original card payment. Use the reference above if you need to trace it.";
+        return "The amount goes back through the original payment. It can take a few working days to appear in your account.";
     }
 
     private static bool HasEmail(string? email)
@@ -320,8 +534,12 @@ internal static class PaymentInvoiceMailer
             sb.Append(E(doc.Customer.FullName));
             sb.Append("""
                 ,</p>
-                          <p style="margin:0 0 18px;font-size:14px;line-height:1.55;color:#3d4a5c;">Thank you. We received your payment and this email is your invoice. Please keep it for your records.</p>
+                          <p style="margin:0 0 18px;font-size:14px;line-height:1.55;color:#3d4a5c;">
                 """);
+            sb.Append(doc.IsExtension
+                ? "Your extension payment is received. This email is the invoice for the extra rental days only. The original order payment is a separate receipt."
+                : "Your payment is received and your order is placed. This email is your invoice. Please keep it for your records. A vendor still needs to accept each product before it is prepared.");
+            sb.Append("</p>");
             sb.Append(MetaTable(doc, paidLabel));
             sb.Append(BillTo(doc));
             sb.Append("<div style=\"margin:22px 0 8px;font-size:13px;font-weight:700;letter-spacing:0.4px;color:#052A72;\">ITEMS IN THIS PAYMENT</div>");
@@ -569,6 +787,298 @@ internal static class PaymentInvoiceMailer
                 .Select(p => p.Trim());
             var text = string.Join(", ", parts);
             return string.IsNullOrWhiteSpace(text) ? null : text;
+        }
+
+        private static string E(string? value) => WebUtility.HtmlEncode(value ?? string.Empty);
+    }
+
+    private sealed record PaymentRequestDocument(
+        Customer Customer,
+        string PaymentUrl,
+        decimal Amount,
+        IReadOnlyList<CustomerOrderDto> Orders);
+
+    private static class PaymentRequestHtml
+    {
+        public static string Render(PaymentRequestDocument doc)
+        {
+            var sb = new StringBuilder();
+            sb.Append("""
+                <!DOCTYPE html>
+                <html>
+                <head>
+                  <meta charset="utf-8">
+                  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                  <title>Complete your BlinksMed payment</title>
+                </head>
+                <body style="margin:0;padding:0;background:#eef3f8;font-family:Arial,Helvetica,sans-serif;color:#1c2430;">
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef3f8;padding:24px 12px;">
+                    <tr><td align="center">
+                      <table role="presentation" width="640" cellpadding="0" cellspacing="0" style="max-width:640px;width:100%;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #e4eaf2;">
+                        <tr><td style="background:#052A72;padding:28px 32px;">
+                          <div style="color:#9ec0ff;font-size:12px;letter-spacing:2px;font-weight:700;">BLINKSMED</div>
+                          <div style="color:#ffffff;font-size:26px;font-weight:700;margin-top:6px;">Payment needed</div>
+                          <div style="color:#d6e4ff;font-size:14px;margin-top:4px;">Your order is placed. Complete payment to send it to a vendor.</div>
+                        </td></tr>
+                        <tr><td style="padding:28px 32px 8px;">
+                          <p style="margin:0 0 8px;font-size:16px;">Hi 
+                """);
+            sb.Append(WebUtility.HtmlEncode(doc.Customer.FullName));
+            sb.Append("""
+                ,</p>
+                          <p style="margin:0 0 18px;font-size:14px;line-height:1.55;color:#3d4a5c;">An order was prepared for you. Pay the amount below and we will offer it to a vendor. You will get a separate invoice email after the payment is received.</p>
+                """);
+            foreach (var order in doc.Orders)
+            {
+                var kind = string.Equals(order.OrderType, "buy", StringComparison.OrdinalIgnoreCase) ? "Buy" : "Rent";
+                sb.Append("""
+                    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e4eaf2;border-radius:12px;margin-top:10px;">
+                      <tr><td style="padding:14px 16px;">
+                        <div style="font-size:15px;font-weight:700;">
+                    """);
+                sb.Append(WebUtility.HtmlEncode(string.IsNullOrWhiteSpace(order.ListingTitle) ? "Item" : order.ListingTitle));
+                sb.Append("</div><div style=\"font-size:12px;color:#5c6b7a;margin-top:3px;\">");
+                sb.Append(WebUtility.HtmlEncode($"{order.OrderNumber} · {kind} · Qty {order.Quantity}"));
+                sb.Append("</div><div style=\"font-size:14px;font-weight:700;margin-top:8px;\">");
+                sb.Append(WebUtility.HtmlEncode(Money(order.TotalAmount)));
+                sb.Append("</div></td></tr></table>");
+            }
+
+            sb.Append("""
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:16px;background:#f3faf0;border-radius:12px;">
+                  <tr>
+                    <td style="padding:16px 18px;font-size:14px;">Amount to pay</td>
+                    <td align="right" style="padding:16px 18px;font-size:22px;font-weight:700;color:#2f7d08;">
+                """);
+            sb.Append(WebUtility.HtmlEncode(Money(doc.Amount)));
+            sb.Append("""
+                    </td>
+                  </tr>
+                </table>
+                <div style="text-align:center;margin:22px 0;">
+                  <a href="
+                """);
+            sb.Append(WebUtility.HtmlEncode(doc.PaymentUrl));
+            sb.Append("""
+                " style="display:inline-block;background:#052A72;color:#ffffff;padding:12px 28px;text-decoration:none;border-radius:8px;font-size:16px;font-weight:700;">Pay now</a>
+                </div>
+                <p style="margin:0 0 8px;font-size:12px;line-height:1.5;color:#5c6b7a;">If the button does not open, copy this link:<br>
+                """);
+            sb.Append(WebUtility.HtmlEncode(doc.PaymentUrl));
+            sb.Append("""
+                </p>
+                        </td></tr>
+                        <tr><td style="padding:18px 32px 28px;background:#f7f9fc;border-top:1px solid #e4eaf2;">
+                          <p style="margin:0;font-size:12px;line-height:1.5;color:#5c6b7a;">Questions about this payment? Write to <a href="mailto:support@blinksmed.in" style="color:#052A72;">support@blinksmed.in</a>.</p>
+                        </td></tr>
+                      </table>
+                    </td></tr>
+                  </table>
+                </body>
+                </html>
+                """);
+            return sb.ToString();
+        }
+
+        public static string RenderPlain(PaymentRequestDocument doc)
+        {
+            var sb = new StringBuilder();
+            sb.AppendLine($"Hi {doc.Customer.FullName},");
+            sb.AppendLine();
+            sb.AppendLine("Your order is placed. Complete payment so it can be sent to a vendor.");
+            sb.AppendLine();
+            foreach (var order in doc.Orders)
+            {
+                var kind = string.Equals(order.OrderType, "buy", StringComparison.OrdinalIgnoreCase) ? "Buy" : "Rent";
+                var title = string.IsNullOrWhiteSpace(order.ListingTitle) ? "Item" : order.ListingTitle.Trim();
+                sb.AppendLine($"{title} ({order.OrderNumber}) · {kind} · Qty {order.Quantity} · {Money(order.TotalAmount)}");
+            }
+
+            sb.AppendLine();
+            sb.AppendLine($"Amount to pay: {Money(doc.Amount)}");
+            sb.AppendLine($"Pay now: {doc.PaymentUrl}");
+            sb.AppendLine();
+            sb.AppendLine("You will get a separate invoice email after the payment is received.");
+            sb.AppendLine("Support: support@blinksmed.in");
+            return sb.ToString();
+        }
+    }
+
+    private sealed record RefundReceiptDocument(
+        string ReceiptNumber,
+        string Kind,
+        string Intro,
+        Customer Customer,
+        string OrderNumber,
+        string ProductTitle,
+        string PaidLabel,
+        decimal PaidAmount,
+        decimal? ExtensionPaidAmount,
+        string? ChargeLabel,
+        decimal ChargeAmount,
+        string? ChargeReason,
+        decimal RefundAmount,
+        DateTimeOffset SentAtUtc,
+        string? Reference,
+        string MethodNote);
+
+    private static class RefundReceiptHtml
+    {
+        public static string Render(RefundReceiptDocument doc)
+        {
+            var sent = PaymentInvoiceMailer.ToIndia(doc.SentAtUtc);
+            var sentLabel = sent.ToString("dd MMM yyyy, h:mm tt", CultureInfo.InvariantCulture) + " IST";
+            var name = string.IsNullOrWhiteSpace(doc.Customer.FullName) ? "there" : doc.Customer.FullName.Trim();
+            var sb = new StringBuilder();
+            sb.Append("""
+                <!DOCTYPE html>
+                <html>
+                <head>
+                  <meta charset="utf-8">
+                  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+                  <title>BlinksMed refund receipt</title>
+                </head>
+                <body style="margin:0;padding:0;background:#eef3f8;font-family:Arial,Helvetica,sans-serif;color:#1c2430;">
+                  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef3f8;padding:24px 12px;">
+                    <tr><td align="center">
+                      <table role="presentation" width="640" cellpadding="0" cellspacing="0" style="max-width:640px;width:100%;background:#ffffff;border-radius:16px;overflow:hidden;border:1px solid #e4eaf2;">
+                        <tr><td style="background:#052A72;padding:28px 32px;">
+                          <div style="color:#9ec0ff;font-size:12px;letter-spacing:2px;font-weight:700;">BLINKSMED</div>
+                          <div style="color:#ffffff;font-size:26px;font-weight:700;margin-top:6px;">Refund receipt</div>
+                          <div style="color:#d6e4ff;font-size:14px;margin-top:4px;">
+                """);
+            sb.Append(E(doc.Kind));
+            sb.Append("""
+                           · Amount sent to you</div>
+                        </td></tr>
+                        <tr><td style="padding:28px 32px 8px;">
+                          <p style="margin:0 0 8px;font-size:16px;">Hi 
+                """);
+            sb.Append(E(name));
+            sb.Append("""
+                ,</p>
+                          <p style="margin:0 0 18px;font-size:14px;line-height:1.55;color:#3d4a5c;">
+                """);
+            sb.Append(E(doc.Intro));
+            sb.Append("</p>");
+            sb.Append("""
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:18px;">
+                  <tr>
+                    <td style="width:50%;padding:10px 12px;background:#f7f9fc;border-radius:10px;">
+                      <div style="font-size:11px;color:#5c6b7a;font-weight:700;">RECEIPT NUMBER</div>
+                      <div style="font-size:14px;font-weight:700;margin-top:3px;">
+                """);
+            sb.Append(E(doc.ReceiptNumber));
+            sb.Append("""
+                      </div>
+                    </td>
+                    <td style="width:12px;"></td>
+                    <td style="width:50%;padding:10px 12px;background:#f7f9fc;border-radius:10px;">
+                      <div style="font-size:11px;color:#5c6b7a;font-weight:700;">SENT ON</div>
+                      <div style="font-size:14px;font-weight:700;margin-top:3px;">
+                """);
+            sb.Append(E(sentLabel));
+            sb.Append("</div></td></tr></table>");
+            sb.Append("""
+                <div style="border:1px solid #e4eaf2;border-radius:12px;padding:14px 16px;">
+                  <div style="font-size:15px;font-weight:700;">
+                """);
+            sb.Append(E(doc.ProductTitle));
+            sb.Append("</div><div style=\"font-size:12px;color:#5c6b7a;margin-top:3px;\">Order ");
+            sb.Append(E(string.IsNullOrWhiteSpace(doc.OrderNumber) ? "—" : doc.OrderNumber));
+            sb.Append("</div><table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin-top:12px;\">");
+            AppendRow(sb, doc.PaidLabel, doc.PaidAmount, bold: false);
+            if (doc.ExtensionPaidAmount is decimal extensionPaid && extensionPaid > 0)
+                AppendRow(sb, "Includes extension payment", extensionPaid, bold: false);
+            if (!string.IsNullOrWhiteSpace(doc.ChargeLabel) && doc.ChargeAmount > 0)
+                AppendRow(sb, doc.ChargeLabel, doc.ChargeAmount, bold: false);
+            sb.Append("</table>");
+            if (!string.IsNullOrWhiteSpace(doc.ChargeReason))
+            {
+                sb.Append("<div style=\"margin-top:10px;background:#fff7e8;border-radius:8px;padding:8px 10px;font-size:13px;color:#7a4b00;\">");
+                sb.Append(E(doc.ChargeReason));
+                sb.Append("</div>");
+            }
+
+            sb.Append("</div>");
+            sb.Append("""
+                <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin-top:16px;background:#f3faf0;border-radius:12px;">
+                  <tr>
+                    <td style="padding:16px 18px;font-size:14px;color:#1c2430;">Refund sent</td>
+                    <td align="right" style="padding:16px 18px;font-size:22px;font-weight:700;color:#2f7d08;">
+                """);
+            sb.Append(E(Money(doc.RefundAmount)));
+            sb.Append("</td></tr></table>");
+            if (!string.IsNullOrWhiteSpace(doc.Reference))
+            {
+                sb.Append("<p style=\"margin:16px 0 0;font-size:13px;color:#3d4a5c;\">Reference: <strong>");
+                sb.Append(E(doc.Reference));
+                sb.Append("</strong></p>");
+            }
+
+            sb.Append("<p style=\"margin:12px 0 18px;font-size:13px;line-height:1.55;color:#5c6b7a;\">");
+            sb.Append(E(doc.MethodNote));
+            sb.Append("</p></td></tr>");
+            sb.Append("""
+                        <tr><td style="padding:18px 32px 28px;background:#f7f9fc;border-top:1px solid #e4eaf2;">
+                          <p style="margin:0;font-size:12px;line-height:1.5;color:#5c6b7a;">Questions about this refund? Write to <a href="mailto:support@blinksmed.in" style="color:#052A72;">support@blinksmed.in</a>.</p>
+                          <p style="margin:8px 0 0;font-size:12px;color:#5c6b7a;">BlinksMed · 
+                """);
+            sb.Append(E(PublicSiteUrls.DefaultCustomerPortal));
+            sb.Append("""
+                </p>
+                        </td></tr>
+                      </table>
+                    </td></tr>
+                  </table>
+                </body>
+                </html>
+                """);
+            return sb.ToString();
+        }
+
+        public static string RenderPlain(RefundReceiptDocument doc)
+        {
+            var sent = PaymentInvoiceMailer.ToIndia(doc.SentAtUtc);
+            var name = string.IsNullOrWhiteSpace(doc.Customer.FullName) ? "there" : doc.Customer.FullName.Trim();
+            var sb = new StringBuilder();
+            sb.AppendLine("BlinksMed refund receipt");
+            sb.AppendLine(doc.Kind);
+            sb.AppendLine($"Receipt: {doc.ReceiptNumber}");
+            sb.AppendLine($"Sent: {sent:dd MMM yyyy, h:mm tt} IST");
+            sb.AppendLine();
+            sb.AppendLine($"Hi {name},");
+            sb.AppendLine(doc.Intro);
+            sb.AppendLine();
+            sb.AppendLine($"{doc.ProductTitle} ({(string.IsNullOrWhiteSpace(doc.OrderNumber) ? "—" : doc.OrderNumber)})");
+            sb.AppendLine($"{doc.PaidLabel}: {Money(doc.PaidAmount)}");
+            if (doc.ExtensionPaidAmount is decimal extensionPaid && extensionPaid > 0)
+                sb.AppendLine($"Includes extension payment: {Money(extensionPaid)}");
+            if (!string.IsNullOrWhiteSpace(doc.ChargeLabel) && doc.ChargeAmount > 0)
+                sb.AppendLine($"{doc.ChargeLabel}: {Money(doc.ChargeAmount)}");
+            if (!string.IsNullOrWhiteSpace(doc.ChargeReason))
+                sb.AppendLine(doc.ChargeReason);
+            sb.AppendLine($"Refund sent: {Money(doc.RefundAmount)}");
+            if (!string.IsNullOrWhiteSpace(doc.Reference))
+                sb.AppendLine($"Reference: {doc.Reference}");
+            sb.AppendLine(doc.MethodNote);
+            sb.AppendLine();
+            sb.AppendLine("Support: support@blinksmed.in");
+            return sb.ToString();
+        }
+
+        private static void AppendRow(StringBuilder sb, string label, decimal amount, bool bold)
+        {
+            var weight = bold ? "font-weight:700;" : string.Empty;
+            sb.Append("<tr><td style=\"padding-top:6px;font-size:13px;color:#3d4a5c;");
+            sb.Append(weight);
+            sb.Append("\">");
+            sb.Append(E(label));
+            sb.Append("</td><td align=\"right\" style=\"padding-top:6px;font-size:13px;color:#1c2430;");
+            sb.Append(weight);
+            sb.Append("\">");
+            sb.Append(E(Money(amount)));
+            sb.Append("</td></tr>");
         }
 
         private static string E(string? value) => WebUtility.HtmlEncode(value ?? string.Empty);

@@ -370,7 +370,7 @@ class OrderMetaChip extends StatelessWidget {
   }
 }
 
-/// Vendor Web parity: customer/qty/payout on one row, location on its own row.
+/// Vendor web list: customer and quantity, then place and payout.
 class OrderItemMetaLine extends StatelessWidget {
   final VendorOrder order;
 
@@ -384,7 +384,7 @@ class OrderItemMetaLine extends StatelessWidget {
       fontSize: 11,
       height: 1.35,
     );
-    final value = TextStyle(
+    final strong = TextStyle(
       color: colors.textPrimary,
       fontSize: 11,
       fontWeight: FontWeight.w700,
@@ -395,8 +395,8 @@ class OrderItemMetaLine extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Wrap(
-          spacing: 10,
-          runSpacing: 4,
+          spacing: 8,
+          runSpacing: 2,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             Row(
@@ -409,7 +409,7 @@ class OrderItemMetaLine extends StatelessWidget {
                 ),
                 const SizedBox(width: 4),
                 ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 108),
+                  constraints: const BoxConstraints(maxWidth: 140),
                   child: Text(
                     order.customerName,
                     style: muted,
@@ -419,60 +419,23 @@ class OrderItemMetaLine extends StatelessWidget {
                 ),
               ],
             ),
-            Text.rich(
-              TextSpan(
-                children: [
-                  TextSpan(text: 'Qty: ', style: muted),
-                  TextSpan(text: '${order.quantity}', style: value),
-                ],
-              ),
-            ),
-            if (vendorEarnsPayout(order.status))
-              Text.rich(
-                TextSpan(
-                  children: [
-                    TextSpan(text: 'Payout: ', style: muted),
-                    TextSpan(
-                      text: formatVendorMoney(order.payoutAmount),
-                      style: value,
-                    ),
-                  ],
-                ),
-              ),
-            if (order.isExtended && order.orderType.toLowerCase() != 'buy')
-              const OrderMetaChip(label: 'EXTENDED', highlight: true),
-            if (order.returnSettlement?.vendorClaimLabel != null)
-              OrderMetaChip(label: order.returnSettlement!.vendorClaimLabel!),
+            Text('Qty ${order.quantity}', style: muted),
           ],
         ),
-        const SizedBox(height: 5),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        const SizedBox(height: 4),
+        Wrap(
+          spacing: 8,
+          runSpacing: 2,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            Padding(
-              padding: const EdgeInsets.only(top: 1),
-              child: Icon(
-                Icons.location_on_outlined,
-                size: 13,
-                color: colors.textMuted.withValues(alpha: 0.8),
-              ),
+            Text(
+              order.customerLocation,
+              style: muted,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
-            const SizedBox(width: 4),
-            Expanded(
-              child: Text.rich(
-                TextSpan(
-                  children: [
-                    TextSpan(text: 'Location: ', style: muted),
-                    TextSpan(
-                      text: order.customerLocation,
-                      style: value.copyWith(fontWeight: FontWeight.w600),
-                    ),
-                  ],
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
+            if (vendorEarnsPayout(order.status))
+              Text(formatVendorMoney(order.payoutAmount), style: strong),
           ],
         ),
       ],
@@ -628,31 +591,41 @@ class OrderGroupListItem extends StatelessWidget {
               Divider(height: 1, color: colors.border.withValues(alpha: 0.4)),
               const SizedBox(height: 10),
               Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  OrderTypeChip(orderType: order.orderType),
-                  const SizedBox(width: 6),
-                  OrderStatusChip(status: order.status),
-                  const Spacer(),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
+                  Expanded(
+                    child: Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
-                        Text(
-                          'Details',
-                          style: TextStyle(
-                            color: AppTheme.accent,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        Icon(
-                          Icons.chevron_right_rounded,
-                          color: AppTheme.accent,
-                          size: 18,
-                        ),
+                        OrderStatusChip(status: order.status),
+                        OrderTypeChip(orderType: order.orderType),
+                        if (order.isExtended && order.orderType.toLowerCase() != 'buy')
+                          const OrderMetaChip(label: 'EXTENDED', highlight: true),
+                        if (order.returnSettlement?.listDamageLabel != null)
+                          OrderMetaChip(label: order.returnSettlement!.listDamageLabel!),
                       ],
                     ),
+                  ),
+                  const SizedBox(width: 8),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Details',
+                        style: TextStyle(
+                          color: AppTheme.accent,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        color: AppTheme.accent,
+                        size: 18,
+                      ),
+                    ],
                   ),
                 ],
               ),

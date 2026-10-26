@@ -344,6 +344,21 @@ class _OrdersScreenState extends State<OrdersScreen> {
               ),
             ),
           ),
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
+          child: Text.rich(
+            TextSpan(
+              style: TextStyle(color: colors.textMuted, fontSize: 12, height: 1.35),
+              children: const [
+                TextSpan(text: 'Status note: '),
+                TextSpan(text: 'Cancelled', style: TextStyle(fontWeight: FontWeight.w700)),
+                TextSpan(text: ' means the customer cancelled the order. '),
+                TextSpan(text: 'Dispatch failed', style: TextStyle(fontWeight: FontWeight.w700)),
+                TextSpan(text: ' means reassignment could not find an eligible vendor.'),
+              ],
+            ),
+          ),
+        ),
         const SizedBox(height: 8),
       ],
     );

@@ -914,6 +914,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                               'name': 'BlinksMed',
                               'description': 'Pay for ${session.orders.length} order(s)',
                               'order_id': session.razorpayOrderId,
+                              'theme': {'color': AppTheme.razorpayThemeColor},
                             };
 
                             try {

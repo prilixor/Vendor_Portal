@@ -188,7 +188,15 @@ class OrderReturnInfo {
     );
   }
 
-  String? get vendorClaimLabel {
+  /// Short list chip. The full "with admin" sentence stays on the order screen.
+  String? get listDamageLabel {
+    if (damageAmount <= 0) return null;
+    return 'Damage ${formatVendorMoney(damageAmount)}';
+  }
+
+  bool get claimReviewed => status == 'refunded' || status == 'settled';
+
+  String get vendorClaimLabel {
     if (damageAmount > 0) {
       final claim = 'Damage claim ${formatVendorMoney(damageAmount)}';
       if (status == 'pending_refund' || status == 'refunding') {

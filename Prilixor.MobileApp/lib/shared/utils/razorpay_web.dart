@@ -60,7 +60,8 @@ Future<void> openRazorpayWeb({
             "ondismiss": function() {
               window["$errorCallbackName"]("Payment cancelled.");
             }
-          }
+          },
+          "theme": { "color": "#6C63FF" }
         };
         var rzp = new window.Razorpay(options);
         rzp.open();

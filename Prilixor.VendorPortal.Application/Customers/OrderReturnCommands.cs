@@ -167,6 +167,7 @@ internal sealed class RefundOrderDepositCommandHandler(
     ICustomerRepository customers,
     IVendorOnboardingRepository vendors,
     IRazorpayPaymentService razorpay,
+    IEmailService email,
     ILogger<RefundOrderDepositCommandHandler> logger)
     : ICommandHandler<RefundOrderDepositCommand, OrderReturnDto>
 {
@@ -324,6 +325,17 @@ internal sealed class RefundOrderDepositCommandHandler(
         await customers.UpdateOrderReturnAsync(row, cancellationToken);
         await customers.SaveChangesAsync(cancellationToken);
         await vendors.SaveChangesAsync(cancellationToken);
+
+        if (row.RefundAmount > 0)
+        {
+            await PaymentInvoiceMailer.SendDepositRefundAsync(
+                customers,
+                email,
+                logger,
+                order,
+                row,
+                cancellationToken);
+        }
     }
 
     private async Task<Result> RefundOnlineAsync(

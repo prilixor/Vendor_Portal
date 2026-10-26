@@ -278,6 +278,12 @@ function orderStatusBadgeClass(status: string): string {
   return "bg-muted text-foreground";
 }
 
+function isShortTimeline(status: string): boolean {
+  const raw = status.toLowerCase().trim();
+  const compact = raw.replace(/\s+/g, "_");
+  return compact === "cancelled" || compact === "canceled" || compact === "dispatch_failed" || raw.includes("dispatch failed");
+}
+
 function OrderTimeline({ status, orderType }: { status: string; orderType?: string }) {
   const raw = status.toLowerCase().trim();
   const compact = raw.replace(/\s+/g, "_");
@@ -1505,7 +1511,23 @@ const VendorOrderDetail = () => {
             </Card>
           )}
 
-          <div className="grid items-start gap-4 sm:gap-6 lg:grid-cols-[minmax(260px,420px)_minmax(0,1fr)]">
+          <div className={cn(
+            "grid items-start gap-4 sm:gap-6",
+            isShortTimeline(order.status) ? "items-stretch lg:grid-cols-2" : "items-start lg:grid-cols-[minmax(260px,420px)_minmax(0,1fr)]",
+          )}>
+            {isShortTimeline(order.status) ? (
+              <Card className="border-border/80 shadow-sm lg:col-span-2">
+                <CardContent className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:p-5">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold">Order timeline</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      Tracking: <span className="font-semibold text-foreground">{order.listingTitle}</span>
+                    </p>
+                  </div>
+                  <OrderTimeline status={order.status} orderType={order.orderType} />
+                </CardContent>
+              </Card>
+            ) : (
             <Card className="border-border/80 shadow-sm">
               <CardHeader className="p-4 pb-2 sm:p-6 sm:pb-2">
                 <p className="text-lg font-semibold">Order timeline</p>
@@ -1517,13 +1539,14 @@ const VendorOrderDetail = () => {
                 <OrderTimeline status={order.status} orderType={order.orderType} />
               </CardContent>
             </Card>
+            )}
 
-            <div className="flex flex-col gap-4 sm:gap-6">
-              <Card className="border-border/80 shadow-sm">
+            <div className={cn("flex flex-col gap-4 sm:gap-6", isShortTimeline(order.status) && "contents")}>
+              <Card className={cn("border-border/80 shadow-sm", isShortTimeline(order.status) && "h-full")}>
                 <CardHeader className="p-4 pb-3 sm:p-6 sm:pb-4">
                   <p className="text-lg font-semibold">Customer</p>
                 </CardHeader>
-                <CardContent className="grid grid-cols-1 gap-4 px-4 pb-4 sm:grid-cols-2 sm:gap-6 sm:px-6 sm:pb-6">
+                <CardContent className={cn("grid grid-cols-1 gap-4 px-4 pb-4 sm:gap-6 sm:px-6 sm:pb-6", !isShortTimeline(order.status) && "sm:grid-cols-2")}>
                   <div className="space-y-1">
                     <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">Name</p>
                     <p className="text-sm font-medium break-words">{order.customerName}</p>
@@ -1535,7 +1558,7 @@ const VendorOrderDetail = () => {
                 </CardContent>
               </Card>
 
-              <Card className="border-border/80 shadow-sm">
+              <Card className={cn("flex flex-col border-border/80 shadow-sm", isShortTimeline(order.status) && "h-full")}>
                 <CardHeader className="p-4 pb-3 sm:p-6 sm:pb-4">
                   <p className="text-lg font-semibold">{order.orderType?.toLowerCase() === "buy" ? "Purchase details" : "Rental details"}</p>
                 </CardHeader>
@@ -1619,6 +1642,20 @@ const VendorOrderDetail = () => {
                       </div>
                     </>
                   )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 border-t border-border/70 px-4 py-4 sm:grid-cols-3 sm:px-6">
+                    <div className="space-y-1">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">Quantity</p>
+                      <p className="text-sm font-medium tabular-nums">{order.quantity}</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">Amount</p>
+                      <p className="text-sm font-semibold tabular-nums">₹{formatRupee(order.totalAmount)}</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">Deposit</p>
+                      <p className="text-sm font-medium tabular-nums">₹{formatInr(order.depositAmount ?? 0)}</p>
+                    </div>
                   </div>
                   {orderShowsVendorPayout(order.status) ? (
                     <div className="mt-auto flex items-center justify-between gap-3 rounded-b-lg border-t border-border/70 bg-muted/40 px-4 py-3 sm:px-6">

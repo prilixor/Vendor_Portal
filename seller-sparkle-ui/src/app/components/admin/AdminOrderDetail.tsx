@@ -163,6 +163,12 @@ function formatDetailDate(value?: string | null): string {
   return d.toLocaleDateString(undefined, { year: "numeric", month: "short", day: "numeric" });
 }
 
+function isShortTimeline(status: string): boolean {
+  const raw = status.toLowerCase().trim();
+  const compact = raw.replace(/\s+/g, "_");
+  return compact === "cancelled" || compact === "canceled" || compact === "dispatch_failed" || raw.includes("dispatch failed");
+}
+
 function OrderTimeline({ status, orderType }: { status: string; orderType?: string }) {
   const { cancelled, dispatchFailed, completedThrough, currentIndex } = getTimelineProgress(status, orderType);
   if (dispatchFailed) {
@@ -611,6 +617,8 @@ const AdminOrderDetail = () => {
     .some((id) => id !== selectedOrder.status);
   const canReassign = selectedOrder.status === "dispatch_failed" && !refundAlreadySent;
   const showAdminActions = canChangeStatus || canReassign;
+  const shortTimeline = isShortTimeline(selectedOrder.status);
+  const refundOutcome = selectedOrder.cancellationRefund?.outcome?.toLowerCase() ?? "";
 
   return (
     <div className="w-full min-w-0 space-y-4 sm:space-y-6">
@@ -923,7 +931,23 @@ const AdminOrderDetail = () => {
           </Card>
           ) : null}
 
-      <div className="grid items-start gap-4 sm:gap-6 lg:grid-cols-[minmax(260px,420px)_minmax(0,1fr)]">
+      <div className={cn(
+        "grid items-start gap-4 sm:gap-6",
+        shortTimeline ? "items-stretch lg:grid-cols-2" : "items-start lg:grid-cols-[minmax(260px,420px)_minmax(0,1fr)]",
+      )}>
+        {shortTimeline ? (
+          <Card className="border-border/80 shadow-sm lg:col-span-2">
+            <CardContent className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:p-5">
+              <div className="min-w-0">
+                <p className="text-sm font-semibold">Order timeline</p>
+                <p className="mt-0.5 text-xs text-muted-foreground">
+                  Tracking: <span className="font-semibold text-foreground">{selectedOrder.listingTitle}</span>
+                </p>
+              </div>
+              <OrderTimeline status={selectedOrder.status} orderType={selectedOrder.orderType} />
+            </CardContent>
+          </Card>
+        ) : (
         <Card className="border-border/80 shadow-sm">
           <CardHeader className="pb-2">
             <p className="text-lg font-semibold">Order timeline</p>
@@ -935,13 +959,14 @@ const AdminOrderDetail = () => {
             <OrderTimeline status={selectedOrder.status} orderType={selectedOrder.orderType} />
           </CardContent>
         </Card>
+        )}
 
-        <div className="flex flex-col gap-4 sm:gap-6">
-          <Card className="border-border/80 shadow-sm">
+        <div className={cn("flex flex-col gap-4 sm:gap-6", shortTimeline && "contents")}>
+          <Card className={cn("border-border/80 shadow-sm", shortTimeline && "h-full")}>
             <CardHeader className="pb-4">
               <p className="text-lg font-semibold">Customer</p>
             </CardHeader>
-            <CardContent className="grid grid-cols-1 gap-4 text-sm sm:grid-cols-2">
+            <CardContent className={cn("grid grid-cols-1 gap-4 text-sm", !shortTimeline && "sm:grid-cols-2")}>
               <div className="space-y-1">
                 <p className="flex items-center gap-1 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
                   <User className="h-3.5 w-3.5" /> Name
@@ -958,14 +983,14 @@ const AdminOrderDetail = () => {
             </CardContent>
           </Card>
 
-          <Card className="border-border/80 shadow-sm">
+          <Card className={cn("border-border/80 shadow-sm", shortTimeline && "h-full")}>
             <CardHeader className="pb-4">
               <p className="text-lg font-semibold">
                 {selectedOrder.orderType?.toLowerCase() === "buy" ? "Purchase details" : "Rental details"}
               </p>
             </CardHeader>
             <CardContent className="flex flex-col p-0">
-              <div className="grid grid-cols-2 gap-x-6 gap-y-4 px-6 pb-4 text-sm">
+              <div className="grid grid-cols-2 gap-x-4 gap-y-4 px-4 pb-4 text-sm sm:gap-x-6 sm:px-6">
                 {selectedOrder.orderType?.toLowerCase() === "buy" ? (
                   <>
                     <div className="space-y-1">
@@ -1011,19 +1036,23 @@ const AdminOrderDetail = () => {
                     </div>
                   </>
                 )}
+              </div>
+              <div className="grid grid-cols-2 gap-3 border-t border-border/70 px-4 py-4 sm:grid-cols-4 sm:px-6">
                 <div className="space-y-1">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Quantity</p>
-                  <p className="font-medium">{selectedOrder.quantity}</p>
+                  <p className="font-medium tabular-nums">{selectedOrder.quantity}</p>
                 </div>
                 <div className="space-y-1">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Amount</p>
                   <p className="font-semibold tabular-nums">₹{selectedOrder.totalAmount.toFixed(0)}</p>
-                  <p className="text-xs text-muted-foreground tabular-nums">
-                    + ₹{selectedOrder.depositAmount.toFixed(0)} deposit
-                  </p>
-                  <p className="text-xs text-muted-foreground tabular-nums">
-                    {formatGstRateLabel(selectedOrder.gstPercent)} ₹{(selectedOrder.gstAmount ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}
-                  </p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Deposit</p>
+                  <p className="font-medium tabular-nums">₹{selectedOrder.depositAmount.toFixed(0)}</p>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">{formatGstRateLabel(selectedOrder.gstPercent)}</p>
+                  <p className="font-medium tabular-nums">₹{(selectedOrder.gstAmount ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}</p>
                 </div>
               </div>
               {orderShowsVendorPayout(selectedOrder.status) ? (
@@ -1221,14 +1250,25 @@ const AdminOrderDetail = () => {
 
           {selectedOrder.cancellationRefund ? (
             <Card className="border-border/80 shadow-sm">
-              <CardHeader className="pb-2">
-                <p className="text-lg font-semibold">Cancellation refund</p>
-                <p className="text-sm text-muted-foreground">{selectedOrder.cancellationRefund.actorLabel}</p>
-                <p className="text-sm text-muted-foreground">
-                  Deduct a charge only if needed, then refund this product.
-                </p>
+              <CardHeader className="p-4 pb-2 sm:p-6 sm:pb-2">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-lg font-semibold">
+                      {refundOutcome === "dispatch_failed" ? "Refund review" : "Cancellation refund"}
+                    </p>
+                    <p className="mt-1 text-sm text-muted-foreground">{selectedOrder.cancellationRefund.actorLabel}</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Deduct a charge only if needed, then refund this product.
+                    </p>
+                  </div>
+                  {adminCancellationChip(selectedOrder.cancellationRefund) ? (
+                    <span className="w-fit shrink-0 rounded-full bg-sky-100 px-2.5 py-1 text-[11px] font-semibold text-sky-900 dark:bg-sky-950/50 dark:text-sky-200">
+                      {adminCancellationChip(selectedOrder.cancellationRefund)}
+                    </span>
+                  ) : null}
+                </div>
               </CardHeader>
-              <CardContent className="space-y-3 text-sm">
+              <CardContent className="p-4 pt-0 text-sm sm:p-6">
                 <CancellationRefundBody
                   row={selectedOrder.cancellationRefund}
                   chargeText={cancelCharge}

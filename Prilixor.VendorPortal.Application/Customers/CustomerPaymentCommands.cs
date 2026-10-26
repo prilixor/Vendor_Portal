@@ -7,6 +7,7 @@ using Microsoft.Extensions.Options;
 using Prilixor.Shared.Abstractions.CQRS;
 using Prilixor.Shared.Models;
 using Prilixor.VendorPortal.Application.Abstractions;
+using Prilixor.VendorPortal.Application.Services;
 using Prilixor.VendorPortal.Domain.Customers;
 using Prilixor.VendorPortal.Domain.Options;
 
@@ -178,24 +179,14 @@ internal sealed class CreateCustomerCheckoutCommandHandler(
                 await customers.UpdateCheckoutSessionAsync(session, cancellationToken);
                 await customers.SaveChangesAsync(cancellationToken);
 
-                try
-                {
-                    await email.SendEmailAsync(
-                        customer.Email,
-                        "Complete your BlinksMed payment",
-                        $"""
-                        <p>Hi {System.Net.WebUtility.HtmlEncode(customer.FullName)},</p>
-                        <p>An order was prepared for you. Please complete payment using the link below:</p>
-                        <p><a href="{System.Net.WebUtility.HtmlEncode(link.ShortUrl)}">{System.Net.WebUtility.HtmlEncode(link.ShortUrl)}</a></p>
-                        <p>Amount: ₹{amount:0.00}</p>
-                        <p>After payment, your order will be sent to vendors for acceptance.</p>
-                        """,
-                        cancellationToken);
-                }
-                catch (Exception ex)
-                {
-                    logger.LogWarning(ex, "Failed to email Razorpay payment link for session {SessionId}", sessionId);
-                }
+                await PaymentInvoiceMailer.SendPaymentLinkAsync(
+                    email,
+                    logger,
+                    customer,
+                    link.ShortUrl,
+                    amount,
+                    placed,
+                    cancellationToken);
 
                 return Result.Success(new CustomerCheckoutDto(
                     sessionId,
@@ -257,6 +248,7 @@ internal sealed class VerifyCustomerCheckoutCommandHandler(
     IRazorpayPaymentService razorpay,
     ISequentialDispatchService dispatch,
     IEmailService email,
+    CustomerSmsNotifier customerSms,
     ILogger<VerifyCustomerCheckoutCommandHandler> logger) : ICommandHandler<VerifyCustomerCheckoutCommand, CustomerCheckoutDto>
 {
     public async Task<Result<CustomerCheckoutDto>> Handle(VerifyCustomerCheckoutCommand request, CancellationToken cancellationToken)
@@ -280,6 +272,7 @@ internal sealed class VerifyCustomerCheckoutCommandHandler(
             customers,
             dispatch,
             email,
+            customerSms,
             logger,
             session,
             request.RazorpayPaymentId,
@@ -362,6 +355,7 @@ internal sealed class ProcessRazorpayWebhookCommandHandler(
     IOptions<RazorpayOptions> razorpayOptions,
     IMediator mediator,
     IEmailService email,
+    CustomerSmsNotifier customerSms,
     ILogger<ProcessRazorpayWebhookCommandHandler> logger) : ICommandHandler<ProcessRazorpayWebhookCommand, bool>
 {
     public async Task<Result<bool>> Handle(ProcessRazorpayWebhookCommand request, CancellationToken cancellationToken)
@@ -444,7 +438,7 @@ internal sealed class ProcessRazorpayWebhookCommandHandler(
         }
 
         await CheckoutPaymentActivator.MarkPaidAndDispatchAsync(
-            customers, dispatch, email, logger, session, paymentId, cancellationToken);
+            customers, dispatch, email, customerSms, logger, session, paymentId, cancellationToken);
         return true;
     }
 
@@ -476,7 +470,7 @@ internal sealed class ProcessRazorpayWebhookCommandHandler(
             session.RazorpayOrderId = orderId;
 
         await CheckoutPaymentActivator.MarkPaidAndDispatchAsync(
-            customers, dispatch, email, logger, session, paymentId, cancellationToken);
+            customers, dispatch, email, customerSms, logger, session, paymentId, cancellationToken);
     }
 }
 
@@ -486,6 +480,7 @@ internal static class CheckoutPaymentActivator
         ICustomerRepository customers,
         ISequentialDispatchService dispatch,
         IEmailService email,
+        CustomerSmsNotifier customerSms,
         ILogger logger,
         CustomerCheckoutSession session,
         string? razorpayPaymentId,
@@ -539,7 +534,27 @@ internal static class CheckoutPaymentActivator
                 cancellationToken);
             await dispatch.PersistAsync(cancellationToken);
 
-            if (!started)
+            if (started)
+            {
+                await customers.AddCustomerNotificationAsync(
+                    new CustomerNotification
+                    {
+                        Id = Guid.NewGuid(),
+                        CustomerId = order.CustomerId,
+                        Title = $"Order {order.OrderNumber} submitted",
+                        Body = $"Your {order.OrderType} request for \"{placementTitle}\" is awaiting vendor acceptance.",
+                        NotificationType = "order_pending",
+                        RelatedOrderId = order.Id,
+                    },
+                    cancellationToken);
+                await customerSms.TrySendAsync(
+                    order.CustomerId,
+                    SmsTemplates.CustomerOrderPending(order.OrderNumber),
+                    CustomerSmsKind.OrderPlaced,
+                    cancellationToken);
+                await customers.SaveChangesAsync(cancellationToken);
+            }
+            else
             {
                 order.Status = "dispatch_failed";
                 await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
