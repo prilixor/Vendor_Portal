@@ -649,7 +649,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
               const SizedBox(height: 2),
               Text(
                 refundSummary,
-                style: const TextStyle(color: Color(0xFF15803D), fontSize: 11, fontWeight: FontWeight.w700, height: 1.2),
+                style: TextStyle(color: colors.success, fontSize: 11, fontWeight: FontWeight.w700, height: 1.2),
                 textAlign: TextAlign.right,
               ),
             ],
@@ -1346,21 +1346,30 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                 Container(
                                   padding: const EdgeInsets.all(12),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFFFFF7ED),
+                                    color: context.isDarkMode ? const Color(0xFF3F2A12) : const Color(0xFFFFF7ED),
                                     borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: const Color(0xFFFDBA74)),
+                                    border: Border.all(
+                                      color: context.isDarkMode ? const Color(0xFFD97706) : const Color(0xFFFDBA74),
+                                    ),
                                   ),
                                   child: Column(
                                     crossAxisAlignment: CrossAxisAlignment.stretch,
                                     children: [
                                       Text(
                                         'Extension approved',
-                                        style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w800),
+                                        style: TextStyle(
+                                          color: context.isDarkMode ? const Color(0xFFFDE68A) : const Color(0xFF9A3412),
+                                          fontWeight: FontWeight.w800,
+                                        ),
                                       ),
                                       const SizedBox(height: 4),
                                       Text(
                                         '${awaitingExtension.additionalDays} day${awaitingExtension.additionalDays == 1 ? '' : 's'}. The end date stays ${_formatOrderDate(order.endDate)} until this payment succeeds, then it moves to ${_formatOrderDate(awaitingExtension.newEndDate)}.',
-                                        style: TextStyle(color: colors.textSecondary, fontSize: 12, height: 1.3),
+                                        style: TextStyle(
+                                          color: context.isDarkMode ? const Color(0xFFFED7AA) : const Color(0xFF7C2D12),
+                                          fontSize: 12,
+                                          height: 1.3,
+                                        ),
                                       ),
                                       const SizedBox(height: 10),
                                       ElevatedButton(
@@ -1389,13 +1398,19 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                 Container(
                                   padding: const EdgeInsets.all(12),
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFFFFFBEB),
+                                    color: context.isDarkMode ? const Color(0xFF3F2A12) : const Color(0xFFFFFBEB),
                                     borderRadius: BorderRadius.circular(12),
-                                    border: Border.all(color: const Color(0xFFFCD34D)),
+                                    border: Border.all(
+                                      color: context.isDarkMode ? const Color(0xFFD97706) : const Color(0xFFFCD34D),
+                                    ),
                                   ),
                                   child: Text(
                                     'Extension waiting for vendor approval · ${pendingExtension.additionalDays} day${pendingExtension.additionalDays == 1 ? '' : 's'} · ₹${pendingExtension.totalAmount.toStringAsFixed(2)}. This amount is not in the order total yet.',
-                                    style: TextStyle(color: colors.textSecondary, fontSize: 12, height: 1.3),
+                                    style: TextStyle(
+                                      color: context.isDarkMode ? const Color(0xFFFED7AA) : const Color(0xFF7C2D12),
+                                      fontSize: 12,
+                                      height: 1.3,
+                                    ),
                                   ),
                                 ),
                               ],
@@ -1407,6 +1422,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                       child: ElevatedButton(
                                         style: ElevatedButton.styleFrom(
                                           backgroundColor: const Color(0xFF6C63FF),
+                                          foregroundColor: Colors.white,
+                                          disabledBackgroundColor: const Color(0xFF6C63FF).withValues(alpha: 0.38),
+                                          disabledForegroundColor: Colors.white,
                                           padding: const EdgeInsets.symmetric(vertical: 12),
                                           minimumSize: const Size.fromHeight(44),
                                         ),
@@ -1415,9 +1433,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                             : () => _showExtensionBottomSheet(context, provider),
                                         child: FittedBox(
                                           fit: BoxFit.scaleDown,
-                                          child: Text(
+                                          child: const Text(
                                             'Extend Rental',
-                                            style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w700),
+                                            style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700),
                                           ),
                                         ),
                                       ),
@@ -2190,7 +2208,7 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              color: colors.textPrimary,
+              color: filled ? Colors.white : colors.textPrimary,
               fontSize: 14,
               fontWeight: FontWeight.w600,
             ),
@@ -2202,8 +2220,9 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
     final style = filled
         ? ElevatedButton.styleFrom(
             backgroundColor: const Color(0xFF6C63FF),
-            foregroundColor: colors.textPrimary,
+            foregroundColor: Colors.white,
             disabledBackgroundColor: const Color(0xFF6C63FF).withValues(alpha: 0.45),
+            disabledForegroundColor: Colors.white,
             padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
             minimumSize: const Size.fromHeight(48),
             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
@@ -2484,9 +2503,9 @@ class _GroupVendorPhotoRequestCard extends StatelessWidget {
                         ? SizedBox(
                             width: 16,
                             height: 16,
-                            child: CircularProgressIndicator(strokeWidth: 2, color: colors.textPrimary),
+                            child: const CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                           )
-                        : Icon(Icons.photo_library_outlined, size: 18, color: colors.textPrimary),
+                        : const Icon(Icons.photo_library_outlined, size: 18, color: Colors.white),
                     label: 'Request all (${eligible.length})',
                     onPressed: busy ? null : onRequestAll,
                   ),

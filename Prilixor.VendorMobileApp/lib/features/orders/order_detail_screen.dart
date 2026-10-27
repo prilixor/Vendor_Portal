@@ -374,22 +374,28 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     }
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.card(context),
-        title: const Text('Cancel order?', style: TextStyle(color: Colors.white)),
+      builder: (ctx) {
+        final colors = ctx.appColors;
+        return AlertDialog(
+        backgroundColor: colors.surface,
+        title: Text('Cancel order?', style: TextStyle(color: colors.textPrimary)),
         content: Text(
           'This releases the assignment so another vendor can receive it.',
-          style: TextStyle(color: Colors.white.withValues(alpha: 0.75)),
+          style: TextStyle(color: colors.textSecondary),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Keep')),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-            child: const Text('Cancel order'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: colors.danger,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Cancel order', style: TextStyle(color: Colors.white)),
           ),
         ],
-      ),
+      );
+      },
     );
     if (confirm != true || !mounted) return;
 
@@ -656,7 +662,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
               ? Center(
                   child: Text(
                     provider.error ?? 'Order not found',
-                    style: const TextStyle(color: Colors.white54),
+                    style: TextStyle(color: context.appColors.textMuted),
                   ),
                 )
               : CustomScrollView(
@@ -1066,6 +1072,9 @@ class _OrderActionBar extends StatelessWidget {
                 style: ElevatedButton.styleFrom(
                   minimumSize: const Size.fromHeight(48),
                   backgroundColor: AppTheme.accent,
+                  foregroundColor: Colors.white,
+                  disabledBackgroundColor: AppTheme.accent.withValues(alpha: 0.38),
+                  disabledForegroundColor: Colors.white,
                 ),
                 child: busy
                     ? const SizedBox(
@@ -1073,7 +1082,10 @@ class _OrderActionBar extends StatelessWidget {
                         height: 20,
                         child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                       )
-                    : Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+                    : Text(
+                        label,
+                        style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+                      ),
               ),
             ],
           ),
@@ -1104,13 +1116,14 @@ class _PendingContinuationsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final dark = context.isDarkMode;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: context.appColors.warningSoft,
+        color: dark ? const Color(0xFF3F2A12) : context.appColors.warningSoft,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: context.appColors.warningBorder),
+        border: Border.all(color: dark ? const Color(0xFFFBBF24) : context.appColors.warningBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -1190,20 +1203,22 @@ class _RequestBox extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.appColors;
+    final dark = context.isDarkMode;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: context.appColors.surface,
+        color: dark ? const Color(0xFF1E293B) : colors.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: context.appColors.warningBorder),
+        border: Border.all(color: dark ? const Color(0xFF92400E) : colors.warningBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: TextStyle(color: context.appColors.textPrimary, fontWeight: FontWeight.w700)),
+          Text(title, style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w700)),
           const SizedBox(height: 4),
-          Text(subtitle, style: TextStyle(color: context.appColors.textSecondary, fontSize: 13)),
+          Text(subtitle, style: TextStyle(color: dark ? const Color(0xFFE2E8F0) : colors.textSecondary, fontSize: 13)),
           const SizedBox(height: 10),
           ...rows.map(
             (r) => Padding(
@@ -1213,12 +1228,12 @@ class _RequestBox extends StatelessWidget {
                   Expanded(
                     child: Text(
                       r.$1,
-                      style: TextStyle(color: context.appColors.textMuted, fontSize: 12),
+                      style: TextStyle(color: dark ? const Color(0xFFCBD5E1) : colors.textMuted, fontSize: 12),
                     ),
                   ),
                   Text(
                     r.$2,
-                    style: TextStyle(color: context.appColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 12),
+                    style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w600, fontSize: 12),
                   ),
                 ],
               ),
@@ -1232,8 +1247,8 @@ class _RequestBox extends StatelessWidget {
                 child: OutlinedButton(
                   onPressed: busy ? null : onReject,
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: context.appColors.textSecondary,
-                    side: BorderSide(color: context.appColors.border),
+                    foregroundColor: colors.textPrimary,
+                    side: BorderSide(color: colors.border),
                   ),
                   child: const Text('Reject'),
                 ),
@@ -1242,8 +1257,13 @@ class _RequestBox extends StatelessWidget {
               Expanded(
                 child: ElevatedButton(
                   onPressed: busy ? null : onApprove,
-                  style: ElevatedButton.styleFrom(backgroundColor: AppTheme.accent),
-                  child: const Text('Approve'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.accent,
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: AppTheme.accent.withValues(alpha: 0.38),
+                    disabledForegroundColor: Colors.white,
+                  ),
+                  child: const Text('Approve', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
                 ),
               ),
             ],
