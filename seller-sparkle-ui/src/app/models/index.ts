@@ -40,6 +40,7 @@ export interface VendorDocument {
   fileUrl?: string;
   fileType?: string;
   fileSize?: number;
+  documentNumber?: string;
   status: VerificationStatus;
   rejectionReason?: string;
   uploadedAt: string;

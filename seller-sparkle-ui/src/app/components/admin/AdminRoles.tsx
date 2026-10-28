@@ -78,7 +78,11 @@ function categoryCoverage(
   permissions: AdminPermissionDto[],
 ): { category: string; enabled: number; total: number }[] {
   const map = new Map<string, { enabled: number; total: number }>();
-  const enabled = new Set(role.permissionCodes);
+  const enabled = new Set(
+    role.code === "super_admin"
+      ? permissions.map((p) => p.code)
+      : role.permissionCodes
+  );
   for (const p of permissions) {
     const cur = map.get(p.category) ?? { enabled: 0, total: 0 };
     cur.total += 1;
@@ -192,7 +196,11 @@ const AdminRoles = () => {
     setCode(role.code);
     setName(role.name);
     setDescription(role.description ?? "");
-    setSelected([...role.permissionCodes]);
+    setSelected(
+      role.code === "super_admin"
+        ? permissions.map((p) => p.code)
+        : [...role.permissionCodes]
+    );
     setPermSearch("");
     setOpen(true);
   };
@@ -201,7 +209,15 @@ const AdminRoles = () => {
 
   const toggle = (perm: string) => {
     if (isLockedSystemSuperAdmin) return;
-    setSelected((prev) => (prev.includes(perm) ? prev.filter((x) => x !== perm) : [...prev, perm]));
+    setSelected((prev) => {
+      if (prev.includes(perm)) {
+        if (perm === "vendors.verify") {
+          return prev.filter((x) => x !== "vendors.verify" && x !== "vendors.auto_verify");
+        }
+        return prev.filter((x) => x !== perm);
+      }
+      return [...prev, perm];
+    });
   };
 
   const toggleCategory = (perms: AdminPermissionDto[], allSelected: boolean) => {
@@ -349,9 +365,10 @@ const AdminRoles = () => {
               const visual = roleVisual(role.code);
               const Icon = visual.icon;
               const coverage = categoryCoverage(role, permissions).slice(0, 4);
+              const permCount = locked ? permissions.length : role.permissionCodes.length;
               const permPct =
                 permissions.length > 0
-                  ? Math.round((role.permissionCodes.length / permissions.length) * 100)
+                  ? Math.round((permCount / permissions.length) * 100)
                   : 0;
 
               return (
@@ -409,7 +426,7 @@ const AdminRoles = () => {
                       <div className="flex items-center justify-between text-[11px]">
                         <span className="font-medium text-muted-foreground">Access coverage</span>
                         <span className={cn("tabular-nums font-medium", visual.accent)}>
-                          {role.permissionCodes.length}/{permissions.length || "—"} · {permPct}%
+                          {permCount}/{permissions.length || "—"} · {permPct}%
                         </span>
                       </div>
                       <div className="h-1.5 overflow-hidden rounded-full bg-muted">
@@ -443,7 +460,7 @@ const AdminRoles = () => {
                       <div className="flex flex-wrap items-center gap-1.5">
                         <Badge variant="secondary" className="gap-1 text-[10px] font-medium">
                           <KeyRound className="h-3 w-3" />
-                          {role.permissionCodes.length} permissions
+                          {permCount} permissions
                         </Badge>
                         {role.isSystem && !locked && (
                           <Badge variant="outline" className="text-[10px] text-muted-foreground">
@@ -565,7 +582,7 @@ const AdminRoles = () => {
                     <div className="min-w-0">
                       <h3 className="text-sm font-semibold">Permissions</h3>
                       <p className="text-xs text-muted-foreground">
-                        {selected.length} of {permissions.length} assigned
+                        {isLockedSystemSuperAdmin ? permissions.length : selected.length} of {permissions.length} assigned
                       </p>
                     </div>
                   </div>
@@ -588,7 +605,11 @@ const AdminRoles = () => {
                     </p>
                   ) : (
                     byCategory.map(([category, perms], catIdx) => {
-                      const selectedInCat = perms.filter((p) => selected.includes(p.code)).length;
+                      const autoVerifyPerm = permissions.find((p) => p.code === "vendors.auto_verify");
+                      const displayPerms = perms.filter((p) => p.code !== "vendors.auto_verify");
+                      const selectedInCat = isLockedSystemSuperAdmin
+                        ? perms.length
+                        : perms.filter((p) => selected.includes(p.code)).length;
                       const allSelected = selectedInCat === perms.length && perms.length > 0;
                       return (
                         <div key={category} className={cn(catIdx > 0 && "border-t")}>
@@ -612,8 +633,9 @@ const AdminRoles = () => {
                             )}
                           </div>
                           <ul>
-                            {perms.map((p) => {
-                              const checked = selected.includes(p.code);
+                            {displayPerms.map((p) => {
+                              const checked = isLockedSystemSuperAdmin || selected.includes(p.code);
+                              const isVerifyVendors = p.code === "vendors.verify";
                               return (
                                 <li key={p.code} className="border-b last:border-b-0">
                                   <label
@@ -638,6 +660,33 @@ const AdminRoles = () => {
                                       </span>
                                     </span>
                                   </label>
+
+                                  {isVerifyVendors && checked && autoVerifyPerm && (
+                                    <div className="border-t bg-muted/20 pl-7 sm:pl-9">
+                                      <label
+                                        className={cn(
+                                          "flex min-h-[3rem] cursor-pointer gap-3 px-3 py-2.5 sm:px-4",
+                                          "hover:bg-muted/40 active:bg-muted/60",
+                                          isLockedSystemSuperAdmin && "cursor-default hover:bg-transparent active:bg-transparent",
+                                        )}
+                                      >
+                                        <Checkbox
+                                          className="mt-0.5"
+                                          checked={isLockedSystemSuperAdmin || selected.includes(autoVerifyPerm.code)}
+                                          onCheckedChange={() => toggle(autoVerifyPerm.code)}
+                                          disabled={isLockedSystemSuperAdmin}
+                                        />
+                                        <span className="min-w-0 flex-1">
+                                          <span className="block text-sm font-medium leading-5">{autoVerifyPerm.name}</span>
+                                          <span className="mt-0.5 block text-xs leading-relaxed text-muted-foreground">
+                                            {autoVerifyPerm.description || (
+                                              <span className="font-mono">{autoVerifyPerm.code}</span>
+                                            )}
+                                          </span>
+                                        </span>
+                                      </label>
+                                    </div>
+                                  )}
                                 </li>
                               );
                             })}

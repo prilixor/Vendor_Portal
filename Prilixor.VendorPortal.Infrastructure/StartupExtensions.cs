@@ -71,6 +71,14 @@ namespace Prilixor.VendorPortal.Infrastructure
             });
             services.AddScoped<IAiSupportService, GroqSupportService>();
 
+            // Configure Cashfree Verification Suite (Secure ID)
+            services.Configure<CashfreeOptions>(configuration.GetSection(CashfreeOptions.SectionName));
+            services.AddHttpClient("Cashfree", client =>
+            {
+                client.Timeout = TimeSpan.FromSeconds(30);
+            });
+            services.AddScoped<ICashfreeVerificationService, CashfreeVerificationService>();
+
             RegisterVendorStorage(services, configuration, environment);
 
             return services;

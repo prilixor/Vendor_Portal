@@ -863,6 +863,20 @@ export const adminApi = {
     );
   },
 
+  async autoVerifyVendorDocument(vendorId: string, documentId: string): Promise<VendorDocumentDto> {
+    return apiClient.post<VendorDocumentDto>(
+      `/vendors/${vendorId}/documents/${documentId}/verify`,
+      {}
+    );
+  },
+
+  async autoVerifyVendorBankAccount(vendorId: string, bankAccountId: string): Promise<VendorBankAccountDto> {
+    return apiClient.post<VendorBankAccountDto>(
+      `/vendors/${vendorId}/bank-accounts/${bankAccountId}/verify`,
+      {}
+    );
+  },
+
   async verifyVendorListing(data: VerifyVendorListingRequest): Promise<VendorProductListingDto> {
     return apiClient.patch<VendorProductListingDto>(
       `/admin/vendors/${data.vendorId}/listings/${data.listingId}/verification`,

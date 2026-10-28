@@ -12,6 +12,7 @@ public static class AdminPermissions
     public const string OrdersManage = "orders.manage";
     public const string VendorsView = "vendors.view";
     public const string VendorsVerify = "vendors.verify";
+    public const string VendorsAutoVerify = "vendors.auto_verify";
     public const string VendorsManage = "vendors.manage";
     public const string VendorsImpersonate = "vendors.impersonate";
     public const string CatalogManage = "catalog.manage";
@@ -31,6 +32,7 @@ public static class AdminPermissions
         (OrdersManage, "Manage Orders", "Orders", "Update status, reassign, cancel/refund, extensions"),
         (VendorsView, "View Vendors", "Vendors", "List and view vendor details"),
         (VendorsVerify, "Verify Vendors", "Vendors", "Verification queue, approve/reject documents"),
+        (VendorsAutoVerify, "Automated Document Verification", "Vendors", "Allow using automated verification (GST, PAN, Cheque OCR, Penny Drop)"),
         (VendorsManage, "Manage Vendors", "Vendors", "Suspend, ban, reactivate, force reset password"),
         (VendorsImpersonate, "Impersonate Vendor", "Vendors", "Open Vendor Portal as a vendor"),
         (CatalogManage, "Manage Catalog", "Catalog", "Products and chemicals management"),
@@ -50,7 +52,7 @@ public static class AdminPermissions
         ["super_admin"] = AllCodes.ToArray(),
         ["verifier"] =
         [
-            DashboardView, NotificationsView, VendorsView, VendorsVerify, AuditView
+            DashboardView, NotificationsView, VendorsView, VendorsVerify, VendorsAutoVerify, AuditView
         ],
         ["operations_admin"] =
         [

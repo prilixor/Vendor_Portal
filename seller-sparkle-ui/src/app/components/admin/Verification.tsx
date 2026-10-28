@@ -8,11 +8,12 @@ import { Label } from "@/app/components/ui/label";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import { TablePagination } from "@/app/components/shared/TablePagination";
 import { StatusBadge } from "@/app/components/shared/StatusBadge";
-import { Search, CheckCircle2, XCircle, Building2, Mail, Loader2, MoreVertical, Ban, ShieldAlert, RotateCcw, FileText, Eye, Building, AlertCircle, Calendar, MapPin, ExternalLink } from "lucide-react";
+import { Search, CheckCircle2, XCircle, Building2, Mail, Loader2, MoreVertical, Ban, ShieldAlert, ShieldCheck, RotateCcw, FileText, Eye, Building, AlertCircle, Info, Calendar, MapPin, ExternalLink } from "lucide-react";
 import { IconTooltip } from "@/app/components/ui/tooltip";
 import { Tabs, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/app/components/ui/dialog";
 import { Badge } from "@/app/components/ui/badge";
+import { Switch } from "@/app/components/ui/switch";
 import { Textarea } from "@/app/components/ui/textarea";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/app/components/ui/dropdown-menu";
 import { toast } from "sonner";
@@ -23,6 +24,8 @@ import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
 import { retryOriginalOnImageError } from "@/app/helpers/utils";
 import { CopyableEmail } from "@/app/components/shared/CopyableEmail";
 import { AdminServiceAreaRadiusDialog } from "@/app/components/admin/AdminServiceAreaRadiusDialog";
+import { useAuth } from "@/app/guards/AuthContext";
+import { ADMIN_PERMISSIONS } from "@/app/helpers/adminNav";
 
 const getApiOrigin = (): string | null => {
   const configured = import.meta.env.VITE_API_BASE_URL as string | undefined;
@@ -195,6 +198,8 @@ const Verification = () => {
   const [loadingAreas, setLoadingAreas] = useState(false);
   const [radiusEditArea, setRadiusEditArea] = useState<VendorServiceAreaDto | null>(null);
   const navigate = useNavigate();
+  const { hasPermission } = useAuth();
+  const canAutoVerify = hasPermission(ADMIN_PERMISSIONS.vendorsAutoVerify);
 
   useEffect(() => {
     loadVendors();
@@ -367,6 +372,55 @@ const Verification = () => {
     }
   };
 
+  const isAutoVerifiable = (docType: string): boolean => {
+    return docType === "GST Certificate" || docType === "PAN Card" || docType === "Cancelled Cheque";
+  };
+
+  const handleAutoVerifyDocument = async (vendorId: string, doc: VendorDocumentDto) => {
+    if (!canAutoVerify) {
+      toast.error("Your admin role does not have permission for automated verification. Please review manually.");
+      return;
+    }
+
+    const adminUserId = getAdminUserId();
+    if (!adminUserId) {
+      toast.error("Admin session not found. Please login again.");
+      return;
+    }
+
+    const key = `doc-${doc.id}-autoverify`;
+    setItemActionLoadingKey(key);
+    const loadingToastId = toast.loading(`Verifying ${doc.documentType} via Registry...`);
+    try {
+      const result = await adminApi.autoVerifyVendorDocument(vendorId, doc.id);
+      await loadDocuments(vendorId);
+      await loadBankAccounts(vendorId);
+      await loadVendors();
+
+      toast.dismiss(loadingToastId);
+
+      if (result.verificationStatus === "approved") {
+        if (doc.documentType === "Cancelled Cheque") {
+          toast.success("Cancelled Cheque & Bank Account verified successfully!");
+        } else if (doc.documentType === "GST Certificate") {
+          toast.success("GST Certificate verified! Document GSTIN and business name match profile.");
+        } else {
+          toast.success(`${doc.documentType} verified successfully.`);
+        }
+      } else if (result.verificationStatus === "rejected") {
+        toast.error(`Verification Failed: ${result.rejectionReason || "Could not be verified against official registry."}`);
+      } else {
+        toast.info(`${doc.documentType} status: ${result.verificationStatus}.`);
+      }
+    } catch (error) {
+      toast.dismiss(loadingToastId);
+      const message = getUserFriendlyMessage(error);
+      toast.error(message);
+    } finally {
+      setItemActionLoadingKey(null);
+    }
+  };
+
   const verifyBankItem = async (vendorId: string, bankAccountId: string, verificationStatus: "approved" | "rejected", notes?: string) => {
     const adminUserId = getAdminUserId();
     if (!adminUserId) {
@@ -401,6 +455,45 @@ const Verification = () => {
       await loadVendors();
       toast.success(`Bank account ${verificationStatus}.`);
     } catch (error) {
+      const message = getUserFriendlyMessage(error);
+      toast.error(message);
+    } finally {
+      setItemActionLoadingKey(null);
+    }
+  };
+
+  const handleAutoVerifyBankAccount = async (vendorId: string, bank: VendorBankAccountDto) => {
+    if (!canAutoVerify) {
+      toast.error("Your admin role does not have permission for automated verification. Please review manually.");
+      return;
+    }
+
+    const adminUserId = getAdminUserId();
+    if (!adminUserId) {
+      toast.error("Admin session not found. Please login again.");
+      return;
+    }
+
+    const key = `bank-${bank.id}-autoverify`;
+    setItemActionLoadingKey(key);
+    const loadingToastId = toast.loading("Verifying bank account & cross-checking cheque...");
+    try {
+      const result = await adminApi.autoVerifyVendorBankAccount(vendorId, bank.id);
+      await loadBankAccounts(vendorId);
+      await loadDocuments(vendorId);
+      await loadVendors();
+
+      toast.dismiss(loadingToastId);
+
+      if (result.verificationStatus === "approved") {
+        toast.success("Bank account & Cancelled Cheque verified successfully!");
+      } else {
+        toast.error("Bank verification failed: Details could not be verified or mismatch detected.");
+      }
+    } catch (error) {
+      toast.dismiss(loadingToastId);
+      await loadBankAccounts(vendorId);
+      await loadDocuments(vendorId);
       const message = getUserFriendlyMessage(error);
       toast.error(message);
     } finally {
@@ -766,10 +859,45 @@ const Verification = () => {
                             <div className="min-w-0">
                               <p className="text-sm font-medium truncate">{d.documentType}</p>
                               {d.documentNumber && <p className="text-xs text-muted-foreground truncate">{d.documentNumber}</p>}
+                              {d.rejectionReason && (
+                                <p className="text-xs text-destructive truncate mt-0.5" title={d.rejectionReason}>
+                                  Reason: {d.rejectionReason}
+                                </p>
+                              )}
                             </div>
                           </div>
-                          <div className="flex items-center gap-1 shrink-0">
+                          <div className="flex items-center gap-1.5 shrink-0">
                             <StatusBadge status={d.verificationStatus as "pending" | "approved" | "rejected" | "under_review"} />
+                            {selected && isAutoVerifiable(d.documentType) && (
+                              <IconTooltip
+                                label={
+                                  !canAutoVerify
+                                    ? "Your admin role does not have permission for automated verification. Review manually."
+                                    : d.documentType === "Cancelled Cheque"
+                                      ? "Verifying Cancelled Cheque will cross-check and verify bank account details"
+                                      : `Verify ${d.documentType} via Registry`
+                                }
+                              >
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => void handleAutoVerifyDocument(selected.id, d)}
+                                  className={`h-8 gap-1.5 px-2.5 text-xs font-medium transition-colors ${
+                                    !canAutoVerify
+                                      ? "border-muted-foreground/30 text-muted-foreground/70 hover:bg-muted/30"
+                                      : "border-primary/40 text-primary hover:bg-primary/10 hover:text-primary"
+                                  }`}
+                                  disabled={verifying || itemActionLoadingKey !== null}
+                                >
+                                  {itemActionLoadingKey === `doc-${d.id}-autoverify` ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                                  ) : (
+                                    <ShieldCheck className="h-3.5 w-3.5 text-primary" />
+                                  )}
+                                  <span>Verify</span>
+                                </Button>
+                              </IconTooltip>
+                            )}
                             {selected && d.verificationStatus !== "approved" && (
                               <IconTooltip label="Approve document">
                               <Button
@@ -831,15 +959,48 @@ const Verification = () => {
                                 <StatusBadge status={d.verificationStatus as "pending" | "approved" | "rejected" | "under_review"} className="text-[10px] px-2 py-0.5 shrink-0" />
                               </div>
                               {d.documentNumber && <p className="text-xs text-muted-foreground mt-0.5 break-all line-clamp-1">{d.documentNumber}</p>}
+                              {d.rejectionReason && (
+                                <p className="text-xs text-destructive mt-0.5 break-words line-clamp-2">
+                                  Reason: {d.rejectionReason}
+                                </p>
+                              )}
                             </div>
                           </div>
-                          <div className="mt-3 grid grid-cols-3 gap-2">
-                            {selected && d.verificationStatus !== "approved" ? (
+                          <div className="mt-3 flex flex-wrap gap-2 justify-end">
+                            {selected && isAutoVerifiable(d.documentType) && (
+                              <IconTooltip
+                                label={
+                                  !canAutoVerify
+                                    ? "Your admin role does not have permission for automated verification. Review manually."
+                                    : `Verify ${d.documentType}`
+                                }
+                              >
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => void handleAutoVerifyDocument(selected.id, d)}
+                                  className={`h-8 px-2 text-[11px] gap-1 font-medium ${
+                                    !canAutoVerify
+                                      ? "border-muted-foreground/30 text-muted-foreground/70"
+                                      : "border-primary/40 text-primary"
+                                  }`}
+                                  disabled={verifying || itemActionLoadingKey !== null}
+                                >
+                                  {itemActionLoadingKey === `doc-${d.id}-autoverify` ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <ShieldCheck className="h-3 w-3 text-primary" />
+                                  )}
+                                  <span>Verify</span>
+                                </Button>
+                              </IconTooltip>
+                            )}
+                            {selected && d.verificationStatus !== "approved" && (
                               <Button
                                 variant="outline"
                                 size="sm"
                                 onClick={() => void verifyDocumentItem(selected.id, d.id, "approved")}
-                                className="h-8 px-1 text-[10px]"
+                                className="h-8 px-2 text-[11px]"
                                 disabled={verifying || itemActionLoadingKey !== null}
                               >
                                 {itemActionLoadingKey === `doc-${d.id}-approved` ? (
@@ -849,15 +1010,13 @@ const Verification = () => {
                                 )}
                                 <span className="ml-1">Approve</span>
                               </Button>
-                            ) : (
-                              <div />
                             )}
-                            {selected && d.verificationStatus !== "rejected" ? (
+                            {selected && d.verificationStatus !== "rejected" && (
                               <Button
                                 variant="outline"
                                 size="sm"
                                 onClick={() => openItemRejectDialog("doc", selected.id, d.id)}
-                                className="h-8 px-1 text-[10px]"
+                                className="h-8 px-2 text-[11px]"
                                 disabled={verifying || itemActionLoadingKey !== null}
                               >
                                 {itemActionLoadingKey === `doc-${d.id}-rejected` ? (
@@ -867,14 +1026,12 @@ const Verification = () => {
                                 )}
                                 <span className="ml-1">Reject</span>
                               </Button>
-                            ) : (
-                              <div />
                             )}
                             <Button
                               variant="outline"
                               size="sm"
                               onClick={() => openPreview(d)}
-                              className="h-8 px-1 text-[10px]"
+                              className="h-8 px-2 text-[11px]"
                             >
                               <Eye className="h-3 w-3" />
                               <span className="ml-1">Preview</span>
@@ -896,6 +1053,13 @@ const Verification = () => {
                   <h4 className="font-semibold">Bank Accounts</h4>
                   <span className="text-xs text-muted-foreground">{bankAccounts.length} added</span>
                 </div>
+                <div className="mb-3 flex items-start gap-2.5 rounded-lg border border-primary/20 bg-primary/5 p-3 text-xs text-muted-foreground">
+                  <Info className="h-4 w-4 shrink-0 text-primary mt-0.5" />
+                  <div>
+                    <span className="font-medium text-foreground">Cross-Verification with Cancelled Cheque:</span>{" "}
+                    Verifying a bank account will automatically cross-check the account number and IFSC against the uploaded Cancelled Cheque and verify both simultaneously (or vice versa).
+                  </div>
+                </div>
                 {loadingBanks ? (
                   <PageLoaderSlot className="min-h-[6rem]" />
                 ) : bankAccounts.length > 0 ? (
@@ -916,8 +1080,41 @@ const Verification = () => {
                               </p>
                             </div>
                           </div>
-                          <div className="flex items-center gap-1 shrink-0">
+                          <div className="flex items-center gap-1.5 shrink-0">
                             <StatusBadge status={b.verificationStatus as "pending" | "approved" | "rejected" | "under_review"} />
+                            {b.verificationStatus === "approved" && (
+                              <span className="hidden md:inline-flex text-[11px] items-center gap-1 font-medium text-success bg-success-soft px-2 py-0.5 rounded-full">
+                                <CheckCircle2 className="h-3 w-3" /> Penny Drop Verified
+                              </span>
+                            )}
+                            {selected && (
+                              <IconTooltip
+                                label={
+                                  !canAutoVerify
+                                    ? "Your admin role does not have permission for automated verification. Review manually."
+                                    : "Verify bank account via Penny Drop & automatically verify matching Cancelled Cheque"
+                                }
+                              >
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => void handleAutoVerifyBankAccount(selected.id, b)}
+                                  className={`h-8 gap-1.5 px-2.5 text-xs font-medium transition-colors ${
+                                    !canAutoVerify
+                                      ? "border-muted-foreground/30 text-muted-foreground/70 hover:bg-muted/30"
+                                      : "border-primary/40 text-primary hover:bg-primary/10 hover:text-primary"
+                                  }`}
+                                  disabled={verifying || itemActionLoadingKey !== null}
+                                >
+                                  {itemActionLoadingKey === `bank-${b.id}-autoverify` ? (
+                                    <Loader2 className="h-3.5 w-3.5 animate-spin text-primary" />
+                                  ) : (
+                                    <ShieldCheck className="h-3.5 w-3.5 text-primary" />
+                                  )}
+                                  <span>Verify</span>
+                                </Button>
+                              </IconTooltip>
+                            )}
                             {selected && b.verificationStatus !== "approved" && (
                               <IconTooltip label="Approve bank account">
                               <Button
@@ -982,6 +1179,34 @@ const Verification = () => {
                           </div>
                           <BankAccountDetailsGrid bank={b} />
                           <div className="flex flex-wrap justify-end gap-2">
+                            {selected && (
+                              <IconTooltip
+                                label={
+                                  !canAutoVerify
+                                    ? "Your admin role does not have permission for automated verification. Review manually."
+                                    : "Verify bank account via Penny Drop"
+                                }
+                              >
+                                <Button
+                                  variant="outline"
+                                  size="sm"
+                                  onClick={() => void handleAutoVerifyBankAccount(selected.id, b)}
+                                  className={`h-8 px-2 text-[11px] gap-1 font-medium ${
+                                    !canAutoVerify
+                                      ? "border-muted-foreground/30 text-muted-foreground/70"
+                                      : "border-primary/40 text-primary"
+                                  }`}
+                                  disabled={verifying || itemActionLoadingKey !== null}
+                                >
+                                  {itemActionLoadingKey === `bank-${b.id}-autoverify` ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <ShieldCheck className="h-3 w-3 text-primary" />
+                                  )}
+                                  <span>Verify</span>
+                                </Button>
+                              </IconTooltip>
+                            )}
                             {selected && b.verificationStatus !== "approved" ? (
                               <Button
                                 variant="outline"

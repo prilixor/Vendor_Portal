@@ -228,6 +228,9 @@ internal sealed class VendorUploadStorageService(
         return thumbRelativeOrUrl;
     }
 
+    public Task<byte[]?> ReadStoredBytesAsync(string storedReference, CancellationToken cancellationToken = default) =>
+        TryReadStoredBytesAsync(storedReference, cancellationToken);
+
     private async Task<byte[]?> TryReadStoredBytesAsync(string storedReference, CancellationToken cancellationToken)
     {
         var opts = s3Options.Value;

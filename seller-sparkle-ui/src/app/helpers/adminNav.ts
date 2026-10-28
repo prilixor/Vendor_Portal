@@ -31,6 +31,7 @@ export const ADMIN_PERMISSIONS = {
   ordersManage: "orders.manage",
   vendorsView: "vendors.view",
   vendorsVerify: "vendors.verify",
+  vendorsAutoVerify: "vendors.auto_verify",
   vendorsManage: "vendors.manage",
   vendorsImpersonate: "vendors.impersonate",
   catalogManage: "catalog.manage",

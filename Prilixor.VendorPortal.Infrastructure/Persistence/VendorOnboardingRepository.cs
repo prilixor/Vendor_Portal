@@ -1469,6 +1469,11 @@ public sealed class VendorOnboardingRepository(
             .FirstOrDefaultAsync(x => x.Id == adminUserId && !x.IsDeleted, cancellationToken);
         if (admin is null) return [];
 
+        if (admin.Role == "super_admin" || admin.AdminRole?.Code == "super_admin")
+        {
+            return AdminPermissions.AllCodes.ToList();
+        }
+
         if (admin.RoleId is Guid roleId)
         {
             return await GetPermissionCodesForRoleAsync(roleId, cancellationToken);
@@ -1517,11 +1522,73 @@ public sealed class VendorOnboardingRepository(
         return Task.CompletedTask;
     }
 
-    public Task<List<AdminPermission>> GetAdminPermissionsAsync(CancellationToken cancellationToken) =>
-        adminDbContext.AdminPermissions
+    public async Task<List<AdminPermission>> GetAdminPermissionsAsync(CancellationToken cancellationToken)
+    {
+        var existing = await adminDbContext.AdminPermissions
             .OrderBy(x => x.Category)
             .ThenBy(x => x.Name)
             .ToListAsync(cancellationToken);
+
+        var existingCodes = existing.Select(x => x.Code).ToHashSet(StringComparer.OrdinalIgnoreCase);
+        var missing = AdminPermissions.Catalog
+            .Where(c => !existingCodes.Contains(c.Code))
+            .ToList();
+
+        if (missing.Count > 0)
+        {
+            foreach (var (code, name, category, desc) in missing)
+            {
+                var perm = new AdminPermission
+                {
+                    Id = Guid.NewGuid(),
+                    Code = code,
+                    Name = name,
+                    Category = category,
+                    Description = desc
+                };
+                await adminDbContext.AdminPermissions.AddAsync(perm, cancellationToken);
+                existing.Add(perm);
+            }
+            await adminDbContext.SaveChangesAsync(cancellationToken);
+        }
+
+        foreach (var (roleCode, expectedCodes) in AdminPermissions.SystemRolePermissions)
+        {
+            var role = await adminDbContext.AdminRoles
+                .FirstOrDefaultAsync(r => r.Code == roleCode, cancellationToken);
+            if (role is null) continue;
+
+            var existingRolePermIds = await adminDbContext.AdminRolePermissions
+                .Where(rp => rp.RoleId == role.Id)
+                .Select(rp => rp.PermissionId)
+                .ToListAsync(cancellationToken);
+
+            var existingRolePermSet = existingRolePermIds.ToHashSet();
+            var expectedPermIds = existing
+                .Where(p => expectedCodes.Contains(p.Code, StringComparer.OrdinalIgnoreCase))
+                .Select(p => p.Id)
+                .ToList();
+
+            var missingForRole = expectedPermIds
+                .Where(pid => !existingRolePermSet.Contains(pid))
+                .ToList();
+
+            if (missingForRole.Count > 0)
+            {
+                foreach (var pid in missingForRole)
+                {
+                    await adminDbContext.AdminRolePermissions.AddAsync(new AdminRolePermission
+                    {
+                        RoleId = role.Id,
+                        PermissionId = pid
+                    }, cancellationToken);
+                }
+                await adminDbContext.SaveChangesAsync(cancellationToken);
+            }
+        }
+
+        return existing.OrderBy(x => x.Category).ThenBy(x => x.Name).ToList();
+    }
 
     public async Task SetAdminRolePermissionsAsync(Guid roleId, IReadOnlyList<Guid> permissionIds, CancellationToken cancellationToken)
     {
@@ -1539,12 +1606,20 @@ public sealed class VendorOnboardingRepository(
         }
     }
 
-    public Task<List<string>> GetPermissionCodesForRoleAsync(Guid roleId, CancellationToken cancellationToken) =>
-        adminDbContext.AdminRolePermissions
+    public async Task<List<string>> GetPermissionCodesForRoleAsync(Guid roleId, CancellationToken cancellationToken)
+    {
+        var role = await adminDbContext.AdminRoles.AsNoTracking().FirstOrDefaultAsync(x => x.Id == roleId, cancellationToken);
+        if (role?.Code == "super_admin")
+        {
+            return AdminPermissions.AllCodes.ToList();
+        }
+
+        return await adminDbContext.AdminRolePermissions
             .AsNoTracking()
             .Where(x => x.RoleId == roleId)
             .Join(adminDbContext.AdminPermissions, rp => rp.PermissionId, p => p.Id, (_, p) => p.Code)
             .ToListAsync(cancellationToken);
+    }
 
     public async Task AddImpersonationExchangeAsync(AdminImpersonationExchange exchange, CancellationToken cancellationToken) =>
         await adminDbContext.AdminImpersonationExchanges.AddAsync(exchange, cancellationToken);
