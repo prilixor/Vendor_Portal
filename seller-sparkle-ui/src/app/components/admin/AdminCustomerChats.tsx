@@ -198,7 +198,7 @@ export default function AdminCustomerChats() {
             </div>
           </CardHeader>
           <ScrollArea className="min-h-0 flex-1">
-            <div className={cn("space-y-2 p-3 transition-opacity duration-200", isPageChanging && "opacity-50")}>
+            <div className={cn("space-y-2 p-3 pr-4 transition-opacity duration-200", isPageChanging && "opacity-50")}>
               {loadingSessions ? (
                 <div className="min-h-[8rem]" aria-busy="true" aria-label="Loading conversations" />
               ) : filteredSessions.length === 0 ? (
@@ -219,7 +219,7 @@ export default function AdminCustomerChats() {
                       key={s.id}
                       onClick={() => selectSession(s.id)}
                       className={cn(
-                        "w-full rounded-xl border px-3.5 py-3 text-left transition-all",
+                        "w-full min-w-0 rounded-xl border px-3.5 py-3 text-left transition-all",
                         selected
                           ? "border-primary/40 bg-primary/5 shadow-sm ring-1 ring-primary/15"
                           : unread > 0
@@ -228,7 +228,7 @@ export default function AdminCustomerChats() {
                       )}
                     >
                       <div className="flex items-start justify-between gap-2">
-                        <span className="truncate font-mono text-[11px] font-semibold tracking-wide text-sky-600 dark:text-sky-400">
+                        <span className="min-w-0 truncate font-mono text-[11px] font-semibold tracking-wide text-sky-600 dark:text-sky-400">
                           {s.orderNumber || "No order"}
                         </span>
                         <div className="flex shrink-0 items-center gap-1.5">
