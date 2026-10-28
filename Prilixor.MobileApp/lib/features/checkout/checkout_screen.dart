@@ -18,6 +18,7 @@ import '../../shared/widgets/required_field_ux.dart';
 import '../../shared/widgets/catalog_image.dart';
 import '../../shared/widgets/rent_exceeds_buy_dialog.dart';
 import '../../shared/widgets/struck_price.dart';
+import '../../core/models/order_quote_model.dart';
 import '../../core/utils/gst_label.dart';
 import '../../core/utils/rental_period.dart';
 import '../profile/addresses_screen.dart';
@@ -738,15 +739,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                             const SizedBox(height: 8),
                             _buildQuoteRow('Service Fee', quote.serviceFeeAmount),
                           ],
-                          if (quote.gstLines.isNotEmpty) ...[
-                            for (final line in quote.gstLines) ...[
-                              const SizedBox(height: 8),
-                              _buildQuoteRow(formatGstLabel(line.gstPercent), line.gstAmount),
-                            ],
-                          ] else if (quote.gstAmount > 0) ...[
-                            const SizedBox(height: 8),
-                            _buildQuoteRow('GST', quote.gstAmount),
-                          ],
+                          ..._gstSummaryRows(quote),
                           Padding(
                             padding: const EdgeInsets.symmetric(vertical: 12),
                             child: Divider(color: colors.border),
@@ -983,6 +976,25 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
   }
 
+  List<Widget> _gstSummaryRows(OrderQuoteModel quote) {
+    final summary = buildGstSummary(
+      quote.gstAmount,
+      [
+        for (final line in quote.gstLines)
+          GstAmountLine(gstPercent: line.gstPercent, gstAmount: line.gstAmount),
+      ],
+    );
+    if (summary == null) return const [];
+    return [
+      const SizedBox(height: 8),
+      _buildQuoteRow(summary.label, summary.amount),
+      for (final line in summary.breakup) ...[
+        const SizedBox(height: 4),
+        _buildGstBreakupRow(line.label, line.amount),
+      ],
+    ];
+  }
+
   Widget _buildQuoteRow(String label, double amount) {
     final colors = context.appColors;
     return Row(
@@ -991,6 +1003,20 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         Text(label, style: TextStyle(color: colors.textSecondary, fontSize: 15)),
         Text('₹${amount.toStringAsFixed(0)}', style: TextStyle(color: colors.textPrimary, fontSize: 15, fontWeight: FontWeight.w500)),
       ],
+    );
+  }
+
+  Widget _buildGstBreakupRow(String label, double amount) {
+    final colors = context.appColors;
+    return Padding(
+      padding: const EdgeInsets.only(left: 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: TextStyle(color: colors.textMuted, fontSize: 12)),
+          Text('₹${amount.toStringAsFixed(0)}', style: TextStyle(color: colors.textMuted, fontSize: 12)),
+        ],
+      ),
     );
   }
 }
