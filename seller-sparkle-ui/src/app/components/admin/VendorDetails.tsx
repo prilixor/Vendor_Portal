@@ -1,12 +1,12 @@
 import { ReactNode, useState, useEffect, useMemo } from "react";
 
-import { Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
+import { Link, Navigate, useNavigate, useParams, useSearchParams } from "react-router-dom";
 
 import { PageHeader } from "@/app/components/shared/PageHeader";
 
 import { Card } from "@/app/components/ui/card";
 
-import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { PageContentGate } from "@/app/components/shared/PageLoader";
 import { TablePagination } from "@/app/components/shared/TablePagination";
 
 import { Button } from "@/app/components/ui/button";
@@ -379,7 +379,12 @@ const VendorListingCard = ({
         </div>
         <div className="mt-1 min-w-0">{price}</div>
       </div>
-      <div className="shrink-0 text-right">{qty}</div>
+      <div className="flex shrink-0 flex-col items-end gap-2 text-right">
+        {qty}
+        <Button variant="outline" size="sm" className="h-7 px-2 text-xs" asChild>
+          <Link to={`/admin/vendors/${listing.vendorId}/listings/${listing.id}`}>Set price</Link>
+        </Button>
+      </div>
     </div>
   );
 };
@@ -395,7 +400,7 @@ const VendorDetails = () => {
 
   const [searchParams, setSearchParams] = useSearchParams();
 
-  const [loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   const [approving, setApproving] = useState(false);
 
@@ -504,17 +509,7 @@ const VendorDetails = () => {
 
     try {
 
-      // Get vendor from the list (we can fetch all and filter, or create a getVendorById endpoint)
-
-      const vendors = await adminApi.getVendors();
-
-      const vendorData = vendors.find((v) => v.id === id);
-
-      if (!vendorData) {
-
-        throw new Error("Vendor not found");
-
-      }
+      const vendorData = await adminApi.getVendor(id);
 
       setVendor(vendorData);
 
@@ -551,10 +546,13 @@ const VendorDetails = () => {
       const sortedListings = listingsData.sort((a, b) => a.listingTitle.localeCompare(b.listingTitle));
       setProductListings(sortedListings);
 
-      // Load catalog products (with per-size variants) so chemical listings can show pricing.
+      // Load only catalog products used by this vendor's listings (variants + images).
       let productsById: Record<string, ProductDto> = {};
+      const productIds = [...new Set(sortedListings.map((l) => l.productId).filter(Boolean))];
       try {
-        const productsData = await adminApi.getProducts();
+        const productsData = productIds.length === 0
+          ? []
+          : await adminApi.getAllProductSummaries({ ids: productIds });
         const map: Record<string, ProductDto> = {};
         productsData.forEach((prod) => { map[prod.id] = prod; });
         productsById = map;
@@ -563,9 +561,6 @@ const VendorDetails = () => {
         setProductMap({});
       }
 
-      // Fetch inventory for each listing.
-      // Chemicals: packaging-size (variant) stock is authoritative — same as Vendor Inventory.
-      // Equipment: flat VendorInventory.
       const inventoryData: Record<string, {
         totalQuantity: number;
         availableQuantity: number;
@@ -573,51 +568,20 @@ const VendorDetails = () => {
         sizes?: { label: string; sku: string; total: number; available: number }[];
         source: "variant" | "flat";
       }> = {};
-      await Promise.all(
-        sortedListings.map(async (l) => {
-          try {
-            const catalogProduct = productsById[l.productId];
-            const isChemical = !!(
-              l.isChemical ||
-              catalogProduct?.baseUnit ||
-              catalogProduct?.casNumber ||
-              catalogProduct?.chemicalFormula ||
-              (catalogProduct?.variants && catalogProduct.variants.length > 0)
-            );
-
-            if (isChemical) {
-              const variantRows = await vendorOnboardingApi.getVariantInventory(id, l.id).catch(() => []);
-              if (variantRows.length > 0) {
-                inventoryData[l.id] = {
-                  totalQuantity: variantRows.reduce((sum, r) => sum + (r.totalQuantity || 0), 0),
-                  availableQuantity: variantRows.reduce((sum, r) => sum + (r.availableQuantity || 0), 0),
-                  reservedQuantity: variantRows.reduce((sum, r) => sum + (r.reservedQuantity || 0), 0),
-                  sizes: variantRows.map((r) => ({
-                    label: `${r.sizeValue} ${r.sizeUnit}`,
-                    sku: r.sku,
-                    total: r.totalQuantity || 0,
-                    available: r.availableQuantity || 0,
-                  })),
-                  source: "variant",
-                };
-                return;
-              }
-            }
-
-            const inv = await vendorOnboardingApi.getVendorInventory(id, l.id);
-            if (inv) {
-              inventoryData[l.id] = {
-                totalQuantity: inv.totalQuantity,
-                availableQuantity: inv.availableQuantity,
-                reservedQuantity: inv.reservedQuantity,
-                source: "flat",
-              };
-            }
-          } catch {
-            // ignore if no inventory
-          }
-        })
-      );
+      try {
+        const summaries = await adminApi.getVendorInventorySummaries(id);
+        summaries.forEach((row) => {
+          inventoryData[row.listingId] = {
+            totalQuantity: row.totalQuantity,
+            availableQuantity: row.availableQuantity,
+            reservedQuantity: row.reservedQuantity,
+            sizes: row.sizes ?? undefined,
+            source: row.source,
+          };
+        });
+      } catch {
+        // ignore if no inventory
+      }
       setInventoryMap(inventoryData);
 
     } catch (error) {
@@ -686,14 +650,7 @@ const VendorDetails = () => {
 
 
 
-  if (loading) {
-    return <PageLoaderSlot />;
-  }
-
-
-
-
-
+  
   const queryTab = searchParams.get("tab");
 
   const activeTab: VendorTab = vendorTabs.includes((queryTab ?? "") as VendorTab) ? (queryTab as VendorTab) : "profile";
@@ -1044,7 +1001,7 @@ const VendorDetails = () => {
 
 
   return (
-
+    <PageContentGate loading={loading}>
     <div>
 
       <PageHeader
@@ -1609,7 +1566,7 @@ const VendorDetails = () => {
               <div>
                 <h3 className="font-semibold">Service areas</h3>
                 <p className="mt-1 text-xs text-muted-foreground">
-                  Review the vendor pin location, then set the coverage radius (e.g. 15, 30, or 100 km).
+                  Review the vendor pin location, then set the coverage radius (1–500 km).
                   Vendor approval stays blocked until every area has an Admin-set radius.
                 </p>
               </div>
@@ -2013,7 +1970,7 @@ const VendorDetails = () => {
                     <button
                       type="button"
                       onClick={() => void downloadUrl(previewDocument.url)}
-                      className="text-primary hover:underline ml-2"
+                      className="ml-2 text-primary no-underline transition-colors hover:text-primary/80 hover:no-underline"
                     >
                       Download file
                     </button>
@@ -2043,7 +2000,7 @@ const VendorDetails = () => {
       </Dialog>
 
     </div>
-
+    </PageContentGate>
   );
 
 };

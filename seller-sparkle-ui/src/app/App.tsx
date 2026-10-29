@@ -21,11 +21,11 @@ import VerifyEmailSent from "@/app/components/auth/VerifyEmailSent";
 import VerifyEmail from "@/app/components/auth/VerifyEmail";
 import ContactUs from "@/app/components/common/ContactUs";
 import DoctorPublicPage from "@/app/components/common/DoctorPublicPage";
-import TermsAndConditions from "@/app/components/legal/TermsAndConditions";
-import PrivacyPolicy from "@/app/components/legal/PrivacyPolicy";
+import LegalDocumentPage from "@/app/components/legal/LegalDocumentPage";
 import AboutPage from "@/app/components/landing/AboutPage";
 import FAQPage from "@/app/components/landing/FAQPage";
 import ContactPage from "@/app/components/landing/ContactPage";
+import DeleteAccountPage from "@/app/components/legal/DeleteAccountPage";
 
 import VendorDashboard from "@/app/components/vendor/Dashboard";
 import Onboarding from "@/app/components/vendor/Onboarding";
@@ -46,6 +46,7 @@ import AdminDashboard from "@/app/components/admin/AdminDashboard";
 import Verification from "@/app/components/admin/Verification";
 import Vendors from "@/app/components/admin/Vendors";
 import VendorDetails from "@/app/components/admin/VendorDetails";
+import VendorListingPricing from "@/app/components/admin/VendorListingPricing";
 import ProductManagement from "@/app/components/admin/ProductManagement";
 import ChemicalManagement from "@/app/components/admin/ChemicalManagement";
 import AdminDoctors from "@/app/components/admin/AdminDoctors";
@@ -63,7 +64,11 @@ import AdminExpirations from "@/app/components/admin/AdminExpirations";
 import AdminOrderDetail from "@/app/components/admin/AdminOrderDetail";
 import { AdminNotifications } from "@/app/components/admin/AdminNotifications";
 import AdminSettings from "@/app/components/admin/AdminSettings";
+import AdminSmsSettings from "@/app/components/admin/AdminSmsSettings";
 import WebsiteContentManagement from "@/app/components/admin/WebsiteContentManagement";
+import LegalDocumentsManager from "@/app/components/admin/LegalDocumentsManager";
+import LegalAcceptances from "@/app/components/admin/LegalAcceptances";
+import LegalDocumentEditor from "@/app/components/admin/LegalDocumentEditor";
 import ImpersonationConsume from "@/app/components/auth/ImpersonationConsume";
 
 import CustomerBrowse from "@/app/components/customer/CustomerBrowse";
@@ -113,8 +118,14 @@ const App = () => (
             <Route path="/reset-password" element={<ResetPassword />} />
             <Route path="/verify-email-sent" element={<VerifyEmailSent />} />
             <Route path="/verify-email" element={<VerifyEmail />} />
-            <Route path="/terms-and-conditions" element={<TermsAndConditions />} />
-            <Route path="/privacy-policy" element={<PrivacyPolicy />} />
+            <Route path="/terms-and-conditions" element={<LegalDocumentPage slug="terms-of-use" />} />
+            <Route path="/privacy-policy" element={<LegalDocumentPage slug="privacy-policy" />} />
+            <Route path="/delete-account" element={<DeleteAccountPage />} />
+            <Route path="/vendor-seller-policy" element={<LegalDocumentPage slug="vendor-seller-policy" />} />
+            <Route path="/rental-and-purchase-policy" element={<LegalDocumentPage slug="rental-and-purchase-policy" />} />
+            <Route path="/cancellation-refund-policy" element={<LegalDocumentPage slug="cancellation-refund-policy" />} />
+            <Route path="/shipping-delivery-policy" element={<LegalDocumentPage slug="shipping-delivery-policy" />} />
+            <Route path="/grievance-redressal-policy" element={<LegalDocumentPage slug="grievance-redressal-policy" />} />
             <Route path="/about" element={<AboutPage />} />
             <Route path="/faq" element={<FAQPage />} />
             <Route path="/faqs" element={<Navigate to="/faq" replace />} />
@@ -146,6 +157,7 @@ const App = () => (
               <Route path="verification" element={<Verification />} />
               <Route path="vendors" element={<Vendors />} />
               <Route path="vendors/:vendorId" element={<VendorDetails />} />
+              <Route path="vendors/:vendorId/listings/:listingId" element={<VendorListingPricing />} />
               <Route path="products" element={<ProductManagement />} />
               <Route path="rental-setup" element={<AdminRentalSetup />} />
               <Route path="rental-durations" element={<Navigate to="/admin/rental-setup" replace />} />
@@ -168,6 +180,7 @@ const App = () => (
               <Route path="expirations" element={<AdminExpirations />} />
               <Route path="notifications" element={<AdminNotifications />} />
               <Route path="settings" element={<AdminSettings />} />
+              <Route path="sms-settings" element={<AdminSmsSettings />} />
               <Route path="website-content" element={<WebsiteContentManagement />} />
               <Route path="website-content/home" element={<WebsiteContentManagement initialTab="home" />} />
               <Route path="website-content/about" element={<WebsiteContentManagement initialTab="about" />} />
@@ -176,6 +189,9 @@ const App = () => (
               <Route path="website-content/rent-or-buy" element={<WebsiteContentManagement initialTab="rent-or-buy" />} />
               <Route path="website-content/faq" element={<WebsiteContentManagement initialTab="faq" />} />
               <Route path="website-content/contact" element={<WebsiteContentManagement initialTab="contact" />} />
+              <Route path="website-content/legal" element={<LegalDocumentsManager />} />
+              <Route path="website-content/legal/acceptances" element={<LegalAcceptances />} />
+              <Route path="website-content/legal/:id" element={<LegalDocumentEditor />} />
               <Route path="website-content/settings" element={<WebsiteContentManagement initialTab="settings" />} />
             </Route>
 

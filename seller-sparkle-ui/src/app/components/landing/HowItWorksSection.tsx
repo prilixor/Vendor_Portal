@@ -116,29 +116,10 @@ export const HowItWorksSection = ({ data }: HowItWorksSectionProps) => {
         </h2>
         <p className="sub">{subtitle}</p>
 
-        <div
-          className="service-grid"
-          style={{
-            display: "grid",
-            gridTemplateColumns: `repeat(auto-fit, minmax(180px, 1fr))`,
-            gap: "16px",
-            marginTop: "48px",
-          }}
-        >
+        <div className="service-grid how-steps">
           {activeSteps.map((step, idx) => (
-            <article key={step.id || idx} className="service-card" style={{ textAlign: "center" }}>
-              <div
-                className="service-icon"
-                style={{
-                  width: "56px",
-                  height: "56px",
-                  borderRadius: "14px",
-                  margin: "0 auto 16px",
-                  display: "flex",
-                  alignItems: "center",
-                  justifyContent: "center",
-                }}
-              >
+            <article key={step.id || idx} className="service-card service-card--center">
+              <div className="service-icon">
                 {renderStepIcon(step.iconName, step.customIconUrl)}
               </div>
               <h4>

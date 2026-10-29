@@ -21,6 +21,9 @@ import {
   HelpCircle,
   PhoneCall,
   Wrench,
+  MessageSquareText,
+  Scale,
+  ClipboardList,
 } from "lucide-react";
 import type { NavSection } from "@/app/helpers/navigation";
 
@@ -34,6 +37,7 @@ export const ADMIN_PERMISSIONS = {
   vendorsAutoVerify: "vendors.auto_verify",
   vendorsManage: "vendors.manage",
   vendorsImpersonate: "vendors.impersonate",
+  vendorsProductPrice: "vendors.product_price",
   catalogManage: "catalog.manage",
   adminsManage: "admins.manage",
   rolesManage: "roles.manage",
@@ -75,8 +79,6 @@ const adminNavBase: { title: string; items: AdminNavItem[] }[] = [
       { label: "Products Management", to: "/admin/products", icon: Package, permission: ADMIN_PERMISSIONS.catalogManage },
       { label: "Chemicals Management", to: "/admin/chemicals", icon: FlaskConical, permission: ADMIN_PERMISSIONS.catalogManage },
       { label: "Rental Setup", to: "/admin/rental-setup", icon: CalendarRange, permission: ADMIN_PERMISSIONS.catalogManage },
-      { label: "Doctor References", to: "/admin/doctors", icon: Stethoscope, permission: ADMIN_PERMISSIONS.catalogManage },
-      { label: "Hospitals", to: "/admin/hospitals", icon: Building2, permission: ADMIN_PERMISSIONS.catalogManage },
     ],
   },
   {
@@ -89,6 +91,8 @@ const adminNavBase: { title: string; items: AdminNavItem[] }[] = [
       { label: "Rent or Buy Content", to: "/admin/website-content/rent-or-buy", icon: Layers, permission: ADMIN_PERMISSIONS.catalogManage },
       { label: "FAQ Management", to: "/admin/website-content/faq", icon: HelpCircle, permission: ADMIN_PERMISSIONS.catalogManage },
       { label: "Contact Details", to: "/admin/website-content/contact", icon: PhoneCall, permission: ADMIN_PERMISSIONS.catalogManage },
+      { label: "Legal Documents", to: "/admin/website-content/legal", icon: Scale, permission: ADMIN_PERMISSIONS.catalogManage },
+      { label: "Legal Acceptances", to: "/admin/website-content/legal/acceptances", icon: ClipboardList, permission: ADMIN_PERMISSIONS.catalogManage },
       { label: "Portal Settings", to: "/admin/website-content/settings", icon: Settings, permission: ADMIN_PERMISSIONS.catalogManage },
     ],
   },
@@ -100,6 +104,7 @@ const adminNavBase: { title: string; items: AdminNavItem[] }[] = [
       { label: "Audit Logs", to: "/admin/audit-logs", icon: ScrollText, permission: ADMIN_PERMISSIONS.auditView },
       { label: "Support", to: "/admin/support", icon: MessageSquare, permission: ADMIN_PERMISSIONS.supportManage },
       { label: "Customer Chats", to: "/admin/customer-chats", icon: MessageSquare, permission: ADMIN_PERMISSIONS.supportManage },
+      { label: "SMS", to: "/admin/sms-settings", icon: MessageSquareText, permission: ADMIN_PERMISSIONS.adminsManage },
       // Available to every signed-in admin (no extra permission)
       { label: "Settings", to: "/admin/settings", icon: Settings },
     ],

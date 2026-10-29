@@ -4,6 +4,7 @@ using Prilixor.VendorPortal.Domain.Support;
 using Prilixor.Shared.Abstractions.DB;
 using Microsoft.EntityFrameworkCore;
 using Prilixor.VendorPortal.Domain.Common;
+using Prilixor.VendorPortal.Domain.Platform;
 
 namespace Prilixor.VendorPortal.Infrastructure.Persistence;
 
@@ -19,6 +20,7 @@ public class ApplicationDbContext : DbContext
     {
     }
 
+    public DbSet<PlatformSmsSettings> PlatformSmsSettings => Set<PlatformSmsSettings>();
     public DbSet<Vendor> Vendors => Set<Vendor>();
     public DbSet<VendorProfile> VendorProfiles => Set<VendorProfile>();
     public DbSet<VendorDocument> VendorDocuments => Set<VendorDocument>();
@@ -32,6 +34,8 @@ public class ApplicationDbContext : DbContext
     public DbSet<ProductImage> ProductImages => Set<ProductImage>();
     public DbSet<ProductDocument> ProductDocuments => Set<ProductDocument>();
     public DbSet<VendorProductListing> VendorProductListings => Set<VendorProductListing>();
+    public DbSet<VendorListingPriceOverride> VendorListingPriceOverrides => Set<VendorListingPriceOverride>();
+    public DbSet<VendorListingVariantPriceOverride> VendorListingVariantPriceOverrides => Set<VendorListingVariantPriceOverride>();
     public DbSet<VendorProductImage> VendorProductImages => Set<VendorProductImage>();
     public DbSet<VendorProductDocument> VendorProductDocuments => Set<VendorProductDocument>();
     public DbSet<VendorInventory> VendorInventory => Set<VendorInventory>();
@@ -57,6 +61,7 @@ public class ApplicationDbContext : DbContext
     public DbSet<RentalDurationMaster> RentalDurationMasters => Set<RentalDurationMaster>();
     public DbSet<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteHomeContent> WebsiteHomeContents => Set<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteHomeContent>();
     public DbSet<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteHomeFeature> WebsiteHomeFeatures => Set<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteHomeFeature>();
+    public DbSet<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteHomeHeroSlide> WebsiteHomeHeroSlides => Set<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteHomeHeroSlide>();
     public DbSet<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteAboutContent> WebsiteAboutContents => Set<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteAboutContent>();
     public DbSet<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteAudienceCategory> WebsiteAudienceCategories => Set<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteAudienceCategory>();
     public DbSet<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteServicesHeader> WebsiteServicesHeaders => Set<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteServicesHeader>();
@@ -66,6 +71,10 @@ public class ApplicationDbContext : DbContext
     public DbSet<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteContactContent> WebsiteContactContents => Set<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteContactContent>();
     public DbSet<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteHowItWorksHeader> WebsiteHowItWorksHeaders => Set<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteHowItWorksHeader>();
     public DbSet<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteHowItWorksStep> WebsiteHowItWorksSteps => Set<Prilixor.VendorPortal.Domain.WebsiteContent.WebsiteHowItWorksStep>();
+    public DbSet<Prilixor.VendorPortal.Domain.Legal.LegalDocument> LegalDocuments => Set<Prilixor.VendorPortal.Domain.Legal.LegalDocument>();
+    public DbSet<Prilixor.VendorPortal.Domain.Legal.LegalDocumentVersion> LegalDocumentVersions => Set<Prilixor.VendorPortal.Domain.Legal.LegalDocumentVersion>();
+    public DbSet<Prilixor.VendorPortal.Domain.Legal.LegalDocumentPlacement> LegalDocumentPlacements => Set<Prilixor.VendorPortal.Domain.Legal.LegalDocumentPlacement>();
+    public DbSet<Prilixor.VendorPortal.Domain.Legal.LegalAcceptance> LegalAcceptances => Set<Prilixor.VendorPortal.Domain.Legal.LegalAcceptance>();
     public DbSet<RentalDurationIcon> RentalDurationIcons => Set<RentalDurationIcon>();
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -79,6 +88,7 @@ public class ApplicationDbContext : DbContext
             entity.Property(x => x.Id).HasColumnName("id");
             entity.Property(x => x.Email).HasColumnName("email");
             entity.Property(x => x.SupportPhone).HasColumnName("support_phone").IsRequired(false);
+            entity.Property(x => x.PhoneVerifiedAt).HasColumnName("phone_verified_at").IsRequired(false);
             entity.Property(x => x.PasswordHash).HasColumnName("password_hash");
             entity.Property(x => x.IsEmailVerified).HasColumnName("email_verified");
             entity.Property(x => x.EmailVerificationToken).HasColumnName("email_verification_token");
@@ -316,6 +326,7 @@ public class ApplicationDbContext : DbContext
             entity.Property(x => x.GstPercent).HasColumnName("gst_percent");
             entity.Property(x => x.IsRentEnabled).HasColumnName("is_rent_enabled");
             entity.Property(x => x.IsBuyEnabled).HasColumnName("is_buy_enabled");
+            entity.Property(x => x.MinimumRentalDays).HasColumnName("minimum_rental_days");
             entity.Property(x => x.IsActive).HasColumnName("is_active");
             entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
             entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
@@ -526,6 +537,48 @@ public class ApplicationDbContext : DbContext
             entity.HasOne(x => x.Inventory)
                 .WithOne(x => x.VendorProductListing)
                 .HasForeignKey<VendorInventory>(x => x.VendorProductListingId);
+            entity.HasOne(x => x.PriceOverride)
+                .WithOne(x => x.VendorProductListing)
+                .HasForeignKey<VendorListingPriceOverride>(x => x.VendorProductListingId);
+        });
+
+        modelBuilder.Entity<VendorListingPriceOverride>(entity =>
+        {
+            entity.ToTable("vendor_listing_price_overrides");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.VendorProductListingId).HasColumnName("vendor_product_listing_id");
+            entity.Property(x => x.IsCustomPricing).HasColumnName("is_custom_pricing");
+            entity.Property(x => x.DailyRent).HasColumnName("daily_rent");
+            entity.Property(x => x.SecurityDeposit).HasColumnName("security_deposit");
+            entity.Property(x => x.BuyPrice).HasColumnName("buy_price");
+            entity.Property(x => x.VendorDailyRent).HasColumnName("vendor_daily_rent");
+            entity.Property(x => x.VendorBuyPrice).HasColumnName("vendor_buy_price");
+            entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
+            entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
+            entity.Property(x => x.CreatedBy).HasColumnName("created_by");
+            entity.Property(x => x.ModifiedBy).HasColumnName("updated_by");
+            entity.HasIndex(x => x.VendorProductListingId).IsUnique();
+            entity.HasMany(x => x.Variants)
+                .WithOne(x => x.VendorListingPriceOverride)
+                .HasForeignKey(x => x.VendorListingPriceOverrideId)
+                .OnDelete(DeleteBehavior.Cascade);
+        });
+
+        modelBuilder.Entity<VendorListingVariantPriceOverride>(entity =>
+        {
+            entity.ToTable("vendor_listing_variant_price_overrides");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.VendorListingPriceOverrideId).HasColumnName("vendor_listing_price_override_id");
+            entity.Property(x => x.ProductVariantId).HasColumnName("product_variant_id");
+            entity.Property(x => x.BuyPrice).HasColumnName("buy_price");
+            entity.Property(x => x.VendorPrice).HasColumnName("vendor_price");
+            entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
+            entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
+            entity.Property(x => x.CreatedBy).HasColumnName("created_by");
+            entity.Property(x => x.ModifiedBy).HasColumnName("updated_by");
+            entity.HasIndex(x => new { x.VendorListingPriceOverrideId, x.ProductVariantId }).IsUnique();
         });
 
         modelBuilder.Entity<VendorProductImage>(entity =>
@@ -656,6 +709,7 @@ public class ApplicationDbContext : DbContext
             entity.Property(x => x.EmailNotificationsEnabled).HasColumnName("email_notifications_enabled");
             entity.Property(x => x.PushNotificationsEnabled).HasColumnName("push_notifications_enabled");
             entity.Property(x => x.NewOrderNotifications).HasColumnName("new_order_notifications");
+            entity.Property(x => x.SmsNotificationsEnabled).HasColumnName("sms_notifications_enabled");
             entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
             entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
             entity.Property(x => x.CreatedBy).HasColumnName("created_by");
@@ -722,6 +776,8 @@ public class ApplicationDbContext : DbContext
             entity.Property(x => x.Email).HasColumnName("email");
             entity.Property(x => x.PasswordHash).HasColumnName("password_hash");
             entity.Property(x => x.FullName).HasColumnName("full_name");
+            entity.Property(x => x.Phone).HasColumnName("phone").IsRequired(false);
+            entity.Property(x => x.PhoneVerifiedAt).HasColumnName("phone_verified_at").IsRequired(false);
             entity.Property(x => x.Role).HasColumnName("role");
             entity.Property(x => x.RoleId).HasColumnName("role_id");
             entity.Property(x => x.IsSystemUser).HasColumnName("is_system_user");

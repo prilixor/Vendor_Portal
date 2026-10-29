@@ -125,8 +125,8 @@ const ContactUs = () => {
             © 2026 BlinksMed Vendor Portal.
           </p>
           <div className="flex items-center gap-6 lg:gap-8 order-1 sm:order-2">
-             <Link to="/terms-and-conditions" className="text-[12px] lg:text-[13px] font-bold text-muted-foreground/80 hover:text-primary transition-colors">Terms</Link>
-             <Link to="/privacy-policy" className="text-[12px] lg:text-[13px] font-bold text-muted-foreground/80 hover:text-primary transition-colors">Privacy</Link>
+             <Link to="/terms-and-conditions" className="text-[12px] lg:text-[13px] font-bold !text-primary underline-offset-2 hover:underline">Terms</Link>
+             <Link to="/privacy-policy" className="text-[12px] lg:text-[13px] font-bold !text-primary underline-offset-2 hover:underline">Privacy</Link>
           </div>
         </footer>
       </main>

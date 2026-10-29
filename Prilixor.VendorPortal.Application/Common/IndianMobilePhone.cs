@@ -12,6 +12,12 @@ public static partial class IndianMobilePhone
     public const string InvalidMessage =
         "Enter a valid 10-digit Indian mobile number starting with 6, 7, 8, or 9.";
 
+    /// <summary>
+    /// Shown when a number cannot be claimed. Does not reveal whether another account owns it.
+    /// </summary>
+    public const string UnavailableMessage =
+        "This phone number can't be used. Enter a different mobile number.";
+
     public static string DigitsOnly(string? value) =>
         string.IsNullOrWhiteSpace(value)
             ? string.Empty
@@ -40,6 +46,19 @@ public static partial class IndianMobilePhone
     {
         normalized = NormalizeDigits(value);
         return IndianMobileRegex().IsMatch(normalized);
+    }
+
+    /// <summary>Returns E.164 for a valid Indian mobile (+91XXXXXXXXXX).</summary>
+    public static bool TryToE164(string? value, out string e164)
+    {
+        if (!TryNormalize(value, out var digits))
+        {
+            e164 = string.Empty;
+            return false;
+        }
+
+        e164 = "+91" + digits;
+        return true;
     }
 
     [GeneratedRegex(Pattern)]

@@ -5,9 +5,10 @@ import 'package:provider/provider.dart';
 
 import '../../core/auth/auth_provider.dart';
 import '../../core/models/dispatch_offer_model.dart';
+import '../../core/models/vendor_order_model.dart';
 import '../../core/providers/vendor_order_provider.dart';
 import '../../core/theme.dart';
-import '../../shared/widgets/vendor_doctor_lookup_sheet.dart';
+import '../../core/utils/debouncer.dart';
 import 'order_detail_screen.dart';
 import 'order_group_utils.dart';
 
@@ -24,6 +25,7 @@ class OrderRequestsScreen extends StatefulWidget {
 
 class _OrderRequestsScreenState extends State<OrderRequestsScreen> {
   final _searchController = TextEditingController();
+  final Debouncer _searchDebouncer = Debouncer(duration: catalogSearchDebounce);
   String _searchQuery = '';
   String _typeFilter = 'all';
   Timer? _ticker;
@@ -60,6 +62,7 @@ class _OrderRequestsScreenState extends State<OrderRequestsScreen> {
   @override
   void dispose() {
     _ticker?.cancel();
+    _searchDebouncer.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -67,8 +70,27 @@ class _OrderRequestsScreenState extends State<OrderRequestsScreen> {
   Future<void> _load({bool silent = false}) async {
     final vendorId = Provider.of<AuthProvider>(context, listen: false).vendorId;
     if (vendorId == null || vendorId.isEmpty) return;
-    await Provider.of<VendorOrderProvider>(context, listen: false)
-        .fetchOffers(vendorId, silent: silent);
+    await Provider.of<VendorOrderProvider>(context, listen: false).fetchOffers(
+      vendorId,
+      silent: silent,
+      search: _searchQuery,
+      orderType: _typeFilter,
+      reset: true,
+    );
+  }
+
+  void _maybeLoadMore(ScrollNotification notification) {
+    if (notification.metrics.pixels < notification.metrics.maxScrollExtent - 480) {
+      return;
+    }
+    final vendorId = Provider.of<AuthProvider>(context, listen: false).vendorId;
+    if (vendorId == null || vendorId.isEmpty) return;
+    Provider.of<VendorOrderProvider>(context, listen: false).fetchOffers(
+      vendorId,
+      search: _searchQuery,
+      orderType: _typeFilter,
+      reset: false,
+    );
   }
 
   Future<void> _respond(
@@ -136,7 +158,7 @@ class _OrderRequestsScreenState extends State<OrderRequestsScreen> {
       final m = min % 60;
       return m == 0 ? '${h}h left' : '${h}h ${m}m left';
     }
-    return '$min min left';
+    return min == 1 ? '1 min left' : '$min mins left';
   }
 
   String _baseOrderNumber(String num) {
@@ -144,25 +166,9 @@ class _OrderRequestsScreenState extends State<OrderRequestsScreen> {
     return parts.length >= 3 ? parts.sublist(0, 3).join('-') : num;
   }
 
-  bool _matchesSearch(VendorDispatchOffer offer, String q) {
-    if (q.isEmpty) return true;
-    return offer.orderNumber.toLowerCase().contains(q) ||
-        offer.listingTitle.toLowerCase().contains(q) ||
-        (offer.doctorName?.toLowerCase().contains(q) ?? false) ||
-        (offer.doctorUniqueCode?.toLowerCase().contains(q) ?? false) ||
-        (offer.hospitalName?.toLowerCase().contains(q) ?? false) ||
-        (offer.hospitalCity?.toLowerCase().contains(q) ?? false);
-  }
-
-  bool _matchesType(VendorDispatchOffer offer) {
-    if (_typeFilter == 'all') return true;
-    return offer.orderType.toLowerCase() == _typeFilter;
-  }
-
   List<_OfferGroup> _buildGroups(List<VendorDispatchOffer> offers) {
     final groups = <_OfferGroup>[];
     for (final offer in offers) {
-      if (!_matchesSearch(offer, _searchQuery) || !_matchesType(offer)) continue;
       final base = _baseOrderNumber(offer.orderNumber);
       _OfferGroup? g;
       for (final existing in groups) {
@@ -227,7 +233,7 @@ class _OrderRequestsScreenState extends State<OrderRequestsScreen> {
             controller: _searchController,
             style: TextStyle(color: colors.textPrimary),
             decoration: InputDecoration(
-              hintText: 'Search order, listing, doctor, hospital…',
+              hintText: 'Search order or listing…',
               hintStyle: TextStyle(color: colors.textMuted),
               prefixIcon: Icon(Icons.search, color: colors.accent),
               suffixIcon: _searchQuery.isNotEmpty
@@ -236,6 +242,7 @@ class _OrderRequestsScreenState extends State<OrderRequestsScreen> {
                       onPressed: () {
                         _searchController.clear();
                         setState(() => _searchQuery = '');
+                        _load();
                       },
                     )
                   : null,
@@ -255,7 +262,10 @@ class _OrderRequestsScreenState extends State<OrderRequestsScreen> {
                 borderSide: BorderSide(color: colors.accent),
               ),
             ),
-            onChanged: (v) => setState(() => _searchQuery = v.trim().toLowerCase()),
+            onChanged: (v) {
+              setState(() => _searchQuery = v.trim().toLowerCase());
+              _searchDebouncer.run(_load);
+            },
           ),
         ),
         Padding(
@@ -268,21 +278,30 @@ class _OrderRequestsScreenState extends State<OrderRequestsScreen> {
                   label: 'All',
                   selected: _typeFilter == 'all',
                   count: totalOffers,
-                  onTap: () => setState(() => _typeFilter = 'all'),
+                  onTap: () {
+                    setState(() => _typeFilter = 'all');
+                    _load();
+                  },
                 ),
                 const SizedBox(width: 8),
                 _TypeChip(
                   label: 'Rent',
                   selected: _typeFilter == 'rent',
                   count: rentCount,
-                  onTap: () => setState(() => _typeFilter = 'rent'),
+                  onTap: () {
+                    setState(() => _typeFilter = 'rent');
+                    _load();
+                  },
                 ),
                 const SizedBox(width: 8),
                 _TypeChip(
                   label: 'Buy',
                   selected: _typeFilter == 'buy',
                   count: buyCount,
-                  onTap: () => setState(() => _typeFilter = 'buy'),
+                  onTap: () {
+                    setState(() => _typeFilter = 'buy');
+                    _load();
+                  },
                 ),
               ],
             ),
@@ -295,20 +314,28 @@ class _OrderRequestsScreenState extends State<OrderRequestsScreen> {
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<VendorOrderProvider>(context);
-    final groups = _buildGroups(provider.pendingOffers);
+    // Summaries also include recently expired, missed, and rejected rows.
+    // This page lists only offers that are still open and not past their deadline.
+    final actionable = provider.pendingOffers;
+    final groups = _buildGroups(actionable);
     final totalItems = groups.fold<int>(0, (n, g) => n + g.items.length);
     final totalPayout = groups.fold<double>(0, (n, g) => n + _groupPayout(g));
-    final rentCount = provider.pendingOffers
-        .where((o) => o.orderType.toLowerCase() == 'rent')
-        .length;
-    final buyCount = provider.pendingOffers
-        .where((o) => o.orderType.toLowerCase() == 'buy')
-        .length;
+    final rentCount = provider.offerTypeCounts['rent'] ??
+        actionable.where((o) => o.orderType.toLowerCase() == 'rent').length;
+    final buyCount = provider.offerTypeCounts['buy'] ??
+        actionable.where((o) => o.orderType.toLowerCase() == 'buy').length;
+    final totalOffers = provider.offerTypeCounts['all'] ??
+        provider.pendingOfferCount;
 
     return RefreshIndicator(
       color: AppTheme.accent,
       onRefresh: () => _load(),
-      child: CustomScrollView(
+      child: NotificationListener<ScrollNotification>(
+        onNotification: (notification) {
+          _maybeLoadMore(notification);
+          return false;
+        },
+        child: CustomScrollView(
         physics: const AlwaysScrollableScrollPhysics(),
         slivers: [
           SliverToBoxAdapter(
@@ -317,7 +344,7 @@ class _OrderRequestsScreenState extends State<OrderRequestsScreen> {
               itemCount: totalItems,
               totalPayout: totalPayout,
               refreshing: provider.offersLoading,
-              totalOffers: provider.pendingOffers.length,
+              totalOffers: totalOffers,
               rentCount: rentCount,
               buyCount: buyCount,
             ),
@@ -419,6 +446,7 @@ class _OrderRequestsScreenState extends State<OrderRequestsScreen> {
             ),
         ],
       ),
+      ),
     );
   }
 }
@@ -499,7 +527,7 @@ class _RequestsHeader extends StatelessWidget {
                 Text(
                   groupCount == 0
                       ? 'Accept or reject incoming dispatch offers.'
-                      : 'Potential payout ₹${totalPayout.toStringAsFixed(0)}',
+                      : 'Potential payout ${formatVendorMoney(totalPayout)}',
                   style: TextStyle(
                     color: colors.textSecondary,
                     fontSize: 12,
@@ -646,7 +674,7 @@ class _RequestGroupCard extends StatelessWidget {
                           ),
                           const SizedBox(width: 8),
                           Text(
-                            '₹${payoutTotal.toStringAsFixed(0)}',
+                            'Total payout ${formatVendorMoney(payoutTotal)}',
                             style: TextStyle(
                               color: colors.accent,
                               fontSize: 11,
@@ -775,10 +803,10 @@ class _RequestItemRow extends StatelessWidget {
     required this.onReject,
   });
 
-  Color _typeColor(String type) {
+  Color _typeColor(BuildContext context, String type) {
     return type.toLowerCase() == 'buy'
-        ? const Color(0xFF818CF8)
-        : const Color(0xFF34D399);
+        ? (context.isDarkMode ? const Color(0xFF818CF8) : const Color(0xFF4338CA))
+        : context.appColors.success;
   }
 
   @override
@@ -786,6 +814,8 @@ class _RequestItemRow extends StatelessWidget {
     final colors = context.appColors;
     final type = offer.orderType.toLowerCase();
     final disabled = working || expired;
+    final typeColor = _typeColor(context, type);
+    final isRent = type != 'buy';
 
     return Container(
       padding: const EdgeInsets.fromLTRB(12, 10, 10, 10),
@@ -822,24 +852,32 @@ class _RequestItemRow extends StatelessWidget {
                   children: [
                     _MetaChip(label: 'Qty ${offer.quantity}'),
                     if (type != 'buy')
-                      _MetaChip(label: '${offer.rentalDays} days'),
+                      _MetaChip(
+                        label: (offer.rentalDurationLabel?.trim().isNotEmpty ?? false)
+                            ? offer.rentalDurationLabel!.trim()
+                            : '${offer.rentalDays} days',
+                      ),
                     _MetaChip(
-                      label: '₹${offer.payoutAmount.toStringAsFixed(0)}',
+                      label: 'Payout ${formatVendorMoney(offer.payoutAmount)}',
                       highlight: true,
                     ),
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
                       decoration: BoxDecoration(
-                        color: _typeColor(type).withValues(alpha: 0.14),
+                        color: isRent
+                            ? colors.successSoft
+                            : typeColor.withValues(alpha: 0.14),
                         borderRadius: BorderRadius.circular(999),
                         border: Border.all(
-                          color: _typeColor(type).withValues(alpha: 0.35),
+                          color: isRent
+                              ? colors.successBorder
+                              : typeColor.withValues(alpha: 0.35),
                         ),
                       ),
                       child: Text(
                         type == 'buy' ? 'Buy' : 'Rent',
                         style: TextStyle(
-                          color: _typeColor(type),
+                          color: typeColor,
                           fontSize: 10,
                           fontWeight: FontWeight.w700,
                         ),
@@ -847,82 +885,6 @@ class _RequestItemRow extends StatelessWidget {
                     ),
                   ],
                 ),
-                if (offer.doctorName != null ||
-                    offer.hospitalName != null ||
-                    offer.doctorUniqueCode != null) ...[
-                  const SizedBox(height: 6),
-                  Material(
-                    color: colors.surfaceElevated,
-                    borderRadius: BorderRadius.circular(8),
-                    child: InkWell(
-                      borderRadius: BorderRadius.circular(8),
-                      onTap: offer.doctorUniqueCode != null
-                          ? () => showVendorDoctorLookupSheet(
-                                context,
-                                initialCode: offer.doctorUniqueCode,
-                              )
-                          : null,
-                      child: Container(
-                        width: double.infinity,
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(8),
-                          border: Border.all(color: colors.border.withValues(alpha: 0.7)),
-                        ),
-                        child: Row(
-                          children: [
-                            Icon(
-                              Icons.medical_services_outlined,
-                              size: 12,
-                              color: colors.textMuted,
-                            ),
-                            const SizedBox(width: 6),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: [
-                                  Text(
-                                    [
-                                      if (offer.doctorName != null)
-                                        'Dr. ${offer.doctorName}${offer.doctorSpecialization != null ? ' · ${offer.doctorSpecialization}' : ''}${offer.doctorUniqueCode != null ? ' · ${offer.doctorUniqueCode}' : ''}',
-                                      if (offer.hospitalName != null)
-                                        offer.hospitalName! +
-                                            (offer.hospitalCity != null
-                                                ? ' (${offer.hospitalCity})'
-                                                : ''),
-                                      if (offer.doctorName == null &&
-                                          offer.hospitalName == null &&
-                                          offer.doctorUniqueCode != null)
-                                        offer.doctorUniqueCode!,
-                                    ].join(' · '),
-                                    maxLines: 2,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: TextStyle(
-                                      color: colors.textSecondary,
-                                      fontSize: 10,
-                                      height: 1.3,
-                                    ),
-                                  ),
-                                  if (offer.doctorUniqueCode != null) ...[
-                                    const SizedBox(height: 2),
-                                    Text(
-                                      'Tap to view',
-                                      style: TextStyle(
-                                        color: colors.textMuted,
-                                        fontSize: 9,
-                                        fontWeight: FontWeight.w500,
-                                      ),
-                                    ),
-                                  ],
-                                ],
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
                 if (expired)
                   Padding(
                     padding: const EdgeInsets.only(top: 6),
@@ -943,7 +905,8 @@ class _RequestItemRow extends StatelessWidget {
             children: [
               _ActionIconButton(
                 icon: Icons.check_rounded,
-                color: const Color(0xFF34D399),
+                color: colors.success,
+                fillColor: colors.successSoft,
                 tooltip: 'Accept',
                 disabled: disabled,
                 loading: working,
@@ -998,6 +961,7 @@ class _MetaChip extends StatelessWidget {
 class _ActionIconButton extends StatelessWidget {
   final IconData icon;
   final Color color;
+  final Color? fillColor;
   final String tooltip;
   final bool disabled;
   final bool loading;
@@ -1006,6 +970,7 @@ class _ActionIconButton extends StatelessWidget {
   const _ActionIconButton({
     required this.icon,
     required this.color,
+    this.fillColor,
     required this.tooltip,
     required this.disabled,
     required this.loading,
@@ -1014,10 +979,14 @@ class _ActionIconButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final well = disabled
+        ? color.withValues(alpha: 0.08)
+        : (fillColor ??
+            color.withValues(alpha: context.isDarkMode ? 0.16 : 0.18));
     return Tooltip(
       message: tooltip,
       child: Material(
-        color: color.withValues(alpha: disabled ? 0.08 : 0.16),
+        color: well,
         borderRadius: BorderRadius.circular(10),
         child: InkWell(
           onTap: disabled ? null : onPressed,

@@ -9,6 +9,7 @@ import '../../core/utils/order_badges.dart';
 import '../../shared/widgets/brand_page_loader.dart';
 import '../../shared/widgets/catalog_image.dart';
 import '../../shared/widgets/guest_sign_in_prompt.dart';
+import '../../shared/widgets/legal_policy_links.dart';
 import 'order_detail_screen.dart';
 
 class OrdersScreen extends StatefulWidget {
@@ -19,6 +20,8 @@ class OrdersScreen extends StatefulWidget {
 }
 
 class _OrdersScreenState extends State<OrdersScreen> {
+  static const _statCardsMinGap = 12.0;
+
   final _searchController = TextEditingController();
   String _searchQuery = '';
   String _statusFilter = 'All';
@@ -31,7 +34,6 @@ class _OrdersScreenState extends State<OrdersScreen> {
     'Active',
     'Returned',
     'Cancelled',
-    'Dispatch failed',
     'Bought Out',
   ];
 
@@ -77,8 +79,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
       return s == 'pending' || s == 'awaiting vendor acceptance';
     }
     if (filter == 'In transit') return s.contains('transit');
-    if (filter == 'Cancelled') return s == 'cancelled' || s == 'canceled';
-    if (filter == 'Dispatch failed') return s == 'dispatch failed';
+    if (filter == 'Cancelled') {
+      return s == 'cancelled' || s == 'canceled' || s == 'dispatch failed';
+    }
     if (filter == 'Bought Out') return s == 'bought out';
     return s == filter.toLowerCase();
   }
@@ -109,9 +112,17 @@ class _OrdersScreenState extends State<OrdersScreen> {
       builder: (ctx) => AlertDialog(
         backgroundColor: context.appColors.surface,
         title: Text('Cancel request?', style: TextStyle(color: context.appColors.textPrimary)),
-        content: Text(
-          'This will cancel this item request. This cannot be undone.',
-          style: TextStyle(color: context.appColors.textSecondary),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'This will cancel this item request. This cannot be undone.',
+              style: TextStyle(color: context.appColors.textSecondary),
+            ),
+            const SizedBox(height: 10),
+            const CancellationPolicyLink(),
+          ],
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Keep', style: TextStyle(color: context.appColors.textSecondary))),
@@ -200,31 +211,40 @@ class _OrdersScreenState extends State<OrdersScreen> {
                                 builder: (context, constraints) {
                                   final narrow = constraints.maxWidth < 360;
                                   final rentalsTotal = provider.activeRentalsTotal;
-                                  return Row(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      Expanded(
-                                        child: _buildStatCard(
-                                          icon: Icons.inventory_2_outlined,
-                                          title: narrow ? 'Active' : 'Active rentals',
-                                          value: provider.activeRentalsCount.toString(),
-                                          subtitle: narrow
-                                              ? _formatInrCompact(rentalsTotal)
-                                              : '${_formatInr(rentalsTotal)} in flight',
-                                          accent: const Color(0xFF34D399),
+                                  final cardGap = narrow
+                                      ? _statCardsMinGap
+                                      : 14.0;
+                                  return IntrinsicHeight(
+                                    child: Row(
+                                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                                      children: [
+                                        Expanded(
+                                          child: _buildStatCard(
+                                            icon: Icons.inventory_2_outlined,
+                                            title: narrow ? 'Active' : 'Active rentals',
+                                            value: provider.activeRentalsCount.toString(),
+                                            subtitle: narrow
+                                                ? _formatInrCompact(rentalsTotal)
+                                                : '${_formatInr(rentalsTotal)} in flight',
+                                            accent: context.appColors.success,
+                                            wellColor: context.appColors.successSoft,
+                                            compact: narrow,
+                                          ),
                                         ),
-                                      ),
-                                      const SizedBox(width: 10),
-                                      Expanded(
-                                        child: _buildStatCard(
-                                          icon: Icons.local_shipping_outlined,
-                                          title: narrow ? 'Upcoming' : 'Deliveries',
-                                          value: provider.upcomingDeliveriesCount.toString(),
-                                          subtitle: narrow ? 'Pending / transit' : 'Pending & in transit',
-                                          accent: const Color(0xFF60A5FA),
+                                        SizedBox(width: cardGap),
+                                        Expanded(
+                                          child: _buildStatCard(
+                                            icon: Icons.local_shipping_outlined,
+                                            title: narrow ? 'Upcoming' : 'Deliveries',
+                                            value: provider.upcomingDeliveriesCount.toString(),
+                                            subtitle: narrow ? 'Pending / transit' : 'Pending & in transit',
+                                            accent: context.appColors.info,
+                                            wellColor: context.appColors.infoSoft,
+                                            compact: narrow,
+                                          ),
                                         ),
-                                      ),
-                                    ],
+                                      ],
+                                    ),
                                   );
                                 },
                               ),
@@ -326,6 +346,19 @@ class _OrdersScreenState extends State<OrdersScreen> {
                                   ),
                                 ),
                               ],
+                              const SizedBox(height: 10),
+                              Text.rich(
+                                TextSpan(
+                                  style: TextStyle(color: context.appColors.textMuted, fontSize: 12, height: 1.35),
+                                  children: const [
+                                    TextSpan(text: 'Status note: '),
+                                    TextSpan(text: 'Cancelled', style: TextStyle(fontWeight: FontWeight.w700)),
+                                    TextSpan(
+                                      text: ' includes requests you stopped and orders no supplier accepted.',
+                                    ),
+                                  ],
+                                ),
+                              ),
                               const SizedBox(height: 16),
                             ],
                           ),
@@ -550,28 +583,33 @@ class _OrdersScreenState extends State<OrdersScreen> {
     required String value,
     required String subtitle,
     required Color accent,
+    Color? wellColor,
+    bool compact = false,
   }) {
     return Container(
       width: double.infinity,
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+      constraints: const BoxConstraints(minHeight: 104),
+      padding: EdgeInsets.fromLTRB(compact ? 12 : 14, 12, compact ? 12 : 14, 12),
       decoration: BoxDecoration(
         color: context.appColors.surface,
-        borderRadius: BorderRadius.circular(16),
+        borderRadius: BorderRadius.circular(14),
         border: Border.all(color: context.appColors.border),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
           Row(
             children: [
               Container(
-                width: 28,
-                height: 28,
+                width: compact ? 28 : 30,
+                height: compact ? 28 : 30,
                 decoration: BoxDecoration(
-                  color: accent.withValues(alpha: 0.15),
+                  color: wellColor ??
+                      accent.withValues(alpha: context.isDarkMode ? 0.14 : 0.16),
                   borderRadius: BorderRadius.circular(8),
                 ),
-                child: Icon(icon, size: 15, color: accent),
+                child: Icon(icon, size: compact ? 15 : 16, color: accent),
               ),
               const SizedBox(width: 8),
               Expanded(
@@ -579,8 +617,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
                   title,
                   style: TextStyle(
                     color: context.appColors.textSecondary,
-                    fontSize: 12,
+                    fontSize: compact ? 11.5 : 12,
                     fontWeight: FontWeight.w600,
+                    height: 1.2,
                   ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
@@ -593,22 +632,23 @@ class _OrdersScreenState extends State<OrdersScreen> {
             value,
             style: TextStyle(
               color: context.appColors.textPrimary,
-              fontSize: 26,
+              fontSize: compact ? 24 : 26,
               fontWeight: FontWeight.w700,
               height: 1,
-              letterSpacing: -0.6,
+              letterSpacing: -0.5,
+              fontFeatures: const [FontFeature.tabularFigures()],
             ),
           ),
-          const SizedBox(height: 6),
+          const SizedBox(height: 5),
           Text(
             subtitle,
             style: TextStyle(
               color: context.appColors.textMuted,
-              fontSize: 11,
+              fontSize: compact ? 10.5 : 11,
               fontWeight: FontWeight.w500,
               height: 1.25,
             ),
-            maxLines: 2,
+            maxLines: compact ? 1 : 2,
             overflow: TextOverflow.ellipsis,
           ),
         ],
@@ -754,82 +794,126 @@ class _OrdersScreenState extends State<OrdersScreen> {
                           overflow: TextOverflow.ellipsis,
                         ),
                         const SizedBox(height: 4),
-                        Text(
-                          '₹${order.totalAmount.toStringAsFixed(0)}',
-                          style: TextStyle(
-                            color: context.isDarkMode ? const Color(0xFFA5B4FC) : const Color(0xFF4F46E5),
-                            fontSize: 15,
-                            fontWeight: FontWeight.w700,
+                        if (isBuy)
+                          Text(
+                            '${_formatOrderDateShort(order.startDate)} · Qty ${order.quantity}',
+                            style: TextStyle(color: context.appColors.textMuted, fontSize: 12, height: 1.3),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          )
+                        else ...[
+                          Text(
+                            _formatDateRangeShort(order.startDate, order.endDate),
+                            style: TextStyle(color: context.appColors.textMuted, fontSize: 12, height: 1.3),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
                           ),
-                        ),
-                        const SizedBox(height: 6),
-                        Text(
-                          isBuy
-                              ? 'Purchased ${_formatOrderDateShort(order.startDate)}'
-                              : _formatDateRangeShort(order.startDate, order.endDate),
-                          style: TextStyle(color: context.appColors.textMuted, fontSize: 12, height: 1.3),
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          'Qty: ${order.quantity}',
-                          style: TextStyle(color: context.appColors.textMuted, fontSize: 12),
-                        ),
+                          const SizedBox(height: 2),
+                          Text(
+                            _rentalQtyLine(order),
+                            style: TextStyle(color: context.appColors.textMuted, fontSize: 12),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ],
                       ],
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 12),
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                crossAxisAlignment: CrossAxisAlignment.center,
+              const SizedBox(height: 10),
+              Wrap(
+                spacing: 6,
+                runSpacing: 4,
+                crossAxisAlignment: WrapCrossAlignment.center,
                 children: [
-                  Flexible(
-                    child: Wrap(
-                      spacing: 6,
-                      runSpacing: 4,
-                      crossAxisAlignment: WrapCrossAlignment.center,
-                      children: [
-                        _buildOrderTypeBadge(context, order.orderType),
-                        _buildStatusBadge(context, order.status),
-                      ],
+                  _buildOrderTypeBadge(context, order.orderType),
+                  if (order.isExtended && order.orderType.toLowerCase() != 'buy')
+                    _buildExtendedBadge(context),
+                  if (order.returnSettlement?.chipLabel != null)
+                    _buildRefundBadge(context, order.returnSettlement!.chipLabel!),
+                  if (order.cancellationRefund?.chipLabel != null)
+                    _buildRefundBadge(context, order.cancellationRefund!.chipLabel!),
+                  _buildStatusBadge(context, order.status),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  Text(
+                    '₹${order.totalAmount.toStringAsFixed(0)}',
+                    style: TextStyle(
+                      color: context.appColors.textPrimary,
+                      fontSize: 14,
+                      fontWeight: FontWeight.w700,
                     ),
                   ),
-                  const SizedBox(width: 8),
-                  Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      if (_isCancellable(order.status)) ...[
-                        TextButton(
-                          style: TextButton.styleFrom(
-                            foregroundColor: Colors.redAccent,
-                            padding: const EdgeInsets.symmetric(horizontal: 6),
-                            minimumSize: Size.zero,
-                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            visualDensity: VisualDensity.compact,
-                          ),
-                          onPressed: () => _confirmCancelOrder(order),
-                          child: const Text('Cancel', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
-                        ),
-                        const SizedBox(width: 4),
-                      ],
-                      const Text(
-                        'Details',
-                        style: TextStyle(
-                          color: Color(0xFF6C63FF),
-                          fontSize: 12,
-                          fontWeight: FontWeight.w700,
-                        ),
+                  const Spacer(),
+                  if (_isCancellable(order.status))
+                    TextButton(
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.redAccent,
+                        padding: const EdgeInsets.symmetric(horizontal: 8),
+                        minimumSize: Size.zero,
+                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                        visualDensity: VisualDensity.compact,
                       ),
-                      const Icon(Icons.chevron_right, color: Color(0xFF6C63FF), size: 16),
-                    ],
+                      onPressed: () => _confirmCancelOrder(order),
+                      child: const Text('Cancel', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                    ),
+                  const SizedBox(width: 4),
+                  const Text(
+                    'Details',
+                    style: TextStyle(
+                      color: Color(0xFF6C63FF),
+                      fontSize: 12,
+                      fontWeight: FontWeight.w700,
+                    ),
                   ),
+                  const Icon(Icons.chevron_right, color: Color(0xFF6C63FF), size: 16),
                 ],
               ),
             ],
           ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildExtendedBadge(BuildContext context) {
+    final isDark = context.isDarkMode;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF78350F).withValues(alpha: 0.45) : const Color(0xFFFEF3C7),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        'EXTENDED',
+        style: TextStyle(
+          color: isDark ? const Color(0xFFFCD34D) : const Color(0xFF92400E),
+          fontSize: 10,
+          fontWeight: FontWeight.w800,
+          letterSpacing: 0.3,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildRefundBadge(BuildContext context, String label) {
+    final isDark = context.isDarkMode;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(
+        color: isDark ? const Color(0xFF0C4A6E).withValues(alpha: 0.55) : const Color(0xFFE0F2FE),
+        borderRadius: BorderRadius.circular(999),
+      ),
+      child: Text(
+        label,
+        style: TextStyle(
+          color: isDark ? const Color(0xFFBAE6FD) : const Color(0xFF0C4A6E),
+          fontSize: 10,
+          fontWeight: FontWeight.w800,
         ),
       ),
     );
@@ -992,6 +1076,16 @@ class _OrdersScreenState extends State<OrdersScreen> {
     if (a != '—') return a;
     if (b != '—') return b;
     return '—';
+  }
+
+  String _rentalQtyLine(OrderModel order) {
+    final raw = order.rentalDurationLabel?.trim() ?? '';
+    final duration = raw
+        .replaceAll(RegExp(r'\s*Billing Cycles?', caseSensitive: false), ' cycles')
+        .replaceAll(RegExp(r'\s*Billing Cycle', caseSensitive: false), ' cycle')
+        .trim();
+    if (duration.isEmpty) return 'Qty ${order.quantity}';
+    return '$duration · Qty ${order.quantity}';
   }
 }
 

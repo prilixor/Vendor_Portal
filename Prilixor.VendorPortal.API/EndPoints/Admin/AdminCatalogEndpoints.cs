@@ -1,6 +1,7 @@
 using FastEndpoints;
 using MediatR;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Prilixor.Shared.Models;
 using Prilixor.VendorPortal.API.Extensions;
 using Prilixor.VendorPortal.Application.Onboarding;
 using Prilixor.VendorPortal.API.EndPoints.Vendors;
@@ -59,6 +60,7 @@ public sealed class CreateProductRequest
     public string? BaseUnit { get; set; }
     public string? SdsDocumentUrl { get; set; }
     public string? CoaDocumentUrl { get; set; }
+    public int? MinimumRentalDays { get; set; }
 }
 
 public sealed class UpdateProductRequest
@@ -93,6 +95,7 @@ public sealed class UpdateProductRequest
     public string? BaseUnit { get; set; }
     public string? SdsDocumentUrl { get; set; }
     public string? CoaDocumentUrl { get; set; }
+    public int? MinimumRentalDays { get; set; }
 }
 
 public sealed class AddProductImageRequest
@@ -235,6 +238,23 @@ public sealed class GetProductsRequest
     public string? CategoryId { get; set; }
 }
 
+public sealed class GetProductSummariesRequest
+{
+    public string? Search { get; set; }
+    public string? CategoryId { get; set; }
+    public string? Status { get; set; }
+    public bool FavoritesOnly { get; set; }
+    public bool? IsChemical { get; set; }
+    public string? Ids { get; set; }
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 10;
+}
+
+public sealed class GetProductByIdRequest
+{
+    public string Id { get; set; } = string.Empty;
+}
+
 public sealed class GetProductsEndpoint(IMediator mediator)
     : Endpoint<GetProductsRequest, Results<Ok<List<ProductDto>>, ProblemHttpResult>>
 {
@@ -248,6 +268,55 @@ public sealed class GetProductsEndpoint(IMediator mediator)
     public override async Task<Results<Ok<List<ProductDto>>, ProblemHttpResult>> ExecuteAsync(GetProductsRequest req, CancellationToken ct)
     {
         var result = await mediator.Send(new GetProductsQuery(req.CategoryId), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class GetProductSummariesEndpoint(IMediator mediator)
+    : Endpoint<GetProductSummariesRequest, Results<Ok<PagedResult<ProductDto>>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("catalog/product-summaries");
+        Group<AdminApiGroup>();
+        Policies("Perm:catalog.manage");
+    }
+
+    public override async Task<Results<Ok<PagedResult<ProductDto>>, ProblemHttpResult>> ExecuteAsync(
+        GetProductSummariesRequest req,
+        CancellationToken ct)
+    {
+        var page = req.Page < 1 ? 1 : req.Page;
+        var pageSize = req.PageSize is < 1 or > 100 ? 10 : req.PageSize;
+        var result = await mediator.Send(new GetProductListQuery(
+            req.Search,
+            req.CategoryId,
+            req.Status,
+            req.FavoritesOnly,
+            req.IsChemical,
+            page,
+            pageSize,
+            req.Ids), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class GetProductByIdEndpoint(IMediator mediator)
+    : Endpoint<GetProductByIdRequest, Results<Ok<ProductDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("catalog/products/{id}");
+        Group<AdminApiGroup>();
+        Policies("Perm:catalog.manage");
+    }
+
+    public override async Task<Results<Ok<ProductDto>, ProblemHttpResult>> ExecuteAsync(
+        GetProductByIdRequest req,
+        CancellationToken ct)
+    {
+        req.Id = Route<string>("id") ?? req.Id;
+        var result = await mediator.Send(new GetProductQuery(req.Id), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }
@@ -293,7 +362,8 @@ public sealed class CreateProductEndpoint(IMediator mediator)
             req.MolecularWeight,
             req.BaseUnit,
             req.SdsDocumentUrl,
-            req.CoaDocumentUrl), ct);
+            req.CoaDocumentUrl,
+            RentalPricingEngine.NormalizeMinimumRentalDays(req.MinimumRentalDays)), ct);
 
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
@@ -342,7 +412,8 @@ public sealed class UpdateProductEndpoint(IMediator mediator)
             req.MolecularWeight,
             req.BaseUnit,
             req.SdsDocumentUrl,
-            req.CoaDocumentUrl), ct);
+            req.CoaDocumentUrl,
+            RentalPricingEngine.NormalizeMinimumRentalDays(req.MinimumRentalDays)), ct);
 
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
@@ -430,6 +501,7 @@ public sealed class PreviewProductRentalPricingRequest
     public decimal DailyRent { get; set; }
     public decimal? BuyPrice { get; set; }
     public bool IsRentEnabled { get; set; } = true;
+    public int? MinimumRentalDays { get; set; }
     public List<CreateOrUpdateProductRentalPricingPlanDto>? ExistingPlans { get; set; }
 }
 
@@ -448,7 +520,12 @@ public sealed class PreviewProductRentalPricingEndpoint(IMediator mediator)
         CancellationToken ct)
     {
         var result = await mediator.Send(
-            new PreviewProductRentalPricingQuery(req.DailyRent, req.BuyPrice, req.IsRentEnabled, req.ExistingPlans),
+            new PreviewProductRentalPricingQuery(
+                req.DailyRent,
+                req.BuyPrice,
+                req.IsRentEnabled,
+                req.ExistingPlans,
+                RentalPricingEngine.NormalizeMinimumRentalDays(req.MinimumRentalDays)),
             ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
@@ -834,7 +911,7 @@ public sealed class GetRentalDurationIconsEndpoint(IMediator mediator)
 public sealed class CreateRentalDurationIconRequest
 {
     public string Name { get; set; } = string.Empty;
-    public string ValueTier { get; set; } = "good";
+    public string ValueTier { get; set; } = string.Empty;
     public string ImageUrl { get; set; } = string.Empty;
     public string? ThumbnailUrl { get; set; }
     public int SortOrder { get; set; }
@@ -870,7 +947,7 @@ public sealed class UpdateRentalDurationIconRequest
 {
     public string Id { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
-    public string ValueTier { get; set; } = "good";
+    public string ValueTier { get; set; } = string.Empty;
     public string ImageUrl { get; set; } = string.Empty;
     public string? ThumbnailUrl { get; set; }
     public int SortOrder { get; set; }

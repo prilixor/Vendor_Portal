@@ -59,9 +59,9 @@ class OnboardingStatusBanner extends StatelessWidget {
                 : Icons.assignment_outlined;
 
     final progressColor = adminDone
-        ? const Color(0xFF10B981)
+        ? colors.success
         : (completedSteps == totalSteps && !adminDone)
-            ? const Color(0xFFF59E0B)
+            ? colors.warning
             : colors.accent;
 
     final hint = _hintText(
@@ -227,15 +227,9 @@ class OnboardingStatusBanner extends StatelessWidget {
               width: double.infinity,
               padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
               decoration: BoxDecoration(
-                color: isDark
-                    ? const Color(0xFFF59E0B).withValues(alpha: 0.1)
-                    : const Color(0xFFFFFBEB),
+                color: colors.warningSoft,
                 borderRadius: BorderRadius.circular(10),
-                border: Border.all(
-                  color: isDark
-                      ? const Color(0xFFF59E0B).withValues(alpha: 0.28)
-                      : const Color(0xFFFDE68A),
-                ),
+                border: Border.all(color: colors.warningBorder),
               ),
               child: Row(
                 crossAxisAlignment: CrossAxisAlignment.start,
@@ -243,18 +237,14 @@ class OnboardingStatusBanner extends StatelessWidget {
                   Icon(
                     Icons.info_outline_rounded,
                     size: 16,
-                    color: isDark
-                        ? const Color(0xFFFBBF24)
-                        : const Color(0xFFB45309),
+                    color: colors.warning,
                   ),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       hint,
                       style: TextStyle(
-                        color: isDark
-                            ? const Color(0xFFFDE68A)
-                            : const Color(0xFF92400E),
+                        color: colors.warning,
                         fontSize: 12,
                         height: 1.4,
                         fontWeight: FontWeight.w500,
@@ -358,9 +348,7 @@ class _OnboardingStepConnector extends StatelessWidget {
             height: 2,
             decoration: BoxDecoration(
               color: active
-                  ? (isDark
-                      ? const Color(0xFF34D399).withValues(alpha: 0.55)
-                      : const Color(0xFF86EFAC))
+                  ? (isDark ? colors.success.withValues(alpha: 0.55) : colors.successBorder)
                   : colors.border.withValues(alpha: isDark ? 0.75 : 1),
               borderRadius: BorderRadius.circular(999),
             ),
@@ -388,13 +376,9 @@ class _OnboardingStepTile extends StatelessWidget {
   Widget build(BuildContext context) {
     final colors = context.appColors;
     final isDark = context.isDarkMode;
-    const success = Color(0xFF10B981);
-    final successSoft = isDark
-        ? success.withValues(alpha: 0.14)
-        : const Color(0xFFECFDF5);
-    final successBorder = isDark
-        ? success.withValues(alpha: 0.35)
-        : const Color(0xFFA7F3D0);
+    final success = colors.success;
+    final successSoft = colors.successSoft;
+    final successBorder = colors.successBorder;
     final idleBg = isDark
         ? colors.surfaceElevated.withValues(alpha: 0.55)
         : colors.surfaceElevated;
@@ -420,9 +404,7 @@ class _OnboardingStepTile extends StatelessWidget {
             maxLines: 1,
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
-              color: done
-                  ? (isDark ? success : const Color(0xFF047857))
-                  : colors.textSecondary,
+              color: done ? success : colors.textSecondary,
               fontSize: 11,
               fontWeight: FontWeight.w700,
             ),
@@ -434,7 +416,7 @@ class _OnboardingStepTile extends StatelessWidget {
             overflow: TextOverflow.ellipsis,
             style: TextStyle(
               color: done
-                  ? (isDark ? success.withValues(alpha: 0.85) : const Color(0xFF059669))
+                  ? success.withValues(alpha: isDark ? 0.85 : 1)
                   : colors.textMuted,
               fontSize: 10,
               fontWeight: FontWeight.w500,
@@ -488,32 +470,32 @@ VerificationStatusStyle verificationStatusStyle(String raw, bool isDark) {
   if (s == 'approved') {
     return VerificationStatusStyle(
       'Approved',
-      isDark ? const Color(0xFF34D399) : const Color(0xFF15803D),
-      isDark ? const Color(0xFF34D399).withValues(alpha: 0.14) : const Color(0xFFDCFCE7),
-      isDark ? const Color(0xFF34D399).withValues(alpha: 0.35) : const Color(0xFF86EFAC),
+      isDark ? AppPalette.dark.success : AppPalette.light.success,
+      isDark ? AppPalette.dark.successSoft : AppPalette.light.successSoft,
+      isDark ? AppPalette.dark.successBorder : AppPalette.light.successBorder,
     );
   }
   if (s == 'rejected') {
     return VerificationStatusStyle(
       'Rejected',
-      isDark ? const Color(0xFFFB7185) : const Color(0xFFB91C1C),
-      isDark ? const Color(0xFFFB7185).withValues(alpha: 0.14) : const Color(0xFFFEE2E2),
-      isDark ? const Color(0xFFFB7185).withValues(alpha: 0.35) : const Color(0xFFFCA5A5),
+      isDark ? AppPalette.dark.danger : AppPalette.light.danger,
+      isDark ? AppPalette.dark.dangerSoft : AppPalette.light.dangerSoft,
+      isDark ? AppPalette.dark.dangerBorder : AppPalette.light.dangerBorder,
     );
   }
   if (s == 'under_review' || s == 'submitted') {
     return VerificationStatusStyle(
       'Under review',
-      isDark ? const Color(0xFF60A5FA) : const Color(0xFF1D4ED8),
-      isDark ? const Color(0xFF60A5FA).withValues(alpha: 0.14) : const Color(0xFFDBEAFE),
-      isDark ? const Color(0xFF60A5FA).withValues(alpha: 0.35) : const Color(0xFF93C5FD),
+      isDark ? AppPalette.dark.info : AppPalette.light.info,
+      isDark ? AppPalette.dark.infoSoft : AppPalette.light.infoSoft,
+      isDark ? AppPalette.dark.infoBorder : AppPalette.light.infoBorder,
     );
   }
   return VerificationStatusStyle(
     'Pending',
-    isDark ? const Color(0xFFFBBF24) : const Color(0xFFB45309),
-    isDark ? const Color(0xFFFBBF24).withValues(alpha: 0.14) : const Color(0xFFFEF3C7),
-    isDark ? const Color(0xFFFBBF24).withValues(alpha: 0.35) : const Color(0xFFFCD34D),
+    isDark ? AppPalette.dark.warning : AppPalette.light.warning,
+    isDark ? AppPalette.dark.warningSoft : AppPalette.light.warningSoft,
+    isDark ? AppPalette.dark.warningBorder : AppPalette.light.warningBorder,
   );
 }
 class SavedBankAccountCard extends StatelessWidget {
@@ -537,25 +519,24 @@ class SavedBankAccountCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = context.isDarkMode;
+    final colors = context.appColors;
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       decoration: BoxDecoration(
-        color: isDark ? null : context.appColors.surface,
+        color: isDark ? null : colors.surface,
         gradient: isDark
             ? LinearGradient(
                 begin: Alignment.topLeft,
                 end: Alignment.bottomRight,
                 colors: [
-                  const Color(0xFF34D399).withValues(alpha: 0.12),
+                  colors.successSoft,
                   AppTheme.card(context),
                 ],
               )
             : null,
         borderRadius: BorderRadius.circular(16),
         border: Border.all(
-          color: isDark
-              ? const Color(0xFF34D399).withValues(alpha: 0.22)
-              : context.appColors.border,
+          color: isDark ? colors.successBorder : colors.border,
         ),
       ),
       child: Padding(
@@ -570,21 +551,15 @@ class SavedBankAccountCard extends StatelessWidget {
                   width: 48,
                   height: 48,
                   decoration: BoxDecoration(
-                    color: isDark
-                        ? const Color(0xFF34D399).withValues(alpha: 0.16)
-                        : const Color(0xFFECFDF5),
+                    color: colors.successSoft,
                     borderRadius: BorderRadius.circular(14),
                     border: Border.all(
-                      color: isDark
-                          ? Colors.transparent
-                          : const Color(0xFFA7F3D0),
+                      color: isDark ? Colors.transparent : colors.successBorder,
                     ),
                   ),
                   child: Icon(
                     Icons.account_balance_rounded,
-                    color: isDark
-                        ? const Color(0xFF34D399)
-                        : const Color(0xFF059669),
+                    color: colors.success,
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -1048,6 +1023,9 @@ class OnboardingRejectedHelpBanner extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final colors = context.appColors;
+    final isDark = context.isDarkMode;
+    final danger = colors.danger;
     final parts = <String>[
       ...rejectedDocuments.map((d) => d.documentType),
       if (rejectedBank) 'Bank account',
@@ -1063,22 +1041,22 @@ class OnboardingRejectedHelpBanner extends StatelessWidget {
       margin: const EdgeInsets.only(bottom: 12),
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: Colors.redAccent.withValues(alpha: 0.12),
+        color: colors.dangerSoft,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.redAccent.withValues(alpha: 0.35)),
+        border: Border.all(color: colors.dangerBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          const Row(
+          Row(
             children: [
-              Icon(Icons.error_outline, color: Colors.redAccent, size: 20),
-              SizedBox(width: 8),
+              Icon(Icons.error_outline, color: danger, size: 20),
+              const SizedBox(width: 8),
               Expanded(
                 child: Text(
                   'Verification needs attention',
                   style: TextStyle(
-                    color: Colors.white,
+                    color: isDark ? colors.textPrimary : danger,
                     fontWeight: FontWeight.w700,
                   ),
                 ),
@@ -1089,7 +1067,7 @@ class OnboardingRejectedHelpBanner extends StatelessWidget {
           Text(
             '$summary Upload corrected files or contact support if you need help.',
             style: TextStyle(
-              color: Colors.white.withValues(alpha: 0.78),
+              color: colors.textSecondary,
               fontSize: 13,
               height: 1.35,
             ),
@@ -1099,7 +1077,7 @@ class OnboardingRejectedHelpBanner extends StatelessWidget {
             Text(
               'Admin comments on rejected documents:',
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.72),
+                color: colors.textMuted,
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
               ),
@@ -1121,7 +1099,7 @@ class OnboardingRejectedHelpBanner extends StatelessWidget {
             Text(
               'Bank rejection notes appear in Alerts if the admin left a comment.',
               style: TextStyle(
-                color: Colors.white.withValues(alpha: 0.55),
+                color: colors.textMuted,
                 fontSize: 11,
                 height: 1.35,
               ),
@@ -1135,8 +1113,9 @@ class OnboardingRejectedHelpBanner extends StatelessWidget {
               icon: const Icon(Icons.support_agent_rounded, size: 18),
               label: const Text('Get help'),
               style: OutlinedButton.styleFrom(
-                foregroundColor: Colors.white,
-                side: BorderSide(color: Colors.white.withValues(alpha: 0.24)),
+                foregroundColor: danger,
+                backgroundColor: isDark ? Colors.white.withValues(alpha: 0.06) : Colors.white,
+                side: BorderSide(color: danger.withValues(alpha: isDark ? 0.45 : 0.35)),
                 minimumSize: const Size.fromHeight(42),
               ),
             ),

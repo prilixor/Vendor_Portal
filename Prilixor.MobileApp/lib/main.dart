@@ -1,3 +1,4 @@
+import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'core/auth/auth_provider.dart';
@@ -10,6 +11,8 @@ import 'features/dashboard/customer_dashboard.dart';
 import 'features/medical/doctor_public_screen.dart';
 import 'shared/widgets/offline_banner.dart';
 import 'shared/widgets/brand_splash.dart';
+import 'shared/widgets/brand_page_loader.dart';
+import 'shared/widgets/legal_reconsent_gate.dart';
 
 import 'core/providers/product_provider.dart';
 import 'core/providers/checkout_provider.dart';
@@ -58,12 +61,21 @@ class PrilixorMobileApp extends StatelessWidget {
   Widget build(BuildContext context) {
     return MaterialApp(
       title: 'BlinksMed',
+      scrollBehavior: const _AppScrollBehavior(),
       theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
       themeMode: ThemeMode.system,
       home: const AuthGate(),
       debugShowCheckedModeBanner: false,
-      builder: (context, child) => OfflineAwareAppShell(child: child),
+      builder: (context, child) => OfflineAwareAppShell(
+        child: Stack(
+          fit: StackFit.expand,
+          children: [
+            child ?? const SizedBox.shrink(),
+            const LegalReconsentGate(),
+          ],
+        ),
+      ),
       onGenerateRoute: (settings) {
         final name = settings.name ?? '';
         final uri = Uri.tryParse(name.startsWith('http') ? name : 'app://local$name');
@@ -159,23 +171,7 @@ class WelcomeScreen extends StatelessWidget {
               mainAxisAlignment: MainAxisAlignment.center,
               crossAxisAlignment: CrossAxisAlignment.stretch,
               children: [
-                Center(
-                  child: ClipRRect(
-                    borderRadius: BorderRadius.circular(12),
-                    child: ColoredBox(
-                      color: Colors.white,
-                      child: Padding(
-                        padding: const EdgeInsets.all(6),
-                        child: Image.asset(
-                          'assets/branding/logo.png',
-                          width: 80,
-                          height: 80,
-                          fit: BoxFit.contain,
-                        ),
-                      ),
-                    ),
-                  ),
-                ),
+                const Center(child: BrandMarkTile()),
                 const SizedBox(height: 32),
                 Text(
                   'BlinksMed',
@@ -231,4 +227,16 @@ class WelcomeScreen extends StatelessWidget {
       ),
     );
   }
+}
+
+class _AppScrollBehavior extends MaterialScrollBehavior {
+  const _AppScrollBehavior();
+
+  @override
+  Set<PointerDeviceKind> get dragDevices => {
+        PointerDeviceKind.touch,
+        PointerDeviceKind.mouse,
+        PointerDeviceKind.trackpad,
+        PointerDeviceKind.stylus,
+      };
 }

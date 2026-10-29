@@ -1,12 +1,15 @@
 using FluentValidation;
 using MediatR;
+using Microsoft.Extensions.Options;
 using Prilixor.VendorPortal.Application.Abstractions;
+using Prilixor.VendorPortal.Application.Common;
 using Prilixor.VendorPortal.Domain.Vendors;
 using Prilixor.VendorPortal.Domain.Options;
 using Prilixor.Shared.Abstractions.CQRS;
 using Prilixor.Shared.Models;
 using Prilixor.Shared.Extensions;
 using Prilixor.VendorPortal.Application.Customers;
+using Prilixor.VendorPortal.Application.Services;
 using Prilixor.VendorPortal.Domain.Customers;
 
 namespace Prilixor.VendorPortal.Application.Onboarding;
@@ -73,6 +76,8 @@ internal sealed class RegisterAdminUserCommandHandler(
             Email = request.Email.Trim().ToLowerInvariant(),
             PasswordHash = passwordHasherService.HashPassword(request.Password),
             FullName = request.FullName,
+            Phone = null,
+            PhoneVerifiedAt = null,
             Role = roleEntity.Code,
             RoleId = roleEntity.Id,
             IsActive = request.IsActive,
@@ -120,6 +125,56 @@ internal sealed class GetAdminUsersQueryHandler(IVendorOnboardingRepository repo
         var rows = await repository.GetAdminUsersAsync(cancellationToken);
         var result = rows.Select(RegisterAdminUserCommandHandler.ToDto).ToList();
         return Result.Success(result);
+    }
+}
+
+public sealed class AdminUserListResult
+{
+    public List<AdminUserDto> Items { get; init; } = [];
+    public int TotalCount { get; init; }
+    public int Page { get; init; }
+    public int PageSize { get; init; }
+    public int SuperAdminCount { get; init; }
+}
+
+public sealed record GetAdminUserListQuery(
+    string? Search,
+    int Page = 1,
+    int PageSize = 8) : IQuery<AdminUserListResult>;
+
+public sealed class GetAdminUserListQueryValidator : AbstractValidator<GetAdminUserListQuery>
+{
+    public GetAdminUserListQueryValidator()
+    {
+        RuleFor(x => x.Page).GreaterThan(0);
+        RuleFor(x => x.PageSize).InclusiveBetween(1, 100);
+    }
+}
+
+internal sealed class GetAdminUserListQueryHandler(IVendorOnboardingRepository repository)
+    : IQueryHandler<GetAdminUserListQuery, AdminUserListResult>
+{
+    public async Task<Result<AdminUserListResult>> Handle(
+        GetAdminUserListQuery request,
+        CancellationToken cancellationToken)
+    {
+        var page = Math.Max(1, request.Page);
+        var pageSize = Math.Clamp(request.PageSize, 1, 100);
+        var (items, totalCount) = await repository.SearchAdminUsersPagedAsync(
+            request.Search,
+            page,
+            pageSize,
+            cancellationToken);
+        var superAdminCount = await repository.CountActiveSuperAdminsAsync(cancellationToken);
+
+        return Result.Success(new AdminUserListResult
+        {
+            Items = items.Select(RegisterAdminUserCommandHandler.ToDto).ToList(),
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize,
+            SuperAdminCount = superAdminCount,
+        });
     }
 }
 
@@ -204,6 +259,10 @@ internal sealed class UpdateAdminUserCommandHandler(IVendorOnboardingRepository 
                 target.Email = email;
             }
         }
+
+        // Admin accounts are email-only (phone not used).
+        target.Phone = null;
+        target.PhoneVerifiedAt = null;
 
         AdminRole? newRole = null;
         if (request.RoleId is Guid rid)
@@ -304,6 +363,21 @@ internal sealed class UpdateAdminUserCommandHandler(IVendorOnboardingRepository 
     }
 }
 
+public sealed record GetOwnAdminProfileQuery(Guid AdminId) : IQuery<AdminUserDto>;
+
+internal sealed class GetOwnAdminProfileQueryHandler(IVendorOnboardingRepository repository)
+    : IQueryHandler<GetOwnAdminProfileQuery, AdminUserDto>
+{
+    public async Task<Result<AdminUserDto>> Handle(GetOwnAdminProfileQuery request, CancellationToken cancellationToken)
+    {
+        var admin = await repository.GetAdminUserByIdAsync(request.AdminId, cancellationToken);
+        if (admin is null || admin.IsDeleted)
+            return Result.Failure<AdminUserDto>(new Error("admin.not_found", "Admin user not found.", ErrorCategory.NotFound));
+
+        return Result.Success(RegisterAdminUserCommandHandler.ToDto(admin));
+    }
+}
+
 public sealed record UpdateOwnAdminProfileCommand(
     Guid AdminId,
     string? FullName,
@@ -336,6 +410,10 @@ internal sealed class UpdateOwnAdminProfileCommandHandler(
                 admin.Email = email;
             }
         }
+
+        // Admin accounts are email-only (phone not used).
+        admin.Phone = null;
+        admin.PhoneVerifiedAt = null;
 
         if (!string.IsNullOrWhiteSpace(request.NewPassword))
         {
@@ -614,7 +692,10 @@ public sealed class VerifyVendorBankAccountCommandValidator : AbstractValidator<
     }
 }
 
-internal sealed class VerifyVendorBankAccountCommandHandler(IVendorOnboardingRepository repository, IMediator mediator)
+internal sealed class VerifyVendorBankAccountCommandHandler(
+    IVendorOnboardingRepository repository,
+    IMediator mediator,
+    VendorSmsNotifier vendorSms)
     : ICommandHandler<VerifyVendorBankAccountCommand, VendorBankAccountDto>
 {
     public async Task<Result<VendorBankAccountDto>> Handle(VerifyVendorBankAccountCommand request, CancellationToken cancellationToken)
@@ -652,7 +733,10 @@ internal sealed class VerifyVendorBankAccountCommandHandler(IVendorOnboardingRep
 
         await repository.UpdateVendorBankAccountAsync(bankAccount, cancellationToken);
 
-        if (!string.Equals(oldStatus, "rejected", StringComparison.OrdinalIgnoreCase)
+        var last4 = GetLast4(bankAccount.AccountNumber);
+        var statusChanged = !string.Equals(oldStatus, request.VerificationStatus, StringComparison.OrdinalIgnoreCase);
+
+        if (statusChanged
             && string.Equals(request.VerificationStatus, "rejected", StringComparison.OrdinalIgnoreCase))
         {
             await mediator.Send(new CreateVendorNotificationCommand(
@@ -660,7 +744,7 @@ internal sealed class VerifyVendorBankAccountCommandHandler(IVendorOnboardingRep
                 "bank_rejected",
                 "Bank account verification rejected",
                 AdminNotificationMessageBuilder.WithReason(
-                    $"Your bank account ending with {GetLast4(bankAccount.AccountNumber)} was rejected. Please review and resubmit.",
+                    $"Your bank account ending with {last4} was rejected. Please review and resubmit.",
                     request.Notes),
                 "in_app",
                 "sent"), cancellationToken);
@@ -680,6 +764,19 @@ internal sealed class VerifyVendorBankAccountCommandHandler(IVendorOnboardingRep
 
         await repository.AddAdminAuditLogAsync(auditLog, cancellationToken);
         await repository.SaveChangesAsync(cancellationToken);
+
+        if (statusChanged
+            && (string.Equals(request.VerificationStatus, "approved", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(request.VerificationStatus, "rejected", StringComparison.OrdinalIgnoreCase)))
+        {
+            await vendorSms.TrySendAsync(
+                vendorId,
+                SmsTemplates.VendorBankVerified(
+                    string.Equals(request.VerificationStatus, "approved", StringComparison.OrdinalIgnoreCase),
+                    last4),
+                VendorSmsKind.BankVerified,
+                cancellationToken);
+        }
 
         return Result.Success(new VendorBankAccountDto(
             bankAccount.Id.ToString(),
@@ -729,7 +826,8 @@ public sealed class VerifyVendorDocumentCommandValidator : AbstractValidator<Ver
 internal sealed class VerifyVendorDocumentCommandHandler(
     IVendorOnboardingRepository repository,
     IVendorFileUrlResolver fileUrlResolver,
-    IMediator mediator)
+    IMediator mediator,
+    VendorSmsNotifier vendorSms)
     : ICommandHandler<VerifyVendorDocumentCommand, VendorDocumentDto>
 {
     public async Task<Result<VendorDocumentDto>> Handle(VerifyVendorDocumentCommand request, CancellationToken cancellationToken)
@@ -784,7 +882,9 @@ internal sealed class VerifyVendorDocumentCommandHandler(
             }
         }
 
-        if (!string.Equals(oldStatus, "rejected", StringComparison.OrdinalIgnoreCase)
+        var statusChanged = !string.Equals(oldStatus, request.VerificationStatus, StringComparison.OrdinalIgnoreCase);
+
+        if (statusChanged
             && string.Equals(request.VerificationStatus, "rejected", StringComparison.OrdinalIgnoreCase))
         {
             await mediator.Send(new CreateVendorNotificationCommand(
@@ -798,7 +898,7 @@ internal sealed class VerifyVendorDocumentCommandHandler(
                 "sent"), cancellationToken);
         }
 
-        if (!string.Equals(oldStatus, "approved", StringComparison.OrdinalIgnoreCase)
+        if (statusChanged
             && string.Equals(request.VerificationStatus, "approved", StringComparison.OrdinalIgnoreCase))
         {
             await mediator.Send(new CreateVendorNotificationCommand(
@@ -823,6 +923,19 @@ internal sealed class VerifyVendorDocumentCommandHandler(
         };
         await repository.AddAdminAuditLogAsync(auditLog, cancellationToken);
         await repository.SaveChangesAsync(cancellationToken);
+
+        if (statusChanged
+            && (string.Equals(request.VerificationStatus, "approved", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(request.VerificationStatus, "rejected", StringComparison.OrdinalIgnoreCase)))
+        {
+            await vendorSms.TrySendAsync(
+                vendorId,
+                SmsTemplates.VendorDocumentVerified(
+                    string.Equals(request.VerificationStatus, "approved", StringComparison.OrdinalIgnoreCase),
+                    document.DocumentType),
+                VendorSmsKind.DocumentVerified,
+                cancellationToken);
+        }
 
         return Result.Success(new VendorDocumentDto(
             document.Id.ToString(),
@@ -1019,6 +1132,20 @@ internal static class AdminNotificationMessageBuilder
 
         return $"{baseMessage} Reason: {notes.Trim()}";
     }
+
+    public static string ClosedOrderCustomerBody(CustomerOrderCancellationRefund? row, bool dispatchFailed)
+    {
+        if (row is not null && !OrderCancellationRefunds.BlocksRedispatch(row))
+        {
+            return dispatchFailed
+                ? "No vendor could take this product. BlinksMed will review the payment before anything is sent back."
+                : "This product was cancelled. BlinksMed will review the payment before anything is sent back.";
+        }
+
+        return dispatchFailed
+            ? "No vendor could take this product."
+            : "This product was cancelled.";
+    }
 }
 
 public sealed record UpdateAdminOrderStatusCommand(string AdminId, Guid OrderId, string Status, List<string>? AssetTags = null) : ICommand<AdminOrderDto>;
@@ -1061,6 +1188,14 @@ internal sealed class UpdateAdminOrderStatusCommandHandler(
         
         if (current == target)
             return await BuildOrderDto(customers, order.Id, cancellationToken);
+
+        if (current == "dispatch_failed")
+        {
+            return Result.Failure<AdminOrderDto>(new Error(
+                "admin.dispatch_failed_stays",
+                "Dispatch failed stays dispatch failed. Refund the payment from the cancellation card, or reassign before that refund is sent.",
+                ErrorCategory.Validation));
+        }
 
         var listing = await customers.GetListingForCustomerAsync(order.VendorProductListingId, cancellationToken);
         if (listing is null)
@@ -1231,7 +1366,42 @@ internal sealed class UpdateAdminOrderStatusCommandHandler(
             }
         }
 
+        CustomerOrderReturn? openedReturn = null;
+        if (target == "returned")
+        {
+            var opened = await OrderReturns.TryOpenAsync(customers, order, 0, null, cancellationToken);
+            if (opened.IsFailure)
+                return Result.Failure<AdminOrderDto>(opened.Errors[0]);
+            openedReturn = opened.Value;
+        }
+
         order.Status = target;
+        CustomerOrderCancellationRefund? openedCancel = null;
+        if (target is "cancelled" or "dispatch_failed")
+        {
+            var adminName = (await vendors.GetAdminUserByIdAsync(adminUserId, cancellationToken))?.FullName;
+            var openedCancelResult = await OrderCancellationRefunds.TryOpenAsync(
+                customers,
+                order,
+                target,
+                CancellationActors.Admin,
+                adminName,
+                cancellationToken);
+            if (openedCancelResult.IsFailure)
+                return Result.Failure<AdminOrderDto>(openedCancelResult.Errors[0]);
+            openedCancel = openedCancelResult.Value;
+            var vendorMessage = target == "dispatch_failed"
+                ? $"BlinksMed marked {order.OrderNumber} dispatch failed. This request is closed."
+                : $"BlinksMed cancelled {order.OrderNumber}. This request is closed.";
+            await DispatchOfferClosing.CloseForOrderAsync(
+                customers,
+                vendors,
+                order.Id,
+                order.OrderNumber,
+                vendorMessage,
+                cancellationToken);
+        }
+
         // Admin marked delivered → close photo request + delete images from S3.
         if (target == "active")
         {
@@ -1252,7 +1422,9 @@ internal sealed class UpdateAdminOrderStatusCommandHandler(
                 {
                     "in_transit" => "Your order is now out for delivery.",
                     "active" => order.OrderType == "buy" ? "Your purchase is delivered." : "Your rental order has been delivered and is now active.",
-                    "returned" => "Return completed for your rental order.",
+                    "returned" => OrderReturns.CustomerMessage(openedReturn),
+                    "cancelled" => AdminNotificationMessageBuilder.ClosedOrderCustomerBody(openedCancel, dispatchFailed: false),
+                    "dispatch_failed" => AdminNotificationMessageBuilder.ClosedOrderCustomerBody(openedCancel, dispatchFailed: true),
                     _ => "Order status has been updated."
                 },
             },
@@ -1313,7 +1485,8 @@ internal sealed class UpdateAdminOrderStatusCommandHandler(
             HospitalId: null,
             HospitalName: null,
             HospitalCity: null,
-            DoctorContactNumber: row.Doctor?.ContactNumber
+            DoctorContactNumber: row.Doctor?.ContactNumber,
+            DoctorUniqueCode: row.Doctor?.UniqueCode
         ));
     }
 }
@@ -1324,7 +1497,7 @@ internal sealed class AdminReassignVendorOrderCommandHandler(
     ICustomerRepository customers,
     IVendorOnboardingRepository vendors,
     IVendorUploadStorageService uploadStorage,
-    Microsoft.Extensions.Options.IOptions<Prilixor.VendorPortal.Domain.Options.CustomerPricingOptions> pricingOptions)
+    ISequentialDispatchService dispatch)
     : ICommandHandler<AdminReassignVendorOrderCommand, AdminOrderDto>
 {
     public async Task<Result<AdminOrderDto>> Handle(AdminReassignVendorOrderCommand request, CancellationToken cancellationToken)
@@ -1341,6 +1514,14 @@ internal sealed class AdminReassignVendorOrderCommandHandler(
         if (order.Status != "dispatch_failed" && order.Status != "confirmed")
             return Result.Failure<AdminOrderDto>(new Error("admin.invalid_order_status", "Only dispatch_failed or confirmed orders can be reassigned.", ErrorCategory.Validation));
 
+        var wasDispatchFailed = string.Equals(order.Status, "dispatch_failed", StringComparison.OrdinalIgnoreCase);
+        var existingRefund = await customers.GetOrderCancellationRefundByOrderIdAsync(order.Id, cancellationToken);
+        if (OrderCancellationRefunds.BlocksRedispatch(existingRefund))
+            return Result.Failure<AdminOrderDto>(new Error(
+                "admin.redispatch.refund_sent",
+                "This payment was already refunded, so this product cannot be offered to a vendor again.",
+                ErrorCategory.Validation));
+
         var oldVendorId = orderRow.Listing?.VendorId;
         // Reassignment ends the previous vendor fulfillment — hide/purge any photo request.
         await CustomerOrderImageLifecycle.CloseAndPurgeForOrderAsync(
@@ -1351,69 +1532,39 @@ internal sealed class AdminReassignVendorOrderCommandHandler(
         if (agg is null)
             return Result.Failure<AdminOrderDto>(new Error("customers.listing_not_found", "Original listing not found.", ErrorCategory.NotFound));
 
-        var options = pricingOptions.Value;
-        var vendorAreasByVendorId = new Dictionary<Guid, List<VendorServiceArea>>();
-        CustomerAddress? address = null;
-        if (order.CustomerAddressId.HasValue)
-            address = await customers.GetCustomerAddressByIdAsync(order.CustomerId, order.CustomerAddressId.Value, cancellationToken);
+        var listingTitle = agg.ListingTitle ?? "Listing";
+        var exclude = oldVendorId.HasValue ? new[] { oldVendorId.Value } : Array.Empty<Guid>();
+        var started = await dispatch.StartWaveAsync(order, agg.ProductId, exclude, listingTitle, cancellationToken);
 
-        var candidateListings = await customers.GetCandidateListingsByProductIdAsync(agg.ProductId, cancellationToken);
-        var eligibleCandidates = new List<(VendorProductListingAggregate Candidate, decimal DistanceKm)>();
-        foreach (var candidate in candidateListings.Where(c => c.VendorId != Guid.Empty && c.VendorId != oldVendorId))
-        {
-            var candidateListing = await vendors.GetVendorProductListingByIdAsync(candidate.VendorId, candidate.ListingId, cancellationToken);
-            if (candidateListing is null) continue;
-
-            var candidateInventory = await vendors.GetVendorInventoryByListingIdAsync(candidate.ListingId, cancellationToken);
-            var candidateAvailable = candidateInventory?.AvailableQuantity ?? candidateListing.AvailableQuantity;
-            if (candidateAvailable < order.Quantity) continue;
-
-            decimal distanceKm = 0m;
-            if (address is not null && address.Latitude.HasValue && address.Longitude.HasValue)
-            {
-                var vendorAreas = await vendors.GetVendorServiceAreasAsync(candidate.VendorId, cancellationToken);
-                var candidateDistance = CustomerOrderPricingRules.ResolveDeliveryDistance(
-                    address.Latitude.Value, address.Longitude.Value, candidate, vendorAreas, options);
-                if (!candidateDistance.IsSuccess) continue;
-                distanceKm = candidateDistance.DistanceKm;
-            }
-            eligibleCandidates.Add((candidate, distanceKm));
-        }
-
-        var ranked = eligibleCandidates
-            .OrderBy(x => x.DistanceKm)
-            .ThenByDescending(x => x.Candidate.InventoryAvailable)
-            .Take(Math.Max(1, options.MaxDispatchVendorsPerLine))
-            .ToList();
-
-        var now = DateTimeOffset.UtcNow;
-        
-        for (var i = 0; i < ranked.Count; i++)
-        {
-            var candidate = ranked[i].Candidate;
-            var offer = new CustomerOrderVendorOffer
-            {
-                CustomerRentalOrderId = order.Id,
-                VendorId = candidate.VendorId,
-                VendorProductListingId = candidate.ListingId,
-                OfferRank = i + 1,
-                Status = "pending",
-                ExpiresAt = now.AddMinutes((double)Math.Max(1m, options.DispatchOfferTtlMinutes)),
-            };
-            await customers.AddCustomerOrderVendorOfferAsync(offer, cancellationToken);
-        }
-
-        if (ranked.Count == 0)
+        if (!started)
         {
             order.Status = "dispatch_failed";
             await CustomerOrderImageLifecycle.CloseAndPurgeForOrderAsync(
                 customers, uploadStorage, order.Id, closedReason: "dispatch_failed", deletedBy: adminUserId, cancellationToken);
             await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
+            var adminName = (await vendors.GetAdminUserByIdAsync(adminUserId, cancellationToken))?.FullName;
+            await OrderCancellationRefunds.TryOpenAsync(
+                customers,
+                order,
+                CancellationOutcomes.DispatchFailed,
+                CancellationActors.Admin,
+                adminName,
+                cancellationToken);
+            await dispatch.PersistAsync(cancellationToken);
             await customers.SaveChangesAsync(cancellationToken);
             return Result.Failure<AdminOrderDto>(new Error("admin.reassign.no_vendor", "No other eligible vendors available right now.", ErrorCategory.Validation));
         }
 
         await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
+        if (wasDispatchFailed
+            && existingRefund is not null
+            && string.Equals(existingRefund.Status, CancellationRefundStatuses.PendingReview, StringComparison.OrdinalIgnoreCase))
+        {
+            existingRefund.IsDeleted = true;
+            existingRefund.DeletedAt = DateTimeOffset.UtcNow;
+            existingRefund.ModifiedOnUtc = DateTime.UtcNow;
+            await customers.UpdateOrderCancellationRefundAsync(existingRefund, cancellationToken);
+        }
         
         var auditLog = new AdminAuditLog
         {
@@ -1425,6 +1576,7 @@ internal sealed class AdminReassignVendorOrderCommandHandler(
         };
         await vendors.AddAdminAuditLogAsync(auditLog, cancellationToken);
 
+        await dispatch.PersistAsync(cancellationToken);
         await customers.SaveChangesAsync(cancellationToken);
         await vendors.SaveChangesAsync(cancellationToken);
 
@@ -1444,7 +1596,7 @@ internal sealed class AdminReassignVendorOrderCommandHandler(
                 ? $"{listing?.ListingTitle ?? "Deleted Product"} ({row.VariantDescription})" 
                 : (listing?.ListingTitle ?? "Deleted Product"),
             o.Status, o.OrderType, o.Quantity, o.RentalDays, o.TotalAmount, o.DepositAmount, o.VendorSubtotalAmount, o.CreatedOnUtc, o.StartDate, o.EndDate, row.ListingPrimaryImageUrl, o.IsExtended,
-            DoctorId: row.Doctor?.Id, DoctorName: row.Doctor?.FullName, DoctorSpecialization: row.Doctor?.Specialization, HospitalId: null, HospitalName: null, HospitalCity: null, DoctorContactNumber: row.Doctor?.ContactNumber
+            DoctorId: row.Doctor?.Id, DoctorName: row.Doctor?.FullName, DoctorSpecialization: row.Doctor?.Specialization, HospitalId: null, HospitalName: null, HospitalCity: null, DoctorContactNumber: row.Doctor?.ContactNumber, DoctorUniqueCode: row.Doctor?.UniqueCode
         ));
     }
 }
@@ -1467,13 +1619,48 @@ internal sealed class AdminForceCancelRefundOrderCommandHandler(
             return Result.Failure<AdminOrderDto>(new Error("customers.order_not_found", "Order not found.", ErrorCategory.NotFound));
 
         var o = row.Order;
+        if (string.Equals(o.Status, "dispatch_failed", StringComparison.OrdinalIgnoreCase))
+            return Result.Failure<AdminOrderDto>(new Error(
+                "admin.dispatch_failed_stays",
+                "Dispatch failed stays dispatch failed. Refund the payment from the cancellation card.",
+                ErrorCategory.Validation));
+
         if (o.Status == "cancelled" || o.Status == "returned")
             return Result.Failure<AdminOrderDto>(new Error("admin.invalid_order_status", "Order is already cancelled or returned.", ErrorCategory.Validation));
 
         o.Status = "cancelled";
+        await DispatchOfferClosing.CloseForOrderAsync(
+            customers,
+            vendors,
+            o.Id,
+            o.OrderNumber,
+            $"BlinksMed cancelled {o.OrderNumber}. This request is closed.",
+            cancellationToken);
         await CustomerOrderImageLifecycle.CloseAndPurgeForOrderAsync(
             customers, uploadStorage, o.Id, closedReason: "cancelled", deletedBy: adminUserId, cancellationToken);
         await customers.UpdateCustomerRentalOrderAsync(o, cancellationToken);
+        var cancellingAdmin = await vendors.GetAdminUserByIdAsync(adminUserId, cancellationToken);
+        var openedCancel = await OrderCancellationRefunds.TryOpenAsync(
+            customers,
+            o,
+            CancellationOutcomes.Cancelled,
+            CancellationActors.Admin,
+            cancellingAdmin?.FullName,
+            cancellationToken);
+        if (openedCancel.IsSuccess && openedCancel.Value is not null)
+        {
+            await customers.AddCustomerNotificationAsync(
+                new CustomerNotification
+                {
+                    Id = Guid.NewGuid(),
+                    CustomerId = o.CustomerId,
+                    RelatedOrderId = o.Id,
+                    NotificationType = "order_status_updated",
+                    Title = $"Order {o.OrderNumber} cancelled",
+                    Body = AdminNotificationMessageBuilder.ClosedOrderCustomerBody(openedCancel.Value, dispatchFailed: false),
+                },
+                cancellationToken);
+        }
 
         var auditLog = new AdminAuditLog
         {
@@ -1504,7 +1691,7 @@ internal sealed class AdminForceCancelRefundOrderCommandHandler(
                 ? $"{listing?.ListingTitle ?? "Deleted Product"} ({row.VariantDescription})" 
                 : (listing?.ListingTitle ?? "Deleted Product"),
             o.Status, o.OrderType, o.Quantity, o.RentalDays, o.TotalAmount, o.DepositAmount, o.VendorSubtotalAmount, o.CreatedOnUtc, o.StartDate, o.EndDate, row.ListingPrimaryImageUrl, o.IsExtended,
-            DoctorId: row.Doctor?.Id, DoctorName: row.Doctor?.FullName, DoctorSpecialization: row.Doctor?.Specialization, HospitalId: null, HospitalName: null, HospitalCity: null, DoctorContactNumber: row.Doctor?.ContactNumber
+            DoctorId: row.Doctor?.Id, DoctorName: row.Doctor?.FullName, DoctorSpecialization: row.Doctor?.Specialization, HospitalId: null, HospitalName: null, HospitalCity: null, DoctorContactNumber: row.Doctor?.ContactNumber, DoctorUniqueCode: row.Doctor?.UniqueCode
         ));
     }
 }
@@ -1515,7 +1702,7 @@ internal sealed class AdminRestartOrderDispatchCommandHandler(
     ICustomerRepository customers,
     IVendorOnboardingRepository vendors,
     IVendorUploadStorageService uploadStorage,
-    Microsoft.Extensions.Options.IOptions<Prilixor.VendorPortal.Domain.Options.CustomerPricingOptions> pricingOptions)
+    ISequentialDispatchService dispatch)
     : ICommandHandler<AdminRestartOrderDispatchCommand, AdminOrderDto>
 {
     public async Task<Result<AdminOrderDto>> Handle(AdminRestartOrderDispatchCommand request, CancellationToken cancellationToken)
@@ -1532,75 +1719,18 @@ internal sealed class AdminRestartOrderDispatchCommandHandler(
         if (order.Status != "dispatch_failed")
             return Result.Failure<AdminOrderDto>(new Error("admin.invalid_order_status", "Only dispatch_failed orders can be restarted.", ErrorCategory.Validation));
 
+        var existingRefund = await customers.GetOrderCancellationRefundByOrderIdAsync(order.Id, cancellationToken);
+        if (OrderCancellationRefunds.BlocksRedispatch(existingRefund))
+            return Result.Failure<AdminOrderDto>(new Error(
+                "admin.redispatch.refund_sent",
+                "This payment was already refunded, so this product cannot be offered to a vendor again.",
+                ErrorCategory.Validation));
+
         order.Status = "awaiting_vendor_acceptance";
         
         var agg = await customers.GetListingForCustomerAsync(order.VendorProductListingId, cancellationToken);
         if (agg is null)
             return Result.Failure<AdminOrderDto>(new Error("customers.listing_not_found", "Original listing not found.", ErrorCategory.NotFound));
-
-        var options = pricingOptions.Value;
-        var vendorAreasByVendorId = new Dictionary<Guid, List<VendorServiceArea>>();
-        CustomerAddress? address = null;
-        if (order.CustomerAddressId.HasValue)
-            address = await customers.GetCustomerAddressByIdAsync(order.CustomerId, order.CustomerAddressId.Value, cancellationToken);
-
-        var candidateListings = await customers.GetCandidateListingsByProductIdAsync(agg.ProductId, cancellationToken);
-        var eligibleCandidates = new List<(VendorProductListingAggregate Candidate, decimal DistanceKm)>();
-        foreach (var candidate in candidateListings.Where(c => c.VendorId != Guid.Empty))
-        {
-            var candidateListing = await vendors.GetVendorProductListingByIdAsync(candidate.VendorId, candidate.ListingId, cancellationToken);
-            if (candidateListing is null) continue;
-
-            var candidateInventory = await vendors.GetVendorInventoryByListingIdAsync(candidate.ListingId, cancellationToken);
-            var candidateAvailable = candidateInventory?.AvailableQuantity ?? candidateListing.AvailableQuantity;
-            if (candidateAvailable < order.Quantity) continue;
-
-            decimal distanceKm = 0m;
-            if (address is not null && address.Latitude.HasValue && address.Longitude.HasValue)
-            {
-                var vendorAreas = await vendors.GetVendorServiceAreasAsync(candidate.VendorId, cancellationToken);
-                var candidateDistance = CustomerOrderPricingRules.ResolveDeliveryDistance(
-                    address.Latitude.Value, address.Longitude.Value, candidate, vendorAreas, options);
-                if (!candidateDistance.IsSuccess) continue;
-                distanceKm = candidateDistance.DistanceKm;
-            }
-            eligibleCandidates.Add((candidate, distanceKm));
-        }
-
-        var ranked = eligibleCandidates
-            .OrderBy(x => x.DistanceKm)
-            .ThenByDescending(x => x.Candidate.InventoryAvailable)
-            .Take(Math.Max(1, options.MaxDispatchVendorsPerLine))
-            .ToList();
-
-        var now = DateTimeOffset.UtcNow;
-        
-        for (var i = 0; i < ranked.Count; i++)
-        {
-            var candidate = ranked[i].Candidate;
-            var offer = new CustomerOrderVendorOffer
-            {
-                CustomerRentalOrderId = order.Id,
-                VendorId = candidate.VendorId,
-                VendorProductListingId = candidate.ListingId,
-                OfferRank = i + 1,
-                Status = "pending",
-                ExpiresAt = now.AddMinutes((double)Math.Max(1m, options.DispatchOfferTtlMinutes)),
-            };
-            await customers.AddCustomerOrderVendorOfferAsync(offer, cancellationToken);
-        }
-
-        if (ranked.Count == 0)
-        {
-            order.Status = "dispatch_failed";
-            await CustomerOrderImageLifecycle.CloseAndPurgeForOrderAsync(
-                customers, uploadStorage, order.Id, closedReason: "dispatch_failed", deletedBy: adminUserId, cancellationToken);
-            await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
-            await customers.SaveChangesAsync(cancellationToken);
-            return Result.Failure<AdminOrderDto>(new Error("admin.restart.no_vendor", "Cannot restart dispatch: No eligible vendors found with sufficient stock or within delivery range.", ErrorCategory.Validation));
-        }
-
-        await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
 
         var listingTitle = agg.ListingTitle ?? "Listing";
         if (order.ProductVariantId.HasValue)
@@ -1611,6 +1741,36 @@ internal sealed class AdminRestartOrderDispatchCommandHandler(
                 listingTitle += $" ({Prilixor.VendorPortal.Application.Common.SizeFormatting.Format(reprocessVariant.SizeValue, reprocessVariant.SizeUnit)})";
             }
         }
+
+        var started = await dispatch.StartWaveAsync(order, agg.ProductId, [], listingTitle, cancellationToken);
+        if (!started)
+        {
+            order.Status = "dispatch_failed";
+            await CustomerOrderImageLifecycle.CloseAndPurgeForOrderAsync(
+                customers, uploadStorage, order.Id, closedReason: "dispatch_failed", deletedBy: adminUserId, cancellationToken);
+            await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
+            var adminName = (await vendors.GetAdminUserByIdAsync(adminUserId, cancellationToken))?.FullName;
+            await OrderCancellationRefunds.TryOpenAsync(
+                customers,
+                order,
+                CancellationOutcomes.DispatchFailed,
+                CancellationActors.Admin,
+                adminName,
+                cancellationToken);
+            await dispatch.PersistAsync(cancellationToken);
+            await customers.SaveChangesAsync(cancellationToken);
+            return Result.Failure<AdminOrderDto>(new Error("admin.restart.no_vendor", "Cannot restart dispatch: No eligible vendors found with sufficient stock or within delivery range.", ErrorCategory.Validation));
+        }
+
+        await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
+        if (existingRefund is not null
+            && string.Equals(existingRefund.Status, CancellationRefundStatuses.PendingReview, StringComparison.OrdinalIgnoreCase))
+        {
+            existingRefund.IsDeleted = true;
+            existingRefund.DeletedAt = DateTimeOffset.UtcNow;
+            existingRefund.ModifiedOnUtc = DateTime.UtcNow;
+            await customers.UpdateOrderCancellationRefundAsync(existingRefund, cancellationToken);
+        }
         
         await customers.AddCustomerNotificationAsync(
             new Prilixor.VendorPortal.Domain.Customers.CustomerNotification
@@ -1618,26 +1778,11 @@ internal sealed class AdminRestartOrderDispatchCommandHandler(
                 Id = Guid.NewGuid(),
                 CustomerId = order.CustomerId,
                 Title = $"Order {order.OrderNumber} is being re-processed",
-                Body = $"We are re-processing your {order.OrderType} request for \"{listingTitle}\" with our vendors.",
+                Body = $"We are re-processing your {order.OrderType} request for \"{listingTitle}\".",
                 NotificationType = "order_pending",
                 RelatedOrderId = order.Id,
             },
             cancellationToken);
-
-        foreach (var r in ranked)
-        {
-            var candidate = r.Candidate;
-            await vendors.AddVendorNotificationAsync(new Prilixor.VendorPortal.Domain.Vendors.VendorNotification
-            {
-                VendorId = candidate.VendorId,
-                NotificationType = "dispatch_offer",
-                Title = $"New order request {order.OrderNumber}",
-                Message = $"You have a new {order.OrderType} request for \"{listingTitle}\".",
-                Channel = "in_app",
-                Status = "sent",
-                SentAt = DateTimeOffset.UtcNow
-            }, cancellationToken);
-        }
         
         var auditLog = new Prilixor.VendorPortal.Domain.Vendors.AdminAuditLog
         {
@@ -1645,10 +1790,11 @@ internal sealed class AdminRestartOrderDispatchCommandHandler(
             ActionType = "ADMIN_RESTART_DISPATCH",
             EntityType = "CustomerRentalOrder",
             EntityId = order.Id,
-            Notes = "Admin restarted the dispatch process and sent new offers."
+            Notes = "Admin restarted sequential dispatch to the nearest eligible vendor."
         };
         await vendors.AddAdminAuditLogAsync(auditLog, cancellationToken);
 
+        await dispatch.PersistAsync(cancellationToken);
         await customers.SaveChangesAsync(cancellationToken);
         await vendors.SaveChangesAsync(cancellationToken);
 
@@ -1668,7 +1814,7 @@ internal sealed class AdminRestartOrderDispatchCommandHandler(
                 ? $"{listing?.ListingTitle ?? "Deleted Product"} ({row.VariantDescription})" 
                 : (listing?.ListingTitle ?? "Deleted Product"),
             o.Status, o.OrderType, o.Quantity, o.RentalDays, o.TotalAmount, o.DepositAmount, o.VendorSubtotalAmount, o.CreatedOnUtc, o.StartDate, o.EndDate, row.ListingPrimaryImageUrl, o.IsExtended,
-            DoctorId: row.Doctor?.Id, DoctorName: row.Doctor?.FullName, DoctorSpecialization: row.Doctor?.Specialization, HospitalId: null, HospitalName: null, HospitalCity: null, DoctorContactNumber: row.Doctor?.ContactNumber
+            DoctorId: row.Doctor?.Id, DoctorName: row.Doctor?.FullName, DoctorSpecialization: row.Doctor?.Specialization, HospitalId: null, HospitalName: null, HospitalCity: null, DoctorContactNumber: row.Doctor?.ContactNumber, DoctorUniqueCode: row.Doctor?.UniqueCode
         ));
     }
 }
@@ -1688,11 +1834,13 @@ public sealed record AdminPendingContinuationDto(
 public sealed record GetAdminAllPendingContinuationsQuery() : IQuery<List<AdminPendingContinuationDto>>;
 
 internal sealed class GetAdminAllPendingContinuationsQueryHandler(
-    ICustomerRepository customers)
+    ICustomerRepository customers,
+    IOptions<CustomerPricingOptions> pricingOptions)
     : IQueryHandler<GetAdminAllPendingContinuationsQuery, List<AdminPendingContinuationDto>>
 {
     public async Task<Result<List<AdminPendingContinuationDto>>> Handle(GetAdminAllPendingContinuationsQuery request, CancellationToken cancellationToken)
     {
+        await PendingExtensionMerger.MergeAllVisibleDuplicatesAsync(customers, pricingOptions.Value, cancellationToken);
         var continuations = await customers.GetAllPendingContinuationsForAdminAsync(cancellationToken);
 
         var list = continuations.Select(c => new AdminPendingContinuationDto(
@@ -1708,5 +1856,60 @@ internal sealed class GetAdminAllPendingContinuationsQueryHandler(
         )).ToList();
 
         return Result.Success(list);
+    }
+}
+
+public sealed class AdminPendingContinuationListResult
+{
+    public List<AdminPendingContinuationDto> Items { get; init; } = [];
+    public int TotalCount { get; init; }
+    public int Page { get; init; }
+    public int PageSize { get; init; }
+}
+
+public sealed record GetAdminPendingContinuationListQuery(
+    int Page = 1,
+    int PageSize = 8) : IQuery<AdminPendingContinuationListResult>;
+
+public sealed class GetAdminPendingContinuationListQueryValidator : AbstractValidator<GetAdminPendingContinuationListQuery>
+{
+    public GetAdminPendingContinuationListQueryValidator()
+    {
+        RuleFor(x => x.Page).GreaterThan(0);
+        RuleFor(x => x.PageSize).InclusiveBetween(1, 100);
+    }
+}
+
+internal sealed class GetAdminPendingContinuationListQueryHandler(
+    ICustomerRepository customers,
+    IOptions<CustomerPricingOptions> pricingOptions)
+    : IQueryHandler<GetAdminPendingContinuationListQuery, AdminPendingContinuationListResult>
+{
+    public async Task<Result<AdminPendingContinuationListResult>> Handle(
+        GetAdminPendingContinuationListQuery request,
+        CancellationToken cancellationToken)
+    {
+        await PendingExtensionMerger.MergeAllVisibleDuplicatesAsync(customers, pricingOptions.Value, cancellationToken);
+        var page = Math.Max(1, request.Page);
+        var pageSize = Math.Clamp(request.PageSize, 1, 100);
+        var (items, totalCount) = await customers.SearchPendingContinuationsForAdminPagedAsync(
+            page, pageSize, cancellationToken);
+
+        return Result.Success(new AdminPendingContinuationListResult
+        {
+            Items = items.Select(c => new AdminPendingContinuationDto(
+                c.Id,
+                c.CustomerRentalOrderId,
+                c.OrderNumber,
+                c.CustomerName,
+                c.VendorName,
+                c.ListingTitle,
+                c.TotalAmount,
+                c.CreatedOnUtc.UtcDateTime,
+                c.Type)).ToList(),
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize,
+        });
     }
 }

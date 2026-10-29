@@ -21,6 +21,23 @@ class BuySuggestionModel {
   }
 }
 
+class GstLineModel {
+  final double gstPercent;
+  final double gstAmount;
+
+  GstLineModel({
+    required this.gstPercent,
+    required this.gstAmount,
+  });
+
+  factory GstLineModel.fromJson(Map<String, dynamic> json) {
+    return GstLineModel(
+      gstPercent: (json['gstPercent'] ?? 0).toDouble(),
+      gstAmount: (json['gstAmount'] ?? 0).toDouble(),
+    );
+  }
+}
+
 class OrderQuoteModel {
   final double subtotalAmount;
   final double depositAmount;
@@ -29,7 +46,9 @@ class OrderQuoteModel {
   final double expressFeeAmount;
   final double gstAmount;
   final double totalAmount;
+  final List<GstLineModel> gstLines;
   final List<BuySuggestionModel> buySuggestions;
+  final bool razorpayTestMode;
 
   OrderQuoteModel({
     required this.subtotalAmount,
@@ -39,13 +58,20 @@ class OrderQuoteModel {
     required this.expressFeeAmount,
     required this.gstAmount,
     required this.totalAmount,
+    this.gstLines = const [],
     this.buySuggestions = const [],
+    this.razorpayTestMode = false,
   });
 
   factory OrderQuoteModel.fromJson(Map<String, dynamic> json) {
     final suggestions = (json['buySuggestions'] as List<dynamic>? ?? [])
         .whereType<Map>()
         .map((e) => BuySuggestionModel.fromJson(Map<String, dynamic>.from(e)))
+        .toList();
+    final gstLines = (json['gstLines'] as List<dynamic>? ?? [])
+        .whereType<Map>()
+        .map((e) => GstLineModel.fromJson(Map<String, dynamic>.from(e)))
+        .where((line) => line.gstAmount > 0)
         .toList();
     return OrderQuoteModel(
       subtotalAmount: (json['subtotalAmount'] ?? 0).toDouble(),
@@ -55,7 +81,9 @@ class OrderQuoteModel {
       expressFeeAmount: (json['expressFeeAmount'] ?? 0).toDouble(),
       gstAmount: (json['gstAmount'] ?? 0).toDouble(),
       totalAmount: (json['totalAmount'] ?? 0).toDouble(),
+      gstLines: gstLines,
       buySuggestions: suggestions,
+      razorpayTestMode: json['razorpayTestMode'] == true,
     );
   }
 }

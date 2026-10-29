@@ -1,8 +1,11 @@
 using FluentValidation;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Prilixor.VendorPortal.Application.Abstractions;
 using Prilixor.VendorPortal.Application.Common;
 using Prilixor.VendorPortal.Application.Onboarding;
+using Prilixor.VendorPortal.Domain.Legal;
 using Prilixor.VendorPortal.Application.Services;
 using Prilixor.VendorPortal.Domain.Customers;
 using Prilixor.VendorPortal.Domain.Options;
@@ -12,52 +15,104 @@ using Prilixor.Shared.Models;
 
 namespace Prilixor.VendorPortal.Application.Customers;
 
-public sealed record CustomerRegisteredDto(Guid Id, string Email, string FullName);
+public sealed record CustomerRegisteredDto(
+    Guid Id,
+    string? Email,
+    string FullName,
+    bool RequiresPhoneOtp,
+    bool RequiresEmailVerification);
 
-public sealed record RegisterCustomerCommand(string Email, string Password, string FullName, string? Phone)
+public sealed record RegisterCustomerCommand(
+    string? Email,
+    string Password,
+    string FullName,
+    string? Phone,
+    bool AcceptedLegal = false,
+    string? SourceSurface = null,
+    IReadOnlyList<string>? AcceptedSlugs = null,
+    string? IpAddress = null,
+    string? UserAgent = null)
     : ICommand<CustomerRegisteredDto>;
 
 public sealed class RegisterCustomerCommandValidator : AbstractValidator<RegisterCustomerCommand>
 {
     public RegisterCustomerCommandValidator()
     {
-        RuleFor(x => x.Email).NotEmpty().EmailAddress();
         RuleFor(x => x.Password).NotEmpty().MinimumLength(8);
         RuleFor(x => x.FullName).NotEmpty().MinimumLength(2).MaximumLength(200);
         RuleFor(x => x.Phone)
-            .Must(p => string.IsNullOrWhiteSpace(p) || IndianMobilePhone.IsValid(p))
+            .NotEmpty()
+            .WithMessage("Phone number is required.")
+            .Must(p => IndianMobilePhone.IsValid(p))
             .WithMessage(IndianMobilePhone.InvalidMessage);
+        RuleFor(x => x.Email)
+            .EmailAddress()
+            .When(x => !string.IsNullOrWhiteSpace(x.Email));
     }
 }
 
 internal sealed class RegisterCustomerCommandHandler(
     ICustomerRepository customers,
-    IPasswordHasherService passwordHasher)
+    IPasswordHasherService passwordHasher,
+    ILegalAcceptanceRecorder legalAcceptances,
+    IPlatformSmsSettingsService smsSettings,
+    ILogger<RegisterCustomerCommandHandler> logger)
     : ICommandHandler<RegisterCustomerCommand, CustomerRegisteredDto>
 {
     public async Task<Result<CustomerRegisteredDto>> Handle(RegisterCustomerCommand request, CancellationToken cancellationToken)
     {
-        var existing = await customers.GetCustomerByEmailAsync(request.Email, cancellationToken);
-        if (existing is not null)
+        // Opaque conflict message on signup (avoid email/phone account enumeration).
+        const string conflictMessage =
+            "Registration failed. If an account with this email or phone number exists, please try logging in.";
+
+        var hasEmail = !string.IsNullOrWhiteSpace(request.Email);
+        var hasPhone = !string.IsNullOrWhiteSpace(request.Phone);
+        if (!hasPhone)
         {
             return Result.Failure<CustomerRegisteredDto>(new Error(
-                "customers.email_exists",
-                "An account already exists for this email.",
+                "customers.phone_required",
+                "Phone number is required.",
                 ErrorCategory.Validation));
         }
 
-        var entity = new Customer
-        {
-            Email = request.Email.Trim().ToLowerInvariant(),
-            PasswordHash = passwordHasher.HashPassword(request.Password),
-            FullName = request.FullName.Trim(),
-            Phone = null,
-            IsEmailVerified = true,
-        };
+        var acceptanceGate = await legalAcceptances.BuildRegisterAcceptancesAsync(
+            LegalCatalog.ActorTypes.Customer,
+            Guid.Empty,
+            request.SourceSurface,
+            request.AcceptedLegal,
+            request.AcceptedSlugs,
+            request.IpAddress,
+            request.UserAgent,
+            cancellationToken);
+        if (!acceptanceGate.IsSuccess)
+            return Result.Failure<CustomerRegisteredDto>(acceptanceGate.Errors);
 
-        if (!string.IsNullOrWhiteSpace(request.Phone))
+        string? email = null;
+        if (hasEmail)
         {
-            if (!IndianMobilePhone.TryNormalize(request.Phone, out var phone))
+            if (!CustomerEmail.TryNormalize(request.Email, out var normalizedEmail))
+            {
+                return Result.Failure<CustomerRegisteredDto>(new Error(
+                    "customers.invalid_email",
+                    "Enter a valid email address.",
+                    ErrorCategory.Validation));
+            }
+
+            email = normalizedEmail;
+            var existing = await customers.GetCustomerByEmailAsync(email, cancellationToken);
+            if (existing is not null)
+            {
+                return Result.Failure<CustomerRegisteredDto>(new Error(
+                    "customers.email_exists",
+                    conflictMessage,
+                    ErrorCategory.Validation));
+            }
+        }
+
+        string? phone = null;
+        if (hasPhone)
+        {
+            if (!IndianMobilePhone.TryNormalize(request.Phone, out phone))
             {
                 return Result.Failure<CustomerRegisteredDto>(new Error(
                     "customers.invalid_phone",
@@ -65,11 +120,61 @@ internal sealed class RegisterCustomerCommandHandler(
                     ErrorCategory.Validation));
             }
 
-            entity.Phone = phone;
+            var phoneOwner = await customers.GetCustomerByPhoneAsync(phone, cancellationToken);
+            if (phoneOwner is not null)
+            {
+                return Result.Failure<CustomerRegisteredDto>(new Error(
+                    "customers.phone_exists",
+                    conflictMessage,
+                    ErrorCategory.Validation));
+            }
         }
 
+        // Phone is required for new customers. SMS OTP follows the admin phone-OTP switch.
+        // Email remains optional (column stays nullable — no DB schema change).
+        var requiresPhoneOtp = await smsSettings.IsPhoneOtpEnabledAsync(cancellationToken);
+        var requiresEmailVerification = false;
+
+        var entity = new Customer
+        {
+            Email = email,
+            PasswordHash = passwordHasher.HashPassword(request.Password),
+            FullName = request.FullName.Trim(),
+            Phone = phone,
+            PhoneVerifiedAt = null,
+            IsEmailVerified = true,
+            EmailVerificationToken = null,
+            EmailVerificationTokenExpiresAt = null,
+        };
+
         await customers.AddCustomerAsync(entity, cancellationToken);
-        await customers.SaveChangesAsync(cancellationToken);
+        try
+        {
+            await customers.SaveChangesAsync(cancellationToken);
+        }
+        catch (Exception ex) when (IsUniqueConstraintViolation(ex))
+        {
+            return Result.Failure<CustomerRegisteredDto>(new Error(
+                "customers.identifier_exists",
+                conflictMessage,
+                ErrorCategory.Validation));
+        }
+
+        var acceptances = acceptanceGate.Value
+            .Select(row =>
+            {
+                row.ActorId = entity.Id;
+                return row;
+            })
+            .ToList();
+        try
+        {
+            await legalAcceptances.SaveAcceptancesAsync(acceptances, cancellationToken);
+        }
+        catch (Exception ex)
+        {
+            logger.LogError(ex, "Failed to persist legal acceptances for customer {CustomerId}", entity.Id);
+        }
 
         await customers.AddCustomerNotificationAsync(
             new CustomerNotification
@@ -83,11 +188,40 @@ internal sealed class RegisterCustomerCommandHandler(
             cancellationToken);
         await customers.SaveChangesAsync(cancellationToken);
 
-        return Result.Success(new CustomerRegisteredDto(entity.Id, entity.Email, entity.FullName));
+        return Result.Success(new CustomerRegisteredDto(
+            entity.Id,
+            entity.Email,
+            entity.FullName,
+            requiresPhoneOtp,
+            requiresEmailVerification));
+    }
+
+    private static bool IsUniqueConstraintViolation(Exception ex)
+    {
+        for (var cur = ex; cur is not null; cur = cur.InnerException!)
+        {
+            var msg = cur.Message ?? string.Empty;
+            if (msg.Contains("23505", StringComparison.Ordinal)
+                || msg.Contains("ux_customers_email", StringComparison.OrdinalIgnoreCase)
+                || msg.Contains("ux_customers_phone", StringComparison.OrdinalIgnoreCase)
+                || msg.Contains("unique constraint", StringComparison.OrdinalIgnoreCase)
+                || msg.Contains("duplicate key", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
     }
 }
 
-public sealed record CustomerProfileDto(Guid Id, string Email, string FullName, string? Phone);
+public sealed record CustomerProfileDto(
+    Guid Id,
+    string? Email,
+    string FullName,
+    string? Phone,
+    bool IsPhoneVerified = false,
+    bool IsEmailVerified = false);
 
 public sealed record GetCustomerProfileQuery(Guid CustomerId) : IQuery<CustomerProfileDto>;
 
@@ -100,11 +234,16 @@ internal sealed class GetCustomerProfileQueryHandler(ICustomerRepository custome
         if (c is null || c.IsDeleted)
             return Result.Failure<CustomerProfileDto>(new Error("customers.not_found", "Customer not found.", ErrorCategory.NotFound));
 
-        return Result.Success(new CustomerProfileDto(c.Id, c.Email, c.FullName, c.Phone));
+        return Result.Success(new CustomerProfileDto(
+            c.Id, c.Email, c.FullName, c.Phone, c.PhoneVerifiedAt.HasValue, c.IsEmailVerified));
     }
 }
 
-public sealed record UpdateCustomerProfileCommand(Guid CustomerId, string FullName, string? Phone) : ICommand<CustomerProfileDto>;
+public sealed record UpdateCustomerProfileCommand(
+    Guid CustomerId,
+    string FullName,
+    string? Phone,
+    string? Email = null) : ICommand<CustomerProfileDto>;
 
 public sealed class UpdateCustomerProfileCommandValidator : AbstractValidator<UpdateCustomerProfileCommand>
 {
@@ -114,10 +253,17 @@ public sealed class UpdateCustomerProfileCommandValidator : AbstractValidator<Up
         RuleFor(x => x.Phone)
             .Must(p => string.IsNullOrWhiteSpace(p) || IndianMobilePhone.IsValid(p))
             .WithMessage(IndianMobilePhone.InvalidMessage);
+        RuleFor(x => x.Email)
+            .EmailAddress()
+            .When(x => !string.IsNullOrWhiteSpace(x.Email));
     }
 }
 
-internal sealed class UpdateCustomerProfileCommandHandler(ICustomerRepository customers)
+internal sealed class UpdateCustomerProfileCommandHandler(
+    ICustomerRepository customers,
+    IEmailService emailService,
+    IConfiguration configuration,
+    ILogger<UpdateCustomerProfileCommandHandler> logger)
     : ICommandHandler<UpdateCustomerProfileCommand, CustomerProfileDto>
 {
     public async Task<Result<CustomerProfileDto>> Handle(UpdateCustomerProfileCommand request, CancellationToken cancellationToken)
@@ -127,8 +273,60 @@ internal sealed class UpdateCustomerProfileCommandHandler(ICustomerRepository cu
             return Result.Failure<CustomerProfileDto>(new Error("customers.not_found", "Customer not found.", ErrorCategory.NotFound));
 
         c.FullName = request.FullName.Trim();
+
+        // Phone-only accounts may add an email once; existing email cannot be changed here.
+        var hadEmail = !string.IsNullOrWhiteSpace(c.Email);
+        var emailAdded = false;
+        if (!hadEmail && !string.IsNullOrWhiteSpace(request.Email))
+        {
+            if (!CustomerEmail.TryNormalize(request.Email, out var normalizedEmail))
+            {
+                return Result.Failure<CustomerProfileDto>(new Error(
+                    "customers.invalid_email",
+                    "Enter a valid email address.",
+                    ErrorCategory.Validation));
+            }
+
+            var emailOwner = await customers.GetCustomerByEmailAsync(normalizedEmail, cancellationToken);
+            if (emailOwner is not null && emailOwner.Id != c.Id)
+            {
+                return Result.Failure<CustomerProfileDto>(new Error(
+                    "customers.email_exists",
+                    "This email can't be used. Enter a different email address.",
+                    ErrorCategory.Validation));
+            }
+
+            c.Email = normalizedEmail;
+            c.IsEmailVerified = false;
+            c.EmailVerificationToken = VerificationTokenGenerator.GenerateSecureToken();
+            c.EmailVerificationTokenExpiresAt = DateTimeOffset.UtcNow.AddHours(24);
+            emailAdded = true;
+        }
+        else if (hadEmail && !string.IsNullOrWhiteSpace(request.Email))
+        {
+            var requested = CustomerEmail.Normalize(request.Email);
+            var current = CustomerEmail.Normalize(c.Email);
+            if (!string.Equals(requested, current, StringComparison.Ordinal))
+            {
+                return Result.Failure<CustomerProfileDto>(new Error(
+                    "customers.email_locked",
+                    "Email cannot be changed from Settings. Contact support if you need to update it.",
+                    ErrorCategory.Validation));
+            }
+        }
+
         if (string.IsNullOrWhiteSpace(request.Phone))
         {
+            if (string.IsNullOrWhiteSpace(c.Email))
+            {
+                return Result.Failure<CustomerProfileDto>(new Error(
+                    "customers.identifier_required",
+                    "Keep a phone number on the account, or add an email first.",
+                    ErrorCategory.Validation));
+            }
+
+            if (!string.IsNullOrWhiteSpace(c.Phone))
+                c.PhoneVerifiedAt = null;
             c.Phone = null;
         }
         else if (!IndianMobilePhone.TryNormalize(request.Phone, out var phone))
@@ -140,13 +338,44 @@ internal sealed class UpdateCustomerProfileCommandHandler(ICustomerRepository cu
         }
         else
         {
+            var phoneOwner = await customers.GetCustomerByPhoneAsync(phone, cancellationToken);
+            if (phoneOwner is not null && phoneOwner.Id != c.Id)
+            {
+                return Result.Failure<CustomerProfileDto>(new Error(
+                    "customers.phone_exists",
+                    IndianMobilePhone.UnavailableMessage,
+                    ErrorCategory.Validation));
+            }
+
+            if (!string.Equals(c.Phone, phone, StringComparison.Ordinal))
+                c.PhoneVerifiedAt = null;
             c.Phone = phone;
         }
 
         await customers.UpdateCustomerAsync(c, cancellationToken);
         await customers.SaveChangesAsync(cancellationToken);
 
-        return Result.Success(new CustomerProfileDto(c.Id, c.Email, c.FullName, c.Phone));
+        if (emailAdded && !string.IsNullOrWhiteSpace(c.Email) && !string.IsNullOrWhiteSpace(c.EmailVerificationToken))
+        {
+            try
+            {
+                var frontendUrl = configuration["FrontendUrl"] ?? "https://blinksmed.com";
+                var verificationLink =
+                    $"{frontendUrl}/verify-email?token={Uri.EscapeDataString(c.EmailVerificationToken)}&portal=customer";
+                var body = EmailTemplates.VendorEmailVerificationRequested(
+                    c.Email,
+                    verificationLink,
+                    c.FullName);
+                await emailService.SendEmailAsync(c.Email, "Verify Your Email Address", body, cancellationToken);
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Failed to send customer email verification after profile update to {Email}", c.Email);
+            }
+        }
+
+        return Result.Success(new CustomerProfileDto(
+            c.Id, c.Email, c.FullName, c.Phone, c.PhoneVerifiedAt.HasValue, c.IsEmailVerified));
     }
 }
 
@@ -431,7 +660,10 @@ public sealed record CartLineRequest(
     string? ContactNumber = null,
     string? ReferenceNumber = null,
     Guid? RentalPricingPlanId = null,
-    DateOnly? RentalStartDate = null);
+    DateOnly? RentalStartDate = null,
+    bool HasPrescriptionFile = false);
+
+public sealed record CustomerGstLineDto(decimal GstPercent, decimal GstAmount);
 
 public sealed record CustomerOrderQuoteDto(
     decimal SubtotalAmount,
@@ -441,7 +673,9 @@ public sealed record CustomerOrderQuoteDto(
     decimal ExpressFeeAmount,
     decimal GstAmount,
     decimal TotalAmount,
-    List<CustomerBuySuggestionDto> BuySuggestions);
+    List<CustomerBuySuggestionDto> BuySuggestions,
+    bool RazorpayTestMode = false,
+    List<CustomerGstLineDto>? GstLines = null);
 
 public sealed record CustomerBuySuggestionDto(
     Guid ListingId,
@@ -461,7 +695,14 @@ public sealed record PlaceCustomerOrdersCommand(
     Guid? CustomerAddressId,
     string DeliveryOption,
     IReadOnlyList<CartLineRequest> Lines,
-    Guid? PlacedByAdminId = null) : ICommand<PlaceCustomerOrdersResultDto>;
+    Guid? PlacedByAdminId = null,
+    bool AcceptedLegal = false,
+    bool AcceptedPrescriptionLegal = false,
+    string? SourceSurface = null,
+    string? IpAddress = null,
+    string? UserAgent = null,
+    /// <summary>When true, create draft orders (awaiting_payment) without vendor dispatch offers.</summary>
+    bool AwaitPayment = false) : ICommand<PlaceCustomerOrdersResultDto>;
 
 public sealed class PlaceCustomerOrdersCommandValidator : AbstractValidator<PlaceCustomerOrdersCommand>
 {
@@ -542,7 +783,12 @@ public sealed record CustomerOrderDto(
     decimal? RentalNormalPrice = null,
     string? RentalDiscountType = null,
     decimal? RentalDiscountValue = null,
-    decimal? RentalFinalPrice = null);
+    decimal? RentalFinalPrice = null,
+    IReadOnlyList<CustomerPrescriptionFileDto>? PrescriptionFiles = null,
+    bool IsExtended = false,
+    OrderReturnDto? ReturnSettlement = null,
+    OrderCancellationRefundDto? CancellationRefund = null);
+
 internal static class CustomerOrderPricingRules
 {
     public static string NormalizeDeliveryOption(string? option) =>
@@ -745,15 +991,17 @@ internal static class CustomerOrderPricingRules
         decimal customerLng,
         VendorProductListingAggregate aggregate,
         List<VendorServiceArea> vendorServiceAreas,
-        CustomerPricingOptions options)
+        CustomerPricingOptions options,
+        bool enforceServiceRadius = true)
     {
+        var enforce = enforceServiceRadius && options.EnforceVendorServiceRadius;
         var activeAreas = vendorServiceAreas
             .Where(a => a.IsActive && !a.IsDeleted)
             .ToList();
 
         if (activeAreas.Count > 0)
         {
-            var withinAreaDistances = activeAreas
+            var areaDistances = activeAreas
                 .Select(area =>
                 {
                     var distanceKm = CalculateDistanceKm(
@@ -763,7 +1011,10 @@ internal static class CustomerOrderPricingRules
                         area.CenterLongitude);
                     return new { distanceKm, area.ServiceRadiusKm };
                 })
-                .Where(x => !options.EnforceVendorServiceRadius || x.distanceKm <= x.ServiceRadiusKm)
+                .ToList();
+
+            var withinAreaDistances = areaDistances
+                .Where(x => !enforce || x.distanceKm <= x.ServiceRadiusKm)
                 .Select(x => x.distanceKm)
                 .OrderBy(x => x)
                 .ToList();
@@ -773,12 +1024,14 @@ internal static class CustomerOrderPricingRules
                 return DeliveryDistanceResult.Success(withinAreaDistances[0]);
             }
 
-            if (options.EnforceVendorServiceRadius)
+            if (enforce)
             {
                 return DeliveryDistanceResult.Fail(
                     "customers.out_of_service_area",
                     "This delivery address is outside the vendor's service area. Please choose another address, or remove items that cannot be delivered there.");
             }
+
+            return DeliveryDistanceResult.Success(areaDistances.Min(x => x.distanceKm));
         }
 
         if (aggregate.VendorLatitude.HasValue && aggregate.VendorLongitude.HasValue)
@@ -789,7 +1042,7 @@ internal static class CustomerOrderPricingRules
                 aggregate.VendorLatitude.Value,
                 aggregate.VendorLongitude.Value);
 
-            if (options.EnforceVendorServiceRadius && distanceKm > options.DefaultServiceRadiusKm)
+            if (enforce && distanceKm > options.DefaultServiceRadiusKm)
             {
                 return DeliveryDistanceResult.Fail(
                     "customers.out_of_service_area",
@@ -814,7 +1067,8 @@ internal sealed record DeliveryDistanceResult(bool IsSuccess, decimal DistanceKm
 internal sealed class QuoteCustomerOrdersCommandHandler(
     ICustomerRepository customers,
     IVendorOnboardingRepository vendors,
-    IOptions<CustomerPricingOptions> pricingOptions)
+    IOptions<CustomerPricingOptions> pricingOptions,
+    IOptions<RazorpayOptions> razorpayOptions)
     : IQueryHandler<QuoteCustomerOrdersCommand, CustomerOrderQuoteDto>
 {
     public async Task<Result<CustomerOrderQuoteDto>> Handle(QuoteCustomerOrdersCommand request, CancellationToken cancellationToken)
@@ -852,6 +1106,7 @@ internal sealed class QuoteCustomerOrdersCommandHandler(
         decimal distanceFeeAmount = 0m;
         decimal expressFeeAmount = 0m;
         decimal gstAmount = 0m;
+        var gstByRate = new Dictionary<decimal, decimal>();
         var buySuggestions = new List<CustomerBuySuggestionDto>();
         var vendorAreasByVendorId = new Dictionary<Guid, List<VendorServiceArea>>();
 
@@ -983,7 +1238,17 @@ internal sealed class QuoteCustomerOrdersCommandHandler(
             distanceFeeAmount += lineDistanceFee;
             expressFeeAmount += lineExpressFee;
             gstAmount += lineGst;
+            if (lineGst > 0m)
+            {
+                gstByRate.TryGetValue(agg.GstPercent, out var bucket);
+                gstByRate[agg.GstPercent] = bucket + lineGst;
+            }
         }
+
+        var gstLines = gstByRate
+            .OrderBy(x => x.Key)
+            .Select(x => new CustomerGstLineDto(x.Key, decimal.Round(x.Value, 2, MidpointRounding.AwayFromZero)))
+            .ToList();
 
         return Result.Success(new CustomerOrderQuoteDto(
             decimal.Round(subtotalAmount, 2, MidpointRounding.AwayFromZero),
@@ -993,14 +1258,19 @@ internal sealed class QuoteCustomerOrdersCommandHandler(
             decimal.Round(expressFeeAmount, 2, MidpointRounding.AwayFromZero),
             decimal.Round(gstAmount, 2, MidpointRounding.AwayFromZero),
             decimal.Round(subtotalAmount + depositAmount + serviceFeeAmount + gstAmount, 2, MidpointRounding.AwayFromZero),
-            buySuggestions));
+            buySuggestions,
+            razorpayOptions.Value.KeyId.Trim().StartsWith("rzp_test_", StringComparison.OrdinalIgnoreCase),
+            gstLines));
     }
 }
 
 internal sealed class PlaceCustomerOrdersCommandHandler(
     ICustomerRepository customers,
     IVendorOnboardingRepository vendors,
-    IOptions<CustomerPricingOptions> pricingOptions)
+    IOptions<CustomerPricingOptions> pricingOptions,
+    CustomerSmsNotifier customerSms,
+    ILegalAcceptanceRecorder legalAcceptances,
+    ISequentialDispatchService dispatch)
     : ICommandHandler<PlaceCustomerOrdersCommand, PlaceCustomerOrdersResultDto>
 {
     public async Task<Result<PlaceCustomerOrdersResultDto>> Handle(PlaceCustomerOrdersCommand request, CancellationToken cancellationToken)
@@ -1008,6 +1278,59 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
         var customer = await customers.GetCustomerByIdAsync(request.CustomerId, cancellationToken);
         if (customer is null || customer.IsDeleted)
             return Result.Failure<PlaceCustomerOrdersResultDto>(new Error("customers.not_found", "Customer not found.", ErrorCategory.NotFound));
+
+        if (request.PlacedByAdminId is null)
+        {
+            var checkoutGate = await legalAcceptances.BuildScreenAcceptancesAsync(
+                LegalCatalog.ActorTypes.Customer,
+                request.CustomerId,
+                request.SourceSurface,
+                LegalCatalog.Screens.Checkout,
+                request.AcceptedLegal,
+                null,
+                request.IpAddress,
+                request.UserAgent,
+                null,
+                cancellationToken);
+            if (!checkoutGate.IsSuccess)
+                return Result.Failure<PlaceCustomerOrdersResultDto>(checkoutGate.Errors);
+
+            var needsPrescription = request.Lines.Any(l =>
+                l.DoctorId.HasValue
+                || l.HasPrescriptionFile
+                || !string.IsNullOrWhiteSpace(l.ReferenceNumber));
+            IReadOnlyList<LegalAcceptance> prescriptionRows = [];
+            if (needsPrescription)
+            {
+                var rxGate = await legalAcceptances.BuildScreenAcceptancesAsync(
+                    LegalCatalog.ActorTypes.Customer,
+                    request.CustomerId,
+                    request.SourceSurface,
+                    LegalCatalog.Screens.Prescription,
+                    request.AcceptedPrescriptionLegal,
+                    null,
+                    request.IpAddress,
+                    request.UserAgent,
+                    null,
+                    cancellationToken);
+                if (!rxGate.IsSuccess)
+                    return Result.Failure<PlaceCustomerOrdersResultDto>(rxGate.Errors);
+                prescriptionRows = rxGate.Value;
+            }
+
+            try
+            {
+                await legalAcceptances.SaveAcceptancesAsync(prescriptionRows, cancellationToken);
+                await legalAcceptances.SaveAcceptancesAsync(checkoutGate.Value, cancellationToken);
+            }
+            catch
+            {
+                return Result.Failure<PlaceCustomerOrdersResultDto>(new Error(
+                    "legal.acceptance_save_failed",
+                    "Could not record policy acceptance. Please try again.",
+                    ErrorCategory.Validation));
+            }
+        }
 
         var deliveryOption = CustomerOrderPricingRules.NormalizeDeliveryOption(request.DeliveryOption);
         CustomerAddress? address = null;
@@ -1211,7 +1534,8 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
                     address.Longitude!.Value,
                     agg,
                     vendorAreas,
-                    options);
+                    options,
+                    enforceServiceRadius: request.PlacedByAdminId is null);
                 if (!distanceResult.IsSuccess)
                 {
                     failed.Add(new FailedCustomerOrderLineDto(
@@ -1268,7 +1592,7 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
                 RentalPeriodUnit = periodUnit,
                 OrderType = orderType,
                 DeliveryOption = deliveryOption,
-                Status = "awaiting_vendor_acceptance",
+                Status = request.AwaitPayment ? "awaiting_payment" : "awaiting_vendor_acceptance",
                 SubtotalAmount = subtotal,
                 VendorSubtotalAmount = vendorSubtotal,
                 DepositAmount = deposit,
@@ -1316,125 +1640,6 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
             await customers.AddCustomerRentalOrderAsync(order, cancellationToken);
             await customers.SaveChangesAsync(cancellationToken);
 
-            var candidateListings = await customers.GetCandidateListingsByProductIdAsync(agg.ProductId, cancellationToken);
-            var eligibleCandidates = new List<(VendorProductListingAggregate Candidate, decimal DistanceKm)>();
-            foreach (var candidate in candidateListings.Where(c => c.VendorId != Guid.Empty))
-            {
-                var candidateListing = await vendors.GetVendorProductListingByIdAsync(candidate.VendorId, candidate.ListingId, cancellationToken);
-                if (candidateListing is null)
-                    continue;
-
-                if (line.ProductVariantId.HasValue)
-                {
-                    var variantInv = await vendors.GetVariantInventoryByListingIdAsync(candidate.ListingId, cancellationToken);
-                    var specificVariant = variantInv.FirstOrDefault(vi => vi.ProductVariantId == line.ProductVariantId.Value);
-                    var varAvailable = specificVariant?.AvailableQuantity ?? 0;
-                    if (varAvailable < line.Quantity)
-                        continue;
-                }
-                else
-                {
-                    var candidateInventory = await vendors.GetVendorInventoryByListingIdAsync(candidate.ListingId, cancellationToken);
-                    var candidateAvailable = candidateInventory?.AvailableQuantity ?? candidateListing.AvailableQuantity;
-                    if (candidateAvailable < line.Quantity)
-                        continue;
-                }
-
-                decimal distanceKm = 0m;
-                if (CustomerOrderPricingRules.RequiresAddress(deliveryOption))
-                {
-                    if (!vendorAreasByVendorId.TryGetValue(candidate.VendorId, out var vendorAreas))
-                    {
-                        vendorAreas = await vendors.GetVendorServiceAreasAsync(candidate.VendorId, cancellationToken);
-                        vendorAreasByVendorId[candidate.VendorId] = vendorAreas;
-                    }
-
-                    var candidateDistance = CustomerOrderPricingRules.ResolveDeliveryDistance(
-                        address!.Latitude!.Value,
-                        address.Longitude!.Value,
-                        candidate,
-                        vendorAreas,
-                        options);
-                    if (!candidateDistance.IsSuccess)
-                        continue;
-
-                    distanceKm = candidateDistance.DistanceKm;
-                }
-
-                eligibleCandidates.Add((candidate, distanceKm));
-            }
-
-            var ranked = eligibleCandidates
-                .OrderBy(x => x.DistanceKm)
-                .ThenByDescending(x => x.Candidate.InventoryAvailable)
-                .Take(Math.Max(1, options.MaxDispatchVendorsPerLine))
-                .ToList();
-
-            var now = DateTimeOffset.UtcNow;
-            for (var i = 0; i < ranked.Count; i++)
-            {
-                var candidate = ranked[i].Candidate;
-                var offer = new CustomerOrderVendorOffer
-                {
-                    CustomerRentalOrderId = order.Id,
-                    VendorId = candidate.VendorId,
-                    VendorProductListingId = candidate.ListingId,
-                    OfferRank = i + 1,
-                    Status = "pending",
-                    ExpiresAt = now.AddMinutes((double)Math.Max(1m, options.DispatchOfferTtlMinutes)),
-                };
-                await customers.AddCustomerOrderVendorOfferAsync(offer, cancellationToken);
-            }
-            await customers.SaveChangesAsync(cancellationToken);
-
-            if (ranked.Count == 0)
-            {
-                order.Status = "dispatch_failed";
-                await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
-                await customers.SaveChangesAsync(cancellationToken);
-
-                failed.Add(new FailedCustomerOrderLineDto(
-                    line.ListingId,
-                    line.Quantity,
-                    line.RentalDays,
-                    orderType,
-                    "customers.dispatch_no_vendor",
-                    "No eligible vendor available right now."));
-                continue;
-            }
-
-            await customers.AddCustomerNotificationAsync(
-                new CustomerNotification
-                {
-                    Id = Guid.NewGuid(),
-                    CustomerId = request.CustomerId,
-                    Title = $"Order {order.OrderNumber} submitted",
-                    Body = $"Your {orderType} request for \"{trackedListing.ListingTitle}\" is awaiting vendor acceptance.",
-                    NotificationType = "order_pending",
-                    RelatedOrderId = order.Id,
-                },
-                cancellationToken);
-            await customers.SaveChangesAsync(cancellationToken);
-
-            foreach (var r in ranked)
-            {
-                var candidate = r.Candidate;
-                await vendors.AddVendorNotificationAsync(new VendorNotification
-                {
-                    VendorId = candidate.VendorId,
-                    NotificationType = "dispatch_offer",
-                    Title = $"New order request {order.OrderNumber}",
-                    Message = $"You have a new {orderType} request for \"{trackedListing.ListingTitle}\".",
-                    Channel = "in_app",
-                    Status = "sent",
-                    SentAt = DateTimeOffset.UtcNow
-                }, cancellationToken);
-            }
-
-            await vendors.SaveChangesAsync(cancellationToken);
-
-            var vendorDisplay = string.IsNullOrWhiteSpace(agg.VendorBusinessName) ? "Vendor" : agg.VendorBusinessName!;
-            var primaryImg = agg.ImageUrls.Count > 0 ? agg.ImageUrls[0] : null;
             var placementTitle = trackedListing.ListingTitle;
             if (order.ProductVariantId.HasValue && agg.Variants != null)
             {
@@ -1444,6 +1649,76 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
                     placementTitle += $" ({Prilixor.VendorPortal.Application.Common.SizeFormatting.Format(variant.SizeValue, variant.SizeUnit)})";
                 }
             }
+
+            if (request.AwaitPayment)
+            {
+                await customers.AddCustomerNotificationAsync(
+                    new CustomerNotification
+                    {
+                        Id = Guid.NewGuid(),
+                        CustomerId = request.CustomerId,
+                        Title = $"Order {order.OrderNumber} awaiting payment",
+                        Body = $"Complete payment to submit your {orderType} request for \"{trackedListing.ListingTitle}\".",
+                        NotificationType = "order_awaiting_payment",
+                        RelatedOrderId = order.Id,
+                    },
+                    cancellationToken);
+                await customers.SaveChangesAsync(cancellationToken);
+            }
+            else
+            {
+                var started = await dispatch.StartWaveAsync(
+                    order,
+                    agg.ProductId,
+                    excludeVendorIds: [],
+                    listingTitle: placementTitle,
+                    cancellationToken);
+                await dispatch.PersistAsync(cancellationToken);
+
+                if (!started)
+                {
+                    order.Status = "dispatch_failed";
+                    await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
+                    await OrderCancellationRefunds.TryOpenAsync(
+                        customers,
+                        order,
+                        CancellationOutcomes.DispatchFailed,
+                        CancellationActors.System,
+                        null,
+                        cancellationToken);
+                    await customers.SaveChangesAsync(cancellationToken);
+
+                    failed.Add(new FailedCustomerOrderLineDto(
+                        line.ListingId,
+                        line.Quantity,
+                        line.RentalDays,
+                        orderType,
+                        "customers.dispatch_no_vendor",
+                        "No eligible vendor available right now."));
+                    continue;
+                }
+
+                await customers.AddCustomerNotificationAsync(
+                    new CustomerNotification
+                    {
+                        Id = Guid.NewGuid(),
+                        CustomerId = request.CustomerId,
+                        Title = $"Order {order.OrderNumber} submitted",
+                        Body = $"Your {orderType} request for \"{trackedListing.ListingTitle}\" is awaiting vendor acceptance.",
+                        NotificationType = "order_pending",
+                        RelatedOrderId = order.Id,
+                    },
+                    cancellationToken);
+                await customerSms.TrySendAsync(
+                    request.CustomerId,
+                    SmsTemplates.CustomerOrderPending(order.OrderNumber),
+                    CustomerSmsKind.OrderPlaced,
+                    cancellationToken);
+                await customers.SaveChangesAsync(cancellationToken);
+            }
+
+            var vendorDisplay = string.IsNullOrWhiteSpace(agg.VendorBusinessName) ? "Vendor" : agg.VendorBusinessName!;
+            var primaryImg = agg.ImageUrls.Count > 0 ? agg.ImageUrls[0] : null;
             placed.Add(new CustomerOrderDto(
                 order.Id,
                 order.OrderNumber,
@@ -1474,7 +1749,8 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
                 RentalNormalPrice: order.RentalNormalPrice,
                 RentalDiscountType: order.RentalDiscountType,
                 RentalDiscountValue: order.RentalDiscountValue,
-                RentalFinalPrice: order.RentalFinalPrice));
+                RentalFinalPrice: order.RentalFinalPrice,
+                IsExtended: order.IsExtended));
         }
 
         if (request.PlacedByAdminId is Guid adminId && placed.Count > 0)
@@ -1539,7 +1815,9 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
 
 public sealed record GetCustomerOrdersQuery(Guid CustomerId) : IQuery<List<CustomerOrderDto>>;
 
-internal sealed class GetCustomerOrdersQueryHandler(ICustomerRepository customers)
+internal sealed class GetCustomerOrdersQueryHandler(
+    ICustomerRepository customers,
+    ISequentialDispatchService dispatch)
     : IQueryHandler<GetCustomerOrdersQuery, List<CustomerOrderDto>>
 {
     public async Task<Result<List<CustomerOrderDto>>> Handle(GetCustomerOrdersQuery request, CancellationToken cancellationToken)
@@ -1556,13 +1834,13 @@ internal sealed class GetCustomerOrdersQueryHandler(ICustomerRepository customer
             var changed = false;
             foreach (var row in rows)
             {
-                changed |= await DispatchStateReconciler.ReconcileAwaitingOrderAsync(
-                    customers, row.Order.Id, now, DispatchStateReconciler.SideEffectToken);
+                changed |= await dispatch.ReconcileAwaitingOrderAsync(
+                    row.Order.Id, now, DispatchStateReconciler.SideEffectToken);
             }
 
             if (changed)
             {
-                await customers.SaveChangesAsync(DispatchStateReconciler.SideEffectToken);
+                await dispatch.PersistAsync(DispatchStateReconciler.SideEffectToken);
                 if (!cancellationToken.IsCancellationRequested)
                 {
                     rows = await customers.GetCustomerOrdersAsync(request.CustomerId, cancellationToken);
@@ -1619,16 +1897,21 @@ internal sealed class GetCustomerOrdersQueryHandler(ICustomerRepository customer
                 RentalNormalPrice: o.RentalNormalPrice,
                 RentalDiscountType: o.RentalDiscountType,
                 RentalDiscountValue: o.RentalDiscountValue,
-                RentalFinalPrice: o.RentalFinalPrice));
+                RentalFinalPrice: o.RentalFinalPrice,
+                IsExtended: o.IsExtended));
         }
 
-        return Result.Success(list);
+        var withReturns = await OrderReturnMapper.AttachAsync(customers, list, cancellationToken);
+        return Result.Success(await OrderCancellationMapper.AttachAsync(customers, withReturns, cancellationToken));
     }
 }
 
 public sealed record GetCustomerOrderDetailQuery(Guid CustomerId, Guid OrderId) : IQuery<CustomerOrderDto>;
 
-internal sealed class GetCustomerOrderDetailQueryHandler(ICustomerRepository customers)
+internal sealed class GetCustomerOrderDetailQueryHandler(
+    ICustomerRepository customers,
+    IVendorFileUrlResolver fileUrlResolver,
+    ISequentialDispatchService dispatch)
     : IQueryHandler<GetCustomerOrderDetailQuery, CustomerOrderDto>
 {
     public async Task<Result<CustomerOrderDto>> Handle(GetCustomerOrderDetailQuery request, CancellationToken cancellationToken)
@@ -1636,10 +1919,10 @@ internal sealed class GetCustomerOrderDetailQueryHandler(ICustomerRepository cus
         // See GetCustomerOrdersQueryHandler — reconcile side-effects must not use RequestAborted.
         if (!cancellationToken.IsCancellationRequested)
         {
-            var changed = await DispatchStateReconciler.ReconcileAwaitingOrderAsync(
-                customers, request.OrderId, DateTimeOffset.UtcNow, DispatchStateReconciler.SideEffectToken);
+            var changed = await dispatch.ReconcileAwaitingOrderAsync(
+                request.OrderId, DateTimeOffset.UtcNow, DispatchStateReconciler.SideEffectToken);
             if (changed)
-                await customers.SaveChangesAsync(DispatchStateReconciler.SideEffectToken);
+                await dispatch.PersistAsync(DispatchStateReconciler.SideEffectToken);
         }
 
         cancellationToken.ThrowIfCancellationRequested();
@@ -1656,7 +1939,8 @@ internal sealed class GetCustomerOrderDetailQueryHandler(ICustomerRepository cus
         {
             title += $" ({row.VariantDescription})";
         }
-        return Result.Success(new CustomerOrderDto(
+        var files = await customers.GetCustomerOrderPrescriptionFilesAsync(o.Id, cancellationToken);
+        var dto = new CustomerOrderDto(
             o.Id,
             o.OrderNumber,
             o.VendorProductListingId,
@@ -1692,15 +1976,20 @@ internal sealed class GetCustomerOrderDetailQueryHandler(ICustomerRepository cus
             RentalNormalPrice: o.RentalNormalPrice,
             RentalDiscountType: o.RentalDiscountType,
             RentalDiscountValue: o.RentalDiscountValue,
-            RentalFinalPrice: o.RentalFinalPrice));
+            RentalFinalPrice: o.RentalFinalPrice,
+            PrescriptionFiles: files.Select(f => CustomerPrescriptionRules.ToDto(f, fileUrlResolver)).ToList(),
+            IsExtended: o.IsExtended);
+        var withReturn = await OrderReturnMapper.AttachAsync(customers, dto, cancellationToken);
+        return Result.Success(await OrderCancellationMapper.AttachAsync(customers, withReturn, cancellationToken));
     }
 }
 
-internal static class CustomerOrderStatusMapper
+public static class CustomerOrderStatusMapper
 {
     public static string ToDisplay(string status) => status.ToLowerInvariant() switch
     {
         "pending" => "Pending",
+        "awaiting_payment" => "Awaiting payment",
         "awaiting_vendor_acceptance" => "Awaiting vendor acceptance",
         "confirmed" => "Confirmed",
         "in_transit" => "In transit",
@@ -1708,6 +1997,7 @@ internal static class CustomerOrderStatusMapper
         "returned" => "Returned",
         "dispatch_failed" => "Dispatch failed",
         "cancelled" => "Cancelled",
+        "bought_out" => "Bought out",
         _ => status
     };
 }
@@ -1718,7 +2008,8 @@ public sealed record CancelCustomerOrderCommand(Guid CustomerId, Guid OrderId) :
 internal sealed class CancelCustomerOrderCommandHandler(
     ICustomerRepository customers,
     IVendorOnboardingRepository vendors,
-    IVendorUploadStorageService uploadStorage)
+    IVendorUploadStorageService uploadStorage,
+    CustomerSmsNotifier customerSms)
     : ICommandHandler<CancelCustomerOrderCommand, CustomerOrderDto>
 {
     public async Task<Result<CustomerOrderDto>> Handle(CancelCustomerOrderCommand request, CancellationToken cancellationToken)
@@ -1730,6 +2021,7 @@ internal sealed class CancelCustomerOrderCommandHandler(
         var o = row.Order;
         var isCancellable =
             string.Equals(o.Status, "pending", StringComparison.OrdinalIgnoreCase) ||
+            string.Equals(o.Status, "awaiting_payment", StringComparison.OrdinalIgnoreCase) ||
             string.Equals(o.Status, "awaiting_vendor_acceptance", StringComparison.OrdinalIgnoreCase);
         if (!isCancellable)
             return Result.Failure<CustomerOrderDto>(new Error("customers.order_not_cancellable", "Only pending orders can be cancelled.", ErrorCategory.Validation));
@@ -1817,10 +2109,26 @@ internal sealed class CancelCustomerOrderCommandHandler(
         }
 
         o.Status = "cancelled";
+        await DispatchOfferClosing.CloseForOrderAsync(
+            customers,
+            vendors,
+            o.Id,
+            o.OrderNumber,
+            $"The customer cancelled {o.OrderNumber} before it was accepted. This request is closed.",
+            cancellationToken);
         // Customer cancel: close photo request + delete images from S3.
         await CustomerOrderImageLifecycle.CloseAndPurgeForOrderAsync(
             customers, uploadStorage, o.Id, closedReason: "cancelled", deletedBy: request.CustomerId, cancellationToken);
         await customers.UpdateCustomerRentalOrderAsync(o, cancellationToken);
+        var openedCancel = await OrderCancellationRefunds.TryOpenAsync(
+            customers,
+            o,
+            CancellationOutcomes.Cancelled,
+            CancellationActors.Customer,
+            o.Customer?.FullName,
+            cancellationToken);
+        if (openedCancel.IsFailure)
+            return Result.Failure<CustomerOrderDto>(openedCancel.Errors[0]);
 
         var listingTitleForNotif = row.Listing?.ListingTitle ?? agg.ListingTitle ?? "Listing unavailable";
         if (!string.IsNullOrEmpty(row.VariantDescription))
@@ -1833,10 +2141,17 @@ internal sealed class CancelCustomerOrderCommandHandler(
                 Id = Guid.NewGuid(),
                 CustomerId = request.CustomerId,
                 Title = $"Order {o.OrderNumber} cancelled",
-                Body = $"Your rental request for \"{listingTitleForNotif}\" was cancelled.",
+                Body = openedCancel.Value is null
+                    ? $"Your rental request for \"{listingTitleForNotif}\" was cancelled."
+                    : $"Your rental request for \"{listingTitleForNotif}\" was cancelled. BlinksMed will review the payment for this product.",
                 NotificationType = CustomerNotificationTypes.OrderCancelled,
                 RelatedOrderId = o.Id,
             },
+            cancellationToken);
+        await customerSms.TrySendAsync(
+            request.CustomerId,
+            SmsTemplates.CustomerOrderCancelled(o.OrderNumber),
+            CustomerSmsKind.OrderCancelled,
             cancellationToken);
         await customers.SaveChangesAsync(cancellationToken);
         await vendors.SaveChangesAsync(cancellationToken);
@@ -1848,7 +2163,7 @@ internal sealed class CancelCustomerOrderCommandHandler(
         {
             listingTitle += $" ({row.VariantDescription})";
         }
-        return Result.Success(new CustomerOrderDto(
+        var cancelledDto = new CustomerOrderDto(
             o.Id,
             o.OrderNumber,
             o.VendorProductListingId,
@@ -1884,6 +2199,9 @@ internal sealed class CancelCustomerOrderCommandHandler(
             RentalNormalPrice: o.RentalNormalPrice,
             RentalDiscountType: o.RentalDiscountType,
             RentalDiscountValue: o.RentalDiscountValue,
-            RentalFinalPrice: o.RentalFinalPrice));
+            RentalFinalPrice: o.RentalFinalPrice,
+            IsExtended: o.IsExtended);
+        var withReturn = await OrderReturnMapper.AttachAsync(customers, cancelledDto, cancellationToken);
+        return Result.Success(await OrderCancellationMapper.AttachAsync(customers, withReturn, cancellationToken));
     }
 }

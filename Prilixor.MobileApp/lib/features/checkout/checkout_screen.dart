@@ -1,23 +1,32 @@
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:razorpay_flutter/razorpay_flutter.dart';
 import '../../core/theme.dart';
 import '../../core/providers/checkout_provider.dart';
+import '../../shared/utils/razorpay_web_checkout.dart';
 import '../../core/providers/cart_provider.dart';
 import '../../core/providers/address_provider.dart';
 import '../../core/models/cart_model.dart';
 import '../../core/models/medical_model.dart';
+import '../../core/utils/platform_file_payload.dart';
 import '../../shared/utils/require_auth.dart';
 import '../../shared/widgets/brand_page_loader.dart';
+import '../../shared/widgets/legal_policy_links.dart';
 import '../../shared/widgets/required_field_ux.dart';
 import '../../shared/widgets/catalog_image.dart';
 import '../../shared/widgets/rent_exceeds_buy_dialog.dart';
 import '../../shared/widgets/struck_price.dart';
+import '../../core/models/order_quote_model.dart';
+import '../../core/utils/gst_label.dart';
 import '../../core/utils/rental_period.dart';
 import '../profile/addresses_screen.dart';
-import 'medical_reference_screen.dart';
-
 /// Temporary: hide Vendor pickup from checkout UI (keep code for later).
 const bool kShowVendorPickupOption = false;
+
+/// Hide Standard / Express. Checkout always places a standard delivery.
+const bool kShowDeliverySpeedOptions = false;
 
 class CheckoutScreen extends StatefulWidget {
   const CheckoutScreen({super.key});
@@ -29,12 +38,25 @@ class CheckoutScreen extends StatefulWidget {
 class _CheckoutScreenState extends State<CheckoutScreen> {
   String? _selectedAddressId;
   String _deliveryOption = 'standard';
-  final Map<String, MedicalRefModel> _medicalRefs = {};
+  final Map<String, List<PendingPrescriptionFile>> _prescriptionFiles = {};
   bool _authChecked = false;
+  bool _acceptedLegal = false;
+  bool _acceptedPrescriptionLegal = false;
+
+  late Razorpay _razorpay;
+  bool _isProcessingCheckout = false;
+  String? _activeCheckoutSessionId;
 
   @override
   void initState() {
     super.initState();
+    if (!kIsWeb) {
+      _razorpay = Razorpay();
+      _razorpay.on(Razorpay.EVENT_PAYMENT_SUCCESS, _handlePaymentSuccess);
+      _razorpay.on(Razorpay.EVENT_PAYMENT_ERROR, _handlePaymentError);
+      _razorpay.on(Razorpay.EVENT_EXTERNAL_WALLET, _handleExternalWallet);
+    }
+
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final ok = await ensureAuthenticated(
         context,
@@ -60,6 +82,73 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     });
   }
 
+  @override
+  void dispose() {
+    if (!kIsWeb) {
+      _razorpay.clear();
+    }
+    super.dispose();
+  }
+
+  void _handlePaymentSuccess(PaymentSuccessResponse response) async {
+    final sessionId = _activeCheckoutSessionId;
+    if (sessionId == null || !mounted) {
+      if (mounted) setState(() => _isProcessingCheckout = false);
+      return;
+    }
+
+    final provider = Provider.of<CheckoutProvider>(context, listen: false);
+    final cart = Provider.of<CartProvider>(context, listen: false);
+
+    final verified = await provider.verifyCheckout(
+      checkoutSessionId: sessionId,
+      razorpayOrderId: response.orderId ?? '',
+      razorpayPaymentId: response.paymentId ?? '',
+      razorpaySignature: response.signature ?? '',
+    );
+
+    if (!mounted) return;
+    setState(() => _isProcessingCheckout = false);
+
+    if (verified) {
+      cart.clearCart();
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Payment successful! Your order has been submitted.'),
+          backgroundColor: Colors.green,
+        ),
+      );
+      Navigator.of(context).popUntil((route) => route.isFirst);
+    } else {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text(provider.errorMessage ?? 'Payment verification failed. Please contact support.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+    }
+  }
+
+  void _handlePaymentError(PaymentFailureResponse response) {
+    if (!mounted) return;
+    setState(() => _isProcessingCheckout = false);
+    final message = response.message ?? 'Payment cancelled or failed.';
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(message),
+        backgroundColor: Colors.orangeAccent,
+      ),
+    );
+  }
+
+  void _handleExternalWallet(ExternalWalletResponse response) {
+    if (!mounted) return;
+    setState(() => _isProcessingCheckout = false);
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(content: Text('External Wallet: ${response.walletName}')),
+    );
+  }
+
   Future<void> _fetchQuote() async {
     final cart = Provider.of<CartProvider>(context, listen: false);
     if (cart.lines.isEmpty) return;
@@ -71,8 +160,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     await provider.getQuote(
       cart.lines,
       addressId: _selectedAddressId,
-      deliveryOption: _deliveryOption,
-      medicalRefs: _medicalRefs,
+      deliveryOption: kShowDeliverySpeedOptions ? _deliveryOption : 'standard',
     );
     if (!mounted) return;
     await _handleBuySuggestions();
@@ -135,36 +223,39 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     await _fetchQuote();
   }
 
-  // Doctor Unique ID is optional — never block place-order.
+  bool _lineHasHealth(CartLineModel line) =>
+      _prescriptionFiles[line.listingId]?.isNotEmpty ?? false;
 
-  Future<void> _openMedicalRef(String listingId, String title) async {
-    final result = await Navigator.push<MedicalRefModel>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => MedicalReferenceScreen(
-          title: 'Doctor for $title',
-          initial: _medicalRefs[listingId] ?? const MedicalRefModel(),
-        ),
-      ),
+  Future<void> _pickPrescription(String listingId) async {
+    final result = await FilePicker.platform.pickFiles(
+      type: FileType.custom,
+      allowedExtensions: const ['jpg', 'jpeg', 'png', 'webp', 'pdf'],
+      withData: true,
     );
-    if (result != null && mounted) {
-      setState(() => _medicalRefs[listingId] = result);
-      _fetchQuote();
+    if (result == null || result.files.isEmpty) return;
+    final file = result.files.first;
+    if (file.size > 5 * 1024 * 1024) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('File must be at most 5 MB.')),
+      );
+      return;
     }
-  }
-
-  void _applyMedicalRefToAll(String sourceListingId) {
-    final source = _medicalRefs[sourceListingId];
-    if (source == null) return;
-    final cart = Provider.of<CartProvider>(context, listen: false);
+    final path = safePlatformFilePath(file);
+    final bytes = file.bytes;
+    if ((bytes == null || bytes.isEmpty) && (path == null || path.isEmpty)) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Could not read that file. Try another image or PDF.')),
+      );
+      return;
+    }
     setState(() {
-      for (final line in cart.lines.where((l) => l.prescriptionRequired)) {
-        _medicalRefs[line.listingId] = source;
-      }
+      final next = [...(_prescriptionFiles[listingId] ?? const <PendingPrescriptionFile>[])];
+      if (next.length >= 3) return;
+      next.add(PendingPrescriptionFile(name: file.name, path: path, bytes: bytes));
+      _prescriptionFiles[listingId] = next;
     });
-    ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Applied doctor reference to all prescription items')),
-    );
   }
 
   @override
@@ -177,6 +268,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     final needsPrescription = cart.needsPrescription;
     final rxLines = cart.lines.where((l) => l.prescriptionRequired).toList();
     final colors = context.appColors;
+    // Same as product detail: bottomSheet ignores the navigation-bar inset.
+    final navBarInset = MediaQuery.viewInsetsOf(context).bottom > 0
+        ? 0.0
+        : MediaQuery.viewPaddingOf(context).bottom;
 
     return Scaffold(
       backgroundColor: colors.background,
@@ -190,8 +285,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
           ? const BrandPageLoader()
           : cart.lines.isEmpty
           ? Center(child: Text('Cart is empty', style: TextStyle(color: colors.textPrimary)))
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(20),
+          : Column(
+              children: [
+                Expanded(
+                  child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 12),
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -243,21 +341,21 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                     crossAxisAlignment: WrapCrossAlignment.center,
                                     spacing: 6,
                                     children: [
-                                      const Text(
+                                      Text(
                                         'Starts on delivery',
-                                        style: TextStyle(color: Colors.white38, fontSize: 11),
+                                        style: TextStyle(color: colors.textMuted, fontSize: 11),
                                       ),
                                       if (line.rentalNormalPrice != null &&
                                           line.rentalNormalPrice! > (line.rentalFinalPrice ?? 0)) ...[
-                                        const Text('·', style: TextStyle(color: Colors.white24, fontSize: 11)),
+                                        Text('·', style: TextStyle(color: colors.textMuted.withValues(alpha: 0.5))),
                                         StruckPrice(
                                           '₹${line.rentalNormalPrice!.toStringAsFixed(0)}',
                                           style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600),
                                         ),
                                         Text(
                                           '₹${(line.rentalFinalPrice ?? 0).toStringAsFixed(0)}',
-                                          style: const TextStyle(
-                                            color: Colors.white70,
+                                          style: TextStyle(
+                                            color: colors.textPrimary,
                                             fontSize: 11,
                                             fontWeight: FontWeight.w700,
                                           ),
@@ -391,23 +489,41 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     const FieldErrorText('Delivery address is required'),
 
                   const SizedBox(height: 24),
-                  Text('Delivery option', style: TextStyle(color: colors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
+                  Text(
+                    kShowDeliverySpeedOptions ? 'Delivery option' : 'Delivery',
+                    style: TextStyle(color: colors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold),
+                  ),
                   const SizedBox(height: 12),
-                  _deliveryOptionTile(
-                    value: 'standard',
-                    title: 'Standard (2-3 days)',
-                    trailing: 'Included',
-                  ),
-                  _deliveryOptionTile(
-                    value: 'express',
-                    title: 'Express (next-day)',
-                    trailing: 'Dynamic',
-                  ),
-                  if (kShowVendorPickupOption)
+                  if (kShowDeliverySpeedOptions) ...[
                     _deliveryOptionTile(
-                      value: 'vendor_pickup',
-                      title: 'Vendor pickup',
-                      trailing: 'Free',
+                      value: 'standard',
+                      title: 'Standard (2-3 days)',
+                      trailing: 'Included',
+                    ),
+                    _deliveryOptionTile(
+                      value: 'express',
+                      title: 'Express (next-day)',
+                      trailing: 'Dynamic',
+                    ),
+                    if (kShowVendorPickupOption)
+                      _deliveryOptionTile(
+                        value: 'vendor_pickup',
+                        title: 'Vendor pickup',
+                        trailing: 'Free',
+                      ),
+                  ] else
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                      decoration: BoxDecoration(
+                        color: colors.surface,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: colors.border),
+                      ),
+                      child: Text(
+                        "We'll deliver to the address you selected. The vendor confirms the delivery time after accepting your request, and your rental starts on delivery.",
+                        style: TextStyle(color: colors.textPrimary, fontSize: 14, height: 1.45),
+                      ),
                     ),
 
                   if (needsPrescription) ...[
@@ -442,12 +558,12 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         children: [
                                           Text(
-                                            'Doctor reference (optional)',
+                                            'Prescription (optional)',
                                             style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.bold),
                                           ),
                                           const SizedBox(height: 4),
                                           Text(
-                                            'Enter a doctor Unique ID from their QR / share page, or skip and place the order without one.',
+                                            'Upload a prescription image or PDF. You can skip this.',
                                             style: TextStyle(color: colors.textSecondary, fontSize: 13),
                                           ),
                                         ],
@@ -459,79 +575,47 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                             ),
                           ),
                           ...rxLines.map((line) {
-                            final ref = _medicalRefs[line.listingId];
-                            final filled = ref?.hasDoctor == true;
+                            final files = _prescriptionFiles[line.listingId] ?? const <PendingPrescriptionFile>[];
                             return Padding(
                               padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
-                              child: Row(
+                              child: Column(
+                                crossAxisAlignment: CrossAxisAlignment.start,
                                 children: [
-                                  Expanded(
-                                    child: Column(
-                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                      children: [
-                                        Text(line.title, style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w600)),
-                                        const SizedBox(height: 4),
-                                        Text(
-                                          filled
-                                              ? 'Linked · ${ref!.doctorName ?? 'Doctor'} (${ref.uniqueCode})'
-                                              : 'No doctor linked yet',
-                                          style: TextStyle(
-                                            color: filled ? const Color(0xFF34D399) : Colors.amber,
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w600,
+                                  Text(line.title, style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w600)),
+                                  if (files.isNotEmpty) ...[
+                                    const SizedBox(height: 8),
+                                    ...files.asMap().entries.map((entry) => Padding(
+                                      padding: const EdgeInsets.only(bottom: 4),
+                                      child: Row(
+                                        children: [
+                                          Expanded(
+                                            child: Text(
+                                              entry.value.name,
+                                              style: TextStyle(color: colors.textSecondary, fontSize: 12),
+                                              overflow: TextOverflow.ellipsis,
+                                            ),
                                           ),
-                                        ),
-                                        if (filled && ref!.hospitals.isNotEmpty) ...[
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            ref.hospitals.length == 1
-                                                ? (ref.hospitals.first.placeLabel != null
-                                                    ? '${ref.hospitals.first.name} · ${ref.hospitals.first.placeLabel}'
-                                                    : ref.hospitals.first.name)
-                                                : '${ref.hospitals.length} affiliated hospitals',
-                                            style: TextStyle(color: colors.textMuted, fontSize: 11),
+                                          TextButton(
+                                            onPressed: () {
+                                              setState(() {
+                                                final next = [...files]..removeAt(entry.key);
+                                                _prescriptionFiles[line.listingId] = next;
+                                              });
+                                            },
+                                            child: Text('Remove', style: TextStyle(color: colors.textMuted, fontSize: 12)),
                                           ),
                                         ],
-                                      ],
+                                      ),
+                                    )),
+                                  ],
+                                  if (files.length < 3)
+                                    TextButton(
+                                      onPressed: () => _pickPrescription(line.listingId),
+                                      child: Text(
+                                        files.isEmpty ? 'Upload prescription' : 'Add another file',
+                                        style: TextStyle(color: colors.accent, fontWeight: FontWeight.bold),
+                                      ),
                                     ),
-                                  ),
-                                  TextButton(
-                                    onPressed: () async {
-                                      await _openMedicalRef(line.listingId, line.title);
-                                      if (rxLines.length > 1 &&
-                                          _medicalRefs[line.listingId]?.hasDoctor == true &&
-                                          mounted) {
-                                        final apply = await showDialog<bool>(
-                                          context: context,
-                                          builder: (ctx) => AlertDialog(
-                                            backgroundColor: colors.surface,
-                                            title: Text('Apply to all?', style: TextStyle(color: colors.textPrimary)),
-                                            content: Text(
-                                              'Use the same doctor Unique ID for all prescription items?',
-                                              style: TextStyle(color: colors.textSecondary),
-                                            ),
-                                            actions: [
-                                              TextButton(
-                                                onPressed: () => Navigator.pop(ctx, false),
-                                                child: Text('No', style: TextStyle(color: colors.textMuted)),
-                                              ),
-                                              TextButton(
-                                                onPressed: () => Navigator.pop(ctx, true),
-                                                child: Text('Yes', style: TextStyle(color: colors.accent)),
-                                              ),
-                                            ],
-                                          ),
-                                        );
-                                        if (apply == true) {
-                                          _applyMedicalRefToAll(line.listingId);
-                                        }
-                                      }
-                                    },
-                                    child: Text(
-                                      filled ? 'Change' : 'Add Unique ID',
-                                      style: TextStyle(color: colors.accent, fontWeight: FontWeight.bold),
-                                    ),
-                                  ),
                                 ],
                               ),
                             );
@@ -655,10 +739,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                             const SizedBox(height: 8),
                             _buildQuoteRow('Service Fee', quote.serviceFeeAmount),
                           ],
-                          if (quote.gstAmount > 0) ...[
-                            const SizedBox(height: 8),
-                            _buildQuoteRow('Taxes (GST)', quote.gstAmount),
-                          ],
+                          ..._gstSummaryRows(quote),
                           Padding(
                             padding: const EdgeInsets.symmetric(vertical: 12),
                             child: Divider(color: colors.border),
@@ -676,15 +757,75 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                         ],
                       ),
                     ),
-                  const SizedBox(height: 100),
+                  const SizedBox(height: 8),
                 ],
               ),
             ),
-      bottomSheet: quote != null
-          ? Container(
-              padding: const EdgeInsets.all(20),
-              color: colors.surface,
-              child: SizedBox(
+                ),
+                if (quote != null)
+                  ConstrainedBox(
+                    constraints: BoxConstraints(
+                      maxHeight: MediaQuery.sizeOf(context).height * 0.42,
+                    ),
+                    child: SingleChildScrollView(
+                      child: Container(
+              padding: EdgeInsets.fromLTRB(20, 12, 20, 12 + navBarInset),
+              decoration: BoxDecoration(
+                color: colors.surface,
+                border: Border(top: BorderSide(color: colors.border)),
+              ),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  LegalAgreeCheckbox(
+                    screen: 'checkout',
+                    value: _acceptedLegal,
+                    onChanged: (value) => setState(() => _acceptedLegal = value),
+                    prefix: 'I agree to the',
+                  ),
+                  if (cart.lines.any((l) => l.prescriptionRequired && _lineHasHealth(l))) ...[
+                    const SizedBox(height: 8),
+                    LegalAgreeCheckbox(
+                      screen: 'prescription',
+                      value: _acceptedPrescriptionLegal,
+                      onChanged: (value) => setState(() => _acceptedPrescriptionLegal = value),
+                      prefix: 'I consent to the',
+                    ),
+                  ],
+                  const SizedBox(height: 12),
+                  if (quote.razorpayTestMode) ...[
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFFFFBEB),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: const Color(0xFFFCD34D)),
+                      ),
+                      child: const Text.rich(
+                        TextSpan(
+                          style: TextStyle(fontSize: 12, height: 1.4, color: Color(0xFF451A03)),
+                          children: [
+                            TextSpan(
+                              text: 'Test payment. No real money is charged.\n',
+                              style: TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                            TextSpan(text: 'Use card '),
+                            TextSpan(
+                              text: '4100 2800 0000 1007',
+                              style: TextStyle(fontWeight: FontWeight.w700),
+                            ),
+                            TextSpan(
+                              text: '. Any future expiry, any CVV, and any name. If a bank page opens, choose Success.',
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                  ],
+                  SizedBox(
                 width: double.infinity,
                 height: 56,
                 child: ElevatedButton(
@@ -694,7 +835,11 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                     shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                   ),
                   onPressed: provider.isPlacingOrder ||
-                          provider.errorMessage != null
+                          _isProcessingCheckout ||
+                          provider.errorMessage != null ||
+                          !_acceptedLegal ||
+                          (cart.lines.any((l) => l.prescriptionRequired && _lineHasHealth(l)) &&
+                              !_acceptedPrescriptionLegal)
                       ? null
                       : () async {
                           if (_deliveryOption != 'vendor_pickup' &&
@@ -705,37 +850,93 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                             );
                             return;
                           }
-                          final success = await provider.placeOrder(
+                          setState(() => _isProcessingCheckout = true);
+
+                          final session = await provider.createCheckout(
                             cart.lines,
                             addressId: _selectedAddressId,
-                            deliveryOption: _deliveryOption,
-                            medicalRefs: _medicalRefs,
+                            deliveryOption: kShowDeliverySpeedOptions ? _deliveryOption : 'standard',
+                            prescriptionFiles: _prescriptionFiles,
+                            acceptedLegal: _acceptedLegal,
+                            acceptedPrescriptionLegal: cart.lines.any((l) =>
+                                    l.prescriptionRequired && _lineHasHealth(l)) &&
+                                _acceptedPrescriptionLegal,
                           );
-                          if (success && mounted) {
-                            cart.clearCart();
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              const SnackBar(
-                                content: Text('Order placed successfully!'),
-                                backgroundColor: Colors.green,
-                              ),
+
+                          if (!mounted) return;
+                          if (session == null) {
+                            setState(() => _isProcessingCheckout = false);
+                            if (provider.errorMessage != null) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text(provider.errorMessage!), backgroundColor: Colors.redAccent),
+                              );
+                            }
+                            return;
+                          }
+
+                          _activeCheckoutSessionId = session.checkoutSessionId;
+
+                          final amountPaise = (session.amount * 100).round();
+                          if (kIsWeb) {
+                            await openRazorpayWeb(
+                              key: session.razorpayKeyId,
+                              amountPaise: amountPaise,
+                              currency: session.currency,
+                              orderId: session.razorpayOrderId ?? '',
+                              name: 'BlinksMed',
+                              description: 'Pay for ${session.orders.length} order(s)',
+                              email: '',
+                              contact: '',
+                              onSuccess: (paymentId, orderId, signature) {
+                                _handlePaymentSuccess(PaymentSuccessResponse(
+                                  paymentId,
+                                  orderId,
+                                  signature,
+                                  null,
+                                ));
+                              },
+                              onError: (message) {
+                                _handlePaymentError(PaymentFailureResponse(0, message, null));
+                              },
                             );
-                            Navigator.of(context).popUntil((route) => route.isFirst);
-                          } else if (provider.errorMessage != null && mounted) {
-                            ScaffoldMessenger.of(context).showSnackBar(
-                              SnackBar(content: Text(provider.errorMessage!), backgroundColor: Colors.redAccent),
-                            );
+                          } else {
+                            final options = {
+                              'key': session.razorpayKeyId,
+                              'amount': amountPaise,
+                              'currency': session.currency,
+                              'name': 'BlinksMed',
+                              'description': 'Pay for ${session.orders.length} order(s)',
+                              'order_id': session.razorpayOrderId,
+                              'theme': {'color': AppTheme.razorpayThemeColor},
+                            };
+
+                            try {
+                              _razorpay.open(options);
+                            } catch (e) {
+                              if (mounted) {
+                                setState(() => _isProcessingCheckout = false);
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  SnackBar(content: Text('Unable to launch Razorpay: $e'), backgroundColor: Colors.redAccent),
+                                );
+                              }
+                            }
                           }
                         },
-                  child: provider.isPlacingOrder
+                  child: provider.isPlacingOrder || _isProcessingCheckout
                       ? const CircularProgressIndicator(color: Colors.white)
-                      : Text(
+                      : const Text(
                           'Place Order',
-                          style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
                         ),
                 ),
               ),
-            )
-          : null,
+                ],
+              ),
+            ),
+                    ),
+                  ),
+              ],
+            ),
     );
   }
 
@@ -775,6 +976,25 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     );
   }
 
+  List<Widget> _gstSummaryRows(OrderQuoteModel quote) {
+    final summary = buildGstSummary(
+      quote.gstAmount,
+      [
+        for (final line in quote.gstLines)
+          GstAmountLine(gstPercent: line.gstPercent, gstAmount: line.gstAmount),
+      ],
+    );
+    if (summary == null) return const [];
+    return [
+      const SizedBox(height: 8),
+      _buildQuoteRow(summary.label, summary.amount),
+      for (final line in summary.breakup) ...[
+        const SizedBox(height: 4),
+        _buildGstBreakupRow(line.label, line.amount),
+      ],
+    ];
+  }
+
   Widget _buildQuoteRow(String label, double amount) {
     final colors = context.appColors;
     return Row(
@@ -785,4 +1005,19 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       ],
     );
   }
+
+  Widget _buildGstBreakupRow(String label, double amount) {
+    final colors = context.appColors;
+    return Padding(
+      padding: const EdgeInsets.only(left: 12),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(label, style: TextStyle(color: colors.textMuted, fontSize: 12)),
+          Text('₹${amount.toStringAsFixed(0)}', style: TextStyle(color: colors.textMuted, fontSize: 12)),
+        ],
+      ),
+    );
+  }
 }
+

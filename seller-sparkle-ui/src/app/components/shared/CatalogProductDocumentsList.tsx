@@ -305,7 +305,7 @@ export function CustomerProductDocumentsInline({
                 <div className="flex min-w-0 flex-1 items-center sm:rounded-full sm:border sm:border-border/80 sm:bg-muted/40 sm:pl-3 sm:pr-0.5">
                   <button
                     type="button"
-                    className="min-w-0 flex-1 truncate px-3 py-2.5 text-left text-[13px] font-medium text-primary underline-offset-2 hover:underline sm:flex-none sm:px-0 sm:py-1.5"
+                    className="min-w-0 flex-1 truncate px-3 py-2.5 text-left text-[13px] font-medium text-primary no-underline transition-colors hover:text-primary/80 hover:no-underline sm:flex-none sm:px-0 sm:py-1.5"
                     onClick={() => openPreview(doc)}
                   >
                     {label}

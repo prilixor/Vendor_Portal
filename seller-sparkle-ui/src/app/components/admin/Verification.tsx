@@ -1,11 +1,12 @@
 import { useState, useEffect } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
 import { Label } from "@/app/components/ui/label";
-import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { PageContentGate, PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import { TablePagination } from "@/app/components/shared/TablePagination";
 import { StatusBadge } from "@/app/components/shared/StatusBadge";
 import { Search, CheckCircle2, XCircle, Building2, Mail, Loader2, MoreVertical, Ban, ShieldAlert, ShieldCheck, RotateCcw, FileText, Eye, Building, AlertCircle, Info, Calendar, MapPin, ExternalLink } from "lucide-react";
@@ -18,10 +19,10 @@ import { Textarea } from "@/app/components/ui/textarea";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/app/components/ui/dropdown-menu";
 import { toast } from "sonner";
 import { safeFormatDate } from "@/app/utils/dateUtils";
-import { adminApi, VendorDto, VendorProfileDto, VendorDocumentDto, VendorBankAccountDto, VendorServiceAreaDto } from "@/app/services/adminApi";
+import { adminApi, VendorDto, VendorProfileDto, VendorDocumentDto, VendorBankAccountDto, VendorServiceAreaDto, AdminVerificationListRow } from "@/app/services/adminApi";
 import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
-import { retryOriginalOnImageError } from "@/app/helpers/utils";
+import { cn, retryOriginalOnImageError } from "@/app/helpers/utils";
 import { CopyableEmail } from "@/app/components/shared/CopyableEmail";
 import { AdminServiceAreaRadiusDialog } from "@/app/components/admin/AdminServiceAreaRadiusDialog";
 import { useAuth } from "@/app/guards/AuthContext";
@@ -145,12 +146,21 @@ const BankAccountDetailsGrid = ({ bank }: { bank: VendorBankAccountDto }) => (
 
 const PAGE_SIZE = 8;
 
+const toVendorDto = (row: AdminVerificationListRow): VendorDto => ({
+  id: row.id,
+  email: row.email,
+  isEmailVerified: row.isEmailVerified,
+  accountStatus: row.accountStatus,
+  registrationStage: row.registrationStage,
+  createdAt: "",
+});
+
 const Verification = () => {
-  const [vendors, setVendors] = useState<VendorDto[]>([]);
-  const [loading, setLoading] = useState(false);
+  const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
   const initialFilter = (searchParams.get("status") as "all" | "pending" | "active" | "rejected" | "suspended" | "banned") ?? "all";
-  const [search, setSearch] = useState("");
+  const [searchInput, setSearchInput] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [page, setPage] = useState(1);
   const [filter, setFilter] = useState<"all" | "pending" | "active" | "rejected" | "suspended" | "banned">(
     ["all", "pending", "active", "rejected", "suspended", "banned"].includes(initialFilter) ? initialFilter : "all"
@@ -193,7 +203,6 @@ const Verification = () => {
   const [previewBank, setPreviewBank] = useState<VendorBankAccountDto | null>(null);
   const [pdfLoading, setPdfLoading] = useState(false);
   const [vendorProfile, setVendorProfile] = useState<VendorProfileDto | null>(null);
-  const [vendorProfiles, setVendorProfiles] = useState<Map<string, VendorProfileDto>>(new Map());
   const [serviceAreas, setServiceAreas] = useState<VendorServiceAreaDto[]>([]);
   const [loadingAreas, setLoadingAreas] = useState(false);
   const [radiusEditArea, setRadiusEditArea] = useState<VendorServiceAreaDto | null>(null);
@@ -202,12 +211,35 @@ const Verification = () => {
   const canAutoVerify = hasPermission(ADMIN_PERMISSIONS.vendorsAutoVerify);
 
   useEffect(() => {
-    loadVendors();
-  }, []);
+    const t = window.setTimeout(() => setDebouncedSearch(searchInput.trim()), 350);
+    return () => window.clearTimeout(t);
+  }, [searchInput]);
 
   useEffect(() => {
     setPage(1);
-  }, [search, filter]);
+  }, [debouncedSearch, filter]);
+
+  const { data, isLoading, isPlaceholderData } = useQuery({
+    queryKey: ["admin-verification-summaries", page, debouncedSearch, filter],
+    queryFn: () =>
+      adminApi.getVendorVerificationSummaries({
+        search: debouncedSearch,
+        status: filter,
+        page,
+        pageSize: PAGE_SIZE,
+      }),
+    placeholderData: keepPreviousData,
+  });
+  const isPageChanging = isPlaceholderData && !isLoading;
+
+  const pageVendors = data?.items ?? [];
+  const totalCount = data?.totalCount ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const safePage = Math.min(page, totalPages);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
 
   // Load documents when a vendor is selected
   useEffect(() => {
@@ -306,30 +338,7 @@ const Verification = () => {
   };
 
   const loadVendors = async () => {
-    setLoading(true);
-    try {
-      const data = await adminApi.getVendors();
-      setVendors(data);
-      
-      // Load all vendor profiles
-      const profilesMap = new Map<string, VendorProfileDto>();
-      await Promise.allSettled(
-        data.map(async (vendor) => {
-          try {
-            const profile = await adminApi.getVendorProfile(vendor.id);
-            profilesMap.set(vendor.id, profile);
-          } catch {
-            // Profile not found - vendor hasn't submitted profile yet, this is expected
-          }
-        })
-      );
-      setVendorProfiles(profilesMap);
-    } catch (error) {
-      const message = getUserFriendlyMessage(error);
-      toast.error(message);
-    } finally {
-      setLoading(false);
-    }
+    await queryClient.invalidateQueries({ queryKey: ["admin-verification-summaries"] });
   };
 
   const verifyDocumentItem = async (vendorId: string, documentId: string, verificationStatus: "approved" | "rejected", notes?: string) => {
@@ -520,25 +529,6 @@ const Verification = () => {
     setItemRejectTarget(null);
     setItemRejectNotes("");
   };
-
-  const filtered = vendors.filter((v) => {
-    const hasProfile = vendorProfiles.has(v.id);
-    
-    // Check if the vendor has progressed past the initial registration stages.
-    // If they have uploaded a document, their stage is usually documents_pending or later.
-    const isReadyForVerification = 
-      v.registrationStage !== "email_registered" && 
-      v.registrationStage !== "profile_pending";
-
-    const m = filter === "all" || v.accountStatus === filter;
-    const s = !search || v.email.toLowerCase().includes(search.toLowerCase());
-    
-    return hasProfile && isReadyForVerification && m && s;
-  });
-
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
-  const safePage = Math.min(page, totalPages);
-  const pageVendors = filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE);
 
   const serviceAreasNeedRadiusReview =
     serviceAreas.length === 0 || serviceAreas.some((a) => !a.isRadiusSetByAdmin);
@@ -739,7 +729,7 @@ const Verification = () => {
         <div className="flex flex-col gap-3 border-b border-border pb-4 sm:flex-row sm:items-center sm:justify-between">
           <div className="relative w-full sm:max-w-xs">
             <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search vendors…" className="pl-9" />
+            <Input value={searchInput} onChange={(e) => setSearchInput(e.target.value)} placeholder="Search vendors…" className="pl-9" />
           </div>
           <Tabs value={filter} onValueChange={handleFilterChange}>
             <TabsList className="h-auto w-full flex-nowrap justify-start overflow-x-auto rounded-lg p-1">
@@ -752,10 +742,8 @@ const Verification = () => {
             </TabsList>
           </Tabs>
         </div>
-        {loading ? (
-          <PageLoaderSlot />
-        ) : (
-          <>
+        <PageContentGate loading={isLoading}>
+          <div className={cn("transition-opacity duration-200", isPageChanging && "opacity-50")}>
           <div className="overflow-x-auto rounded-lg border border-border">
             <table className="w-full min-w-[700px] text-sm">
               <thead className="bg-muted/30 text-left text-xs uppercase tracking-wider text-muted-foreground">
@@ -768,7 +756,7 @@ const Verification = () => {
               </thead>
               <tbody className="divide-y divide-border">
                 {pageVendors.map((v) => {
-                  const profile = vendorProfiles.get(v.id);
+                  const businessName = v.businessName || v.email;
                   return (
                     <tr key={v.id} className="hover:bg-muted/20">
                       <td className="px-4 py-3">
@@ -777,7 +765,7 @@ const Verification = () => {
                             <Building2 className="h-4 w-4" />
                           </div>
                           <div className="min-w-0">
-                            <p className="font-medium truncate" title={profile?.businessName || v.email}>{profile?.businessName || v.email}</p>
+                            <p className="font-medium truncate" title={businessName}>{businessName}</p>
                             <p className="text-xs text-muted-foreground truncate" title={v.email}>
                               <CopyableEmail email={v.email} textClassName="text-xs text-muted-foreground" />
                             </p>
@@ -787,7 +775,7 @@ const Verification = () => {
                       <td className="px-4 py-3">{v.registrationStage}</td>
                       <td className="px-4 py-3"><StatusBadge status={v.accountStatus as "pending" | "approved" | "rejected" | "under_review"} /></td>
                       <td className="px-4 py-3 text-right">
-                        <Button variant="outline" size="sm" onClick={() => setSelected(v)}>Review</Button>
+                        <Button variant="outline" size="sm" onClick={() => setSelected(toVendorDto(v))}>Review</Button>
                       </td>
                     </tr>
                   );
@@ -798,12 +786,12 @@ const Verification = () => {
           <TablePagination
             page={safePage}
             pageSize={PAGE_SIZE}
-            total={filtered.length}
+            total={totalCount}
             onPageChange={setPage}
             label="vendors"
           />
-          </>
-        )}
+          </div>
+        </PageContentGate>
       </Card>
 
       {/* Vendor detail */}
@@ -1537,7 +1525,7 @@ const Verification = () => {
                     <button
                       type="button"
                       onClick={() => void downloadUrl(previewDocument.url)}
-                      className="text-primary hover:underline ml-2"
+                      className="ml-2 text-primary no-underline transition-colors hover:text-primary/80 hover:no-underline"
                     >
                       Download file
                     </button>

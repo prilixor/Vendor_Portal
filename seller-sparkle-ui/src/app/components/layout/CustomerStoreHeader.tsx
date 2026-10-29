@@ -42,16 +42,12 @@ export function CustomerStoreHeader() {
   const { lines } = useCart();
   const cartCount = useMemo(() => lines.reduce((acc, l) => acc + l.quantity, 0), [lines]);
 
-  const { data: customerNotifications = [] } = useQuery({
-    queryKey: ["customer-notifications"],
-    queryFn: () => customerApi.getNotifications({ quiet: true }),
+  const { data: unreadCustomerCount = 0 } = useQuery({
+    queryKey: ["customer-notifications-unread-count"],
+    queryFn: () => customerApi.getUnreadNotificationCount({ quiet: true }),
     enabled: !!signedIn,
     refetchInterval: 30000,
   });
-  const unreadCustomerCount = useMemo(
-    () => customerNotifications.filter((n) => !n.readAt).length,
-    [customerNotifications],
-  );
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);
@@ -69,7 +65,7 @@ export function CustomerStoreHeader() {
       <div className="mx-auto flex h-14 min-w-0 max-w-[1400px] items-center gap-2 px-3 sm:h-16 sm:gap-3 sm:px-6 lg:px-8">
         <Link to="/customer/shop" className="flex shrink-0 items-center" aria-label="BlinksMed shop">
           {/* Full lockup already includes BLINKSMED + Buy | Rent | Care */}
-          <BrandMark size="lg" rounded="2xl" className="h-10 w-10 sm:h-14 sm:w-14" />
+          <BrandMark size="md" />
         </Link>
 
         <div className="ml-auto flex min-w-0 shrink-0 items-center gap-1 sm:gap-2">
@@ -152,13 +148,12 @@ export function CustomerStoreHeader() {
                   </div>
                 </DropdownMenuLabel>
                 <DropdownMenuSeparator />
-                {navItems.map((item) => (
+                {navItems
+                  .filter((item) => item.to !== "/customer/notifications" && item.to !== "/customer/cart")
+                  .map((item) => (
                   <DropdownMenuItem key={item.to} onClick={() => navigate(item.to)}>
                     <item.icon className="mr-2 h-4 w-4" />
                     {item.label}
-                    {item.label === "Cart" && cartCount > 0 ? (
-                      <span className="ml-auto text-xs text-muted-foreground">{cartCount}</span>
-                    ) : null}
                     {item.label === "Notifications" && unreadCustomerCount > 0 ? (
                       <span className="ml-auto text-xs text-muted-foreground">
                         {unreadCustomerCount}

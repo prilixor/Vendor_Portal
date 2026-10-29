@@ -1,12 +1,12 @@
 import { useEffect, useMemo, useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { adminApi, type AdminOrderDto } from "@/app/services/adminApi";
 import { useSearchParams, useNavigate, useLocation } from "react-router-dom";
 import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card, CardContent } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
-import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { PageContentGate } from "@/app/components/shared/PageLoader";
 import { TablePagination } from "@/app/components/shared/TablePagination";
 import { ListingThumb } from "@/app/components/shared/ListingThumb";
 import {
@@ -20,6 +20,8 @@ import {
   ChevronRight,
 } from "lucide-react";
 import { formatOrderStatusLabel, formatOrderStatusTitle, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
+import { adminRefundChip } from "@/app/helpers/orderReturn";
+import { adminCancellationChip } from "@/app/helpers/orderCancellation";
 import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
 import {
   ActiveFilterChips,
@@ -43,16 +45,6 @@ const statusTabs = [
   { id: "cancelled", label: "Cancelled" },
   { id: "dispatch_failed", label: "Dispatch Failed" },
 ] as const;
-
-function matchesAdminStatus(status: string, tabId: (typeof statusTabs)[number]["id"]): boolean {
-  if (tabId === "all") return true;
-  const s = status.trim().toLowerCase().replace(/_/g, " ");
-  if (tabId === "pending") return s === "pending" || s === "awaiting vendor acceptance";
-  if (tabId === "in_transit") return s.includes("transit");
-  if (tabId === "dispatch_failed") return s === "dispatch failed";
-  if (tabId === "cancelled") return s === "cancelled" || s === "canceled";
-  return s === tabId.replace(/_/g, " ");
-}
 
 function orderStatusBadgeClass(status: string): string {
   const s = status.toLowerCase().replace(/_/g, " ");
@@ -113,10 +105,24 @@ export const AdminOrders = () => {
   }, [urlTab]);
   const [page, setPage] = useState(1);
 
-  const { data: orders = [], isLoading, error, refetch, isFetching } = useQuery({
-    queryKey: ["admin-orders"],
-    queryFn: () => adminApi.getAdminOrders({ quiet: true }),
+  const [manualRefresh, setManualRefresh] = useState(false);
+  const { data, isLoading, refetch, isPlaceholderData } = useQuery({
+    queryKey: ["admin-order-summaries", page, debouncedSearch, activeTab],
+    queryFn: () =>
+      adminApi.getAdminOrderSummaries({
+        search: debouncedSearch,
+        status: activeTab,
+        page,
+        pageSize: PAGE_SIZE,
+      }, { quiet: true }),
+    placeholderData: keepPreviousData,
   });
+  const isPageChanging = isPlaceholderData && !isLoading;
+
+  const orders = data?.items ?? [];
+  const stats = data?.stats ?? { totalCount: 0, revenue: 0, active: 0, returned: 0, failed: 0 };
+  const statusCounts = data?.statusCounts ?? {};
+  const totalCount = data?.totalCount ?? 0;
 
   useEffect(() => {
     const openParam = searchParams.get("open");
@@ -137,64 +143,6 @@ export const AdminOrders = () => {
     setPage(1);
   }, [debouncedSearch, activeTab]);
 
-  // Statistics Computations
-  const stats = useMemo(() => {
-    const totalCount = orders.length;
-    const revenue = orders.reduce((sum, o) => sum + o.totalAmount, 0);
-    const active = orders.filter((o) => {
-      const s = o.status.toLowerCase().replace(/_/g, " ");
-      return s === "active";
-    }).length;
-    const returned = orders.filter((o) => {
-      const s = o.status.toLowerCase().replace(/_/g, " ");
-      return s === "returned";
-    }).length;
-    const failed = orders.filter((o) => {
-      const s = o.status.toLowerCase().replace(/_/g, " ");
-      return s.includes("dispatch failed");
-    }).length;
-
-    return { totalCount, revenue, active, returned, failed };
-  }, [orders]);
-
-  // Filtering Logic
-  const filtered = useMemo(() => {
-    let list = orders;
-    const q = debouncedSearch.toLowerCase();
-    if (q) {
-      list = list.filter(
-        (o) =>
-          o.orderNumber.toLowerCase().includes(q) ||
-          o.listingTitle.toLowerCase().includes(q) ||
-          o.customerName.toLowerCase().includes(q) ||
-          o.customerEmail.toLowerCase().includes(q) ||
-          o.vendorName.toLowerCase().includes(q) ||
-          o.orderId.toLowerCase().includes(q)
-      );
-    }
-    return list.filter((o) => matchesAdminStatus(o.status, activeTab));
-  }, [orders, debouncedSearch, activeTab]);
-
-  const statusCounts = useMemo(() => {
-    let searchable = orders;
-    const q = debouncedSearch.toLowerCase();
-    if (q) {
-      searchable = searchable.filter(
-        (o) =>
-          o.orderNumber.toLowerCase().includes(q) ||
-          o.listingTitle.toLowerCase().includes(q) ||
-          o.customerName.toLowerCase().includes(q) ||
-          o.customerEmail.toLowerCase().includes(q) ||
-          o.vendorName.toLowerCase().includes(q) ||
-          o.orderId.toLowerCase().includes(q)
-      );
-    }
-    return statusTabs.reduce<Record<(typeof statusTabs)[number]["id"], number>>((acc, tab) => {
-      acc[tab.id] = tab.id === "all" ? searchable.length : searchable.filter((o) => matchesAdminStatus(o.status, tab.id)).length;
-      return acc;
-    }, {} as Record<(typeof statusTabs)[number]["id"], number>);
-  }, [orders, debouncedSearch]);
-
   const statusOptions = statusTabs.filter(
     (tab) => tab.id !== "bought_out" || (statusCounts[tab.id] ?? 0) > 0,
   );
@@ -211,15 +159,13 @@ export const AdminOrders = () => {
           },
         ];
 
-  // Pagination
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
-  const pageSlice = useMemo(
-    () => filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
-    [filtered, safePage]
-  );
 
-  // Grouping by Base Order Number
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
   const groupedOrders = useMemo(() => {
     const groups: Array<{
       baseOrderNumber: string;
@@ -230,7 +176,7 @@ export const AdminOrders = () => {
       totalAmount: number;
     }> = [];
 
-    pageSlice.forEach((order) => {
+    orders.forEach((order) => {
       const baseNum = order.orderNumber.split("-").slice(0, 3).join("-");
       let g = groups.find((x) => x.baseOrderNumber === baseNum);
       if (!g) {
@@ -249,7 +195,7 @@ export const AdminOrders = () => {
     });
 
     return groups;
-  }, [pageSlice]);
+  }, [orders]);
 
   return (
     <div className="space-y-6">
@@ -257,8 +203,16 @@ export const AdminOrders = () => {
         title="Customer Orders Tracking"
         description="Comprehensive dashboard to check status transitions, split orders, and vendor fulfillment statistics."
         actions={
-          <Button variant="outline" size="sm" onClick={() => void refetch()} disabled={isFetching || isLoading}>
-            <RefreshCw className={cn("mr-2 h-4 w-4", isFetching && "animate-spin")} />
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setManualRefresh(true);
+              void refetch().finally(() => setManualRefresh(false));
+            }}
+            disabled={manualRefresh || isLoading}
+          >
+            <RefreshCw className={cn("mr-2 h-4 w-4", manualRefresh && "animate-spin")} />
             Refresh
           </Button>
         }
@@ -283,7 +237,7 @@ export const AdminOrders = () => {
         <Card className="border-border/60 bg-card/60 backdrop-blur-md">
           <CardContent className="p-4 sm:p-5">
             <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-emerald-500/10 text-emerald-500 p-2.5">
+              <div className="rounded-lg bg-emerald-50 p-2.5 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300">
                 <TrendingUp className="h-5 w-5" />
               </div>
               <div className="min-w-0 flex-1">
@@ -297,7 +251,7 @@ export const AdminOrders = () => {
         <Card className="border-border/60 bg-card/60 backdrop-blur-md">
           <CardContent className="p-4 sm:p-5">
             <div className="flex items-center gap-3">
-              <div className="rounded-lg bg-indigo-500/10 text-indigo-500 p-2.5">
+              <div className="rounded-lg bg-indigo-50 p-2.5 text-indigo-700 dark:bg-indigo-500/15 dark:text-indigo-300">
                 <Truck className="h-5 w-5" />
               </div>
               <div className="min-w-0 flex-1">
@@ -383,12 +337,10 @@ export const AdminOrders = () => {
           </FilterSection>
         </FilterPanel>
 
-        {isLoading ? (
-          <PageLoaderSlot />
-        ) : groupedOrders.length === 0 ? (
+        <PageContentGate loading={isLoading}>{groupedOrders.length === 0 ? (
           <p className="py-12 text-center text-sm text-muted-foreground">No customer orders found matching current criteria.</p>
         ) : (
-          <div className="space-y-4">
+          <div className={cn("space-y-4 transition-opacity duration-200", isPageChanging && "opacity-50")}>
             {groupedOrders.map((group) => (
               <div key={group.baseOrderNumber} className="min-w-0 overflow-hidden rounded-xl border border-border/80 bg-card p-4 shadow-sm transition-all hover:border-border/100 sm:p-6">
                 {/* Transaction Group Header */}
@@ -397,11 +349,11 @@ export const AdminOrders = () => {
                     <span className="text-[10px] font-bold uppercase tracking-wider text-muted-foreground">Order Group</span>
                     <h4 className="break-all text-base font-bold text-foreground">{group.baseOrderNumber}</h4>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-6 gap-y-2 text-xs text-muted-foreground md:flex md:gap-6">
-                    <p>Customer: <span className="font-semibold text-foreground truncate block sm:inline">{group.customerName}</span></p>
-                    <p>Email: <span className="font-semibold text-foreground break-all sm:break-normal">{group.customerEmail}</span></p>
-                    <p>Placed: <span className="font-semibold text-foreground">{new Date(group.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</span></p>
-                    <p>Combined Total: <span className="font-bold text-primary">₹{group.totalAmount.toFixed(0)}</span></p>
+                  <div className="grid grid-cols-1 gap-1 text-xs text-muted-foreground sm:grid-cols-2 sm:gap-x-6 sm:gap-y-2 md:flex md:gap-6">
+                    <p className="truncate"><span className="font-semibold text-foreground">{group.customerName}</span></p>
+                    <p className="truncate">{group.customerEmail}</p>
+                    <p>{new Date(group.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric', year: 'numeric' })}</p>
+                    <p>Total <span className="font-bold text-primary">₹{group.totalAmount.toFixed(0)}</span></p>
                   </div>
                 </div>
 
@@ -410,30 +362,35 @@ export const AdminOrders = () => {
                   {group.items.map((item) => {
                     const imageUrl = resolveItemImageUrl(item);
                     return (
-                    <div key={item.orderId} className="flex min-w-0 flex-col gap-4 rounded-xl border border-border/50 bg-card p-3 shadow-sm transition-all duration-300 hover:border-border hover:bg-accent/10 sm:flex-row sm:items-center sm:justify-between sm:p-4">
+                    <div key={item.orderId}
+                      role="link"
+                      tabIndex={0}
+                      onClick={() => navigate(`/admin/orders/${encodeURIComponent(item.orderId)}`)}
+                      onKeyDown={(event) => {
+                        if (event.key === "Enter" || event.key === " ") {
+                          event.preventDefault();
+                          navigate(`/admin/orders/${encodeURIComponent(item.orderId)}`);
+                        }
+                      }}
+                      className="flex min-w-0 cursor-pointer flex-col gap-3 rounded-xl border border-border/50 bg-card p-3 shadow-sm transition-all duration-300 hover:border-border hover:bg-accent/10 sm:flex-row sm:items-center sm:justify-between sm:p-4"
+                    >
                       <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
                         <ListingThumb src={imageUrl} size="lg" className="border border-border shadow-sm" />
                         <div className="min-w-0 flex-1">
-                          <p className="text-sm font-semibold text-foreground truncate">{item.listingTitle}</p>
-                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground mt-1">
-                            <span className="flex items-center gap-1"><Building className="h-3.5 w-3.5 shrink-0 opacity-60" /> {item.vendorName}</span>
-                            <span>Qty: <strong className="text-foreground font-medium">{item.quantity}</strong></span>
-                            <span>{item.orderType === "rent" ? `${item.rentalDays} days rental` : "Buyout"}</span>
-                          </div>
+                          <p className="truncate text-sm font-semibold text-foreground">{item.listingTitle}</p>
+                          <p className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                            <span className="inline-flex min-w-0 items-center gap-1">
+                              <Building className="h-3.5 w-3.5 shrink-0 opacity-60" />
+                              <span className="truncate">{item.vendorName}</span>
+                            </span>
+                            <span>Qty {item.quantity}</span>
+                            <span>{item.orderType === "rent" ? `${item.rentalDays} days` : "Buy"}</span>
+                          </p>
                         </div>
                       </div>
 
-                      <div className="flex w-full min-w-0 flex-nowrap items-center justify-between gap-1 border-t border-border/20 pt-3 sm:w-auto sm:justify-end sm:gap-3 sm:border-none sm:pt-0">
-                        <div className="flex min-w-0 flex-nowrap items-center gap-1">
-                          <Badge className={cn("h-5 shrink-0 whitespace-nowrap px-1.5 py-0 text-[10px] font-semibold leading-none sm:px-2", orderTypeBadgeClass(item.orderType))} variant="outline">
-                            {item.orderType.toUpperCase()}
-                          </Badge>
-                          {item.isExtended && (
-                            <Badge className="h-5 shrink-0 whitespace-nowrap px-1.5 py-0 text-[10px] font-bold leading-none sm:px-2 bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900/40 dark:text-amber-300 dark:border-amber-800/50" variant="outline">
-                              <span className="sm:hidden">EXT</span>
-                              <span className="hidden sm:inline">EXTENDED</span>
-                            </Badge>
-                          )}
+                      <div className="flex w-full min-w-0 items-center justify-between gap-2 border-t border-border/40 pt-2.5 sm:w-auto sm:justify-end sm:gap-3 sm:border-none sm:pt-0">
+                        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
                           <Badge
                             title={formatOrderStatusTitle(item.status)}
                             className={cn("shrink-0", orderStatusBadgeSizeClass, orderStatusBadgeClass(item.status))}
@@ -441,19 +398,32 @@ export const AdminOrders = () => {
                           >
                             {formatOrderStatusLabel(item.status)}
                           </Badge>
+                          <Badge className={cn("h-5 shrink-0 whitespace-nowrap px-2 py-0 text-[10px] font-semibold leading-none", orderTypeBadgeClass(item.orderType))} variant="outline">
+                            {item.orderType.toUpperCase()}
+                          </Badge>
+                          {item.isExtended ? (
+                            <Badge className="h-5 shrink-0 whitespace-nowrap border-amber-200 bg-amber-100 px-2 py-0 text-[10px] font-bold leading-none text-amber-800 dark:border-amber-800/50 dark:bg-amber-900/40 dark:text-amber-300" variant="outline">
+                              EXTENDED
+                            </Badge>
+                          ) : null}
+                          {adminRefundChip(item.returnSettlement) ? (
+                            <span className="shrink-0 whitespace-nowrap rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold leading-none text-sky-900 dark:bg-sky-950/50 dark:text-sky-200">
+                              {adminRefundChip(item.returnSettlement)}
+                            </span>
+                          ) : null}
+                          {adminCancellationChip(item.cancellationRefund) ? (
+                            <span className="shrink-0 whitespace-nowrap rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold leading-none text-sky-900 dark:bg-sky-950/50 dark:text-sky-200">
+                              {adminCancellationChip(item.cancellationRefund)}
+                            </span>
+                          ) : null}
                         </div>
-                        <div className="flex shrink-0 flex-nowrap items-center gap-1 sm:gap-3">
+                        <div className="flex shrink-0 items-center gap-0.5">
                           <span className="text-xs font-semibold tabular-nums text-foreground sm:text-sm">₹{item.totalAmount.toFixed(0)}</span>
-                          <Button
-                          size="sm"
-                          variant="ghost"
-                          className="h-7 shrink-0 px-1.5 text-xs font-semibold text-primary transition-colors hover:bg-accent sm:h-8 sm:px-2"
-                          onClick={() => navigate(`/admin/orders/${encodeURIComponent(item.orderId)}`)}
-                        >
-                          <span className="sm:hidden">Details</span>
-                          <span className="hidden sm:inline">View details</span>
-                          <ChevronRight className="h-3.5 w-3.5" />
-                        </Button>
+                          <span className="inline-flex h-8 shrink-0 items-center px-1 text-xs font-semibold text-primary">
+                            <span className="sm:hidden">Details</span>
+                            <span className="hidden sm:inline">View details</span>
+                            <ChevronRight className="h-3.5 w-3.5" />
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -466,12 +436,12 @@ export const AdminOrders = () => {
             <TablePagination
               page={safePage}
               pageSize={PAGE_SIZE}
-              total={filtered.length}
+              total={totalCount}
               onPageChange={setPage}
               label="order items"
             />
           </div>
-        )}
+        )}</PageContentGate>
       </Card>
     </div>
   );

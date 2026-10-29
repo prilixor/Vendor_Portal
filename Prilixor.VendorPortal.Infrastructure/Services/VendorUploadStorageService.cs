@@ -19,6 +19,9 @@ internal sealed class VendorUploadStorageService(
 {
     private const int ThumbnailMaxWidth = 400;
     private const int ThumbnailJpegQuality = 72;
+    private const int HeroMaxWidth = 1920;
+    private const int HeroJpegQuality = 78;
+    private const int HeroSkipIfUnderBytes = 400 * 1024;
 
     public async Task<VendorFilePersistResult> PersistVendorUploadAsync(
         string vendorId,
@@ -51,9 +54,30 @@ internal sealed class VendorUploadStorageService(
         await stream.CopyToAsync(sourceMs, cancellationToken);
         sourceMs.Position = 0;
 
+        if (folderType == VendorFileFolderType.WebsiteHero
+            && LooksLikeImage(contentType, extension)
+            && !IsSvg(contentType, extension)
+            && !IsAnimatedFriendly(contentType, extension))
+        {
+            var compressed = TryCompressHeroJpeg(sourceMs, sourceMs.Length);
+            sourceMs.Position = 0;
+            if (compressed is { Length: > 0 })
+            {
+                sourceMs.SetLength(0);
+                await sourceMs.WriteAsync(compressed, cancellationToken);
+                sourceMs.Position = 0;
+                extension = ".jpg";
+                contentType = "image/jpeg";
+                storedFileName = $"{Path.GetFileNameWithoutExtension(storedFileName)}.jpg";
+                localRelativePath = VendorStoragePaths.LocalVendorUploadPath(vendorId, storedFileName, folderType);
+            }
+        }
+
         byte[]? thumbnailBytes = null;
         string? thumbnailFileName = null;
-        if ((folderType == VendorFileFolderType.ProductImages || folderType == VendorFileFolderType.RentalIcons)
+        if ((folderType == VendorFileFolderType.ProductImages
+                || folderType == VendorFileFolderType.RentalIcons
+                || folderType == VendorFileFolderType.OrderImages)
             && LooksLikeImage(contentType, extension))
         {
             thumbnailBytes = TryCreateThumbnailJpeg(sourceMs, sourceMs.Length);
@@ -108,15 +132,7 @@ internal sealed class VendorUploadStorageService(
             }
         }
 
-        var folderName = folderType switch
-        {
-            VendorFileFolderType.ProductImages => "product-images",
-            VendorFileFolderType.ProductDocuments => "product-documents",
-            VendorFileFolderType.Support => "support",
-            VendorFileFolderType.RentalIcons => "rental-icons",
-            VendorFileFolderType.OrderImages => "order-images",
-            _ => "documents"
-        };
+        var folderName = VendorStoragePaths.GetFolderName(folderType);
         var uploadsRoot = Path.Combine(
             environment.ContentRootPath,
             "wwwroot",
@@ -423,6 +439,24 @@ internal sealed class VendorUploadStorageService(
         return ext is ".jpg" or ".jpeg" or ".png" or ".webp" or ".gif" or ".bmp";
     }
 
+    private static bool IsSvg(string? contentType, string? extension)
+    {
+        var ct = (contentType ?? string.Empty).Trim().ToLowerInvariant();
+        if (ct is "image/svg+xml")
+            return true;
+        var ext = (extension ?? string.Empty).Trim().ToLowerInvariant();
+        return ext == ".svg";
+    }
+
+    private static bool IsAnimatedFriendly(string? contentType, string? extension)
+    {
+        var ct = (contentType ?? string.Empty).Trim().ToLowerInvariant();
+        if (ct is "image/gif" or "image/webp")
+            return true;
+        var ext = (extension ?? string.Empty).Trim().ToLowerInvariant();
+        return ext is ".gif" or ".webp";
+    }
+
     private static byte[]? TryCreateThumbnailJpeg(Stream source, long originalByteLength)
     {
         try
@@ -453,6 +487,41 @@ internal sealed class VendorUploadStorageService(
         catch
         {
             // Non-image or corrupt payload — skip thumbnail; original upload still succeeds.
+            return null;
+        }
+    }
+
+    private static byte[]? TryCompressHeroJpeg(Stream source, long originalByteLength)
+    {
+        try
+        {
+            using var image = Image.Load(source);
+            var width = image.Width;
+            var height = image.Height;
+            if (width <= 0 || height <= 0)
+                return null;
+
+            var needsResize = width > HeroMaxWidth;
+            if (!needsResize && originalByteLength > 0 && originalByteLength <= HeroSkipIfUnderBytes)
+                return null;
+
+            if (needsResize)
+            {
+                var newHeight = (int)Math.Round(height * (HeroMaxWidth / (double)width));
+                image.Mutate(x => x.Resize(HeroMaxWidth, Math.Max(1, newHeight)));
+            }
+
+            using var outMs = new MemoryStream();
+            image.Save(outMs, new JpegEncoder { Quality = HeroJpegQuality });
+            var bytes = outMs.ToArray();
+
+            if (originalByteLength > 0 && bytes.Length >= originalByteLength)
+                return null;
+
+            return bytes;
+        }
+        catch
+        {
             return null;
         }
     }

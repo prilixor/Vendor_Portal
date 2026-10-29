@@ -1,8 +1,10 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_provider.dart';
 import '../../core/providers/profile_provider.dart';
 import '../../core/theme.dart';
+import '../../shared/widgets/legal_policy_links.dart';
 import '../../shared/widgets/required_field_ux.dart';
 
 class UpdatePasswordScreen extends StatefulWidget {
@@ -70,10 +72,13 @@ class _UpdatePasswordScreenState extends State<UpdatePasswordScreen> {
     if (!mounted) return;
 
     if (success) {
+      TextInput.finishAutofillContext();
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Password updated successfully!')),
       );
-      Navigator.pop(context);
+      _currentPasswordController.clear();
+      _newPasswordController.clear();
+      _confirmPasswordController.clear();
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(authProvider.errorMessage ?? 'Failed to update password')),
@@ -89,108 +94,169 @@ class _UpdatePasswordScreenState extends State<UpdatePasswordScreen> {
     return Scaffold(
       backgroundColor: colors.background,
       appBar: AppBar(
-        title: Text('Update Password', style: TextStyle(color: colors.textPrimary)),
+        title: Text('Privacy & Security', style: TextStyle(color: colors.textPrimary)),
         backgroundColor: colors.background,
         elevation: 0,
         iconTheme: IconThemeData(color: colors.textPrimary),
       ),
       body: SafeArea(
-        child: Padding(
-          padding: const EdgeInsets.all(24.0),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              const RequiredFieldsNote(),
-              TextField(
-                controller: _currentPasswordController,
-                style: TextStyle(color: colors.textPrimary),
-                obscureText: _obscureCurrent,
-                onChanged: (_) {
-                  if (_currentError != null) setState(() => _currentError = null);
-                },
-                decoration: requiredInputDecoration(
-                  context,
-                  label: 'Current Password',
-                  required: true,
-                  errorText: _currentError,
-                  prefixIcon: Icons.lock_outline,
-                ).copyWith(
-                  suffixIcon: IconButton(
-                    tooltip: _obscureCurrent ? 'Show password' : 'Hide password',
-                    onPressed: () => setState(() => _obscureCurrent = !_obscureCurrent),
-                    icon: Icon(
-                      _obscureCurrent ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                      color: colors.textMuted,
+        child: ListView(
+          padding: const EdgeInsets.fromLTRB(24, 8, 24, 32),
+          children: [
+            Text(
+              'Security',
+              style: TextStyle(
+                color: colors.textSecondary,
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+                letterSpacing: 0.4,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Change the password for your customer account.',
+              style: TextStyle(color: colors.textMuted, fontSize: 13, height: 1.35),
+            ),
+            const SizedBox(height: 16),
+            const RequiredFieldsNote(),
+            AutofillGroup(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  TextField(
+                    controller: _currentPasswordController,
+                    style: TextStyle(color: colors.textPrimary),
+                    obscureText: _obscureCurrent,
+                    textInputAction: TextInputAction.next,
+                    autofillHints: const [AutofillHints.password],
+                    onChanged: (_) {
+                      if (_currentError != null) {
+                        setState(() => _currentError = null);
+                      }
+                    },
+                    decoration: requiredInputDecoration(
+                      context,
+                      label: 'Current Password',
+                      required: true,
+                      errorText: _currentError,
+                      prefixIcon: Icons.lock_outline,
+                    ).copyWith(
+                      suffixIcon: IconButton(
+                        tooltip: _obscureCurrent ? 'Show password' : 'Hide password',
+                        onPressed: () =>
+                            setState(() => _obscureCurrent = !_obscureCurrent),
+                        icon: Icon(
+                          _obscureCurrent
+                              ? Icons.visibility_off_outlined
+                              : Icons.visibility_outlined,
+                          color: colors.textMuted,
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _newPasswordController,
-                style: TextStyle(color: colors.textPrimary),
-                obscureText: _obscureNew,
-                onChanged: (_) {
-                  if (_newError != null) setState(() => _newError = null);
-                },
-                decoration: requiredInputDecoration(
-                  context,
-                  label: 'New Password',
-                  required: true,
-                  errorText: _newError,
-                  prefixIcon: Icons.lock,
-                ).copyWith(
-                  suffixIcon: IconButton(
-                    tooltip: _obscureNew ? 'Show password' : 'Hide password',
-                    onPressed: () => setState(() => _obscureNew = !_obscureNew),
-                    icon: Icon(
-                      _obscureNew ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                      color: colors.textMuted,
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _newPasswordController,
+                    style: TextStyle(color: colors.textPrimary),
+                    obscureText: _obscureNew,
+                    textInputAction: TextInputAction.next,
+                    autofillHints: const [AutofillHints.newPassword],
+                    onChanged: (_) {
+                      if (_newError != null) setState(() => _newError = null);
+                    },
+                    decoration: requiredInputDecoration(
+                      context,
+                      label: 'New Password',
+                      required: true,
+                      errorText: _newError,
+                      prefixIcon: Icons.lock,
+                    ).copyWith(
+                      suffixIcon: IconButton(
+                        tooltip: _obscureNew ? 'Show password' : 'Hide password',
+                        onPressed: () => setState(() => _obscureNew = !_obscureNew),
+                        icon: Icon(
+                          _obscureNew
+                              ? Icons.visibility_off_outlined
+                              : Icons.visibility_outlined,
+                          color: colors.textMuted,
+                        ),
+                      ),
                     ),
                   ),
-                ),
-              ),
-              const SizedBox(height: 16),
-              TextField(
-                controller: _confirmPasswordController,
-                style: TextStyle(color: colors.textPrimary),
-                obscureText: _obscureConfirm,
-                onChanged: (_) {
-                  if (_confirmError != null) setState(() => _confirmError = null);
-                },
-                decoration: requiredInputDecoration(
-                  context,
-                  label: 'Confirm New Password',
-                  required: true,
-                  errorText: _confirmError,
-                  prefixIcon: Icons.lock_clock,
-                ).copyWith(
-                  suffixIcon: IconButton(
-                    tooltip: _obscureConfirm ? 'Show password' : 'Hide password',
-                    onPressed: () => setState(() => _obscureConfirm = !_obscureConfirm),
-                    icon: Icon(
-                      _obscureConfirm ? Icons.visibility_off_outlined : Icons.visibility_outlined,
-                      color: colors.textMuted,
+                  const SizedBox(height: 16),
+                  TextField(
+                    controller: _confirmPasswordController,
+                    style: TextStyle(color: colors.textPrimary),
+                    obscureText: _obscureConfirm,
+                    textInputAction: TextInputAction.done,
+                    autofillHints: const [AutofillHints.newPassword],
+                    onChanged: (_) {
+                      if (_confirmError != null) {
+                        setState(() => _confirmError = null);
+                      }
+                    },
+                    onSubmitted: (_) {
+                      if (!isLoading) _submit();
+                    },
+                    decoration: requiredInputDecoration(
+                      context,
+                      label: 'Confirm New Password',
+                      required: true,
+                      errorText: _confirmError,
+                      prefixIcon: Icons.lock_outline,
+                    ).copyWith(
+                      suffixIcon: IconButton(
+                        tooltip:
+                            _obscureConfirm ? 'Show password' : 'Hide password',
+                        onPressed: () =>
+                            setState(() => _obscureConfirm = !_obscureConfirm),
+                        icon: Icon(
+                          _obscureConfirm
+                              ? Icons.visibility_off_outlined
+                              : Icons.visibility_outlined,
+                          color: colors.textMuted,
+                        ),
+                      ),
                     ),
                   ),
-                ),
+                ],
               ),
-              const SizedBox(height: 32),
-              SizedBox(
-                height: 56,
-                child: ElevatedButton(
-                  onPressed: isLoading ? null : _submit,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF6C63FF),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
-                  ),
-                  child: isLoading
-                      ? const CircularProgressIndicator(color: Colors.white)
-                      : const Text('Update Password', style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white)),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              height: 56,
+              child: ElevatedButton(
+                onPressed: isLoading ? null : _submit,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6C63FF),
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
                 ),
+                child: isLoading
+                    ? const CircularProgressIndicator(color: Colors.white)
+                    : const Text(
+                        'Update Password',
+                        style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
+                      ),
               ),
-            ],
-          ),
+            ),
+            const SizedBox(height: 32),
+            Text(
+              'Legal',
+              style: TextStyle(
+                color: colors.textSecondary,
+                fontWeight: FontWeight.w700,
+                fontSize: 13,
+                letterSpacing: 0.4,
+              ),
+            ),
+            const SizedBox(height: 6),
+            Text(
+              'Agreements for your customer account.',
+              style: TextStyle(color: colors.textMuted, fontSize: 13, height: 1.35),
+            ),
+            const SizedBox(height: 12),
+            const PrivacySecurityPolicyLinks(),
+          ],
         ),
       ),
     );

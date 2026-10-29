@@ -1,15 +1,38 @@
-import type { RentalValueTier } from "@/app/services/adminApi";
-
-export const RENTAL_VALUE_TIERS: { value: RentalValueTier; label: string }[] = [
-  { value: "good", label: "Good" },
-  { value: "better", label: "Better" },
-  { value: "best_value", label: "Best Value" },
-  { value: "maximum_savings", label: "Maximum Savings" },
-];
+export function slugFromName(name?: string | null): string {
+  const slug = (name ?? "")
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "")
+    .slice(0, 32)
+    .replace(/_+$/g, "");
+  return slug || "icon";
+}
 
 export function rentalValueTierLabel(tier?: string | null): string {
   const key = (tier ?? "").toLowerCase().replace(/-/g, "_");
-  return RENTAL_VALUE_TIERS.find((t) => t.value === key)?.label ?? "Good";
+  const known: Record<string, string> = {
+    good: "Good",
+    better: "Better",
+    best_value: "Best Value",
+    maximum_savings: "Maximum Savings",
+  };
+  if (known[key]) return known[key];
+  if (!key) return "";
+  return key
+    .split("_")
+    .filter(Boolean)
+    .map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+export function rentalIconLabel(plan?: {
+  iconName?: string | null;
+  valueTier?: string | null;
+} | null): string {
+  const name = plan?.iconName?.trim();
+  if (name) return name;
+  return rentalValueTierLabel(plan?.valueTier);
 }
 
 export function formatBillingCycles(cycles?: number | null): string {
@@ -91,7 +114,7 @@ export function resolveRentalIconUrl(fileUrl?: string | null): string {
   return `${origin}${path}`;
 }
 
-/** Same order as live: full icon first, thumbnail fallback. */
+/** Same look as live: original PNG/JPG first so trophy/crown transparency is kept. */
 export function resolveRentalIconUrlFromPlan(plan?: {
   iconUrl?: string | null;
   iconThumbnailUrl?: string | null;
@@ -100,4 +123,18 @@ export function resolveRentalIconUrlFromPlan(plan?: {
   const primary = resolveRentalIconUrl(plan.iconUrl);
   if (primary) return primary;
   return resolveRentalIconUrl(plan.iconThumbnailUrl);
+}
+
+/** Warm the browser cache so chips start downloading as soon as plans arrive. */
+export function prefetchRentalIconUrls(urls: Array<string | null | undefined>): void {
+  if (typeof document === "undefined") return;
+  const seen = new Set<string>();
+  for (const raw of urls) {
+    const url = (raw ?? "").trim();
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    const img = new Image();
+    img.decoding = "async";
+    img.src = url;
+  }
 }

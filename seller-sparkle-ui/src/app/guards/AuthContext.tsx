@@ -1,6 +1,6 @@
 import { createContext, useContext, useEffect, useState, ReactNode } from "react";
 import { Role, User } from "@/app/models";
-import { authApi } from "@/app/services/authApi";
+import { authApi, RegisterCustomerResponse } from "@/app/services/authApi";
 import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
 import {
   ADMIN_USER_KEY,
@@ -9,17 +9,28 @@ import {
   clearImpersonationSession,
   clearPortalSession,
   ensureAdminTokenMigrated,
+  getActiveAccessToken,
+  getActiveRefreshToken,
+  isAccessTokenStale,
   isAdminPath,
   readImpersonationUser,
   setAdminAccessToken,
 } from "@/app/helpers/authSession";
+import { refreshStoredSession } from "@/app/services/apiClient";
 
 interface AuthContextValue {
   user: User | null;
   isHydrating: boolean;
   login: (email: string, password: string, role: Role) => Promise<void>;
-  register: (email: string, password: string, phone: string) => Promise<{ id: string; email: string }>;
-  registerCustomer: (email: string, password: string, fullName: string, phone?: string) => Promise<{ id: string; email: string; fullName: string }>;
+  loginWithCustomerPhoneOtp: (phone: string, code: string) => Promise<void>;
+  register: (email: string, password: string, phone: string, acceptedLegal?: boolean) => Promise<{ id: string; email: string }>;
+  registerCustomer: (
+    email: string | null | undefined,
+    password: string,
+    fullName: string,
+    phone?: string | null,
+    acceptedLegal?: boolean,
+  ) => Promise<RegisterCustomerResponse>;
   logout: () => void;
   switchRole: (role: Role) => void;
   hasPermission: (permission: string) => boolean;
@@ -73,9 +84,36 @@ function readInitialUser(): User | null {
   }
 }
 
+function needsSessionRenewal(): boolean {
+  if (typeof window === "undefined") return false;
+  if (readImpersonationUser()) return false;
+  const access = getActiveAccessToken();
+  const refresh = getActiveRefreshToken();
+  return Boolean(access && refresh && isAccessTokenStale(access));
+}
+
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(() => readInitialUser());
-  const [isHydrating] = useState(false);
+  const [isHydrating, setIsHydrating] = useState(needsSessionRenewal);
+
+  useEffect(() => {
+    if (!isHydrating) return;
+    let cancelled = false;
+    void refreshStoredSession().then((renewed) => {
+      if (cancelled) return;
+      if (!renewed) {
+        if (isAdminPath()) clearAdminSession();
+        else clearPortalSession();
+        setUser(null);
+      } else {
+        setUser(readInitialUser());
+      }
+      setIsHydrating(false);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isHydrating]);
 
   const logout = () => {
     // Impersonation is tab-scoped — never wipe the admin session in other tabs.
@@ -158,8 +196,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     persist(result.user);
   };
 
-  const register = async (email: string, password: string, phone: string) => {
-    const result = await authApi.registerVendor(email, password, phone);
+  const loginWithCustomerPhoneOtp = async (phone: string, code: string) => {
+    const result = await authApi.loginWithCustomerPhoneOtp(phone, code);
+    clearImpersonationSession();
+    persist(result.user);
+  };
+
+  const register = async (email: string, password: string, phone: string, acceptedLegal = true) => {
+    const result = await authApi.registerVendor(email, password, phone, acceptedLegal);
     try {
       await vendorOnboardingApi.upsertVendorNotificationPreference(result.id, {
         vendorId: result.id,
@@ -173,8 +217,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     return result;
   };
 
-  const registerCustomer = async (email: string, password: string, fullName: string, phone?: string) => {
-    return authApi.registerCustomer(email, password, fullName, phone);
+  const registerCustomer = async (
+    email: string | null | undefined,
+    password: string,
+    fullName: string,
+    phone?: string | null,
+    acceptedLegal = true,
+  ) => {
+    return authApi.registerCustomer(email, password, fullName, phone, acceptedLegal);
   };
 
   const switchRole = (role: Role) => {
@@ -196,7 +246,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   };
 
   return (
-    <AuthContext.Provider value={{ user, isHydrating, login, register, registerCustomer, logout, switchRole, hasPermission, setSessionUser }}>
+    <AuthContext.Provider value={{ user, isHydrating, login, loginWithCustomerPhoneOtp, register, registerCustomer, logout, switchRole, hasPermission, setSessionUser }}>
       {children}
     </AuthContext.Provider>
   );

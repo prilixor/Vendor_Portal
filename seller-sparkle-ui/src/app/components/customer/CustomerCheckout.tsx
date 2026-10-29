@@ -5,6 +5,7 @@ import { customerApi } from "@/app/services/customerApi";
 import type { PlaceCustomerOrdersResultApi } from "@/app/services/customerApi";
 import { estimateCartLineRent, useCart } from "@/app/contexts/CartContext";
 import { useAuth } from "@/app/guards/AuthContext";
+import { openRazorpayCheckout } from "@/app/helpers/razorpayCheckout";
 import { Button } from "@/app/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
 import { Label } from "@/app/components/ui/label";
@@ -16,24 +17,26 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/app/components/ui/select";
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogTrigger, DialogClose } from "@/app/components/ui/dialog";
 import { toast } from "sonner";
-import { Loader2, Plus, FileText, CheckCircle2, MapPin } from "lucide-react";
+import { Loader2, Plus, FileText, MapPin } from "lucide-react";
 import { cn, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
-import { CustomerMedicalReference, type DoctorRefSelection } from "./CustomerMedicalReference";
-import { Checkbox } from "@/app/components/ui/checkbox";
 import { RentExceedsBuyDialog } from "@/app/components/shared/RentExceedsBuyDialog";
 import { BackLink } from "@/app/components/shared/BackLink";
 import { StruckPrice } from "@/app/components/shared/RentalPeriodPlanDropdown";
+import { buildGstSummary } from "@/app/helpers/gstLabel";
 import { dayPlanTitle } from "@/app/helpers/rentalDurationIcons";
 import { formatRentalDuration } from "@/app/helpers/rentalPeriod";
 import { lastShopHref } from "@/app/helpers/customerShopBrowse";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
+import { LegalAgreeCheckbox } from "@/app/components/legal/LegalAgreeCheckbox";
 
 type DeliveryChoice = "standard" | "express" | "vendor_pickup";
 
 /** Temporary: hide Vendor pickup from checkout UI (keep code for later). */
 const SHOW_VENDOR_PICKUP_OPTION = false;
+
+/** Hide Standard / Express. Checkout always places a standard delivery. */
+const SHOW_DELIVERY_SPEED_OPTIONS = false;
 
 function formatAddressOption(a: { label?: string | null; line1: string; city: string }): string {
   const tail = `${a.line1}, ${a.city}`;
@@ -44,6 +47,10 @@ function formatCheckoutInr(value: number): string {
   return `₹${Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 }
 
+function hasPrescriptionFiles(files?: File[]) {
+  return (files?.length ?? 0) > 0;
+}
+
 const CustomerCheckout = () => {
   const navigate = useNavigate();
   const { user, isHydrating } = useAuth();
@@ -51,10 +58,12 @@ const CustomerCheckout = () => {
   const { lines, totalEstimatedRent, clear, updateLine } = useCart();
   const [addressId, setAddressId] = useState<string>("");
   const [deliveryChoice, setDeliveryChoice] = useState<DeliveryChoice>("standard");
+  const selectedDelivery: DeliveryChoice = SHOW_DELIVERY_SPEED_OPTIONS ? deliveryChoice : "standard";
   const [hasInitializedAddress, setHasInitializedAddress] = useState(false);
-  const [applyToAll, setApplyToAll] = useState(false);
   const [failedLines, setFailedLines] = useState<PlaceCustomerOrdersResultApi["failedLines"]>([]);
-  const [medicalRefs, setMedicalRefs] = useState<Record<string, DoctorRefSelection | null>>({});
+  const [prescriptionFiles, setPrescriptionFiles] = useState<Record<string, File[]>>({});
+  const [acceptedLegal, setAcceptedLegal] = useState(false);
+  const [acceptedPrescriptionLegal, setAcceptedPrescriptionLegal] = useState(false);
   const [rentToBuyOpen, setRentToBuyOpen] = useState(false);
   const [rentToBuySuggestion, setRentToBuySuggestion] = useState<{
     listingId: string;
@@ -70,27 +79,26 @@ const CustomerCheckout = () => {
     }
   }, [isHydrating, user, navigate]);
 
-  const setMedicalRef = (listingId: string, value: DoctorRefSelection | null) => {
-    setMedicalRefs((prev) => ({ ...prev, [listingId]: value }));
-  };
-
-  const applyMedicalRefToAll = (sourceListingId: string) => {
-    const source = medicalRefs[sourceListingId];
-    if (!source) return;
-
-    setMedicalRefs((prev) => {
-      const next = { ...prev };
-      lines
-        .filter((l) => l.prescriptionRequired && l.listingId !== sourceListingId)
-        .forEach((l) => {
-          next[l.listingId] = { ...source };
-        });
-      return next;
-    });
-    toast.success("Applied doctor reference to all prescription items");
-  };
-
   const needsPrescription = lines.some((l) => l.prescriptionRequired);
+  const sharingHealthData = lines.some(
+    (l) => l.prescriptionRequired && hasPrescriptionFiles(prescriptionFiles[l.listingId]),
+  );
+
+  const addPrescriptionFiles = (listingId: string, incoming: FileList | File[]) => {
+    const next = Array.from(incoming).filter((f) => f.size <= 5 * 1024 * 1024);
+    if (next.length === 0) return;
+    setPrescriptionFiles((prev) => {
+      const merged = [...(prev[listingId] || []), ...next].slice(0, 3);
+      return { ...prev, [listingId]: merged };
+    });
+  };
+
+  const removePrescriptionFile = (listingId: string, index: number) => {
+    setPrescriptionFiles((prev) => ({
+      ...prev,
+      [listingId]: (prev[listingId] || []).filter((_, i) => i !== index),
+    }));
+  };
 
   const { data: addresses } = useQuery({
     queryKey: ["customer-addresses"],
@@ -115,7 +123,7 @@ const CustomerCheckout = () => {
 
   const quotePayload = useMemo(
     () => ({
-      deliveryOption: deliveryChoice,
+      deliveryOption: selectedDelivery,
       customerAddressId: addressId || undefined,
       lines: lines.map((l) => ({
         listingId: l.listingId,
@@ -129,16 +137,16 @@ const CustomerCheckout = () => {
               rentalPricingPlanId: l.rentalPricingPlanId,
             }
           : {}),
-        ...(l.prescriptionRequired && medicalRefs[l.listingId]?.doctorId
-          ? { doctorId: medicalRefs[l.listingId]!.doctorId }
+        ...(l.prescriptionRequired && (prescriptionFiles[l.listingId]?.length ?? 0) > 0
+          ? { hasPrescriptionFile: true }
           : {}),
       })),
     }),
-    [addressId, deliveryChoice, lines, medicalRefs],
+    [addressId, selectedDelivery, lines, prescriptionFiles],
   );
 
   const { data: quote, isFetching: quoteLoading, error: quoteError } = useQuery({
-    queryKey: ["customer-order-quote", addressId, deliveryChoice, lines],
+    queryKey: ["customer-order-quote", addressId, selectedDelivery, lines],
     queryFn: () => customerApi.quoteOrders(quotePayload),
     enabled: user?.role === "customer" && lines.length > 0,
     retry: false,
@@ -148,13 +156,17 @@ const CustomerCheckout = () => {
   const distanceFee = quote?.distanceFeeAmount ?? 0;
   const serviceFee = quote?.serviceFeeAmount ?? 0;
   const gstAmount = quote?.gstAmount ?? 0;
+  const gstSummary = buildGstSummary(gstAmount, quote?.gstLines ?? []);
   const grandTotal = quote?.totalAmount ?? (totalEstimatedRent + totalDeposit + serviceFee + gstAmount);
 
   const placeMutation = useMutation({
-    mutationFn: () =>
-      customerApi.placeOrders({
-        deliveryOption: deliveryChoice,
+    mutationFn: async () => {
+      const checkout = await customerApi.createCheckout({
+        deliveryOption: selectedDelivery,
         customerAddressId: addressId || undefined,
+        acceptedLegal,
+        acceptedPrescriptionLegal: sharingHealthData ? acceptedPrescriptionLegal : false,
+        sourceSurface: "customer_web",
         lines: lines.map((l) => ({
           listingId: l.listingId,
           quantity: l.quantity,
@@ -167,32 +179,90 @@ const CustomerCheckout = () => {
                 rentalPricingPlanId: l.rentalPricingPlanId,
               }
             : {}),
-          ...(l.prescriptionRequired && medicalRefs[l.listingId]?.doctorId
-            ? { doctorId: medicalRefs[l.listingId]!.doctorId }
+          ...(l.prescriptionRequired && (prescriptionFiles[l.listingId]?.length ?? 0) > 0
+            ? { hasPrescriptionFile: true }
             : {}),
         })),
-      }),
-    onSuccess: (result) => {
-      const placedCount = result.placedOrders.length;
-      const failedCount = result.failedLines.length;
-      setFailedLines(failedCount > 0 ? result.failedLines : []);
-      if (placedCount > 0 && failedCount > 0) {
-        const failedDetails = result.failedLines.map((l) => l.message).join(", ");
-        toast.success(`Placed ${placedCount} order(s). Failed lines: ${failedDetails}`);
-      } else if (placedCount > 0) {
-        toast.success(`Placed ${placedCount} order(s).`);
-      } else {
-        const failedDetails = result.failedLines.map((l) => l.message).join(", ");
-        toast.error(`No orders placed. Reason: ${failedDetails}`);
+      });
+
+      if (!checkout.orders?.length) {
+        return { checkout, paid: false as const, uploadErrors: [] as string[] };
       }
 
-      if (placedCount > 0) {
-        clear();
-        queryClient.invalidateQueries({ queryKey: ["customer-orders"] });
-        navigate("/customer/orders");
+      const uploadErrors: string[] = [];
+      for (const order of checkout.orders) {
+        const files = prescriptionFiles[order.listingId] || [];
+        for (const file of files) {
+          try {
+            await customerApi.uploadOrderPrescription(order.id, file, {
+              acceptedPrescriptionLegal,
+              uploadSource: "checkout",
+            });
+          } catch {
+            uploadErrors.push(order.orderNumber);
+          }
+        }
       }
+
+      if (!checkout.razorpayOrderId) {
+        throw new Error("Payment could not be started. Please try again.");
+      }
+
+      const payment = await openRazorpayCheckout({
+        key: checkout.razorpayKeyId,
+        amountPaise: Math.round(Number(checkout.amount) * 100),
+        currency: checkout.currency || "INR",
+        orderId: checkout.razorpayOrderId,
+        description: `Pay for ${checkout.orders.length} order(s)`,
+        prefill: {
+          name: user?.name || undefined,
+          email: user?.email || undefined,
+        },
+      });
+
+      const verified = await customerApi.verifyCheckout({
+        checkoutSessionId: checkout.checkoutSessionId,
+        razorpayOrderId: payment.razorpay_order_id,
+        razorpayPaymentId: payment.razorpay_payment_id,
+        razorpaySignature: payment.razorpay_signature,
+      });
+
+      return { checkout: verified, paid: true as const, uploadErrors };
     },
-    onError: (err: Error) => toast.error(getUserFriendlyMessage(err, "Unable to place your order. Please try again.")),
+    onSuccess: (result) => {
+      const placedCount = result.checkout.orders.length;
+      const failedCount = result.checkout.failedLines.length;
+      setFailedLines(failedCount > 0 ? result.checkout.failedLines : []);
+      if (placedCount === 0) {
+        const failedDetails = result.checkout.failedLines.map((l) => l.message).join(", ");
+        toast.error(`No orders placed. Reason: ${failedDetails || "Unknown error"}`);
+        return;
+      }
+
+      if (!result.paid) {
+        toast.error("Unable to start payment for these items.");
+        return;
+      }
+
+      if (result.uploadErrors.length > 0) {
+        toast.error(
+          `Order placed, but the prescription could not be uploaded for ${[...new Set(result.uploadErrors)].join(", ")}. You can add it from the order page.`,
+        );
+      }
+
+      if (failedCount > 0) {
+        toast.success(`Paid ${placedCount} order(s). Some lines failed: ${result.checkout.failedLines.map((l) => l.message).join(", ")}`);
+      } else {
+        toast.success(`Payment successful. ${placedCount} order(s) submitted.`);
+      }
+
+      clear();
+      queryClient.invalidateQueries({ queryKey: ["customer-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-order-summaries"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-dashboard-summary"] });
+      navigate("/customer/orders");
+    },
+    onError: (err: Error) => toast.error(getUserFriendlyMessage(err, "Unable to complete payment. Please try again.")),
   });
 
   useEffect(() => {
@@ -348,9 +418,12 @@ const CustomerCheckout = () => {
 
           <Card className="border-border/80 shadow-sm">
             <CardHeader className="pb-4">
-              <p className="text-base font-semibold">Delivery option</p>
+              <p className="text-base font-semibold">
+                {SHOW_DELIVERY_SPEED_OPTIONS ? "Delivery option" : "Delivery"}
+              </p>
             </CardHeader>
             <CardContent className="pt-0">
+              {SHOW_DELIVERY_SPEED_OPTIONS ? (
               <RadioGroup
                 value={deliveryChoice}
                 onValueChange={(v) => setDeliveryChoice(v as DeliveryChoice)}
@@ -400,6 +473,13 @@ const CustomerCheckout = () => {
                   </label>
                 )}
               </RadioGroup>
+              ) : (
+                <div className="rounded-xl border border-border bg-muted/40 px-4 py-3.5">
+                  <p className="text-sm leading-relaxed text-foreground">
+                    We&apos;ll deliver to the address you selected. The vendor confirms the delivery time after accepting your request, and your rental starts on delivery.
+                  </p>
+                </div>
+              )}
             </CardContent>
           </Card>
 
@@ -408,103 +488,63 @@ const CustomerCheckout = () => {
               <div className="flex items-start gap-3 border-b border-teal-100/70 bg-teal-50/70 px-5 py-4 dark:border-teal-500/20 dark:bg-teal-500/10">
                 <FileText className="mt-0.5 h-5 w-5 shrink-0 text-teal-700 dark:text-teal-300" />
                 <div>
-                  <h3 className="font-semibold text-teal-950 dark:text-teal-50">Doctor reference (optional)</h3>
+                  <h3 className="font-semibold text-teal-950 dark:text-teal-50">Prescription (optional)</h3>
                   <p className="mt-0.5 text-sm leading-relaxed text-teal-800/80 dark:text-teal-200/80">
-                    Some items can include a doctor reference. Enter the Unique ID from your doctor or their QR share page.
-                    You can also skip this and place the order without one.
+                    Upload a prescription image or PDF. You can skip this and still place the order.
                   </p>
                 </div>
               </div>
               <div className="divide-y divide-border/60">
                 {lines.map((l) => {
                   if (!l.prescriptionRequired) return null;
-                  const mRef = medicalRefs[l.listingId];
-                  const hasFilled = !!mRef?.doctorId;
-                  const hasOthers = lines.filter((x) => x.prescriptionRequired).length > 1;
+                  const files = prescriptionFiles[l.listingId] || [];
 
                   return (
-                    <div key={l.listingId} className="px-5 py-4 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-                      <div>
-                        <p className="font-medium">{l.title}</p>
-                        {hasFilled ? (
-                          <div className="mt-2 space-y-1">
-                            <div className="flex w-fit items-center gap-1.5 rounded-md border border-green-200/60 bg-green-50/80 px-2.5 py-1 text-[13px] font-medium text-green-700 dark:border-emerald-500/30 dark:bg-emerald-500/10 dark:text-emerald-300">
-                              <CheckCircle2 className="h-3.5 w-3.5" />
-                              <span>
-                                {mRef!.doctorName}
-                                <span className="ml-1 font-mono text-xs tracking-wide">({mRef!.uniqueCode})</span>
-                              </span>
-                            </div>
-                            {(mRef!.hospitals?.length ?? 0) > 0 && (
-                              <p className="text-[12px] text-muted-foreground pl-0.5">
-                                {(mRef!.hospitals!.length === 1
-                                  ? mRef!.hospitals![0].name
-                                  : `${mRef!.hospitals!.length} affiliated hospitals`)}
-                                {mRef!.hospitals!.length === 1 && mRef!.hospitals![0].city
-                                  ? ` · ${mRef!.hospitals![0].city}`
-                                  : ""}
-                              </p>
-                            )}
-                          </div>
-                        ) : (
-                          <p className="text-[13px] text-muted-foreground mt-1">No doctor linked yet</p>
-                        )}
-                      </div>
+                    <div key={l.listingId} className="px-5 py-4 flex flex-col gap-3">
+                      <p className="font-medium">{l.title}</p>
 
-                      <div className="flex items-center gap-2 shrink-0">
-                        <Dialog onOpenChange={(open) => { if (open) setApplyToAll(false); }}>
-                          <DialogTrigger asChild>
-                            <Button variant={hasFilled ? "outline" : "default"} size="sm" className="h-8">
-                              {hasFilled ? "Change" : (
-                                <>
-                                  <Plus className="mr-1.5 h-3.5 w-3.5" /> Add Unique ID
-                                </>
-                              )}
-                            </Button>
-                          </DialogTrigger>
-                          <DialogContent className="max-h-[90vh] overflow-y-auto border-border p-0 sm:max-w-[480px]">
-                            <DialogTitle className="sr-only">Doctor Unique ID</DialogTitle>
-                            <DialogDescription className="sr-only">
-                              Look up doctor by Unique ID for {l.title}
-                            </DialogDescription>
-                            <div className="p-4 sm:p-6 pb-2">
-                              <CustomerMedicalReference
-                                title={`Doctor for ${l.title}`}
-                                value={mRef || null}
-                                onChange={(v) => setMedicalRef(l.listingId, v)}
-                              />
-                            </div>
-                            <div className="bg-muted/40 p-4 sm:px-6 flex flex-col sm:flex-row sm:items-center justify-between border-t border-border/40 gap-4">
-                              {hasOthers ? (
-                                <div className="flex items-center space-x-2">
-                                  <Checkbox
-                                    id={`apply-all-${l.listingId}`}
-                                    checked={applyToAll}
-                                    onCheckedChange={(c) => setApplyToAll(!!c)}
-                                  />
-                                  <label
-                                    htmlFor={`apply-all-${l.listingId}`}
-                                    className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer select-none"
-                                  >
-                                    Apply to all items
-                                  </label>
-                                </div>
-                              ) : <div />}
-                              <DialogClose asChild>
+                      <div className="space-y-2">
+                        {files.length > 0 && (
+                          <ul className="space-y-1.5">
+                            {files.map((file, index) => (
+                              <li
+                                key={`${file.name}-${file.size}-${index}`}
+                                className="flex items-center justify-between gap-2 rounded-md border border-teal-200/70 bg-teal-50/60 px-2.5 py-1.5 text-[13px] dark:border-teal-500/30 dark:bg-teal-500/10"
+                              >
+                                <span className="min-w-0 truncate">{file.name}</span>
                                 <Button
-                                  className="w-full sm:w-auto shrink-0"
-                                  onClick={() => {
-                                    if (applyToAll) {
-                                      applyMedicalRefToAll(l.listingId);
-                                    }
-                                  }}
+                                  type="button"
+                                  variant="ghost"
+                                  size="sm"
+                                  className="h-7 px-2"
+                                  onClick={() => removePrescriptionFile(l.listingId, index)}
                                 >
-                                  Done
+                                  Remove
                                 </Button>
-                              </DialogClose>
-                            </div>
-                          </DialogContent>
-                        </Dialog>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                        {files.length < 3 && (
+                          <label className="inline-flex">
+                            <input
+                              type="file"
+                              accept="image/jpeg,image/png,image/webp,application/pdf,.pdf,.jpg,.jpeg,.png,.webp"
+                              className="sr-only"
+                              multiple
+                              onChange={(e) => {
+                                if (e.target.files?.length) addPrescriptionFiles(l.listingId, e.target.files);
+                                e.target.value = "";
+                              }}
+                            />
+                            <Button type="button" variant="outline" size="sm" className="h-8" asChild>
+                              <span>
+                                <Plus className="mr-1.5 h-3.5 w-3.5" />
+                                {files.length > 0 ? "Add another file" : "Upload prescription"}
+                              </span>
+                            </Button>
+                          </label>
+                        )}
                       </div>
                     </div>
                   );
@@ -609,10 +649,18 @@ const CustomerCheckout = () => {
                   <span className="tabular-nums text-foreground">{formatCheckoutInr(serviceFee)}</span>
                 </div>
               )}
-              {gstAmount > 0 ? (
-                <div className="flex justify-between gap-4 text-muted-foreground">
-                  <span>GST</span>
-                  <span className="tabular-nums text-foreground">{formatCheckoutInr(gstAmount)}</span>
+              {gstSummary ? (
+                <div className="space-y-1">
+                  <div className="flex justify-between gap-4 text-muted-foreground">
+                    <span>{gstSummary.label}</span>
+                    <span className="tabular-nums text-foreground">{formatCheckoutInr(gstSummary.amount)}</span>
+                  </div>
+                  {gstSummary.breakup.map((line) => (
+                    <div key={line.key} className="flex justify-between gap-4 pl-3 text-xs text-muted-foreground">
+                      <span>{line.label}</span>
+                      <span className="tabular-nums">{formatCheckoutInr(line.amount)}</span>
+                    </div>
+                  ))}
                 </div>
               ) : null}
               <div className="flex justify-between gap-4 border-t pt-3 text-base font-bold">
@@ -634,10 +682,47 @@ const CustomerCheckout = () => {
                 ) : null}
             </div>
 
+            <div className="space-y-3 rounded-lg border border-border/70 bg-muted/20 p-3">
+              <LegalAgreeCheckbox
+                surface="customer_web"
+                screen="checkout"
+                agreed={acceptedLegal}
+                onAgreedChange={setAcceptedLegal}
+                prefix="I agree to the"
+                id="checkout-legal-agree"
+              />
+              {sharingHealthData ? (
+                <LegalAgreeCheckbox
+                  surface="customer_web"
+                  screen="prescription"
+                  agreed={acceptedPrescriptionLegal}
+                  onAgreedChange={setAcceptedPrescriptionLegal}
+                  prefix="I consent to the"
+                  id="checkout-privacy-health"
+                />
+              ) : null}
+            </div>
+
+            {quote?.razorpayTestMode ? (
+              <div className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-xs leading-relaxed text-amber-950 dark:border-amber-500/40 dark:bg-amber-500/10 dark:text-amber-100">
+                <p className="font-semibold">Test payment. No real money is charged.</p>
+                <p className="mt-1">
+                  Use card <span className="font-semibold">4100 2800 0000 1007</span>. Any future expiry, any CVV, and any name.
+                  If a bank page opens, choose Success.
+                </p>
+              </div>
+            ) : null}
+
             <Button
               className="w-full bg-gradient-primary font-semibold text-primary-foreground shadow-glow hover:opacity-95"
               size="lg"
-              disabled={placeMutation.isPending || !!quoteError || quoteLoading}
+              disabled={
+                placeMutation.isPending
+                || !!quoteError
+                || quoteLoading
+                || !acceptedLegal
+                || (sharingHealthData && !acceptedPrescriptionLegal)
+              }
               onClick={() => {
                 placeMutation.mutate();
               }}
@@ -645,14 +730,14 @@ const CustomerCheckout = () => {
               {placeMutation.isPending ? (
                 <>
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Placing order…
+                  Processing payment…
                 </>
               ) : (
-                "Place order"
+                `Pay ₹${grandTotal.toFixed(0)}`
               )}
             </Button>
             <p className="text-center text-xs text-muted-foreground">
-              You&apos;ll be charged after BlinksMed confirms.
+              Secure payment via Razorpay. Orders are sent to vendors after payment succeeds.
             </p>
           </CardContent>
         </Card>

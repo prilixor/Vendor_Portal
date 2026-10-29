@@ -1,17 +1,24 @@
-import { useParams, Link } from "react-router-dom";
+import { useParams, Link, useNavigate } from "react-router-dom";
 import { useState, useMemo, useRef, useEffect, type ReactNode } from "react";
 import { useQuery, useQueries, useMutation, useQueryClient } from "@tanstack/react-query";
-import { Check, CheckSquare, Headset, Images, Loader2, MessageCircle, Package } from "lucide-react";
+import { Check, CheckSquare, Headset, ImageOff, Images, Info, Loader2, Maximize2, MessageCircle, Package } from "lucide-react";
+import { Popover, PopoverContent, PopoverTrigger } from "@/app/components/ui/popover";
+import { RadioGroup, RadioGroupItem } from "@/app/components/ui/radio-group";
 import {
   customerApi,
+  type CustomerExtensionApi,
   type CustomerOrderImageApi,
   type CustomerOrderImageRequestApi,
 } from "@/app/services/customerApi";
+import { openRazorpayCheckout } from "@/app/helpers/razorpayCheckout";
+import { customerRefundChip, formatInr } from "@/app/helpers/orderReturn";
+import { combinedRefundSummary, customerCancellationChip } from "@/app/helpers/orderCancellation";
 import { chatApi } from "@/app/services/chatApi";
 import { Button } from "@/app/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
 import { Checkbox } from "@/app/components/ui/checkbox";
-import { OrderMedicalReferenceCard } from "@/app/components/shared/OrderMedicalReferenceCard";
+import { OrderPrescriptionFilesCard } from "@/app/components/shared/OrderPrescriptionFilesCard";
+import { LegalAgreeCheckbox } from "@/app/components/legal/LegalAgreeCheckbox";
 import { BackLink } from "@/app/components/shared/BackLink";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import { ZoomableImageStage } from "@/app/components/shared/ZoomableImageStage";
@@ -21,11 +28,17 @@ import { ChatMessageTextarea } from "@/app/components/shared/ChatMessageTextarea
 import { ChatDaySeparator } from "@/app/components/shared/ChatDaySeparator";
 import { toast } from "sonner";
 import { isSameChatDay } from "@/app/helpers/chatDayLabel";
-import { formatCustomerOrderStatusTitle, formatOrderStatusLabel, formatOrderTypeLabel, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
-import { cn, originalUrlFromThumb, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
+import { formatGstRateLabel } from "@/app/helpers/gstLabel";
+import { formatCustomerOrderStatusTitle, formatCustomerOrderStatusLabel, formatOrderTypeLabel, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
+import { cn, orderPhotoTileUrl, originalUrlFromThumb, photoAtSlot, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
 import type { ExtensionQuoteApi, BuyoutQuoteApi } from "@/app/services/customerApi";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
 import { Label } from "@/app/components/ui/label";
+import { LegalPolicyLinks } from "@/app/components/legal/LegalPolicyLinks";
+import { CancelOrderConfirm } from "@/app/components/legal/CancelOrderConfirm";
+
+/** Hide Buyout Item on the customer order page. Extend Rental stays. */
+const SHOW_CUSTOMER_BUYOUT = false;
 
 function orderStatusBadgeClass(status: string): string {
   const s = status.toLowerCase().replace(/_/g, " ");
@@ -72,7 +85,12 @@ function isCustomerOrderCancellable(status: string): boolean {
   return s === "pending" || s === "awaiting vendor acceptance";
 }
 
-const MAX_ORDER_IMAGES = 5;
+/** Match Customer Mobile order detail polling while the page is open. */
+const CUSTOMER_ORDER_POLL_MS = 5_000;
+
+function isOrderGuid(value: string | undefined): value is string {
+  return !!value && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(value);
+}
 
 function orderStatusCompact(status: string): string {
   return status.trim().toLowerCase().replace(/\s+/g, "_");
@@ -84,11 +102,58 @@ function canRequestOrderImages(status: string): boolean {
   return compact === "pending" || compact === "confirmed" || compact === "in_transit";
 }
 
+function canUploadPrescription(status: string): boolean {
+  const compact = orderStatusCompact(status);
+  return !["cancelled", "canceled", "dispatch_failed", "active", "completed", "returned"].includes(compact);
+}
+
 function isAwaitingVendorForPhotos(status: string): boolean {
   const compact = orderStatusCompact(status);
   return (
     compact === "awaiting_vendor_acceptance" ||
     compact === "pending_vendor_acceptance"
+  );
+}
+
+function OrderOptionPhotoThumb({
+  src,
+  alt,
+  onPreview,
+}: {
+  src: string;
+  alt: string;
+  onPreview: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      className="group relative aspect-square w-full overflow-hidden rounded-xl bg-muted ring-1 ring-inset ring-black/[0.06] transition-transform hover:ring-primary/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 dark:ring-white/10"
+      onClick={onPreview}
+      aria-label={alt}
+    >
+      <img
+        src={src}
+        alt=""
+        loading="lazy"
+        decoding="async"
+        className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.03]"
+        onError={retryOriginalOnImageError}
+      />
+    </button>
+  );
+}
+
+function OrderOptionEmptySlot() {
+  return (
+    <div
+      className="flex aspect-square w-full flex-col items-center justify-center gap-1 rounded-xl bg-muted/55 px-1 ring-1 ring-inset ring-border/70 dark:bg-muted/25"
+      aria-label="No image"
+    >
+      <ImageOff className="h-5 w-5 text-muted-foreground/55" />
+      <span className="text-[9px] font-medium uppercase tracking-[0.08em] text-muted-foreground/80">
+        Empty
+      </span>
+    </div>
   );
 }
 
@@ -115,37 +180,39 @@ const getTimelineSteps = (orderType?: string) => {
 /** Last step index fully completed (inclusive). `currentIndex` is the active step if any. */
 function getTimelineProgress(status: string, orderType?: string): {
   cancelled: boolean;
+  dispatchFailed: boolean;
   completedThrough: number;
   currentIndex: number | null;
 } {
   const raw = status.toLowerCase().trim();
   const compact = raw.replace(/\s+/g, "_");
   const isBuy = orderType?.toLowerCase() === "buy";
+  const open = { cancelled: false, dispatchFailed: false };
 
   if (compact === "cancelled" || compact === "canceled") {
-    return { cancelled: true, completedThrough: -1, currentIndex: null };
+    return { cancelled: true, dispatchFailed: false, completedThrough: -1, currentIndex: null };
   }
   if (compact === "dispatch_failed" || raw.includes("dispatch failed")) {
-    return { cancelled: false, completedThrough: 0, currentIndex: null };
+    return { cancelled: false, dispatchFailed: true, completedThrough: -1, currentIndex: null };
   }
   if (compact === "pending") {
-    return { cancelled: false, completedThrough: 0, currentIndex: 1 };
+    return { ...open, completedThrough: 0, currentIndex: 1 };
   }
   if (compact === "confirmed") {
-    return { cancelled: false, completedThrough: 1, currentIndex: 2 };
+    return { ...open, completedThrough: 1, currentIndex: 2 };
   }
   if (compact === "in_transit" || raw.includes("transit")) {
-    return { cancelled: false, completedThrough: 2, currentIndex: 3 };
+    return { ...open, completedThrough: 2, currentIndex: 3 };
   }
   if (compact === "active") {
     return isBuy
-      ? { cancelled: false, completedThrough: 3, currentIndex: null }
-      : { cancelled: false, completedThrough: 3, currentIndex: 4 };
+      ? { ...open, completedThrough: 3, currentIndex: null }
+      : { ...open, completedThrough: 3, currentIndex: 4 };
   }
   if (compact === "returned") {
-    return { cancelled: false, completedThrough: 5, currentIndex: null };
+    return { ...open, completedThrough: 5, currentIndex: null };
   }
-  return { cancelled: false, completedThrough: 0, currentIndex: 1 };
+  return { ...open, completedThrough: 0, currentIndex: 1 };
 }
 
 function TimelineDot({
@@ -251,7 +318,11 @@ function DetailRow({
 }
 
 function OrderTimeline({ status, orderType }: { status: string; orderType?: string }) {
-  const { cancelled, completedThrough, currentIndex } = getTimelineProgress(status, orderType);
+  const { cancelled, dispatchFailed, completedThrough, currentIndex } = getTimelineProgress(status, orderType);
+
+  if (dispatchFailed) {
+    return <p className="text-sm text-muted-foreground">No vendor accepted this product.</p>;
+  }
 
   if (cancelled) {
     return (
@@ -364,9 +435,12 @@ function OrderTimeline({ status, orderType }: { status: string; orderType?: stri
 
 const CustomerOrderDetail = () => {
   const { orderId } = useParams<{ orderId: string }>();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const routeIsGuid = isOrderGuid(orderId);
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
 
+  const [cancelConfirmOpen, setCancelConfirmOpen] = useState(false);
   const [isChatOpen, setIsChatOpen] = useState(false);
   const [newMessageText, setNewMessageText] = useState("");
 
@@ -379,22 +453,80 @@ const CustomerOrderDetail = () => {
   const [buyoutDialogOpen, setBuyoutDialogOpen] = useState(false);
   const [buyoutQuote, setBuyoutQuote] = useState<BuyoutQuoteApi | null>(null);
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  const [optionNotePreview, setOptionNotePreview] = useState<{ label: string; description: string } | null>(null);
+  const [openOptionInfoId, setOpenOptionInfoId] = useState<string | null>(null);
   const [photoRequestSelection, setPhotoRequestSelection] = useState<string[]>([]);
   const [photoSelectionInitialized, setPhotoSelectionInitialized] = useState(false);
 
+  // Support links historically used the order number. Resolve it to the order id before calling the API.
+  const orderNumberLookup = useQuery({
+    queryKey: ["customer-order-id-by-number", orderId],
+    enabled: !!orderId && !routeIsGuid,
+    retry: false,
+    queryFn: async () => {
+      const result = await customerApi.getOrderSummaries({ search: orderId, pageSize: 50 });
+      const wanted = orderId!.trim().toLowerCase();
+      return result.items.find((item) => item.orderNumber.trim().toLowerCase() === wanted)?.id ?? null;
+    },
+  });
+
+  useEffect(() => {
+    if (!orderNumberLookup.data || !isOrderGuid(orderNumberLookup.data)) return;
+    navigate(`/customer/orders/${orderNumberLookup.data}`, { replace: true });
+  }, [navigate, orderNumberLookup.data]);
+
   // Fetch current selected item details
-  const currentItemId = selectedItemId || orderId;
+  const currentItemId = selectedItemId || (routeIsGuid ? orderId : undefined);
 
   const { data, isLoading, error } = useQuery({
     queryKey: ["customer-order", currentItemId],
     queryFn: () => customerApi.getOrder(currentItemId!),
     enabled: !!currentItemId,
+    refetchInterval: CUSTOMER_ORDER_POLL_MS,
   });
 
-  // Fetch all orders to group them locally
-  const { data: allOrders } = useQuery({
-    queryKey: ["customer-orders"],
-    queryFn: () => customerApi.getOrders(),
+  const { data: groupOrders } = useQuery({
+    queryKey: ["customer-order-group", orderId],
+    queryFn: () => customerApi.getOrderGroup(orderId!, { quiet: true }),
+    enabled: routeIsGuid && !!orderId,
+    refetchInterval: CUSTOMER_ORDER_POLL_MS,
+  });
+
+  const { data: prescriptionFiles = [] } = useQuery({
+    queryKey: ["customer-order-prescriptions", currentItemId],
+    queryFn: () => customerApi.getOrderPrescriptions(currentItemId!),
+    enabled: !!currentItemId,
+  });
+
+  const [acceptedRxLegal, setAcceptedRxLegal] = useState(false);
+
+  useEffect(() => {
+    setAcceptedRxLegal(false);
+  }, [currentItemId]);
+
+  const uploadRxMut = useMutation({
+    mutationFn: (file: File) =>
+      customerApi.uploadOrderPrescription(currentItemId!, file, {
+        acceptedPrescriptionLegal: true,
+        uploadSource: "order_detail",
+      }),
+    onSuccess: () => {
+      setAcceptedRxLegal(false);
+      toast.success("Prescription uploaded.");
+      queryClient.invalidateQueries({ queryKey: ["customer-order-prescriptions", currentItemId] });
+      queryClient.invalidateQueries({ queryKey: ["customer-order", currentItemId] });
+    },
+    onError: (err: Error) => toast.error(err.message || "Unable to upload prescription."),
+  });
+
+  const deleteRxMut = useMutation({
+    mutationFn: (fileId: string) => customerApi.deleteOrderPrescription(currentItemId!, fileId),
+    onSuccess: () => {
+      toast.success("Prescription removed.");
+      queryClient.invalidateQueries({ queryKey: ["customer-order-prescriptions", currentItemId] });
+      queryClient.invalidateQueries({ queryKey: ["customer-order", currentItemId] });
+    },
+    onError: (err: Error) => toast.error(err.message || "Unable to remove prescription."),
   });
 
   const cancelMut = useMutation({
@@ -403,6 +535,8 @@ const CustomerOrderDetail = () => {
       toast.success("Order cancelled.");
       queryClient.invalidateQueries({ queryKey: ["customer-order", variables] });
       queryClient.invalidateQueries({ queryKey: ["customer-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-order-summaries"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-order-group"] });
     },
     onError: (err: Error) => toast.error(err.message),
   });
@@ -468,13 +602,49 @@ const CustomerOrderDetail = () => {
   const processExtensionMut = useMutation({
     mutationFn: () => customerApi.processExtension(activeItem!.id, extensionDays),
     onSuccess: () => {
-      toast.success("Rental extension requested successfully! Pending approval.");
+      const updatedExisting = (extensionQuote?.pendingDays ?? 0) > 0;
+      toast.success(updatedExisting
+        ? "Extension request updated. Still waiting for vendor approval."
+        : "Rental extension requested successfully! Pending approval.");
       setExtensionDialogOpen(false);
       setExtensionQuote(null);
       queryClient.invalidateQueries({ queryKey: ["customer-order", activeItem?.id] });
+      queryClient.invalidateQueries({ queryKey: ["customer-order-extensions"] });
       queryClient.invalidateQueries({ queryKey: ["customer-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-order-summaries"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-order-group"] });
     },
     onError: (err: Error) => toast.error(err.message || "Failed to process extension.")
+  });
+
+  const payExtensionMut = useMutation({
+    mutationFn: async (ext: CustomerExtensionApi) => {
+      const order = data;
+      if (!order) throw new Error("Order not loaded.");
+      const session = await customerApi.startExtensionPayment(order.id, ext.extensionId);
+      if (!session.razorpayOrderId) throw new Error("Payment could not be started. Please try again.");
+      const payment = await openRazorpayCheckout({
+        key: session.razorpayKeyId,
+        amountPaise: Math.round(Number(session.amount) * 100),
+        currency: session.currency || "INR",
+        orderId: session.razorpayOrderId,
+        description: `Extension for ${order.listingTitle}`,
+      });
+      await customerApi.verifyExtensionPayment(order.id, ext.extensionId, {
+        checkoutSessionId: session.checkoutSessionId,
+        razorpayOrderId: payment.razorpay_order_id,
+        razorpayPaymentId: payment.razorpay_payment_id,
+        razorpaySignature: payment.razorpay_signature,
+      });
+    },
+    onSuccess: () => {
+      toast.success("Extension paid. The new end date is now on this product.");
+      queryClient.invalidateQueries({ queryKey: ["customer-order", currentItemId] });
+      queryClient.invalidateQueries({ queryKey: ["customer-order-extensions"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-order-group"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-order-summaries"] });
+    },
+    onError: (err: Error) => toast.error(err.message || "Extension payment failed."),
   });
 
   const quoteBuyoutMut = useMutation({
@@ -491,30 +661,46 @@ const CustomerOrderDetail = () => {
       setBuyoutQuote(null);
       queryClient.invalidateQueries({ queryKey: ["customer-order", activeItem?.id] });
       queryClient.invalidateQueries({ queryKey: ["customer-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-order-summaries"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-order-group"] });
     },
     onError: (err: Error) => toast.error(err.message || "Failed to process buyout.")
   });
 
-  // Find all items belonging to the same order group prefix
   const orderGroupItems = useMemo(() => {
-    if (!data || !allOrders) return data ? [data] : [];
-    const baseNum = data.orderNumber?.split('-').slice(0, 3).join('-') || "";
-    if (!baseNum) return data ? [data] : [];
-    const matches = allOrders.filter((o) => o && o.orderNumber && o.orderNumber.split('-').slice(0, 3).join('-') === baseNum);
-    return matches.length > 0 ? matches : (data ? [data] : []);
-  }, [data, allOrders]);
+    if (groupOrders && groupOrders.length > 0) return groupOrders;
+    return data ? [data] : [];
+  }, [data, groupOrders]);
 
   const groupItemIds = useMemo(() => orderGroupItems.map((item) => item.id), [orderGroupItems]);
+
+  const extensionQueries = useQueries({
+    queries: groupItemIds.map((itemId) => ({
+      queryKey: ["customer-order-extensions", itemId],
+      queryFn: () => customerApi.getOrderExtensions(itemId),
+      enabled: groupItemIds.length > 0,
+      refetchInterval: CUSTOMER_ORDER_POLL_MS,
+    })),
+  });
+
+  const extensionsByItemId = useMemo(() => {
+    const map = new Map<string, CustomerExtensionApi[]>();
+    groupItemIds.forEach((itemId, index) => {
+      map.set(itemId, extensionQueries[index]?.data ?? []);
+    });
+    return map;
+  }, [groupItemIds, extensionQueries]);
 
   const imageRequestQueries = useQueries({
     queries: groupItemIds.map((itemId) => ({
       queryKey: ["customer-order-image-request", itemId],
       queryFn: () => customerApi.getOrderImageRequest(itemId),
       enabled: groupItemIds.length > 0,
+      refetchInterval: CUSTOMER_ORDER_POLL_MS,
     })),
   });
 
-  const imageRequestLoading = imageRequestQueries.some((q) => q.isLoading || q.isFetching);
+  const imageRequestLoading = imageRequestQueries.some((q) => q.isLoading);
   /** True until every item's request status has been fetched at least once (avoid treating "unknown" as eligible). */
   const imageRequestsReady =
     groupItemIds.length === 0 ||
@@ -628,6 +814,16 @@ const CustomerOrderDetail = () => {
     onError: (err: Error) => toast.error(err.message || "Failed to request photos."),
   });
 
+  const selectImageOptionMut = useMutation({
+    mutationFn: ({ orderId: itemOrderId, optionId }: { orderId: string; optionId: string }) =>
+      customerApi.selectOrderImageOption(itemOrderId, optionId),
+    onSuccess: (_row, vars) => {
+      toast.success("Option selected.");
+      queryClient.invalidateQueries({ queryKey: ["customer-order-image-request", vars.orderId] });
+    },
+    onError: (err: Error) => toast.error(err.message || "Failed to select option."),
+  });
+
   // Combined totals for the order group
   const groupTotalAmount = useMemo(() => {
     return orderGroupItems.reduce((sum, item) => sum + (item?.totalAmount ?? 0), 0);
@@ -637,12 +833,47 @@ const CustomerOrderDetail = () => {
     return orderGroupItems.reduce((sum, item) => sum + (item?.depositAmount ?? 0), 0);
   }, [orderGroupItems]);
 
+  const refundSummary = useMemo(
+    () => combinedRefundSummary(
+      orderGroupItems.map((item) => item.returnSettlement),
+      orderGroupItems.map((item) => item.cancellationRefund),
+    ),
+    [orderGroupItems],
+  );
+
   const baseOrderNumber = useMemo(() => {
     if (!data || !data.orderNumber) return "";
     return data.orderNumber.split('-').slice(0, 3).join('-');
   }, [data]);
 
   if (!orderId) return <p className="text-sm text-muted-foreground">Missing order.</p>;
+
+  if (!routeIsGuid) {
+    if (orderNumberLookup.isError) {
+      const lookupError = orderNumberLookup.error;
+      return (
+        <div className="space-y-4">
+          <p className="text-sm text-destructive">
+            {lookupError instanceof Error ? lookupError.message : "Not found."}
+          </p>
+          <Button variant="outline" asChild>
+            <Link to="/customer/orders">Back to orders</Link>
+          </Button>
+        </div>
+      );
+    }
+    if (orderNumberLookup.isSuccess && !orderNumberLookup.data) {
+      return (
+        <div className="space-y-4">
+          <p className="text-sm text-destructive">Order not found.</p>
+          <Button variant="outline" asChild>
+            <Link to="/customer/orders">Back to orders</Link>
+          </Button>
+        </div>
+      );
+    }
+    return <PageLoaderSlot />;
+  }
 
   if (error) {
     return (
@@ -655,11 +886,28 @@ const CustomerOrderDetail = () => {
     );
   }
 
-  if (isLoading || !data) {
+  if ((isLoading && !data) || !data) {
     return <PageLoaderSlot />;
   }
 
   const activeItem = data;
+  const activeReturn = activeItem.returnSettlement
+    ?? orderGroupItems.find((item) => item.id === activeItem.id)?.returnSettlement
+    ?? null;
+  const activeCancellation = activeItem.cancellationRefund
+    ?? orderGroupItems.find((item) => item.id === activeItem.id)?.cancellationRefund
+    ?? null;
+  const activeExtensions = extensionsByItemId.get(activeItem.id) ?? [];
+  const paidExtensions = activeExtensions.filter((ext) => ext.status === "paid");
+  const awaitingExtension = activeExtensions.find((ext) => ext.status === "awaiting_payment") ?? null;
+  const pendingExtension = activeExtensions.find((ext) => ext.status === "pending_approval") ?? null;
+  const paidExtensionTotal = paidExtensions.reduce((sum, ext) => sum + (ext.totalAmount ?? 0), 0);
+  const originalRentalAmount = Math.max(0, (activeItem.totalAmount ?? 0) - paidExtensionTotal);
+  const shownPrescriptionFiles = activeItem.prescriptionFiles?.length
+    ? activeItem.prescriptionFiles
+    : prescriptionFiles;
+  const canAddPrescription =
+    canUploadPrescription(activeItem.status) && shownPrescriptionFiles.length < 3;
 
   return (
     <div className="mx-auto max-w-3xl space-y-2.5 sm:space-y-4">
@@ -681,6 +929,11 @@ const CustomerOrderDetail = () => {
               <p className="mt-0.5 text-[11px] tabular-nums text-muted-foreground">
                 + ₹{groupDepositAmount.toFixed(0)} deposit
               </p>
+              {refundSummary ? (
+                <p className="mt-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-400">
+                  {refundSummary}
+                </p>
+              ) : null}
             </div>
           </div>
 
@@ -688,6 +941,9 @@ const CustomerOrderDetail = () => {
             <p className="text-[13px] font-semibold sm:text-base">Items in this order</p>
             {orderGroupItems.map((item) => {
               const isSelected = item.id === activeItem.id;
+              const itemExtensions = extensionsByItemId.get(item.id) ?? [];
+              const itemExtended = itemExtensions.some((ext) => ext.status === "paid");
+              const itemPaymentDue = itemExtensions.some((ext) => ext.status === "awaiting_payment");
               const imageUrl = resolveItemImageUrl(item);
               const openRequest = imageRequestsByItemId.get(item.id);
               const photoCount = openRequest?.images?.length ?? 0;
@@ -724,8 +980,28 @@ const CustomerOrderDetail = () => {
                           orderStatusBadgeClass(item.status),
                         )}
                       >
-                        {formatOrderStatusLabel(item.status)}
+                        {formatCustomerOrderStatusLabel(item.status)}
                       </span>
+                      {itemExtended ? (
+                        <span className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                          EXTENDED
+                        </span>
+                      ) : null}
+                      {itemPaymentDue ? (
+                        <span className="inline-flex items-center rounded-full bg-orange-100 px-2 py-0.5 text-[10px] font-bold text-orange-900 dark:bg-orange-950/40 dark:text-orange-200">
+                          Payment due
+                        </span>
+                      ) : null}
+                      {customerRefundChip(item.returnSettlement) ? (
+                        <span className="inline-flex items-center rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-bold text-sky-900 dark:bg-sky-950/50 dark:text-sky-200">
+                          {customerRefundChip(item.returnSettlement)}
+                        </span>
+                      ) : null}
+                      {customerCancellationChip(item.cancellationRefund) ? (
+                        <span className="inline-flex items-center rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-bold text-sky-900 dark:bg-sky-950/50 dark:text-sky-200">
+                          {customerCancellationChip(item.cancellationRefund)}
+                        </span>
+                      ) : null}
                       {photoLabel ? (
                         <span className="text-[11px] text-muted-foreground">· {photoLabel}</span>
                       ) : null}
@@ -737,6 +1013,101 @@ const CustomerOrderDetail = () => {
           </div>
         </CardContent>
       </Card>
+
+      {activeReturn ? (
+        <Card className="border-border/80 shadow-sm">
+          <CardHeader className="p-3 pb-1 sm:p-4 sm:pb-2">
+            <p className="text-[13px] font-semibold sm:text-base">
+              Deposit refund
+              <span className="ml-1.5 font-normal text-muted-foreground">· {activeItem.listingTitle}</span>
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-2 px-3 pb-3 text-sm sm:px-4 sm:pb-4">
+            <div className="grid gap-2 sm:grid-cols-3">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Deposit</p>
+                <p className="font-medium tabular-nums">₹{formatInr(activeReturn.depositAmount)}</p>
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Damage charge</p>
+                <p className="font-medium tabular-nums">₹{formatInr(activeReturn.damageAmount)}</p>
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Refund</p>
+                <p className="font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
+                  ₹{formatInr(activeReturn.refundAmount)}
+                  {activeReturn.refundAmount > 0
+                    ? activeReturn.status === "refunded"
+                      ? " received"
+                      : " processing"
+                    : ""}
+                </p>
+              </div>
+            </div>
+            {activeReturn.damageReason ? <p className="text-muted-foreground">{activeReturn.damageReason}</p> : null}
+            {activeReturn.status === "refunded" && activeReturn.refundedAt ? (
+              <p className="text-xs text-muted-foreground">
+                Received {new Date(activeReturn.refundedAt).toLocaleString()}
+              </p>
+            ) : activeReturn.refundAmount <= 0 ? (
+              <p className="text-xs text-muted-foreground">
+                {activeReturn.damageAmount > 0
+                  ? "The damage charge uses this product's full deposit, so nothing is refunded."
+                  : "No security deposit is due back on this product."}
+              </p>
+            ) : (
+              <p className="text-xs text-muted-foreground">BlinksMed is sending this refund to your original payment.</p>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
+
+      {activeCancellation ? (
+        <Card className="border-border/80 shadow-sm">
+          <CardHeader className="p-3 pb-1 sm:p-4 sm:pb-2">
+            <p className="text-[13px] font-semibold sm:text-base">
+              Cancellation refund
+              <span className="ml-1.5 font-normal text-muted-foreground">· {activeItem.listingTitle}</span>
+            </p>
+          </CardHeader>
+          <CardContent className="space-y-2 px-3 pb-3 text-sm sm:px-4 sm:pb-4">
+            <p className="text-muted-foreground">{activeCancellation.actorLabel}</p>
+            <div className="grid gap-2 sm:grid-cols-3">
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Paid</p>
+                <p className="font-medium tabular-nums">₹{formatInr(activeCancellation.paidAmount)}</p>
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Charge</p>
+                <p className="font-medium tabular-nums">₹{formatInr(activeCancellation.chargeAmount)}</p>
+              </div>
+              <div>
+                <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Refund</p>
+                <p className="font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
+                  ₹{formatInr(activeCancellation.refundAmount)}
+                  {activeCancellation.refundAmount > 0
+                    ? activeCancellation.status === "refunded"
+                      ? " received"
+                      : " processing"
+                    : ""}
+                </p>
+              </div>
+            </div>
+            {activeCancellation.chargeReason ? <p className="text-muted-foreground">{activeCancellation.chargeReason}</p> : null}
+            {activeCancellation.status === "refunded" && activeCancellation.refundedAt ? (
+              <p className="text-xs text-muted-foreground">
+                Received {new Date(activeCancellation.refundedAt).toLocaleString()}
+              </p>
+            ) : activeCancellation.status === "pending_review" ? (
+              <p className="text-xs text-muted-foreground">BlinksMed is reviewing this payment before anything is sent back.</p>
+            ) : activeCancellation.refundAmount <= 0 ? (
+              <p className="text-xs text-muted-foreground">The charge uses the full payment for this product, so nothing is refunded.</p>
+            ) : (
+              <p className="text-xs text-muted-foreground">BlinksMed is sending this refund to your original payment.</p>
+            )}
+          </CardContent>
+        </Card>
+      ) : null}
 
       <Card className="border-border/80 shadow-sm">
         <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 p-3 pb-2 sm:p-4 sm:pb-2">
@@ -770,7 +1141,16 @@ const CustomerOrderDetail = () => {
           ) : (
             <>
               <DetailRow label="Start date">{formatDetailDate(activeItem.startDate)}</DetailRow>
-              <DetailRow label="End date">{formatDetailDate(activeItem.endDate)}</DetailRow>
+              <DetailRow label="End date">
+                <span className="inline-flex flex-wrap items-center justify-end gap-2 sm:justify-start">
+                  {formatDetailDate(activeItem.endDate)}
+                  {(extensionsByItemId.get(activeItem.id) ?? []).some((ext) => ext.status === "paid") ? (
+                    <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                      EXTENDED
+                    </span>
+                  ) : null}
+                </span>
+              </DetailRow>
               <DetailRow label="Quantity">{activeItem.quantity}</DetailRow>
               <DetailRow label="Order type">
                 {formatOrderTypeLabel(activeItem.orderType)}
@@ -818,20 +1198,59 @@ const CustomerOrderDetail = () => {
             </>
           )}
         </CardContent>
+        {activeItem.orderType?.toLowerCase() === "rent" && paidExtensions.length > 0 && (
+          <div className="space-y-1.5 border-t border-border/60 px-3 py-3 text-sm sm:px-4">
+            <div className="flex items-center justify-between gap-3 text-muted-foreground">
+              <span>Original rental</span>
+              <span className="tabular-nums">₹{originalRentalAmount.toFixed(2)}</span>
+            </div>
+            {paidExtensions.map((ext) => (
+              <div key={ext.extensionId} className="flex items-center justify-between gap-3">
+                <span>Extension · {ext.additionalDays} day{ext.additionalDays === 1 ? "" : "s"}</span>
+                <span className="tabular-nums">₹{ext.totalAmount.toFixed(2)}</span>
+              </div>
+            ))}
+            <div className="flex items-center justify-between gap-3 border-t border-border/60 pt-1.5 font-semibold">
+              <span>Product total</span>
+              <span className="tabular-nums">₹{activeItem.totalAmount.toFixed(2)}</span>
+            </div>
+          </div>
+        )}
       </Card>
 
-      {/* Medical Reference */}
-      {(activeItem.doctorId ||
-        activeItem.hospitalId ||
-        activeItem.doctorName ||
-        activeItem.doctorUniqueCode) && (
-        <OrderMedicalReferenceCard
-          doctorName={activeItem.doctorName}
-          doctorSpecialization={activeItem.doctorSpecialization}
-          doctorUniqueCode={activeItem.doctorUniqueCode}
-          doctorContactNumber={activeItem.doctorContactNumber}
-          hospitalName={activeItem.hospitalName}
-          hospitalCity={activeItem.hospitalCity}
+      {(shownPrescriptionFiles.length > 0 || canUploadPrescription(activeItem.status)) && (
+        <OrderPrescriptionFilesCard
+          files={shownPrescriptionFiles}
+          canEdit={canUploadPrescription(activeItem.status)}
+          uploading={uploadRxMut.isPending}
+          uploadDisabled={canAddPrescription && !acceptedRxLegal}
+          onUpload={(file) => {
+            if (!acceptedRxLegal) {
+              toast.error("Please agree to the Privacy Policy before uploading a prescription.");
+              return;
+            }
+            uploadRxMut.mutate(file);
+          }}
+          onDelete={(fileId) => deleteRxMut.mutate(fileId)}
+          footer={
+            canAddPrescription ? (
+              <div className="space-y-2">
+                <LegalAgreeCheckbox
+                  surface="customer_web"
+                  screen="prescription"
+                  agreed={acceptedRxLegal}
+                  onAgreedChange={setAcceptedRxLegal}
+                  prefix="I consent to the"
+                  id="order-detail-prescription-terms"
+                />
+                {!acceptedRxLegal ? (
+                  <p className="text-xs text-muted-foreground">
+                    Agree to the Privacy Policy before this prescription can be uploaded.
+                  </p>
+                ) : null}
+              </div>
+            ) : null
+          }
         />
       )}
 
@@ -842,8 +1261,8 @@ const CustomerOrderDetail = () => {
             <p className="text-[13px] font-semibold sm:text-base">Request photos from your supplier</p>
             <p className="text-xs text-muted-foreground">
               {orderGroupItems.length > 1
-                ? `Photos come from each product’s supplier. Up to ${MAX_ORDER_IMAGES} per item.`
-                : `Photos come from this product’s supplier. Up to ${MAX_ORDER_IMAGES} photos.`}
+                ? `Photos come from each product’s supplier — up to 3 photos under Option 1, Option 2, and so on. Choose one option.`
+                : `Photos come from this product’s supplier — up to 3 photos under Option 1, Option 2, and so on. Choose one option.`}
             </p>
           </CardHeader>
           <CardContent className="space-y-5">
@@ -994,9 +1413,10 @@ const CustomerOrderDetail = () => {
                       </p>
                     </div>
                     <div className="space-y-3">
-                      {groupPhotoSections.map(({ item, images }) => {
+                      {groupPhotoSections.map(({ item, request, images }) => {
                         const waiting = images.length === 0;
                         const isActiveItem = item.id === activeItem.id;
+                        const options = request?.options?.length ? request.options : null;
                         return (
                           <div
                             key={item.id}
@@ -1029,13 +1449,152 @@ const CustomerOrderDetail = () => {
                                 <Images className="h-3 w-3" />
                                 {waiting
                                   ? "Waiting for supplier photos"
-                                  : `${images.length}/${MAX_ORDER_IMAGES} received`}
+                                  : `${images.length} received`}
                               </span>
                             </div>
                             {waiting ? (
                               <p className="text-xs text-muted-foreground">
                                 Request already sent for this product — supplier has not uploaded photos yet.
                               </p>
+                            ) : options ? (
+                              <div className="space-y-3">
+                                {request?.selectedOptionId ? (
+                                  <p className="text-xs text-muted-foreground">
+                                    Your selection:{" "}
+                                    <span className="font-semibold text-foreground">
+                                      {options.find((o) => o.id === request.selectedOptionId)?.label ?? "an option"}
+                                    </span>
+                                  </p>
+                                ) : (
+                                  <p className="text-xs text-muted-foreground">
+                                    Select one option for your supplier.
+                                  </p>
+                                )}
+                                <RadioGroup
+                                  value={request?.selectedOptionId ?? ""}
+                                  onValueChange={(optionId) => {
+                                    if (!optionId || optionId === request?.selectedOptionId) return;
+                                    const target = options.find((o) => o.id === optionId);
+                                    if (!target?.images.length) {
+                                      toast.error("Choose an option that already has photos.");
+                                      return;
+                                    }
+                                    selectImageOptionMut.mutate({ orderId: item.id, optionId });
+                                  }}
+                                  className="grid grid-cols-1 gap-3 sm:grid-cols-3"
+                                  disabled={selectImageOptionMut.isPending}
+                                >
+                                {options.map((option) => {
+                                  const photos = option.images ?? [];
+                                  const note = option.description?.trim() ?? "";
+                                  const chosen = request?.selectedOptionId === option.id;
+                                  const canChoose = photos.length > 0;
+                                  return (
+                                  <div
+                                    key={option.id}
+                                    className={cn(
+                                      "min-w-0 space-y-2.5 rounded-xl border bg-card p-3 shadow-sm",
+                                      chosen
+                                        ? "border-primary/35 ring-1 ring-primary/15"
+                                        : "border-border/70",
+                                    )}
+                                  >
+                                    <div className="flex min-h-6 items-center gap-2">
+                                      <RadioGroupItem
+                                        value={option.id}
+                                        id={`photo-option-${item.id}-${option.id}`}
+                                        disabled={!canChoose || selectImageOptionMut.isPending}
+                                        className="shrink-0"
+                                      />
+                                      <label
+                                        htmlFor={`photo-option-${item.id}-${option.id}`}
+                                        className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground"
+                                      >
+                                        {option.label}
+                                      </label>
+                                      {chosen ? (
+                                        <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                                          Selected
+                                        </span>
+                                      ) : null}
+                                      {note ? (
+                                        <Popover
+                                          open={openOptionInfoId === option.id}
+                                          onOpenChange={(open) => setOpenOptionInfoId(open ? option.id : null)}
+                                        >
+                                          <PopoverTrigger asChild>
+                                            <button
+                                              type="button"
+                                              className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                                              aria-label={`View description for ${option.label}`}
+                                            >
+                                              <Info className="h-3.5 w-3.5" />
+                                            </button>
+                                          </PopoverTrigger>
+                                          <PopoverContent
+                                            align="start"
+                                            className="w-80 max-w-[calc(100vw-2rem)] p-3"
+                                          >
+                                            <div className="mb-1 flex items-start justify-between gap-2">
+                                              <p className="text-xs font-semibold text-foreground">
+                                                {option.label}
+                                              </p>
+                                              <button
+                                                type="button"
+                                                className="inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+                                                aria-label={`Read ${option.label} description full screen`}
+                                                onClick={() => {
+                                                  setOpenOptionInfoId(null);
+                                                  setOptionNotePreview({
+                                                    label: option.label,
+                                                    description: note,
+                                                  });
+                                                }}
+                                              >
+                                                <Maximize2 className="h-3.5 w-3.5" />
+                                              </button>
+                                            </div>
+                                            <p className="max-h-40 overflow-y-auto whitespace-pre-wrap break-words text-sm text-muted-foreground">
+                                              {note}
+                                            </p>
+                                            <button
+                                              type="button"
+                                              className="mt-2 text-xs font-medium text-primary hover:underline"
+                                              onClick={() => {
+                                                setOpenOptionInfoId(null);
+                                                setOptionNotePreview({
+                                                  label: option.label,
+                                                  description: note,
+                                                });
+                                              }}
+                                            >
+                                              Read full screen
+                                            </button>
+                                          </PopoverContent>
+                                        </Popover>
+                                      ) : null}
+                                    </div>
+                                    <div className="grid grid-cols-3 gap-2">
+                                    {Array.from({ length: request?.maxImagesPerOption ?? 3 }).map((_, slot) => {
+                                      const photo = photoAtSlot(photos, slot);
+                                      if (photo) {
+                                        return (
+                                          <OrderOptionPhotoThumb
+                                            key={photo.id}
+                                            src={orderPhotoTileUrl(photo)}
+                                            alt={`Preview ${option.label} for ${item.listingTitle}`}
+                                            onPreview={() => setPreviewImageUrl(photo.fileUrl)}
+                                          />
+                                        );
+                                      }
+                                      return <OrderOptionEmptySlot key={`${option.id}-empty-${slot}`} />;
+                                    })}
+                                    </div>
+                                  </div>
+                                  );
+                                })}
+                                </RadioGroup>
+                              </div>
                             ) : (
                               <div className="grid grid-cols-3 gap-3 sm:grid-cols-5">
                                 {images.map((img: CustomerOrderImageApi) => (
@@ -1047,8 +1606,10 @@ const CustomerOrderDetail = () => {
                                     aria-label={`Preview photo for ${item.listingTitle}`}
                                   >
                                     <img
-                                      src={img.fileUrl}
+                                      src={orderPhotoTileUrl(img)}
                                       alt={img.originalFileName || item.listingTitle}
+                                      loading="lazy"
+                                      decoding="async"
                                       className="h-full w-full object-cover"
                                       onError={retryOriginalOnImageError}
                                     />
@@ -1083,12 +1644,64 @@ const CustomerOrderDetail = () => {
         </DialogContent>
       </Dialog>
 
+      <Dialog open={!!optionNotePreview} onOpenChange={(open) => !open && setOptionNotePreview(null)}>
+        <DialogContent className="flex h-[100dvh] max-h-[100dvh] w-screen max-w-none flex-col gap-0 overflow-hidden rounded-none p-0 sm:h-[100dvh] sm:max-w-none sm:p-0">
+          <DialogHeader className="border-b border-border px-4 py-3 pr-12">
+            <DialogTitle className="text-base font-semibold">
+              {optionNotePreview?.label ?? "Option description"}
+            </DialogTitle>
+          </DialogHeader>
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 sm:px-8 sm:py-6">
+            <p className="whitespace-pre-wrap break-words text-base leading-relaxed text-foreground">
+              {optionNotePreview?.description}
+            </p>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <LegalPolicyLinks
+        surface="customer_web"
+        screen="order_confirm"
+        className="w-full border-t border-border/60"
+      />
+
+      {awaitingExtension && (
+        <Card className="border-orange-200 bg-orange-50 shadow-sm dark:border-orange-900/50 dark:bg-orange-950/20">
+          <CardContent className="space-y-3 p-3 sm:p-4">
+            <div>
+              <p className="text-sm font-semibold text-orange-950 dark:text-orange-100">Extension approved</p>
+              <p className="mt-1 text-sm text-orange-950/80 dark:text-orange-100/80">
+                {awaitingExtension.additionalDays} day{awaitingExtension.additionalDays === 1 ? "" : "s"} for {activeItem.listingTitle}. The end date stays {formatDetailDate(activeItem.endDate)} until this payment succeeds, then it moves to {formatDetailDate(awaitingExtension.newEndDate)}.
+              </p>
+            </div>
+            <Button
+              className="w-full sm:w-auto"
+              disabled={payExtensionMut.isPending}
+              onClick={() => payExtensionMut.mutate(awaitingExtension)}
+            >
+              {payExtensionMut.isPending ? "Opening payment…" : `Pay ₹${awaitingExtension.totalAmount.toFixed(2)}`}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {pendingExtension && !awaitingExtension && (
+        <Card className="border-amber-200 bg-amber-50 shadow-sm dark:border-amber-900/50 dark:bg-amber-950/20">
+          <CardContent className="p-3 sm:p-4">
+            <p className="text-sm font-semibold text-amber-950 dark:text-amber-100">Extension waiting for vendor approval</p>
+            <p className="mt-1 text-sm text-amber-950/80 dark:text-amber-100/80">
+              {pendingExtension.additionalDays} day{pendingExtension.additionalDays === 1 ? "" : "s"} · ₹{pendingExtension.totalAmount.toFixed(2)}. This amount is not in the order total yet.
+            </p>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Support and Cancellation Actions for Selected Item */}
       <div className="grid grid-cols-2 gap-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:flex sm:flex-wrap sm:gap-3">
         <Button variant="outline" className="w-full justify-center sm:w-auto" asChild>
           <Link
             className="inline-flex items-center justify-center"
-            to={`/customer/support?order=${encodeURIComponent(activeItem.orderNumber)}`}
+            to={`/customer/support?order=${encodeURIComponent(activeItem.orderNumber)}&orderId=${encodeURIComponent(activeItem.id)}`}
           >
             <Headset className="mr-1.5 h-4 w-4 shrink-0 sm:mr-2" />
             <span className="sm:hidden">Support</span>
@@ -1107,17 +1720,19 @@ const CustomerOrderDetail = () => {
             variant="destructive"
             className="col-span-2 w-full sm:col-auto sm:w-auto"
             disabled={cancelMut.isPending}
-            onClick={() => cancelMut.mutate(activeItem.id)}
+            onClick={() => setCancelConfirmOpen(true)}
           >
             Cancel item request
           </Button>
         )}
 
         {activeItem.status.trim().toLowerCase() === "active" && activeItem.orderType.toLowerCase() === "rent" && (
-          <div className="col-span-2 grid grid-cols-2 gap-2 sm:contents">
+          <div className={cn("col-span-2 grid gap-2 sm:contents", SHOW_CUSTOMER_BUYOUT ? "grid-cols-2" : "grid-cols-1")}>
             <Button
               variant="default"
               className="w-full sm:w-auto"
+              disabled={Boolean(awaitingExtension)}
+              title={awaitingExtension ? "Pay the approved extension before requesting more days." : undefined}
               onClick={() => {
                 setExtensionDays(1);
                 setExtensionQuote(null);
@@ -1127,17 +1742,19 @@ const CustomerOrderDetail = () => {
             >
               Extend Rental
             </Button>
-            <Button
-              variant="secondary"
-              className="w-full sm:w-auto"
-              onClick={() => {
-                setBuyoutQuote(null);
-                setBuyoutDialogOpen(true);
-                quoteBuyoutMut.mutate();
-              }}
-            >
-              Buyout Item
-            </Button>
+            {SHOW_CUSTOMER_BUYOUT && (
+              <Button
+                variant="secondary"
+                className="w-full sm:w-auto"
+                onClick={() => {
+                  setBuyoutQuote(null);
+                  setBuyoutDialogOpen(true);
+                  quoteBuyoutMut.mutate();
+                }}
+              >
+                Buyout Item
+              </Button>
+            )}
           </div>
         )}
       </div>
@@ -1165,9 +1782,14 @@ const CustomerOrderDetail = () => {
                 />
                 <span className="text-sm text-muted-foreground">days</span>
               </div>
+              {(extensionQuote?.pendingDays ?? 0) > 0 && (
+                <p className="text-sm text-muted-foreground">
+                  A {extensionQuote?.pendingDays}-day extension is already waiting for approval. Confirming adds the days above, for {extensionQuote?.additionalDays} days in total.
+                </p>
+              )}
             </div>
 
-            {quoteExtensionMut.isPending ? (
+            {!extensionQuote && quoteExtensionMut.isPending ? (
               <p className="text-sm text-muted-foreground">Calculating quote…</p>
             ) : extensionQuote ? (
               <div className="rounded-lg border bg-muted/50 p-4 space-y-2 text-sm">
@@ -1187,13 +1809,16 @@ const CustomerOrderDetail = () => {
                   </div>
                 )}
                 <div className="flex justify-between text-muted-foreground">
-                  <span>GST:</span>
+                  <span>{formatGstRateLabel(extensionQuote.gstPercent)}:</span>
                   <span>₹{extensionQuote.gstAmount.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between border-t pt-2 font-bold text-foreground">
                   <span>Total Amount:</span>
                   <span>₹{extensionQuote.totalAmount.toFixed(2)}</span>
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  Payment is taken on this order page after the vendor approves. The end date changes only after that payment.
+                </p>
               </div>
             ) : null}
           </div>
@@ -1201,9 +1826,13 @@ const CustomerOrderDetail = () => {
             <Button variant="outline" onClick={() => setExtensionDialogOpen(false)}>Cancel</Button>
             <Button 
               onClick={() => processExtensionMut.mutate()} 
-              disabled={processExtensionMut.isPending || quoteExtensionMut.isPending || !extensionQuote}
+              disabled={processExtensionMut.isPending || !extensionQuote}
             >
-              {processExtensionMut.isPending ? "Processing..." : "Confirm & Pay"}
+              {processExtensionMut.isPending
+                ? "Processing..."
+                : (extensionQuote?.pendingDays ?? 0) > 0
+                  ? "Update request"
+                  : "Request extension"}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -1239,7 +1868,7 @@ const CustomerOrderDetail = () => {
                   </div>
                 )}
                 <div className="flex justify-between text-muted-foreground">
-                  <span>GST:</span>
+                  <span>{formatGstRateLabel(buyoutQuote.gstPercent)}:</span>
                   <span>₹{buyoutQuote.gstAmount.toFixed(2)}</span>
                 </div>
                 <div className="flex justify-between border-t border-emerald-200 pt-2 font-bold text-foreground dark:border-emerald-800">
@@ -1370,6 +1999,16 @@ const CustomerOrderDetail = () => {
           )}
         </SheetContent>
       </Sheet>
+
+      <CancelOrderConfirm
+        open={cancelConfirmOpen}
+        onOpenChange={setCancelConfirmOpen}
+        pending={cancelMut.isPending}
+        onConfirm={() => {
+          if (!activeItem) return;
+          cancelMut.mutate(activeItem.id, { onSettled: () => setCancelConfirmOpen(false) });
+        }}
+      />
     </div>
   );
 };

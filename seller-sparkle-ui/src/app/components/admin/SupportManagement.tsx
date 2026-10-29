@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useSearchParams } from "react-router-dom";
-import { useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
+import { TablePagination } from "@/app/components/shared/TablePagination";
 import { 
   Ticket, 
   MessageSquare, 
@@ -44,20 +45,21 @@ import { toast } from "sonner";
 
 const SUPPORT_CHAT_POLL_MS = 3000;
 const SUPPORT_TICKETS_POLL_MS = 10000;
+const PAGE_SIZE = 8;
 
 export default function SupportManagement() {
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [tickets, setTickets] = useState<SupportTicketDto[]>([]);
   const [selectedTicket, setSelectedTicket] = useState<SupportTicketDto | null>(null);
   const [messages, setMessages] = useState<SupportMessageDto[]>([]);
-  const [loading, setLoading] = useState(false);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [sending, setSending] = useState(false);
   const [newMessage, setNewMessage] = useState("");
   const [search, setSearch] = useState("");
+  const [appliedSearch, setAppliedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
+  const [page, setPage] = useState(1);
 
   const scrollRef = useRef<HTMLDivElement>(null);
   const selectedTicketIdRef = useRef<string | null>(null);
@@ -67,34 +69,56 @@ export default function SupportManagement() {
     selectedTicketIdRef.current = selectedTicket?.id ?? null;
   }, [selectedTicket?.id]);
 
-  const loadTickets = useCallback(async (silent = false) => {
-    if (!silent) setLoading(true);
-    try {
-      const data = await supportApi.getAllTickets({ quiet: silent });
-      setTickets(data);
-      const activeId = selectedTicketIdRef.current;
-      if (activeId) {
-        const refreshed = data.find((t) => t.id === activeId);
-        if (refreshed) {
-          setSelectedTicket((current) =>
-            current?.id === refreshed.id ? refreshed : current,
-          );
-        }
-      }
-    } catch {
-      if (!silent) toast.error("Failed to load tickets.");
-    } finally {
-      if (!silent) setLoading(false);
-    }
-  }, []);
+  useEffect(() => {
+    const t = window.setTimeout(() => {
+      setAppliedSearch(search.trim());
+      setPage(1);
+    }, 350);
+    return () => window.clearTimeout(t);
+  }, [search]);
 
   useEffect(() => {
-    void loadTickets();
-    const interval = setInterval(() => {
-      void loadTickets(true);
-    }, SUPPORT_TICKETS_POLL_MS);
-    return () => clearInterval(interval);
-  }, [loadTickets]);
+    setPage(1);
+  }, [statusFilter]);
+
+  const { data, isLoading, isPlaceholderData, isError, refetch } = useQuery({
+    queryKey: ["admin-support-ticket-summaries", page, appliedSearch, statusFilter],
+    queryFn: () =>
+      supportApi.getAdminTicketSummaries({
+        search: appliedSearch,
+        status: statusFilter,
+        page,
+        pageSize: PAGE_SIZE,
+      }, { quiet: true }),
+    placeholderData: keepPreviousData,
+    refetchInterval: SUPPORT_TICKETS_POLL_MS,
+  });
+  const isPageChanging = isPlaceholderData && !isLoading;
+  const tickets = data?.items ?? [];
+  const totalCount = data?.totalCount ?? 0;
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
+  const safePage = Math.min(Math.max(1, page), totalPages);
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
+
+  useEffect(() => {
+    if (isError) toast.error("Failed to load tickets.");
+  }, [isError]);
+
+  useEffect(() => {
+    const activeId = selectedTicketIdRef.current;
+    if (!activeId) return;
+    const refreshed = tickets.find((t) => t.id === activeId);
+    if (refreshed) {
+      setSelectedTicket((current) => (current?.id === refreshed.id ? refreshed : current));
+    }
+  }, [tickets]);
+
+  const loadTickets = useCallback(async (_silent = false) => {
+    await refetch();
+  }, [refetch]);
 
   const loadMessages = useCallback(async (ticketId: string, silent = false) => {
     if (!silent) setMessagesLoading(true);
@@ -102,8 +126,9 @@ export default function SupportManagement() {
       const data = await supportApi.getTicketMessages(ticketId, { markReadForAdmin: true });
       setMessages(data);
       void queryClient.invalidateQueries({ queryKey: ["admin-vendor-support-unread"] });
-      setTickets((prev) =>
-        prev.map((t) => (t.id === ticketId ? { ...t, unreadCount: 0 } : t)),
+      void queryClient.invalidateQueries({ queryKey: ["admin-support-ticket-summaries"] });
+      setSelectedTicket((current) =>
+        current?.id === ticketId ? { ...current, unreadCount: 0 } : current,
       );
     } catch {
       if (!silent) toast.error("Failed to load messages.");
@@ -112,16 +137,19 @@ export default function SupportManagement() {
     }
   }, [queryClient]);
 
-  // Deep-link from Admin Notifications: /admin/support?ticketId=...
+  const deepLinkTicketId = searchParams.get("ticketId");
+  const { data: deepLinkTicket } = useQuery({
+    queryKey: ["admin-support-ticket", deepLinkTicketId],
+    queryFn: () => supportApi.getAdminTicket(deepLinkTicketId!, { quiet: true }),
+    enabled: !!deepLinkTicketId,
+  });
+
   useEffect(() => {
-    const ticketId = searchParams.get("ticketId");
-    if (!ticketId || tickets.length === 0) return;
-    if (deepLinkHandledRef.current === ticketId) return;
-    const match = tickets.find((t) => t.id === ticketId);
-    if (!match) return;
-    deepLinkHandledRef.current = ticketId;
-    setSelectedTicket(match);
-  }, [searchParams, tickets]);
+    if (!deepLinkTicketId || !deepLinkTicket) return;
+    if (deepLinkHandledRef.current === deepLinkTicketId) return;
+    deepLinkHandledRef.current = deepLinkTicketId;
+    setSelectedTicket(deepLinkTicket);
+  }, [deepLinkTicketId, deepLinkTicket]);
 
   useEffect(() => {
     if (!selectedTicket) {
@@ -188,23 +216,7 @@ export default function SupportManagement() {
     }
   };
 
-  const filteredTickets = tickets.filter((t) => {
-    const q = search.toLowerCase();
-    const matchesSearch =
-      t.ticketNumber.toLowerCase().includes(q) ||
-      t.subject.toLowerCase().includes(q) ||
-      t.vendorEmail?.toLowerCase().includes(q) ||
-      t.vendorBusinessName?.toLowerCase().includes(q);
-
-    const status = t.status.toLowerCase();
-    const matchesStatus =
-      statusFilter === "all" ||
-      (statusFilter === "done"
-        ? status === "closed" || status === "resolved"
-        : status === statusFilter.toLowerCase());
-
-    return matchesSearch && matchesStatus;
-  });
+  const filteredTickets = tickets;
 
   const selectTicket = (ticket: SupportTicketDto) => {
     setSelectedTicket(ticket);
@@ -262,9 +274,9 @@ export default function SupportManagement() {
           variant="outline"
           size="sm"
           className="shrink-0 gap-2 font-bold shadow-sm sm:h-10 sm:px-4"
-          disabled={loading}
+          disabled={isLoading}
         >
-          <RefreshCw className={cn("h-4 w-4", loading && "animate-spin")} />
+          <RefreshCw className={cn("h-4 w-4", isLoading && "animate-spin")} />
           <span className="hidden sm:inline">Refresh</span>
         </Button>
       </div>
@@ -282,7 +294,7 @@ export default function SupportManagement() {
             <div className="flex items-center justify-between gap-2">
               <p className="text-sm font-semibold text-foreground">Tickets</p>
               <span className="text-xs text-muted-foreground tabular-nums">
-                {filteredTickets.length}
+                {totalCount}
               </span>
             </div>
             <div className="relative">
@@ -304,8 +316,8 @@ export default function SupportManagement() {
             </Tabs>
           </CardHeader>
           <ScrollArea className="flex-1">
-            <div className="space-y-2 p-3">
-              {loading ? (
+            <div className={cn("space-y-2 p-3 transition-opacity duration-200", isPageChanging && "opacity-50")}>
+              {isLoading ? (
                 <div className="min-h-[8rem]" aria-busy="true" aria-label="Loading tickets" />
               ) : filteredTickets.length === 0 ? (
                 <div className="flex flex-col items-center justify-center px-6 py-14 text-center text-muted-foreground">
@@ -384,6 +396,17 @@ export default function SupportManagement() {
                 })
               )}
             </div>
+            {totalCount > 0 ? (
+              <div className="border-t border-border/70 px-3 py-2">
+                <TablePagination
+                  page={safePage}
+                  pageSize={PAGE_SIZE}
+                  total={totalCount}
+                  onPageChange={setPage}
+                  label="tickets"
+                />
+              </div>
+            ) : null}
           </ScrollArea>
         </Card>
 

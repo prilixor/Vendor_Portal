@@ -59,7 +59,8 @@ internal sealed class RentalPricingService(
             ProductRentalPricingApplicator.ToDurationInputs(masters),
             ProductRentalPricingApplicator.ToExistingInputs(product.RentalPricingPlans),
             _options,
-            resetManualOverrides);
+            resetManualOverrides,
+            product.MinimumRentalDays);
 
         ProductRentalPricingApplicator.Apply(product, calculation);
         return Result.Success();

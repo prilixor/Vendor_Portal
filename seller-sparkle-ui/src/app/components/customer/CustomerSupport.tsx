@@ -1,6 +1,5 @@
 import { useState } from "react";
 import { useSearchParams, Link } from "react-router-dom";
-import { useQuery } from "@tanstack/react-query";
 import {
   PhoneCall,
   Mail,
@@ -16,20 +15,23 @@ import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/app
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import { BackLink } from "@/app/components/shared/BackLink";
-import { websiteContentApi } from "@/app/services/websiteContentApi";
+import { usePublicWebsiteContent } from "@/app/hooks/usePublicWebsiteContent";
 import { toast } from "sonner";
+import { LegalPolicyLinks } from "@/app/components/legal/LegalPolicyLinks";
 
 const CustomerSupport = () => {
   const [searchParams] = useSearchParams();
   const orderRef = searchParams.get("order")?.trim();
+  const orderId = searchParams.get("orderId")?.trim();
+  const backToOrder =
+    orderId && /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(orderId)
+      ? `/customer/orders/${orderId}`
+      : orderRef
+        ? `/customer/orders/${encodeURIComponent(orderRef)}`
+        : null;
   const [copied, setCopied] = useState(false);
 
-  const { data: publicContent } = useQuery({
-    queryKey: ["publicWebsiteContent"],
-    queryFn: () => websiteContentApi.getPublicContent(),
-    staleTime: 1000 * 60 * 5,
-    retry: 1,
-  });
+  const { data: publicContent } = usePublicWebsiteContent();
 
   const contact = publicContent?.contact;
   const phone = contact?.phone || "+91 8511225390";
@@ -81,7 +83,7 @@ const CustomerSupport = () => {
       <div>
         {orderRef ? (
           <div className="mb-3">
-            <BackLink to={`/customer/orders/${encodeURIComponent(orderRef)}`} label="Back to order" />
+            <BackLink to={backToOrder ?? "/customer/orders"} label="Back to order" />
           </div>
         ) : null}
         <div className="flex items-center gap-3">
@@ -148,7 +150,7 @@ const CustomerSupport = () => {
                 title="Copy phone number"
                 aria-label="Copy phone number"
               >
-                {copied ? <Check className="h-4 w-4 text-emerald-500" /> : <Copy className="h-4 w-4" />}
+                {copied ? <Check className="h-4 w-4 text-emerald-700 dark:text-emerald-300" /> : <Copy className="h-4 w-4" />}
               </button>
             </div>
             <div className="grid grid-cols-2 gap-2">
@@ -166,7 +168,7 @@ const CustomerSupport = () => {
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  <MessageSquare className="mr-1.5 h-3.5 w-3.5 text-emerald-500" /> WhatsApp
+                  <MessageSquare className="mr-1.5 h-3.5 w-3.5 text-emerald-700 dark:text-emerald-300" /> WhatsApp
                 </a>
               </Button>
             </div>
@@ -189,7 +191,7 @@ const CustomerSupport = () => {
                 <a
                   href={`mailto:${businessEmail}`}
                   onClick={(e) => handleEmailClick(businessEmail, e)}
-                  className="font-semibold text-primary hover:underline cursor-pointer"
+                  className="cursor-pointer font-semibold text-primary no-underline transition-colors hover:text-primary/80 hover:no-underline"
                 >
                   {businessEmail}
                 </a>
@@ -199,7 +201,7 @@ const CustomerSupport = () => {
                 <a
                   href={`mailto:${supportEmail}`}
                   onClick={(e) => handleEmailClick(supportEmail, e)}
-                  className="font-semibold text-primary hover:underline cursor-pointer"
+                  className="cursor-pointer font-semibold text-primary no-underline transition-colors hover:text-primary/80 hover:no-underline"
                 >
                   {supportEmail}
                 </a>
@@ -241,6 +243,16 @@ const CustomerSupport = () => {
           </CardContent>
         </Card>
       </div>
+
+      <Card className="max-w-md border-border/60 p-4 sm:p-6">
+        <h2 className="mb-1 font-semibold">Legal</h2>
+        <p className="mb-3 text-xs text-muted-foreground">Agreements for this support channel.</p>
+        <LegalPolicyLinks
+          surface="customer_web"
+          screen="support"
+          layout="quiet"
+        />
+      </Card>
 
       {/* Institutional & Bulk Inquiry Banner */}
       <Card className="border-border/80 bg-muted/20">

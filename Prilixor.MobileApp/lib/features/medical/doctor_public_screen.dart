@@ -53,7 +53,9 @@ class _DoctorPublicScreenState extends State<DoctorPublicScreen> {
 
   void _goShop() {
     Navigator.of(context).pushAndRemoveUntil(
-      MaterialPageRoute(builder: (_) => const CustomerDashboard()),
+      MaterialPageRoute(
+        builder: (_) => CustomerDashboard(key: CustomerDashboard.navigationKey),
+      ),
       (_) => false,
     );
     // Ensure catalog is ready for Discover tab.
@@ -68,7 +70,7 @@ class _DoctorPublicScreenState extends State<DoctorPublicScreen> {
     return Scaffold(
       backgroundColor: colors.background,
       appBar: AppBar(
-        title: Text('Doctor reference', style: TextStyle(color: colors.textPrimary)),
+        title: Text('Doctor profile', style: TextStyle(color: colors.textPrimary)),
         backgroundColor: colors.background,
         iconTheme: IconThemeData(color: colors.textPrimary),
       ),
@@ -119,8 +121,10 @@ class _DoctorPublicScreenState extends State<DoctorPublicScreen> {
                             Expanded(
                               child: Text(
                                 'Unique ID: ${doctor.uniqueCode}',
-                                style: const TextStyle(
-                                  color: Color(0xFFA5B4FC),
+                                style: TextStyle(
+                                  color: context.isDarkMode
+                                      ? const Color(0xFF5EEAD4)
+                                      : const Color(0xFF0F766E),
                                   fontWeight: FontWeight.w700,
                                 ),
                               ),
@@ -133,7 +137,7 @@ class _DoctorPublicScreenState extends State<DoctorPublicScreen> {
                         ),
                         const SizedBox(height: 8),
                         Text(
-                          'Use this Unique ID at checkout as an optional doctor reference.',
+                          'Orders use a prescription upload. A doctor Unique ID is not collected at checkout.',
                           style: TextStyle(color: colors.textMuted, fontSize: 12),
                         ),
                       ],

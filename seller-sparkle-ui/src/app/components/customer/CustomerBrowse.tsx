@@ -1,7 +1,7 @@
 import { useState, useEffect, useLayoutEffect, useMemo, type MouseEvent } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
 import { Link, useNavigate, useSearchParams } from "react-router-dom";
-import { Heart, ImageOff, MapPin } from "lucide-react";
+import { Heart, ImageOff, Loader2, MapPin } from "lucide-react";
 import { customerApi } from "@/app/services/customerApi";
 import { Button } from "@/app/components/ui/button";
 import { Card, CardContent, CardFooter, CardHeader } from "@/app/components/ui/card";
@@ -32,14 +32,12 @@ import {
 
 import { useQueryClient, useMutation } from "@tanstack/react-query";
 import { toast } from "sonner";
+import { PageContentGate } from "@/app/components/shared/PageLoader";
+
+const PAGE_SIZE = 9;
 
 /** Filters by inventory level on active listings (not listing active/inactive). */
 type StockFilter = "all" | "low_stock" | "out_of_stock";
-
-function isActiveCatalogListing(listingStatus: string): boolean {
-  const status = listingStatus.trim().toLowerCase();
-  return status === "active" || status === "approved";
-}
 
 export function availabilityBadge(
   status: string,
@@ -129,6 +127,7 @@ const CustomerBrowse = () => {
   const [stockFilter, setStockFilter] = useState<StockFilter>("all");
   const [showFavoritesOnly, setShowFavoritesOnly] = useState(false);
   const [showLocationPrompt, setShowLocationPrompt] = useState(false);
+  const [loadMoreEl, setLoadMoreEl] = useState<HTMLDivElement | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
   const tabParam = searchParams.get(SHOP_TAB_PARAM);
   const browseMode = resolveShopBrowseMode(tabParam);
@@ -220,9 +219,37 @@ const CustomerBrowse = () => {
     queryFn: () => customerApi.getCatalogCategories(),
   });
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: ["customer-catalog", debouncedSearch],
-    queryFn: () => customerApi.getCatalogListings(undefined, debouncedSearch),
+  const {
+    data,
+    isLoading,
+    isFetchingNextPage,
+    hasNextPage,
+    fetchNextPage,
+    error,
+  } = useInfiniteQuery({
+    queryKey: [
+      "customer-catalog-summaries",
+      debouncedSearch,
+      browseMode,
+      appliedCat,
+      stockFilter,
+      showFavoritesOnly,
+    ],
+    queryFn: ({ pageParam }) =>
+      customerApi.getCatalogListingSummaries({
+        search: debouncedSearch,
+        category: appliedCat,
+        isChemical: browseMode === "chemicals",
+        stock: stockFilter,
+        favoritesOnly: showFavoritesOnly,
+        page: pageParam,
+        pageSize: PAGE_SIZE,
+      }),
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) => {
+      const loaded = lastPage.page * lastPage.pageSize;
+      return loaded < lastPage.totalCount ? lastPage.page + 1 : undefined;
+    },
   });
 
   const { data: addresses = [], isLoading: addressesLoading } = useQuery({
@@ -276,38 +303,48 @@ const CustomerBrowse = () => {
     { id: "low_stock", label: "Low stock" },
     { id: "out_of_stock", label: "Out of stock" },
   ];
-  /** Active listings for the current tab (+ stock/favorites); category applied separately for the grid. */
-  const catalogBeforeCategory = useMemo(() => {
-    if (!data) return [];
-    let result = data.filter((item) => isActiveCatalogListing(item.listingStatus));
-    if (browseMode === "equipment") {
-      result = result.filter((item) => item.baseUnit == null);
-    } else {
-      result = result.filter((item) => item.baseUnit != null);
-    }
-    if (stockFilter !== "all") {
-      result = result.filter((item) => item.availabilityStatus.toLowerCase() === stockFilter);
-    }
-    if (showFavoritesOnly) {
-      result = result.filter((item) => wishlist.has(item.id));
-    }
-    return result;
-  }, [data, stockFilter, showFavoritesOnly, wishlist, browseMode]);
-
-  const categoryItemCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    for (const item of catalogBeforeCategory) {
-      const name = item.categoryName?.trim();
-      if (!name) continue;
-      counts[name] = (counts[name] ?? 0) + 1;
-    }
-    return counts;
-  }, [catalogBeforeCategory]);
-
   const filteredData = useMemo(() => {
-    if (!appliedCat) return catalogBeforeCategory;
-    return catalogBeforeCategory.filter((item) => item.categoryName === appliedCat);
-  }, [catalogBeforeCategory, appliedCat]);
+    const seen = new Set<string>();
+    const items = [];
+    for (const row of data?.pages.flatMap((p) => p.items) ?? []) {
+      if (seen.has(row.id)) continue;
+      seen.add(row.id);
+      items.push(row);
+    }
+    return items;
+  }, [data]);
+  const totalCount = data?.pages[0]?.totalCount ?? 0;
+  const allCount = data?.pages[0]?.allCount ?? 0;
+  const categoryItemCounts = data?.pages[0]?.categoryCounts ?? {};
+
+  useEffect(() => {
+    if (!loadMoreEl || !hasNextPage || isFetchingNextPage) return;
+
+    const loadIfNear = () => {
+      const rect = loadMoreEl.getBoundingClientRect();
+      if (rect.top < window.innerHeight + 480) {
+        void fetchNextPage();
+      }
+    };
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        if (entries[0]?.isIntersecting) {
+          void fetchNextPage();
+        }
+      },
+      { root: null, rootMargin: "480px 0px", threshold: 0 },
+    );
+    observer.observe(loadMoreEl);
+    loadIfNear();
+    window.addEventListener("scroll", loadIfNear, { passive: true });
+    window.addEventListener("resize", loadIfNear);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener("scroll", loadIfNear);
+      window.removeEventListener("resize", loadIfNear);
+    };
+  }, [loadMoreEl, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   // Drop category selection when switching tabs if it doesn't belong to the new mode.
   useEffect(() => {
@@ -468,19 +505,8 @@ const CustomerBrowse = () => {
           </div>
         </div>
 
-        {(activeChips.length > 0 || (!isLoading && filteredData.length > 0)) && (
-          <div className="mt-3 flex flex-col gap-2 border-t border-border/60 pt-3 sm:flex-row sm:items-center sm:justify-between">
-            <p className="text-sm text-muted-foreground">
-              <span className="font-medium text-foreground">{filteredData.length}</span>
-              {` ${filteredData.length === 1 ? "product" : "products"}`}
-              {browseMode === "chemicals" ? " for purchase" : " for rent"}
-              {appliedCat ? (
-                <>
-                  {" "}
-                  in <span className="font-medium text-foreground">{appliedCat}</span>
-                </>
-              ) : null}
-            </p>
+        {activeChips.length > 0 && (
+          <div className="mt-3 border-t border-border/60 pt-3">
             <ActiveFilterChips chips={activeChips} onClearAll={clearAllFilters} clearLabel="Clear all" />
           </div>
         )}
@@ -540,7 +566,7 @@ const CustomerBrowse = () => {
               <FilterCategoryList
                 options={modeCategoryNames}
                 counts={categoryItemCounts}
-                allCount={catalogBeforeCategory.length}
+                allCount={allCount}
                 value={draftCategory}
                 onChange={setDraftCategory}
                 active={filtersOpen}
@@ -556,11 +582,12 @@ const CustomerBrowse = () => {
         </div>
       )}
 
+      <PageContentGate loading={isLoading && !data} className="min-h-[16rem] py-0">
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        {!isLoading &&
-          filteredData.map((item) => {
+        {filteredData.map((item) => {
             const ls = item.listingStatus.trim().toLowerCase();
             const isBrowsable = ls === "active" || ls === "approved";
+            const shopState = { previewImage: item.primaryImageUrl ?? "" };
             const isChem = !!item.isChemical;
             const showRent = !isChem && (item.isRentEnabled ?? true);
             const showBuy = isChem || !!item.isBuyEnabled;
@@ -603,6 +630,7 @@ const CustomerBrowse = () => {
                   {isBrowsable ? (
                     <Link
                       to={`/customer/shop/${item.id}`}
+                      state={shopState}
                       className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     >
                       <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
@@ -639,6 +667,7 @@ const CustomerBrowse = () => {
                   {isBrowsable ? (
                     <Link
                       to={`/customer/shop/${item.id}`}
+                      state={shopState}
                       className="block rounded-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     >
                       <p className="line-clamp-2 min-h-[2.5rem] text-[15px] font-semibold leading-snug tracking-tight group-hover:text-primary">
@@ -688,7 +717,7 @@ const CustomerBrowse = () => {
                 <CardFooter className="mt-auto border-t border-border/70 bg-muted/20 px-4 py-3">
                   {isBrowsable ? (
                     <Button size="sm" className="w-full bg-gradient-primary shadow-glow hover:opacity-95" asChild>
-                      <Link to={`/customer/shop/${item.id}`}>View details</Link>
+                      <Link to={`/customer/shop/${item.id}`} state={shopState}>View details</Link>
                     </Button>
                   ) : (
                     <Button variant="outline" size="sm" className="w-full" disabled>
@@ -701,7 +730,7 @@ const CustomerBrowse = () => {
           })}
       </div>
 
-      {!isLoading && filteredData.length === 0 && (
+      {totalCount === 0 && (
         <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-border bg-muted/20 px-6 py-16 text-center">
           <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-full bg-muted">
             <ImageOff className="h-5 w-5 text-muted-foreground" />
@@ -717,6 +746,18 @@ const CustomerBrowse = () => {
           )}
         </div>
       )}
+
+      {totalCount > 0 && (
+        <div ref={setLoadMoreEl} className="flex min-h-10 items-center justify-center py-4">
+          {isFetchingNextPage ? (
+            <p className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Loader2 className="h-4 w-4 animate-spin" />
+              Loading more products...
+            </p>
+          ) : null}
+        </div>
+      )}
+      </PageContentGate>
 
       <Dialog open={showLocationPrompt} onOpenChange={(open) => !open && handleDismissPrompt()}>
         <DialogContent>

@@ -5,9 +5,11 @@ using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Prilixor.VendorPortal.API.Extensions;
 using Prilixor.VendorPortal.Application.Abstractions;
+using Prilixor.VendorPortal.Application.Admin.LegalDocuments;
 using Prilixor.VendorPortal.Application.Customers;
 using Prilixor.VendorPortal.Application.Onboarding;
 using Prilixor.VendorPortal.Domain.Customers;
+using Prilixor.VendorPortal.Domain.Legal;
 
 namespace Prilixor.VendorPortal.API.EndPoints.Customers;
 
@@ -21,10 +23,13 @@ public sealed class CustomersRouteGroup : Group
 
 public sealed class RegisterCustomerRequest
 {
-    public string Email { get; set; } = string.Empty;
+    public string? Email { get; set; }
     public string Password { get; set; } = string.Empty;
     public string FullName { get; set; } = string.Empty;
     public string? Phone { get; set; }
+    public bool AcceptedLegal { get; set; }
+    public string? SourceSurface { get; set; }
+    public List<string>? AcceptedSlugs { get; set; }
 }
 
 public sealed class RegisterCustomerEndpoint(IMediator mediator)
@@ -41,7 +46,16 @@ public sealed class RegisterCustomerEndpoint(IMediator mediator)
 
     public override async Task<Results<Ok<CustomerRegisteredDto>, ProblemHttpResult>> ExecuteAsync(RegisterCustomerRequest req, CancellationToken ct)
     {
-        var result = await mediator.Send(new RegisterCustomerCommand(req.Email, req.Password, req.FullName, req.Phone), ct);
+        var result = await mediator.Send(new RegisterCustomerCommand(
+            req.Email,
+            req.Password,
+            req.FullName,
+            req.Phone,
+            req.AcceptedLegal,
+            req.SourceSurface,
+            req.AcceptedSlugs,
+            HttpContext.Connection.RemoteIpAddress?.ToString(),
+            HttpContext.Request.Headers.UserAgent.ToString()), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }
@@ -77,6 +91,68 @@ public sealed class GetCustomerCatalogEndpoint(IMediator mediator)
         }
 
         var result = await mediator.Send(new GetCustomerCatalogListingsQuery(req.Category, req.Search, customerId), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class GetCustomerCatalogListingSummariesRequest
+{
+    [QueryParam]
+    public string? Search { get; set; }
+
+    [QueryParam]
+    public string? Category { get; set; }
+
+    [QueryParam]
+    public bool? IsChemical { get; set; }
+
+    [QueryParam]
+    public string? Stock { get; set; }
+
+    [QueryParam]
+    public bool FavoritesOnly { get; set; }
+
+    [QueryParam]
+    public int Page { get; set; } = 1;
+
+    [QueryParam]
+    public int PageSize { get; set; } = 9;
+}
+
+public sealed class GetCustomerCatalogListingSummariesEndpoint(IMediator mediator)
+    : Endpoint<GetCustomerCatalogListingSummariesRequest, Results<Ok<CustomerCatalogListingSummariesResult>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("catalog/listings/summaries");
+        AllowAnonymous();
+        Group<CustomersRouteGroup>();
+        DontAutoTag();
+        Options(x => x.WithTags("Customers"));
+    }
+
+    public override async Task<Results<Ok<CustomerCatalogListingSummariesResult>, ProblemHttpResult>> ExecuteAsync(
+        GetCustomerCatalogListingSummariesRequest req,
+        CancellationToken ct)
+    {
+        Guid? customerId = null;
+        var subject = User.FindFirstValue(ClaimTypes.NameIdentifier);
+        if (Guid.TryParse(subject, out var parsedCustomerId))
+        {
+            customerId = parsedCustomerId;
+        }
+
+        var page = req.Page < 1 ? 1 : req.Page;
+        var pageSize = req.PageSize is < 1 or > 50 ? 9 : req.PageSize;
+        var result = await mediator.Send(new GetCustomerCatalogListingSummariesQuery(
+            req.Search,
+            req.Category,
+            req.IsChemical,
+            req.Stock,
+            req.FavoritesOnly,
+            customerId,
+            page,
+            pageSize), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }
@@ -180,6 +256,8 @@ public sealed class CustomerListingDetailResponse
     public string AvailabilityStatus { get; set; } = "available";
     public string Description { get; set; } = string.Empty;
     public List<string> ImageUrls { get; set; } = [];
+    /// <summary>Same order as <see cref="ImageUrls"/>; empty when that gallery slot has no thumb.</summary>
+    public List<string> ImageThumbnailUrls { get; set; } = [];
     public bool IsRentEnabled { get; set; } = true;
     public bool IsBuyEnabled { get; set; }
     /// <summary>True when this listing is a chemical (drives buy-only + chemical spec display on the customer UI).</summary>
@@ -239,7 +317,7 @@ public sealed class GetCustomerListingDetailEndpoint(ICustomerRepository custome
 {
     public override void Configure()
     {
-        Get("catalog/listings/{ListingId}");
+        Get("catalog/listings/{ListingId:guid}");
         AllowAnonymous();
         Group<CustomersRouteGroup>();
         DontAutoTag();
@@ -290,6 +368,7 @@ public sealed class GetCustomerListingDetailEndpoint(ICustomerRepository custome
             AvailabilityStatus = availabilityStatus,
             Description = agg.Description,
             ImageUrls = agg.ImageUrls.Count > 0 ? agg.ImageUrls : [],
+            ImageThumbnailUrls = agg.ImageThumbnailUrls.Count > 0 ? agg.ImageThumbnailUrls : [],
             IsRentEnabled = agg.IsRentEnabled,
             IsBuyEnabled = agg.IsBuyEnabled,
             IsChemical = agg.IsChemical,
@@ -370,6 +449,8 @@ public sealed class UpdateCustomerProfileRequest
 {
     public string FullName { get; set; } = string.Empty;
     public string? Phone { get; set; }
+    /// <summary>Optional. Phone-only accounts may set email once (verification email is sent).</summary>
+    public string? Email { get; set; }
 }
 
 public sealed class UpdateCustomerProfileEndpoint(IMediator mediator)
@@ -390,7 +471,9 @@ public sealed class UpdateCustomerProfileEndpoint(IMediator mediator)
         if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var customerId))
             return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid token.", statusCode: 401);
 
-        var result = await mediator.Send(new UpdateCustomerProfileCommand(customerId, req.FullName, req.Phone), ct);
+        var result = await mediator.Send(
+            new UpdateCustomerProfileCommand(customerId, req.FullName, req.Phone, req.Email),
+            ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }
@@ -560,6 +643,7 @@ public sealed class CartLineDto
     public string? ReferenceNumber { get; set; }
     public Guid? RentalPricingPlanId { get; set; }
     public DateOnly? RentalStartDate { get; set; }
+    public bool HasPrescriptionFile { get; set; }
 }
 
 public sealed class PlaceCustomerOrdersRequest
@@ -567,11 +651,50 @@ public sealed class PlaceCustomerOrdersRequest
     public Guid? CustomerAddressId { get; set; }
     public string DeliveryOption { get; set; } = "standard";
     public List<CartLineDto> Lines { get; set; } = [];
+    public bool AcceptedLegal { get; set; }
+    public bool AcceptedPrescriptionLegal { get; set; }
+    public string? SourceSurface { get; set; }
 }
 
 public sealed class CustomerOrderExpirationsRequest
 {
     public int WithinDays { get; set; } = 7;
+}
+
+public sealed class GetCustomerOrderSummariesRequest
+{
+    [QueryParam]
+    public string? Search { get; set; }
+
+    [QueryParam]
+    public string? Status { get; set; }
+
+    [QueryParam]
+    public int Page { get; set; } = 1;
+
+    [QueryParam]
+    public int PageSize { get; set; } = 8;
+}
+
+public sealed class GetCustomerExpirationSummariesRequest
+{
+    [QueryParam]
+    public int WithinDays { get; set; } = 30;
+
+    [QueryParam]
+    public int Page { get; set; } = 1;
+
+    [QueryParam]
+    public int PageSize { get; set; } = 8;
+}
+
+public sealed class GetCustomerNotificationSummariesRequest
+{
+    [QueryParam]
+    public int Page { get; set; } = 1;
+
+    [QueryParam]
+    public int PageSize { get; set; } = 15;
 }
 
 public sealed class QuoteCustomerOrdersEndpoint(IMediator mediator)
@@ -595,7 +718,7 @@ public sealed class QuoteCustomerOrdersEndpoint(IMediator mediator)
         var lines = req.Lines.ConvertAll(l => new CartLineRequest(
             l.ListingId, l.Quantity, l.RentalDays, l.RentalPeriodUnit, l.OrderType, l.ProductVariantId,
             l.DoctorId, l.HospitalId, l.ContactNumber, l.ReferenceNumber,
-            l.RentalPricingPlanId, l.RentalStartDate));
+            l.RentalPricingPlanId, l.RentalStartDate, l.HasPrescriptionFile));
         var result = await mediator.Send(new QuoteCustomerOrdersCommand(
             customerId,
             req.CustomerAddressId,
@@ -627,12 +750,18 @@ public sealed class PlaceCustomerOrdersEndpoint(IMediator mediator)
         var lines = req.Lines.ConvertAll(l => new CartLineRequest(
             l.ListingId, l.Quantity, l.RentalDays, l.RentalPeriodUnit, l.OrderType, l.ProductVariantId,
             l.DoctorId, l.HospitalId, l.ContactNumber, l.ReferenceNumber,
-            l.RentalPricingPlanId, l.RentalStartDate));
+            l.RentalPricingPlanId, l.RentalStartDate, l.HasPrescriptionFile));
         var result = await mediator.Send(new PlaceCustomerOrdersCommand(
             customerId,
             req.CustomerAddressId,
             req.DeliveryOption,
-            lines), ct);
+            lines,
+            null,
+            req.AcceptedLegal,
+            req.AcceptedPrescriptionLegal,
+            req.SourceSurface ?? "customer_web",
+            HttpContext.Connection.RemoteIpAddress?.ToString(),
+            HttpContext.Request.Headers.UserAgent.ToString()), ct);
 
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
@@ -661,6 +790,86 @@ public sealed class GetCustomerOrdersEndpoint(IMediator mediator)
     }
 }
 
+public sealed class GetCustomerOrderSummariesEndpoint(IMediator mediator)
+    : Endpoint<GetCustomerOrderSummariesRequest, Results<Ok<CustomerOrderListResult>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("me/orders/summaries");
+        AuthSchemes(JwtBearerDefaults.AuthenticationScheme);
+        Policies("CustomerOnly");
+        Group<CustomersRouteGroup>();
+        DontAutoTag();
+        Options(x => x.WithTags("Customers"));
+    }
+
+    public override async Task<Results<Ok<CustomerOrderListResult>, ProblemHttpResult>> ExecuteAsync(
+        GetCustomerOrderSummariesRequest req,
+        CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var customerId))
+            return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid token.", statusCode: 401);
+
+        var page = req.Page < 1 ? 1 : req.Page;
+        var pageSize = req.PageSize is < 1 or > 50 ? 8 : req.PageSize;
+        var result = await mediator.Send(
+            new GetCustomerOrderListQuery(customerId, req.Search, req.Status, page, pageSize),
+            ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class GetCustomerOrderGroupEndpoint(IMediator mediator)
+    : Endpoint<CustomerOrderIdRequest, Results<Ok<List<CustomerOrderDto>>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("me/orders/{OrderId:guid}/group");
+        AuthSchemes(JwtBearerDefaults.AuthenticationScheme);
+        Policies("CustomerOnly");
+        Group<CustomersRouteGroup>();
+        DontAutoTag();
+        Options(x => x.WithTags("Customers"));
+    }
+
+    public override async Task<Results<Ok<List<CustomerOrderDto>>, ProblemHttpResult>> ExecuteAsync(
+        CustomerOrderIdRequest req,
+        CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var customerId))
+            return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid token.", statusCode: 401);
+
+        if (!Guid.TryParse(req.OrderId, out var orderId))
+            return TypedResults.Problem(title: "customers.invalid_id", detail: "Invalid order id.", statusCode: 400);
+
+        var result = await mediator.Send(new GetCustomerOrderGroupQuery(customerId, orderId), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class GetCustomerDashboardSummaryEndpoint(IMediator mediator)
+    : EndpointWithoutRequest<Results<Ok<CustomerDashboardSummaryDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("me/dashboard/summary");
+        AuthSchemes(JwtBearerDefaults.AuthenticationScheme);
+        Policies("CustomerOnly");
+        Group<CustomersRouteGroup>();
+        DontAutoTag();
+        Options(x => x.WithTags("Customers"));
+    }
+
+    public override async Task<Results<Ok<CustomerDashboardSummaryDto>, ProblemHttpResult>> ExecuteAsync(CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var customerId))
+            return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid token.", statusCode: 401);
+
+        var result = await mediator.Send(new GetCustomerDashboardSummaryQuery(customerId), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
 public sealed class GetCustomerOrderExpirationsEndpoint(IMediator mediator)
     : Endpoint<CustomerOrderExpirationsRequest, Results<Ok<List<ExpiringOrderDto>>, ProblemHttpResult>>
 {
@@ -680,6 +889,36 @@ public sealed class GetCustomerOrderExpirationsEndpoint(IMediator mediator)
             return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid token.", statusCode: 401);
 
         var result = await mediator.Send(new GetCustomerOrderExpirationsQuery(customerId, req.WithinDays), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class GetCustomerExpirationSummariesEndpoint(IMediator mediator)
+    : Endpoint<GetCustomerExpirationSummariesRequest, Results<Ok<CustomerExpirationListResult>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("me/orders/expirations/summaries");
+        AuthSchemes(JwtBearerDefaults.AuthenticationScheme);
+        Policies("CustomerOnly");
+        Group<CustomersRouteGroup>();
+        DontAutoTag();
+        Options(x => x.WithTags("Customers"));
+    }
+
+    public override async Task<Results<Ok<CustomerExpirationListResult>, ProblemHttpResult>> ExecuteAsync(
+        GetCustomerExpirationSummariesRequest req,
+        CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var customerId))
+            return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid token.", statusCode: 401);
+
+        var page = req.Page < 1 ? 1 : req.Page;
+        var pageSize = req.PageSize is < 1 or > 50 ? 8 : req.PageSize;
+        var withinDays = req.WithinDays is < 1 or > 60 ? 30 : req.WithinDays;
+        var result = await mediator.Send(
+            new GetCustomerExpirationListQuery(customerId, withinDays, page, pageSize),
+            ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }
@@ -760,6 +999,56 @@ public sealed class GetCustomerNotificationsEndpoint(IMediator mediator)
             return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid token.", statusCode: 401);
 
         var result = await mediator.Send(new GetCustomerNotificationsQuery(customerId), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class GetCustomerNotificationSummariesEndpoint(IMediator mediator)
+    : Endpoint<GetCustomerNotificationSummariesRequest, Results<Ok<CustomerNotificationListResult>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("me/notifications/summaries");
+        AuthSchemes(JwtBearerDefaults.AuthenticationScheme);
+        Policies("CustomerOnly");
+        Group<CustomersRouteGroup>();
+        DontAutoTag();
+        Options(x => x.WithTags("Customers"));
+    }
+
+    public override async Task<Results<Ok<CustomerNotificationListResult>, ProblemHttpResult>> ExecuteAsync(
+        GetCustomerNotificationSummariesRequest req,
+        CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var customerId))
+            return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid token.", statusCode: 401);
+
+        var page = req.Page < 1 ? 1 : req.Page;
+        var pageSize = req.PageSize is < 1 or > 50 ? 15 : req.PageSize;
+        var result = await mediator.Send(new GetCustomerNotificationListQuery(customerId, page, pageSize), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class GetCustomerUnreadNotificationCountEndpoint(IMediator mediator)
+    : EndpointWithoutRequest<Results<Ok<int>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("me/notifications/unread-count");
+        AuthSchemes(JwtBearerDefaults.AuthenticationScheme);
+        Policies("CustomerOnly");
+        Group<CustomersRouteGroup>();
+        DontAutoTag();
+        Options(x => x.WithTags("Customers"));
+    }
+
+    public override async Task<Results<Ok<int>, ProblemHttpResult>> ExecuteAsync(CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var customerId))
+            return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid token.", statusCode: 401);
+
+        var result = await mediator.Send(new GetCustomerUnreadNotificationCountQuery(customerId), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }
@@ -856,6 +1145,7 @@ public sealed class UpdateCustomerNotificationPreferenceRequest
     public bool DepositRefundsEnabled { get; set; }
     public bool DirectMessagesEnabled { get; set; }
     public bool MarketingEmailsEnabled { get; set; }
+    public bool SmsNotificationsEnabled { get; set; } = true;
 }
 
 public sealed class UpdateCustomerNotificationPreferenceEndpoint(IMediator mediator)
@@ -882,7 +1172,8 @@ public sealed class UpdateCustomerNotificationPreferenceEndpoint(IMediator media
             req.ExpirationRemindersEnabled,
             req.DepositRefundsEnabled,
             req.DirectMessagesEnabled,
-            req.MarketingEmailsEnabled), ct);
+            req.MarketingEmailsEnabled,
+            req.SmsNotificationsEnabled), ct);
 
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
@@ -959,6 +1250,108 @@ public sealed class RequestExtensionEndpoint(IMediator mediator)
 
         return TypedResults.Ok(new RequestExtensionResponse { ExtensionId = result.Value });
     }
+}
+
+public sealed class GetCustomerExtensionHistoryEndpoint(IMediator mediator)
+    : Endpoint<CustomerOrderIdRequest, Results<Ok<List<CustomerExtensionHistoryDto>>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("me/orders/{OrderId}/extensions");
+        AuthSchemes(JwtBearerDefaults.AuthenticationScheme);
+        Policies("CustomerOnly");
+        Group<CustomersRouteGroup>();
+        DontAutoTag();
+        Options(x => x.WithTags("Customers"));
+    }
+
+    public override async Task<Results<Ok<List<CustomerExtensionHistoryDto>>, ProblemHttpResult>> ExecuteAsync(CustomerOrderIdRequest req, CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var customerId))
+            return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid token.", statusCode: 401);
+
+        if (!Guid.TryParse(req.OrderId, out var orderId))
+            return TypedResults.Problem(title: "customers.invalid_id", detail: "Invalid order id.", statusCode: 400);
+
+        var result = await mediator.Send(new GetCustomerExtensionHistoryQuery(customerId, orderId), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class StartExtensionPaymentEndpoint(IMediator mediator)
+    : Endpoint<ExtensionPaymentRouteRequest, Results<Ok<ExtensionPaymentDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Post("me/orders/{OrderId}/extensions/{ExtensionId}/pay");
+        AuthSchemes(JwtBearerDefaults.AuthenticationScheme);
+        Policies("CustomerOnly");
+        Group<CustomersRouteGroup>();
+        DontAutoTag();
+        Options(x => x.WithTags("Customers"));
+    }
+
+    public override async Task<Results<Ok<ExtensionPaymentDto>, ProblemHttpResult>> ExecuteAsync(ExtensionPaymentRouteRequest req, CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var customerId))
+            return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid token.", statusCode: 401);
+
+        if (!Guid.TryParse(req.OrderId, out var orderId) || !Guid.TryParse(req.ExtensionId, out var extensionId))
+            return TypedResults.Problem(title: "customers.invalid_id", detail: "Invalid order or extension id.", statusCode: 400);
+
+        var result = await mediator.Send(new StartExtensionPaymentCommand(customerId, orderId, extensionId), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class VerifyExtensionPaymentRequest
+{
+    public string OrderId { get; set; } = string.Empty;
+    public string ExtensionId { get; set; } = string.Empty;
+    public Guid CheckoutSessionId { get; set; }
+    public string RazorpayOrderId { get; set; } = string.Empty;
+    public string RazorpayPaymentId { get; set; } = string.Empty;
+    public string RazorpaySignature { get; set; } = string.Empty;
+}
+
+public sealed class VerifyExtensionPaymentEndpoint(IMediator mediator)
+    : Endpoint<VerifyExtensionPaymentRequest, Results<Ok, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Post("me/orders/{OrderId}/extensions/{ExtensionId}/verify");
+        AuthSchemes(JwtBearerDefaults.AuthenticationScheme);
+        Policies("CustomerOnly");
+        Group<CustomersRouteGroup>();
+        DontAutoTag();
+        Options(x => x.WithTags("Customers"));
+    }
+
+    public override async Task<Results<Ok, ProblemHttpResult>> ExecuteAsync(VerifyExtensionPaymentRequest req, CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var customerId))
+            return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid token.", statusCode: 401);
+
+        if (!Guid.TryParse(req.OrderId, out var orderId) || !Guid.TryParse(req.ExtensionId, out var extensionId))
+            return TypedResults.Problem(title: "customers.invalid_id", detail: "Invalid order or extension id.", statusCode: 400);
+
+        var result = await mediator.Send(new VerifyExtensionPaymentCommand(
+            customerId,
+            orderId,
+            extensionId,
+            req.CheckoutSessionId,
+            req.RazorpayOrderId,
+            req.RazorpayPaymentId,
+            req.RazorpaySignature), ct);
+
+        return result.IsSuccess ? TypedResults.Ok() : result.ToErrorResponse();
+    }
+}
+
+public sealed class ExtensionPaymentRouteRequest
+{
+    public string OrderId { get; set; } = string.Empty;
+    public string ExtensionId { get; set; } = string.Empty;
 }
 
 public sealed class QuoteBuyoutRequest
@@ -1083,5 +1476,294 @@ public sealed class CreateCustomerOrderImageRequestEndpoint(IMediator mediator)
 
         var result = await mediator.Send(new CreateCustomerOrderImageRequestCommand(customerId, orderId), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class CreateCustomerCheckoutEndpoint(IMediator mediator)
+    : Endpoint<PlaceCustomerOrdersRequest, Results<Ok<CustomerCheckoutDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Post("me/payments/checkout");
+        AuthSchemes(JwtBearerDefaults.AuthenticationScheme);
+        Policies("CustomerOnly");
+        Group<CustomersRouteGroup>();
+        DontAutoTag();
+        Options(x => x.WithTags("Customers"));
+    }
+
+    public override async Task<Results<Ok<CustomerCheckoutDto>, ProblemHttpResult>> ExecuteAsync(PlaceCustomerOrdersRequest req, CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var customerId))
+            return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid token.", statusCode: 401);
+
+        var lines = req.Lines.ConvertAll(l => new CartLineRequest(
+            l.ListingId, l.Quantity, l.RentalDays, l.RentalPeriodUnit, l.OrderType, l.ProductVariantId,
+            l.DoctorId, l.HospitalId, l.ContactNumber, l.ReferenceNumber,
+            l.RentalPricingPlanId, l.RentalStartDate, l.HasPrescriptionFile));
+
+        var result = await mediator.Send(new CreateCustomerCheckoutCommand(
+            customerId,
+            req.CustomerAddressId,
+            req.DeliveryOption,
+            lines,
+            CheckoutSessionSources.CustomerWeb,
+            null,
+            req.AcceptedLegal,
+            req.AcceptedPrescriptionLegal,
+            HttpContext.Connection.RemoteIpAddress?.ToString(),
+            HttpContext.Request.Headers.UserAgent.ToString()), ct);
+
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class VerifyCustomerCheckoutRequest
+{
+    public Guid CheckoutSessionId { get; set; }
+    public string RazorpayOrderId { get; set; } = string.Empty;
+    public string RazorpayPaymentId { get; set; } = string.Empty;
+    public string RazorpaySignature { get; set; } = string.Empty;
+}
+
+public sealed class VerifyCustomerCheckoutEndpoint(IMediator mediator)
+    : Endpoint<VerifyCustomerCheckoutRequest, Results<Ok<CustomerCheckoutDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Post("me/payments/verify");
+        AuthSchemes(JwtBearerDefaults.AuthenticationScheme);
+        Policies("CustomerOnly");
+        Group<CustomersRouteGroup>();
+        DontAutoTag();
+        Options(x => x.WithTags("Customers"));
+    }
+
+    public override async Task<Results<Ok<CustomerCheckoutDto>, ProblemHttpResult>> ExecuteAsync(VerifyCustomerCheckoutRequest req, CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var customerId))
+            return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid token.", statusCode: 401);
+
+        var result = await mediator.Send(new VerifyCustomerCheckoutCommand(
+            customerId,
+            req.CheckoutSessionId,
+            req.RazorpayOrderId,
+            req.RazorpayPaymentId,
+            req.RazorpaySignature), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class CustomerSelectOrderImageOptionRequest
+{
+    public string OrderId { get; set; } = string.Empty;
+    public Guid OptionId { get; set; }
+}
+
+public sealed class SelectCustomerOrderImageOptionEndpoint(IMediator mediator)
+    : Endpoint<CustomerSelectOrderImageOptionRequest, Results<Ok<CustomerOrderImageRequestDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Patch("me/orders/{OrderId}/image-request/selection");
+        AuthSchemes(JwtBearerDefaults.AuthenticationScheme);
+        Policies("CustomerOnly");
+        Group<CustomersRouteGroup>();
+        DontAutoTag();
+        Options(x => x.WithTags("Customers"));
+    }
+
+    public override async Task<Results<Ok<CustomerOrderImageRequestDto>, ProblemHttpResult>> ExecuteAsync(
+        CustomerSelectOrderImageOptionRequest req,
+        CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var customerId))
+            return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid token.", statusCode: 401);
+
+        if (!Guid.TryParse(req.OrderId, out var orderId))
+            return TypedResults.Problem(title: "customers.invalid_id", detail: "Invalid order id.", statusCode: 400);
+
+        if (req.OptionId == Guid.Empty)
+            return TypedResults.Problem(title: "customers.order_images.option_required", detail: "optionId is required.", statusCode: 400);
+
+        var result = await mediator.Send(new SelectCustomerOrderImageOptionCommand(customerId, orderId, req.OptionId), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class GetCustomerLegalReconsentEndpoint(IMediator mediator)
+    : EndpointWithoutRequest<Results<Ok<IReadOnlyList<PendingLegalReconsentDto>>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("me/legal-reconsent");
+        AuthSchemes(JwtBearerDefaults.AuthenticationScheme);
+        Policies("CustomerOnly");
+        Group<CustomersRouteGroup>();
+        DontAutoTag();
+        Options(x => x.WithTags("Customers"));
+    }
+
+    public override async Task<Results<Ok<IReadOnlyList<PendingLegalReconsentDto>>, ProblemHttpResult>> ExecuteAsync(CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var customerId))
+            return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid token.", statusCode: 401);
+
+        var result = await mediator.Send(new PendingLegalReconsentQuery(LegalCatalog.ActorTypes.Customer, customerId), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class RecordCustomerLegalAcceptanceRequest
+{
+    public string Screen { get; set; } = "reconsent";
+    public bool AcceptedLegal { get; set; }
+    public string? SourceSurface { get; set; }
+    public string? SignedName { get; set; }
+}
+
+public sealed class RecordCustomerLegalAcceptanceEndpoint(IMediator mediator)
+    : Endpoint<RecordCustomerLegalAcceptanceRequest, Results<Ok<int>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Post("me/legal-acceptances");
+        AuthSchemes(JwtBearerDefaults.AuthenticationScheme);
+        Policies("CustomerOnly");
+        Group<CustomersRouteGroup>();
+        DontAutoTag();
+        Options(x => x.WithTags("Customers"));
+    }
+
+    public override async Task<Results<Ok<int>, ProblemHttpResult>> ExecuteAsync(RecordCustomerLegalAcceptanceRequest req, CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var customerId))
+            return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid token.", statusCode: 401);
+
+        var result = await mediator.Send(new RecordLegalAcceptanceCommand(
+            LegalCatalog.ActorTypes.Customer,
+            customerId,
+            req.Screen,
+            req.AcceptedLegal,
+            req.SourceSurface ?? LegalCatalog.Surfaces.CustomerWeb,
+            req.SignedName,
+            HttpContext.Connection.RemoteIpAddress?.ToString(),
+            HttpContext.Request.Headers.UserAgent.ToString()), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class CustomerPrescriptionFileIdRequest
+{
+    public string OrderId { get; set; } = string.Empty;
+    public string FileId { get; set; } = string.Empty;
+}
+
+public sealed class GetCustomerOrderPrescriptionsEndpoint(IMediator mediator)
+    : Endpoint<CustomerOrderIdRequest, Results<Ok<IReadOnlyList<CustomerPrescriptionFileDto>>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("me/orders/{OrderId}/prescriptions");
+        AuthSchemes(JwtBearerDefaults.AuthenticationScheme);
+        Policies("CustomerOnly");
+        Group<CustomersRouteGroup>();
+        DontAutoTag();
+        Options(x => x.WithTags("Customers"));
+    }
+
+    public override async Task<Results<Ok<IReadOnlyList<CustomerPrescriptionFileDto>>, ProblemHttpResult>> ExecuteAsync(
+        CustomerOrderIdRequest req, CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var customerId))
+            return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid token.", statusCode: 401);
+
+        if (!Guid.TryParse(req.OrderId, out var orderId))
+            return TypedResults.Problem(title: "customers.invalid_id", detail: "Invalid order id.", statusCode: 400);
+
+        var result = await mediator.Send(new GetCustomerOrderPrescriptionsQuery(customerId, orderId), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class UploadCustomerOrderPrescriptionEndpoint(IMediator mediator)
+    : Endpoint<CustomerOrderIdRequest, Results<Ok<CustomerPrescriptionFileDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Post("me/orders/{OrderId}/prescriptions");
+        AuthSchemes(JwtBearerDefaults.AuthenticationScheme);
+        Policies("CustomerOnly");
+        Group<CustomersRouteGroup>();
+        AllowFileUploads();
+        DontAutoTag();
+        Options(x => x.WithTags("Customers"));
+    }
+
+    public override async Task<Results<Ok<CustomerPrescriptionFileDto>, ProblemHttpResult>> ExecuteAsync(
+        CustomerOrderIdRequest req, CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var customerId))
+            return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid token.", statusCode: 401);
+
+        if (!Guid.TryParse(req.OrderId, out var orderId))
+            return TypedResults.Problem(title: "customers.invalid_id", detail: "Invalid order id.", statusCode: 400);
+
+        var file = Files.FirstOrDefault();
+        if (file is null || file.Length <= 0)
+            return TypedResults.Problem(title: "customers.prescriptions.missing_file", detail: "Prescription file is required.", statusCode: 400);
+
+        await using var ms = new MemoryStream();
+        await file.CopyToAsync(ms, ct);
+        var publicBase = new Uri($"{HttpContext.Request.Scheme}://{HttpContext.Request.Host}");
+        var accepted = string.Equals(Form["acceptedPrescriptionLegal"].ToString(), "true", StringComparison.OrdinalIgnoreCase);
+        var source = Form["uploadSource"].ToString();
+        var surface = Form["sourceSurface"].ToString();
+        if (string.IsNullOrWhiteSpace(surface))
+            surface = LegalCatalog.Surfaces.CustomerWeb;
+
+        var result = await mediator.Send(
+            new UploadCustomerOrderPrescriptionCommand(
+                customerId,
+                orderId,
+                file.FileName,
+                file.ContentType,
+                ms.ToArray(),
+                publicBase,
+                source,
+                accepted,
+                surface,
+                HttpContext.Connection.RemoteIpAddress?.ToString(),
+                HttpContext.Request.Headers.UserAgent.ToString()),
+            ct);
+
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class DeleteCustomerOrderPrescriptionEndpoint(IMediator mediator)
+    : Endpoint<CustomerPrescriptionFileIdRequest, Results<NoContent, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Delete("me/orders/{OrderId}/prescriptions/{FileId}");
+        AuthSchemes(JwtBearerDefaults.AuthenticationScheme);
+        Policies("CustomerOnly");
+        Group<CustomersRouteGroup>();
+        DontAutoTag();
+        Options(x => x.WithTags("Customers"));
+    }
+
+    public override async Task<Results<NoContent, ProblemHttpResult>> ExecuteAsync(
+        CustomerPrescriptionFileIdRequest req, CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var customerId))
+            return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid token.", statusCode: 401);
+
+        if (!Guid.TryParse(req.OrderId, out var orderId) || !Guid.TryParse(req.FileId, out var fileId))
+            return TypedResults.Problem(title: "customers.invalid_id", detail: "Invalid id.", statusCode: 400);
+
+        var result = await mediator.Send(new DeleteCustomerOrderPrescriptionCommand(customerId, orderId, fileId), ct);
+        return result.IsSuccess ? TypedResults.NoContent() : result.ToErrorResponse();
     }
 }

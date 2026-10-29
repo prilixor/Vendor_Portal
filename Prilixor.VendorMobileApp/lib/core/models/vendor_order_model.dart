@@ -1,5 +1,12 @@
 import '../utils/media_url.dart';
 
+/// Rupee text that keeps paise only when the amount is not a whole rupee.
+String formatVendorMoney(num value) {
+  final rounded = (value * 100).round() / 100;
+  final whole = rounded == rounded.roundToDouble();
+  return '₹${whole ? rounded.toStringAsFixed(0) : rounded.toStringAsFixed(2)}';
+}
+
 class VendorOrder {
   final String orderId;
   final String orderNumber;
@@ -9,6 +16,8 @@ class VendorOrder {
   final int rentalDays;
   final double totalAmount;
   final double vendorSubtotalAmount;
+  final double depositAmount;
+  final double gstAmount;
   final String? startDate;
   final String? endDate;
   final String listingId;
@@ -34,6 +43,7 @@ class VendorOrder {
   final String? rentalDiscountType;
   final double? rentalDiscountValue;
   final double? rentalFinalPrice;
+  final OrderReturnInfo? returnSettlement;
 
   const VendorOrder({
     required this.orderId,
@@ -44,6 +54,8 @@ class VendorOrder {
     required this.rentalDays,
     required this.totalAmount,
     required this.vendorSubtotalAmount,
+    this.depositAmount = 0,
+    this.gstAmount = 0,
     this.startDate,
     this.endDate,
     required this.listingId,
@@ -69,6 +81,7 @@ class VendorOrder {
     this.rentalDiscountType,
     this.rentalDiscountValue,
     this.rentalFinalPrice,
+    this.returnSettlement,
   });
 
   double get payoutAmount =>
@@ -104,6 +117,8 @@ class VendorOrder {
       totalAmount: (json['totalAmount'] as num?)?.toDouble() ?? 0,
       vendorSubtotalAmount:
           (json['vendorSubtotalAmount'] as num?)?.toDouble() ?? 0,
+      depositAmount: (json['depositAmount'] as num?)?.toDouble() ?? 0,
+      gstAmount: (json['gstAmount'] as num?)?.toDouble() ?? 0,
       startDate: json['startDate']?.toString(),
       endDate: json['endDate']?.toString(),
       listingId: json['listingId']?.toString() ?? '',
@@ -134,6 +149,61 @@ class VendorOrder {
       rentalDiscountType: json['rentalDiscountType']?.toString(),
       rentalDiscountValue: (json['rentalDiscountValue'] as num?)?.toDouble(),
       rentalFinalPrice: (json['rentalFinalPrice'] as num?)?.toDouble(),
+      returnSettlement: OrderReturnInfo.fromJson(json['returnSettlement']),
     );
+  }
+}
+
+class OrderReturnInfo {
+  final double depositAmount;
+  final double damageAmount;
+  final String? damageReason;
+  final double refundAmount;
+  final String status;
+  final List<String> damageImageUrls;
+
+  const OrderReturnInfo({
+    required this.depositAmount,
+    required this.damageAmount,
+    this.damageReason,
+    required this.refundAmount,
+    required this.status,
+    this.damageImageUrls = const [],
+  });
+
+  static OrderReturnInfo? fromJson(dynamic raw) {
+    if (raw is! Map) return null;
+    final json = Map<String, dynamic>.from(raw);
+    return OrderReturnInfo(
+      depositAmount: (json['depositAmount'] as num?)?.toDouble() ?? 0,
+      damageAmount: (json['damageAmount'] as num?)?.toDouble() ?? 0,
+      damageReason: json['damageReason']?.toString(),
+      damageImageUrls: (json['damageImageUrls'] as List?)
+              ?.map((e) => e.toString())
+              .where((e) => e.trim().isNotEmpty)
+              .toList() ??
+          const [],
+      refundAmount: (json['refundAmount'] as num?)?.toDouble() ?? 0,
+      status: json['status']?.toString() ?? '',
+    );
+  }
+
+  /// Short list chip. The full "with admin" sentence stays on the order screen.
+  String? get listDamageLabel {
+    if (damageAmount <= 0) return null;
+    return 'Damage ${formatVendorMoney(damageAmount)}';
+  }
+
+  bool get claimReviewed => status == 'refunded' || status == 'settled';
+
+  String get vendorClaimLabel {
+    if (damageAmount > 0) {
+      final claim = 'Damage claim ${formatVendorMoney(damageAmount)}';
+      if (status == 'pending_refund' || status == 'refunding') {
+        return '$claim · with admin';
+      }
+      return claim;
+    }
+    return 'No damage';
   }
 }

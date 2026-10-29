@@ -22,13 +22,20 @@ import '../../shared/widgets/required_field_ux.dart';
 import '../../shared/widgets/rent_exceeds_buy_dialog.dart';
 import '../../shared/widgets/struck_price.dart';
 import '../../shared/utils/require_auth.dart';
+import '../../shared/widgets/listing_delivery_check.dart';
+import '../../shared/widgets/gallery_thumb_strip.dart';
 import '../dashboard/customer_dashboard.dart';
 import 'product_image_viewer_screen.dart';
 
 class ProductDetailScreen extends StatefulWidget {
   final String listingId;
+  final String? previewImageUrl;
 
-  const ProductDetailScreen({super.key, required this.listingId});
+  const ProductDetailScreen({
+    super.key,
+    required this.listingId,
+    this.previewImageUrl,
+  });
 
   @override
   State<ProductDetailScreen> createState() => _ProductDetailScreenState();
@@ -89,6 +96,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     });
     checkout.fetchProductDetailModel(widget.listingId).then((detail) {
       if (!mounted) return;
+      if (detail != null) {
+        _precacheRentalPlanIcons(detail);
+        _precacheProductImages(detail);
+      }
       setState(() {
         _localDetail = detail;
         _loadingDetail = false;
@@ -142,12 +153,44 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     );
   }
 
+  void _precacheRentalPlanIcons(ProductDetailModel detail) {
+    for (final plan in detail.activeRentalPlans) {
+      final url = _planIconUrl(plan);
+      if (url == null || url.isEmpty) continue;
+      precacheImage(NetworkImage(url), context);
+    }
+  }
+
+  void _precacheProductImages(ProductDetailModel detail) {
+    for (var i = 0; i < detail.imageUrls.length; i++) {
+      final preview = _galleryPreview(detail, i);
+      if (preview != null && preview.isNotEmpty) {
+        precacheImage(NetworkImage(preview), context);
+      }
+    }
+    for (final url in detail.imageUrls) {
+      if (url.isEmpty) continue;
+      precacheImage(NetworkImage(url), context);
+    }
+  }
+
+  String? _galleryPreview(ProductDetailModel detail, int index) {
+    return galleryPreviewUrl(
+      index: index,
+      originals: detail.imageUrls,
+      thumbnails: detail.imageThumbnailUrls,
+      placeholder: widget.previewImageUrl,
+    );
+  }
+
   /// Match web [RentalPeriodPlanDropdown] legend + trigger icon chips.
   Widget? _planIconAvatar(RentalPricingPlanModel? plan, {double size = 40}) {
     final url = plan == null ? null : _planIconUrl(plan);
     if (url == null || url.isEmpty) return null;
     final colors = context.appColors;
     final iconSize = size * 0.72;
+    final original = plan == null ? null : resolveRentalIconUrl(plan.iconUrl);
+    final thumb = plan == null ? null : resolveRentalIconUrl(plan.iconThumbnailUrl);
     return Container(
       width: size,
       height: size,
@@ -160,9 +203,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       child: CatalogImage(
         key: ValueKey(url),
         url: url,
+        fallbackUrl: thumb != original ? thumb : null,
         width: iconSize,
         height: iconSize,
         fit: BoxFit.contain,
+        showLoadingIndicator: false,
       ),
     );
   }
@@ -221,24 +266,18 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   }
 
   Widget _pctOffBadge(int pct) {
-    final isDark = context.isDarkMode;
+    final colors = context.appColors;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: isDark
-            ? const Color(0xFF10B981).withValues(alpha: 0.14)
-            : const Color(0xFFDCFCE7),
+        color: colors.successSoft,
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(
-          color: isDark
-              ? const Color(0xFF10B981).withValues(alpha: 0.3)
-              : const Color(0xFF86EFAC),
-        ),
+        border: Border.all(color: colors.successBorder),
       ),
       child: Text(
         '$pct% OFF',
         style: TextStyle(
-          color: isDark ? const Color(0xFF34D399) : const Color(0xFF15803D),
+          color: colors.success,
           fontSize: 11,
           fontWeight: FontWeight.w800,
         ),
@@ -247,8 +286,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
   }
 
   Widget _saveAmountLabel(double amount) {
-    final isDark = context.isDarkMode;
-    final color = isDark ? const Color(0xFF34D399) : const Color(0xFF15803D);
+    final color = context.appColors.success;
     return Row(
       mainAxisSize: MainAxisSize.min,
       children: [
@@ -266,17 +304,16 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     );
   }
   List<({String tier, String label, String url})> _tierLegend(List<RentalPricingPlanModel> plans) {
-    const order = ['good', 'better', 'best_value', 'maximum_savings'];
-    final byTier = <String, ({String label, String url})>{};
+    final byIcon = <String, ({String label, String url})>{};
     for (final plan in plans) {
-      final tier = (plan.valueTier ?? '').toLowerCase().replaceAll('-', '_');
       final url = _planIconUrl(plan);
-      if (tier.isEmpty || url == null || url.isEmpty || byTier.containsKey(tier)) continue;
-      byTier[tier] = (label: rentalValueTierLabel(tier), url: url);
+      final key = plan.rentalDurationIconId ?? plan.iconName ?? plan.valueTier ?? '';
+      if (key.isEmpty || url == null || url.isEmpty || byIcon.containsKey(key)) continue;
+      byIcon[key] = (label: rentalIconLabel(plan), url: url);
     }
     return [
-      for (final t in order)
-        if (byTier[t] != null) (tier: t, label: byTier[t]!.label, url: byTier[t]!.url),
+      for (final entry in byIcon.entries)
+        (tier: entry.key, label: entry.value.label, url: entry.value.url),
     ];
   }
 
@@ -354,6 +391,14 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     }
 
     final colors = context.appColors;
+    // Scaffold.bottomSheet is anchored to the keyboard inset and strips
+    // bottom padding, so SafeArea inside it adds nothing. On Android 15+
+    // the 3-button nav is drawn over that bar. Use the route's view padding
+    // while the keyboard is closed; the scaffold already lifts the sheet
+    // when the keyboard is open.
+    final navBarInset = MediaQuery.viewInsetsOf(context).bottom > 0
+        ? 0.0
+        : MediaQuery.viewPaddingOf(context).bottom;
 
     return Scaffold(
       backgroundColor: colors.background,
@@ -449,6 +494,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                                   MaterialPageRoute(
                                                     builder: (_) => ProductImageViewerScreen(
                                                       imageUrls: detail.imageUrls,
+                                                      thumbnails: detail.imageThumbnailUrls,
+                                                      placeholder: widget.previewImageUrl,
                                                       initialIndex: _imageIndex,
                                                       title: detail.title,
                                                     ),
@@ -463,7 +510,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                                   padding: const EdgeInsets.all(16),
                                                   child: CatalogImage(
                                                     url: detail.imageUrls[i],
+                                                    previewUrl: _galleryPreview(detail, i),
                                                     fit: BoxFit.contain,
+                                                    showLoadingIndicator: false,
                                                   ),
                                                 ),
                                               ),
@@ -484,7 +533,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                                 children: [
                                                   Icon(Icons.zoom_in_rounded, color: Colors.white, size: 14),
                                                   SizedBox(width: 4),
-                                                  const Text(
+                                                  Text(
                                                     'View & zoom',
                                                     style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
                                                   ),
@@ -521,43 +570,41 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                 if (detail.imageUrls.length > 1)
                                   Padding(
                                     padding: const EdgeInsets.only(top: 12),
-                                    child: SizedBox(
-                                      height: 68,
-                                      child: ListView.separated(
-                                        scrollDirection: Axis.horizontal,
-                                        itemCount: detail.imageUrls.length,
-                                        separatorBuilder: (_, __) => const SizedBox(width: 10),
-                                        itemBuilder: (_, i) {
-                                          final selected = i == _imageIndex;
-                                          return GestureDetector(
-                                            onTap: () {
-                                              setState(() => _imageIndex = i);
-                                              _imagePageController.animateToPage(
-                                                i,
-                                                duration: const Duration(milliseconds: 220),
-                                                curve: Curves.easeOut,
-                                              );
-                                            },
-                                            child: AnimatedContainer(
-                                              duration: const Duration(milliseconds: 180),
-                                              width: 68,
-                                              decoration: BoxDecoration(
-                                                borderRadius: BorderRadius.circular(12),
-                                                border: Border.all(
-                                                  color: selected ? const Color(0xFF6C63FF) : colors.border,
-                                                  width: selected ? 2 : 1,
-                                                ),
-                                                color: colors.surface,
-                                              ),
-                                              clipBehavior: Clip.antiAlias,
-                                              child: Padding(
-                                                padding: const EdgeInsets.all(6),
-                                                child: CatalogImage(url: detail.imageUrls[i], fit: BoxFit.contain),
-                                              ),
+                                    child: GalleryThumbStrip(
+                                      itemCount: detail.imageUrls.length,
+                                      selectedIndex: _imageIndex,
+                                      fadeColor: colors.background,
+                                      itemBuilder: (_, i) {
+                                        final selected = i == _imageIndex;
+                                        return AnimatedContainer(
+                                          duration: const Duration(milliseconds: 180),
+                                          decoration: BoxDecoration(
+                                            borderRadius: BorderRadius.circular(12),
+                                            border: Border.all(
+                                              color: selected ? const Color(0xFF6C63FF) : colors.border,
+                                              width: selected ? 2 : 1,
                                             ),
-                                          );
-                                        },
-                                      ),
+                                            color: colors.surface,
+                                          ),
+                                          clipBehavior: Clip.antiAlias,
+                                          child: Padding(
+                                            padding: const EdgeInsets.all(6),
+                                            child: CatalogImage(
+                                              url: _galleryPreview(detail, i) ?? detail.imageUrls[i],
+                                              fit: BoxFit.contain,
+                                              showLoadingIndicator: false,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                      onSelected: (i) {
+                                        setState(() => _imageIndex = i);
+                                        _imagePageController.animateToPage(
+                                          i,
+                                          duration: const Duration(milliseconds: 220),
+                                          curve: Curves.easeOut,
+                                        );
+                                      },
                                     ),
                                   ),
                               ],
@@ -680,7 +727,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                                 ),
                                                 Text(
                                                   formatPlanInr(selectedVariant?.buyPrice ?? 0),
-                                                  style: const TextStyle(color: Color(0xFF34D399), fontSize: 18, fontWeight: FontWeight.bold),
+                                                  style: TextStyle(
+                                                    color: colors.success,
+                                                    fontSize: 18,
+                                                    fontWeight: FontWeight.bold,
+                                                  ),
                                                 ),
                                               ],
                                             ),
@@ -768,7 +819,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                         const SizedBox(width: 8),
                                         Expanded(
                                           child: Text(
-                                            'Doctor Unique ID can be added optionally at checkout.',
+                                            'A prescription image or PDF can be added at checkout.',
                                             style: TextStyle(
                                               color: context.isDarkMode ? Colors.amber : const Color(0xFF92400E),
                                               fontSize: 13,
@@ -920,6 +971,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                                               width: 18,
                                                               height: 18,
                                                               fit: BoxFit.contain,
+                                                              showLoadingIndicator: false,
                                                             ),
                                                             const SizedBox(width: 5),
                                                             Text(
@@ -954,7 +1006,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                                   border: Border.all(color: borderColor, width: 1.5),
                                                 ),
                                                 child: Row(
-                                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                                  crossAxisAlignment: CrossAxisAlignment.center,
                                                   children: [
                                                     Expanded(
                                                       child: Column(
@@ -1012,8 +1064,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                                     const SizedBox(width: 8),
                                                     Row(
                                                       mainAxisSize: MainAxisSize.min,
-                                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                                      crossAxisAlignment: CrossAxisAlignment.center,
                                                       children: [
+                                                        if (_planIconAvatar(selectedPlan, size: 32)
+                                                            case final icon?) ...[
+                                                          icon,
+                                                          const SizedBox(width: 8),
+                                                        ],
                                                         Column(
                                                           crossAxisAlignment: CrossAxisAlignment.end,
                                                           children: [
@@ -1040,11 +1097,6 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                                             ],
                                                           ],
                                                         ),
-                                                        if (_planIconAvatar(selectedPlan, size: 48)
-                                                            case final icon?) ...[
-                                                          const SizedBox(width: 8),
-                                                          icon,
-                                                        ],
                                                         const SizedBox(width: 2),
                                                         Padding(
                                                           padding: const EdgeInsets.only(top: 2),
@@ -1201,10 +1253,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                                             ),
                                                             child: Row(
                                                               children: [
-                                                                const Icon(
+                                                                Icon(
                                                                   Icons.verified_user_outlined,
                                                                   size: 18,
-                                                                  color: Color(0xFF34D399),
+                                                                  color: colors.success,
                                                                 ),
                                                                 const SizedBox(width: 8),
                                                                 Expanded(
@@ -1455,6 +1507,22 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                      style: TextStyle(color: colors.textMuted, fontSize: 13),
                                    ),
                                  ],
+                                const SizedBox(height: 16),
+                                ListingDeliveryCheck(
+                                  quoteLine: {
+                                    'listingId': detail.id,
+                                    'quantity': _quantity,
+                                    'rentalDays': actualOrderType == 'buy'
+                                        ? 0
+                                        : (selectedPlan?.durationDays ?? 0),
+                                    'rentalPeriodUnit': rentalUnitDay,
+                                    'orderType': actualOrderType,
+                                    if (_selectedVariantId != null && _selectedVariantId!.isNotEmpty)
+                                      'productVariantId': _selectedVariantId,
+                                    if (actualOrderType == 'rent' && selectedPlan != null)
+                                      'rentalPricingPlanId': selectedPlan.id,
+                                  },
+                                ),
                                 if (_relatedProducts.isNotEmpty) ...[
                                   const SizedBox(height: 24),
                                   Text(
@@ -1486,7 +1554,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                           Navigator.push(
                                             context,
                                             MaterialPageRoute(
-                                              builder: (_) => ProductDetailScreen(listingId: product.id),
+                                              builder: (_) => ProductDetailScreen(
+                                                listingId: product.id,
+                                                previewImageUrl: product.primaryImageUrl,
+                                              ),
                                             ),
                                           );
                                         },
@@ -1523,7 +1594,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                     ),
                                   ),
                                 ],
-                                const SizedBox(height: 100),
+                                SizedBox(height: 100 + navBarInset),
                               ],
                             ),
                           ),
@@ -1542,21 +1613,23 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     (actualOrderType == 'rent' &&
                         (!detail.hasActiveRentalPlans || selectedPlan == null));
 
-                return SafeArea(
-                  top: false,
-                  child: Container(
-                    padding: const EdgeInsets.fromLTRB(20, 12, 20, 12),
+                return Container(
+                    padding: EdgeInsets.fromLTRB(20, 10, 20, 12 + navBarInset),
                     decoration: BoxDecoration(
                       color: colors.surface,
                       border: Border(top: BorderSide(color: colors.border)),
                     ),
-                    child: SizedBox(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        SizedBox(
                       width: double.infinity,
                       height: 52,
                       child: ElevatedButton(
                         style: ElevatedButton.styleFrom(
                           backgroundColor: inCart
-                              ? const Color(0xFF10B981)
+                              ? colors.success
                               : const Color(0xFF6C63FF),
                           disabledBackgroundColor: colors.border,
                           elevation: 0,
@@ -1696,8 +1769,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                         ),
                       ),
                     ),
-                  ),
-                );
+                      ],
+                    ),
+                  );
               },
             )
           : null,
@@ -1799,7 +1873,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                         },
                         borderRadius: BorderRadius.circular(14),
                         child: Container(
-                          padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+                          padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
                           decoration: BoxDecoration(
                             color: selected
                                 ? accent.withValues(alpha: plan.isRecommended ? 0.18 : 0.14)
@@ -1817,12 +1891,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                             ),
                           ),
                           child: Row(
-                            crossAxisAlignment: CrossAxisAlignment.start,
+                            crossAxisAlignment: CrossAxisAlignment.center,
                             children: [
                               Container(
                                 width: 18,
                                 height: 18,
-                                margin: const EdgeInsets.only(top: 2),
                                 decoration: BoxDecoration(
                                   shape: BoxShape.circle,
                                   color: selected ? accent : Colors.transparent,
@@ -1839,6 +1912,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                               Expanded(
                                 child: Column(
                                   crossAxisAlignment: CrossAxisAlignment.start,
+                                  mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Wrap(
                                       crossAxisAlignment: WrapCrossAlignment.center,
@@ -1860,62 +1934,56 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                     const SizedBox(height: 3),
                                     Text(
                                       planListMetaLine(plan),
+                                      style: TextStyle(
+                                        color: context.appColors.textMuted,
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w500,
+                                      ),
+                                    ),
+                                    if (savings > 0) ...[
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        pct > 0
+                                            ? '$pct% off \u00b7 Save ${formatPlanInr(savings)}'
+                                            : 'Save ${formatPlanInr(savings)}',
                                         style: TextStyle(
-                                          color: context.appColors.textMuted,
-                                          fontSize: 11,
-                                          fontWeight: FontWeight.w500,
+                                          color: context.appColors.success,
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w800,
                                         ),
                                       ),
-                                      if (savings > 0) ...[
-                                        const SizedBox(height: 5),
-                                        Text(
-                                          pct > 0
-                                              ? '$pct% off \u00b7 Save ${formatPlanInr(savings)}'
-                                              : 'Save ${formatPlanInr(savings)}',
-                                          style: TextStyle(
-                                            color: context.isDarkMode
-                                                ? const Color(0xFF34D399)
-                                                : const Color(0xFF15803D),
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w800,
-                                          ),
-                                        ),
-                                      ],
-                                      // Web mobile row: price left, catalog icon right.
-                                      const SizedBox(height: 8),
-                                      Row(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              children: [
-                                                Text(
-                                                  formatPlanInr(plan.finalRentalPrice),
-                                                  style: TextStyle(
-                                                    color: priceColor,
-                                                    fontWeight: FontWeight.w800,
-                                                    fontSize: 15,
-                                                  ),
-                                                ),
-                                                if (savings > 0) ...[
-                                                  const SizedBox(height: 2),
-                                                  StruckPrice(
-                                                    formatPlanInr(plan.normalPrice),
-                                                    style: const TextStyle(
-                                                      fontSize: 11,
-                                                      fontWeight: FontWeight.w600,
-                                                    ),
-                                                  ),
-                                                ],
-                                              ],
-                                            ),
-                                          ),
-                                          if (_planIconAvatar(plan, size: 36) case final icon?) icon,
-                                        ],
-                                      ),
+                                    ],
                                   ],
                                 ),
+                              ),
+                              const SizedBox(width: 8),
+                              if (_planIconAvatar(plan, size: 28) case final icon?) ...[
+                                icon,
+                                const SizedBox(width: 6),
+                              ],
+                              Column(
+                                crossAxisAlignment: CrossAxisAlignment.end,
+                                mainAxisSize: MainAxisSize.min,
+                                children: [
+                                  Text(
+                                    formatPlanInr(plan.finalRentalPrice),
+                                    style: TextStyle(
+                                      color: priceColor,
+                                      fontWeight: FontWeight.w800,
+                                      fontSize: 15,
+                                    ),
+                                  ),
+                                  if (savings > 0) ...[
+                                    const SizedBox(height: 2),
+                                    StruckPrice(
+                                      formatPlanInr(plan.normalPrice),
+                                      style: const TextStyle(
+                                        fontSize: 11,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ],
                               ),
                             ],
                           ),
@@ -2132,7 +2200,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           Text(
             value,
             style: TextStyle(
-              color: highlight ? const Color(0xFF10B981) : colors.textPrimary,
+              color: highlight ? colors.success : colors.textPrimary,
               fontWeight: FontWeight.bold,
             ),
           ),

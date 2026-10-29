@@ -4,9 +4,12 @@ import 'package:flutter/services.dart';
 import 'theme/app_palette.dart';
 
 export 'theme/app_palette.dart';
+export 'theme/theme_provider.dart';
 
 class AppTheme {
   static const Color accent = AppPalette.accentSeed;
+  /// Razorpay checkout button. Same accent in light and dark.
+  static const String razorpayThemeColor = '#6C63FF';
   static const Color bg = Color(0xFF0F172A);
   static const Color card = Color(0xFF1E293B);
 

@@ -3,6 +3,7 @@ using MediatR;
 using Microsoft.AspNetCore.Http.HttpResults;
 using Prilixor.VendorPortal.API.EndPoints.Vendors;
 using Prilixor.VendorPortal.API.Extensions;
+using Prilixor.VendorPortal.Application.Abstractions;
 using Prilixor.VendorPortal.Application.Admin.WebsiteContent;
 
 namespace Prilixor.VendorPortal.API.EndPoints.Admin;
@@ -38,6 +39,59 @@ public sealed class UpdateHomeContentEndpoint(IMediator mediator)
     {
         var result = await mediator.Send(req, ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class UploadHomeHeroImageEndpoint(IVendorUploadStorageService storage)
+    : EndpointWithoutRequest<Results<Ok<HomeHeroImageUploadDto>, ProblemHttpResult>>
+{
+    private const long MaxBytes = 5 * 1024 * 1024;
+
+    public override void Configure()
+    {
+        Post("website-content/home/hero-image");
+        Group<AdminApiGroup>();
+        Policies("Perm:catalog.manage");
+        AllowFileUploads();
+    }
+
+    public override async Task<Results<Ok<HomeHeroImageUploadDto>, ProblemHttpResult>> ExecuteAsync(CancellationToken ct)
+    {
+        var file = Files.FirstOrDefault();
+        if (file is null || file.Length <= 0)
+            return TypedResults.Problem(
+                title: "website-content.hero_image.missing_file",
+                detail: "Hero image file is required.",
+                statusCode: 400);
+
+        if (file.Length > MaxBytes)
+            return TypedResults.Problem(
+                title: "website-content.hero_image.too_large",
+                detail: "Hero image must be 5MB or smaller.",
+                statusCode: 400);
+
+        var contentType = (file.ContentType ?? string.Empty).Trim().ToLowerInvariant();
+        var extension = Path.GetExtension(file.FileName).ToLowerInvariant();
+        var allowed = contentType is "image/png" or "image/jpeg" or "image/jpg" or "image/webp" or "image/svg+xml" or "image/gif"
+            || extension is ".png" or ".jpg" or ".jpeg" or ".webp" or ".svg" or ".gif";
+        if (!allowed)
+            return TypedResults.Problem(
+                title: "website-content.hero_image.invalid_type",
+                detail: "Hero image must be PNG, JPG, SVG, WebP, or GIF.",
+                statusCode: 400);
+
+        await using var stream = file.OpenReadStream();
+        var publicBase = new Uri($"{HttpContext.Request.Scheme}://{HttpContext.Request.Host}");
+        var persist = await storage.PersistVendorUploadAsync(
+            "common",
+            file.FileName,
+            file.ContentType,
+            stream,
+            publicBase,
+            ct,
+            VendorFileFolderType.WebsiteHero);
+
+        return TypedResults.Ok(new HomeHeroImageUploadDto { FileUrl = persist.BrowserAccessibleUrl });
     }
 }
 

@@ -8,6 +8,7 @@ import { apiClient } from "@/app/services/apiClient";
 import { toast } from "sonner";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
 import { forgotPasswordPath } from "@/app/helpers/portalHost";
+import { setActiveRefreshToken } from "@/app/helpers/authSession";
 
 const AdminLogin = () => {
   const navigate = useNavigate();
@@ -66,7 +67,7 @@ const AdminLogin = () => {
       // Dedicated admin token — must not share vendor_portal_token with impersonation tabs.
       apiClient.setAdminAuthToken(response.token);
       if (response.refreshToken) {
-        localStorage.setItem("vendor_portal_refresh_token", response.refreshToken);
+        setActiveRefreshToken(response.refreshToken);
       }
       if (response.user.mustChangePassword) {
         toast.message("Please change your temporary password.");

@@ -2,9 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/auth/auth_provider.dart';
+import '../../core/auth/phone_otp_setting.dart';
+import '../../core/providers/vendor_profile_provider.dart';
 import '../../core/theme.dart';
 import '../../core/utils/indian_mobile_phone.dart';
 import '../../shared/widgets/custom_text_field.dart';
+import '../../shared/widgets/phone_otp_dialog.dart';
 import '../../shared/widgets/required_field_ux.dart';
 import '../dashboard/vendor_dashboard.dart';
 import 'forgot_password_screen.dart';
@@ -24,6 +27,7 @@ class _LoginScreenState extends State<LoginScreen> {
   final FocusNode _passwordFocusNode = FocusNode();
   String? _identifierError;
   String? _passwordError;
+  bool _isProcessing = false;
 
   @override
   void dispose() {
@@ -63,6 +67,7 @@ class _LoginScreenState extends State<LoginScreen> {
       return;
     }
 
+    setState(() => _isProcessing = true);
     final authProvider = Provider.of<AuthProvider>(context, listen: false);
     final identifier = IndianMobilePhone.normalizeLoginIdentifier(
       _identifierController.text,
@@ -75,10 +80,41 @@ class _LoginScreenState extends State<LoginScreen> {
     if (!mounted) return;
 
     if (success) {
+      final vendorId = authProvider.vendorId;
+      if (vendorId != null && vendorId.isNotEmpty) {
+        final profileProvider = Provider.of<VendorProfileProvider>(context, listen: false);
+        await profileProvider.fetchProfile(vendorId);
+        if (!mounted) return;
+        final profile = profileProvider.profile;
+        final rawPhone = profile?.supportPhone.trim() ?? '';
+        if (await PhoneOtpSetting.isEnabled() &&
+            rawPhone.isNotEmpty &&
+            !(profile?.isPhoneVerified ?? false)) {
+          setState(() => _isProcessing = false);
+          final normalizedPhone = IndianMobilePhone.normalizeDigits(rawPhone);
+          final verified = await PhoneOtpDialog.show(
+            context,
+            phone: normalizedPhone,
+            role: 'vendor',
+            required: true,
+            title: 'Verify phone number',
+            description:
+                'Enter the 6-digit code sent to +91 $normalizedPhone. Verification is required to continue.',
+          );
+          if (verified != true) return;
+          if (!mounted) return;
+          setState(() => _isProcessing = true);
+          await profileProvider.fetchProfile(vendorId);
+        }
+      }
+
+      if (!mounted) return;
+      setState(() => _isProcessing = false);
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(builder: (_) => const VendorDashboard()),
       );
     } else {
+      setState(() => _isProcessing = false);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
           content: Text(authProvider.errorMessage ?? 'Login failed'),
@@ -91,6 +127,7 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     final authProvider = Provider.of<AuthProvider>(context);
+    final isLoading = authProvider.isLoading || _isProcessing;
     final fieldWidth = MediaQuery.sizeOf(context).width - 48;
 
     return Scaffold(
@@ -184,7 +221,7 @@ class _LoginScreenState extends State<LoginScreen> {
                   }
                 },
                 onSubmitted: (_) {
-                  if (!authProvider.isLoading) _handleLogin();
+                  if (!isLoading) _handleLogin();
                 },
               ),
               const SizedBox(height: 16),
@@ -195,7 +232,7 @@ class _LoginScreenState extends State<LoginScreen> {
                     Navigator.push(
                       context,
                       MaterialPageRoute(
-                        builder: (_) => const ForgotPasswordScreen(),
+                        builder: (_) => const ForgotPasswordScreen(role: 'vendor'),
                       ),
                     );
                   },
@@ -212,8 +249,8 @@ class _LoginScreenState extends State<LoginScreen> {
               SizedBox(
                 height: 56,
                 child: ElevatedButton(
-                  onPressed: authProvider.isLoading ? null : _handleLogin,
-                  child: authProvider.isLoading
+                  onPressed: isLoading ? null : _handleLogin,
+                  child: isLoading
                       ? const SizedBox(
                           width: 24,
                           height: 24,

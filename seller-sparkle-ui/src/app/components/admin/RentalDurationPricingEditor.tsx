@@ -28,8 +28,7 @@ import type {
 } from "../../services/adminApi";
 import {
   dayPlanTitle,
-  rentalValueTierLabel,
-  resolveRentalIconUrl,
+  resolveRentalIconUrlFromPlan,
 } from "@/app/helpers/rentalDurationIcons";
 import { cn, retryOriginalOnImageError } from "@/app/helpers/utils";
 
@@ -84,12 +83,13 @@ function tierBadgeClass(tier?: string | null): string {
     case "maximum_savings":
       return "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300";
     default:
-      return "";
+      return "border-border bg-muted/40 text-foreground";
   }
 }
 
 type Props = {
   dailyRate: number;
+  minimumRentalDays?: number | null;
   hideDailyRateInput?: boolean;
   onDailyRateChange?: (rate: number) => void;
   masters: RentalDurationMasterDto[];
@@ -106,6 +106,7 @@ type Props = {
 
 export function RentalDurationPricingEditor({
   dailyRate,
+  minimumRentalDays,
   hideDailyRateInput = false,
   onDailyRateChange,
   masters,
@@ -146,9 +147,12 @@ export function RentalDurationPricingEditor({
   }) => {
     const fromCatalog = activeIcons.find((i) => i.id === plan.rentalDurationIconId);
     if (fromCatalog) {
-      return resolveRentalIconUrl(fromCatalog.thumbnailUrl || fromCatalog.imageUrl);
+      return resolveRentalIconUrlFromPlan({
+        iconUrl: fromCatalog.imageUrl,
+        iconThumbnailUrl: fromCatalog.thumbnailUrl,
+      });
     }
-    return resolveRentalIconUrl(plan.iconThumbnailUrl || plan.iconUrl);
+    return resolveRentalIconUrlFromPlan(plan);
   };
 
   const updatePlan = (
@@ -416,6 +420,11 @@ export function RentalDurationPricingEditor({
                       Economic max {economicMaximumDays} days
                     </Badge>
                   )}
+                  {minimumRentalDays != null && minimumRentalDays > 0 && (
+                    <Badge variant="outline" className="font-normal">
+                      Minimum {minimumRentalDays} days
+                    </Badge>
+                  )}
                   {popularLabel && (
                     <Badge className="bg-blue-500/15 font-normal text-blue-800 hover:bg-blue-500/15 dark:text-blue-200">
                       Most popular: {popularLabel}
@@ -467,11 +476,16 @@ export function RentalDurationPricingEditor({
               <span className="inline-flex items-center rounded-md border border-border/70 bg-background px-2.5 py-1 text-xs text-muted-foreground">
                 {plans.length} plans
               </span>
+              {minimumRentalDays != null && minimumRentalDays > 0 && (
+                <span className="inline-flex items-center rounded-md border border-border/70 bg-background px-2.5 py-1 text-xs text-muted-foreground">
+                  Minimum {minimumRentalDays} days — shorter plans stay unavailable
+                </span>
+              )}
               <span className="text-xs text-muted-foreground">
                 Manage{" "}
                 <Link
                   to="/admin/rental-setup"
-                  className="font-medium text-primary underline-offset-2 hover:underline"
+                  className="font-medium text-primary no-underline transition-colors hover:text-primary/80 hover:no-underline"
                   onClick={() => setChartOpen(false)}
                 >
                   durations
@@ -479,7 +493,7 @@ export function RentalDurationPricingEditor({
                 {" · "}
                 <Link
                   to="/admin/rental-setup?tab=icons"
-                  className="font-medium text-primary underline-offset-2 hover:underline"
+                  className="font-medium text-primary no-underline transition-colors hover:text-primary/80 hover:no-underline"
                   onClick={() => setChartOpen(false)}
                 >
                   icons
@@ -580,7 +594,10 @@ export function RentalDurationPricingEditor({
                                     <span className="text-muted-foreground">No icon</span>
                                   </SelectItem>
                                   {activeIcons.map((icon) => {
-                                    const src = resolveRentalIconUrl(icon.thumbnailUrl || icon.imageUrl);
+                                    const src = resolveRentalIconUrlFromPlan({
+                                      iconUrl: icon.imageUrl,
+                                      iconThumbnailUrl: icon.thumbnailUrl,
+                                    });
                                     return (
                                       <SelectItem key={icon.id} value={icon.id}>
                                         <div className="flex items-center gap-2">
@@ -593,7 +610,7 @@ export function RentalDurationPricingEditor({
                                               tierBadgeClass(icon.valueTier),
                                             )}
                                           >
-                                            {rentalValueTierLabel(icon.valueTier)}
+                                            {icon.name}
                                           </Badge>
                                         </div>
                                       </SelectItem>
@@ -761,7 +778,10 @@ export function RentalDurationPricingEditor({
                               <SelectItem key={icon.id} value={icon.id}>
                                 <div className="flex items-center gap-2">
                                   {renderIconThumb(
-                                    resolveRentalIconUrl(icon.thumbnailUrl || icon.imageUrl),
+                                    resolveRentalIconUrlFromPlan({
+                                      iconUrl: icon.imageUrl,
+                                      iconThumbnailUrl: icon.thumbnailUrl,
+                                    }),
                                     icon.name,
                                     "md",
                                   )}

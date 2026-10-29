@@ -15,6 +15,7 @@ public static class AdminPermissions
     public const string VendorsAutoVerify = "vendors.auto_verify";
     public const string VendorsManage = "vendors.manage";
     public const string VendorsImpersonate = "vendors.impersonate";
+    public const string VendorsProductPrice = "vendors.product_price";
     public const string CatalogManage = "catalog.manage";
     public const string AdminsManage = "admins.manage";
     public const string RolesManage = "roles.manage";
@@ -35,6 +36,7 @@ public static class AdminPermissions
         (VendorsAutoVerify, "Automated Document Verification", "Vendors", "Allow using automated verification (GST, PAN, Cheque OCR, Penny Drop)"),
         (VendorsManage, "Manage Vendors", "Vendors", "Suspend, ban, reactivate, force reset password"),
         (VendorsImpersonate, "Impersonate Vendor", "Vendors", "Open Vendor Portal as a vendor"),
+        (VendorsProductPrice, "Set Vendor Product Price", "Vendors", "Set a custom sell and payout price for one vendor listing"),
         (CatalogManage, "Manage Catalog", "Catalog", "Products and chemicals management"),
         (AdminsManage, "Manage Admin Users", "System", "Create and manage admin accounts"),
         (RolesManage, "Manage Roles", "System", "Create roles and assign permissions"),

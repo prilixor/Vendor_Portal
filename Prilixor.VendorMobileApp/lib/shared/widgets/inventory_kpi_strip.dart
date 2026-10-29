@@ -40,23 +40,23 @@ class InventoryKpiStrip extends StatelessWidget {
         InventoryKpiMetric(
           label: 'Available',
           value: record.available,
-          color: const Color(0xFF10B981),
+          color: colors.success,
         ),
         InventoryKpiMetric(
           label: 'Reserved',
           value: record.reserved,
-          color: const Color(0xFFF59E0B),
+          color: colors.warning,
         ),
         if (!record.isChemical)
           InventoryKpiMetric(
             label: 'Rented',
             value: record.rented,
-            color: const Color(0xFF3B82F6),
+            color: colors.info,
           ),
         InventoryKpiMetric(
           label: 'Blocked',
           value: record.blocked,
-          color: const Color(0xFFEF4444),
+          color: colors.danger,
         ),
       ],
     );

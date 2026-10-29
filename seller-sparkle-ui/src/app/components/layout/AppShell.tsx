@@ -13,6 +13,8 @@ import { MobileNavScrim, useMobileNavLock } from "./MobileNavScrim";
 import { cn } from "@/app/helpers/utils";
 
 import { CustomerStoreHeader } from "./CustomerStoreHeader";
+import { CustomerPhoneVerificationGate } from "@/app/components/customer/CustomerPhoneVerificationGate";
+import { VendorPhoneVerificationGate } from "@/app/components/vendor/VendorPhoneVerificationGate";
 
 import { vendorNav, customerNav, guestCustomerNav } from "@/app/helpers/navigation";
 
@@ -30,6 +32,10 @@ import { supportApi } from "@/app/services/supportApi";
 import { useAuth } from "@/app/guards/AuthContext";
 
 import { NotificationProvider, useNotificationContext } from "@/app/contexts/NotificationContext";
+import {
+  VendorDispatchOffersProvider,
+  useVendorDispatchOffersContext,
+} from "@/app/contexts/VendorDispatchOffersContext";
 
 import { SupportChatProvider } from "@/app/contexts/SupportChatContext";
 
@@ -46,6 +52,7 @@ import { VendorVerificationBanner } from "@/app/components/vendor/VendorVerifica
 import { SupportChat } from "@/app/components/support/SupportChat";
 import { BrandBootSplash } from "@/app/components/shared/BrandMark";
 import { PortalGlobalLoader } from "@/app/components/shared/PortalGlobalLoader";
+import { LegalReconsentGate } from "@/app/components/legal/LegalReconsentGate";
 
 
 
@@ -69,6 +76,11 @@ function customerBrowseAndCartPaths(pathname: string): boolean {
 
 }
 
+function shellContentClass(pathname: string) {
+  const wideOrder = /\/orders\/[^/]+/.test(pathname);
+  return cn("mx-auto w-full min-w-0", wideOrder ? "max-w-[1600px]" : "max-w-7xl");
+}
+
 
 
 function VendorShellContent({
@@ -89,7 +101,9 @@ function VendorShellContent({
 
 }) {
 
+  const { pathname } = useLocation();
   const { unreadCount: unreadVendorCount } = useNotificationContext();
+  const { pendingCount: pendingOrderRequestsCount } = useVendorDispatchOffersContext();
 
   const verification = useVendorVerification();
 
@@ -104,6 +118,8 @@ function VendorShellContent({
     () =>
 
       getVendorNav(unreadVendorCount, {
+
+        pendingOrderRequestsCount,
 
         operationsBlocked: verification.operationsBlocked,
 
@@ -121,7 +137,7 @@ function VendorShellContent({
 
       }),
 
-    [unreadVendorCount, verification.operationsBlocked, verification.bannerVariant],
+    [unreadVendorCount, pendingOrderRequestsCount, verification.operationsBlocked, verification.bannerVariant],
 
   );
 
@@ -163,7 +179,7 @@ function VendorShellContent({
 
         <main className="relative z-0 min-w-0 flex-1 overflow-x-clip px-3 py-4 pb-24 sm:px-6 sm:py-6 lg:px-8">
 
-          <div className="mx-auto w-full min-w-0 max-w-7xl">
+          <div className={shellContentClass(pathname)}>
 
             {user.impersonation && (
 
@@ -179,7 +195,7 @@ function VendorShellContent({
 
                   type="button"
 
-                  className="font-semibold text-primary underline"
+                  className="font-semibold text-primary no-underline transition-colors hover:text-primary/80 hover:no-underline"
 
                   onClick={() => {
                     clearImpersonationSession();
@@ -202,7 +218,9 @@ function VendorShellContent({
 
             )}
 
-            <PortalGlobalLoader placement="main" />
+            <VendorPhoneVerificationGate>
+              <PortalGlobalLoader placement="main" />
+            </VendorPhoneVerificationGate>
 
           </div>
 
@@ -260,23 +278,9 @@ export const AppShell = ({ variant }: AppShellProps) => {
 
 
 
-  const { data: adminOrders = [] } = useQuery({
-    queryKey: ["admin-orders"],
-    queryFn: () => adminApi.getAdminOrders({ quiet: true }),
-    enabled: variant === "admin" && !!user,
-    refetchInterval: 30000,
-  });
-
-  const { data: adminVendors = [] } = useQuery({
-    queryKey: ["admin-vendors"],
-    queryFn: () => adminApi.getVendors({ quiet: true }),
-    enabled: variant === "admin" && !!user,
-    refetchInterval: 30000,
-  });
-
-  const { data: adminAuditLogs = [] } = useQuery({
-    queryKey: ["admin-audit-logs"],
-    queryFn: () => adminApi.getAuditLogs(undefined, { quiet: true }),
+  const { data: adminAlertSummary } = useQuery({
+    queryKey: ["admin-alert-summary"],
+    queryFn: () => adminApi.getAdminAlertSummary({ quiet: true }),
     enabled: variant === "admin" && !!user,
     refetchInterval: 30000,
   });
@@ -299,22 +303,13 @@ export const AppShell = ({ variant }: AppShellProps) => {
   const vendorSupportUnread = adminSupportUnread?.count ?? 0;
 
   const unreadAdminCount = useMemo(() => {
-    const criticalOrders = (adminOrders || []).filter((o) => {
-      if (!o || !o.status) return false;
-      const s = o.status.toLowerCase().replace(/_/g, " ");
-      return s.includes("dispatch failed") || s.includes("cancelled");
-    }).length;
-
-    const pendingVendors = (adminVendors || []).filter((v) => v && v.accountStatus === "pending").length;
-
-    const listingPricingAlerts = (adminAuditLogs || []).filter((l) => {
-      const a = (l.actionType || "").toLowerCase();
-      return a === "vendor.listing.created" || a === "vendor.listing.updated";
-    }).length;
-
-    // Live unread Customer→Admin + Vendor→Admin support (clears when admin opens the thread).
-    return criticalOrders + pendingVendors + listingPricingAlerts + customerChatUnread + vendorSupportUnread;
-  }, [adminOrders, adminVendors, adminAuditLogs, customerChatUnread, vendorSupportUnread]);
+    const criticalOrders = adminAlertSummary?.criticalOrderCount ?? 0;
+    const pendingRefunds = (adminAlertSummary?.pendingDepositRefundCount ?? 0)
+      + (adminAlertSummary?.pendingCancellationRefundCount ?? 0);
+    const pendingVendors = adminAlertSummary?.pendingVendorCount ?? 0;
+    const listingPricingAlerts = adminAlertSummary?.listingPricingAlertCount ?? 0;
+    return criticalOrders + pendingRefunds + pendingVendors + listingPricingAlerts + customerChatUnread + vendorSupportUnread;
+  }, [adminAlertSummary, customerChatUnread, vendorSupportUnread]);
 
 
 
@@ -392,7 +387,7 @@ export const AppShell = ({ variant }: AppShellProps) => {
   return (
 
     <NotificationProvider vendorId={variant === "vendor" ? user?.id : undefined}>
-
+      <VendorDispatchOffersProvider vendorId={variant === "vendor" ? user?.id : undefined}>
       <SupportChatProvider>
 
         {isCustomerShell ? (
@@ -417,7 +412,7 @@ export const AppShell = ({ variant }: AppShellProps) => {
 
                     type="button"
 
-                    className="font-semibold text-primary underline"
+                    className="font-semibold text-primary no-underline transition-colors hover:text-primary/80 hover:no-underline"
 
                     onClick={() => {
                       clearImpersonationSession();
@@ -440,7 +435,9 @@ export const AppShell = ({ variant }: AppShellProps) => {
 
               <div className="mx-auto w-full min-w-0 max-w-[1400px]">
 
-                <PortalGlobalLoader placement="chrome" />
+                <CustomerPhoneVerificationGate>
+                  <PortalGlobalLoader placement="chrome" />
+                </CustomerPhoneVerificationGate>
 
               </div>
 
@@ -502,7 +499,7 @@ export const AppShell = ({ variant }: AppShellProps) => {
 
               <main className="relative z-0 min-w-0 flex-1 overflow-x-clip px-3 py-4 sm:px-6 lg:px-8">
 
-                <div className="mx-auto w-full min-w-0 max-w-7xl">
+                <div className={shellContentClass(location.pathname)}>
 
                   <PortalGlobalLoader placement="main" />
 
@@ -517,6 +514,12 @@ export const AppShell = ({ variant }: AppShellProps) => {
         )}
 
       </SupportChatProvider>
+
+      {variant !== "admin" && user && !user.impersonation ? (
+        <LegalReconsentGate role={variant === "vendor" ? "vendor" : "customer"} userId={user.id} />
+      ) : null}
+
+      </VendorDispatchOffersProvider>
 
     </NotificationProvider>
 

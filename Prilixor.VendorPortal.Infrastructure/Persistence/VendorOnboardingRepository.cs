@@ -1,4 +1,6 @@
+using Prilixor.Shared.Extensions;
 using Prilixor.VendorPortal.Application.Abstractions;
+using Prilixor.VendorPortal.Application.Common;
 using Prilixor.VendorPortal.Application.Onboarding;
 using Prilixor.VendorPortal.Domain.Options;
 using Prilixor.VendorPortal.Domain.Vendors;
@@ -12,7 +14,8 @@ namespace Prilixor.VendorPortal.Infrastructure.Persistence;
 public sealed class VendorOnboardingRepository(
     ApplicationDbContext dbContext,
     AdminPortalDbContext adminDbContext,
-    CommonPortalDbContext commonDbContext)
+    CommonPortalDbContext commonDbContext,
+    IVendorFileUrlResolver fileUrlResolver)
     : IVendorOnboardingRepository, IScopedService
 {
     public Task<Vendor?> GetVendorByIdAsync(Guid vendorId, CancellationToken cancellationToken)
@@ -30,7 +33,10 @@ public sealed class VendorOnboardingRepository(
 
     public Task<Vendor?> GetVendorByPhoneAsync(string phoneNumber, CancellationToken cancellationToken)
     {
-        var normalized = new string(phoneNumber.Where(char.IsDigit).ToArray());
+        var normalized = IndianMobilePhone.NormalizeDigits(phoneNumber);
+        if (string.IsNullOrEmpty(normalized))
+            return Task.FromResult<Vendor?>(null);
+
         return dbContext.Vendors
             .FirstOrDefaultAsync(x => x.SupportPhone == normalized && !x.IsDeleted, cancellationToken);
     }
@@ -48,6 +54,116 @@ public sealed class VendorOnboardingRepository(
             .Include(x => x.Documents)
             .Where(x => !x.IsDeleted)
             .ToListAsync(cancellationToken);
+    }
+
+    public async Task<AdminVendorListResult> SearchVendorSummariesAsync(
+        AdminVendorListQuerySpec spec,
+        CancellationToken cancellationToken)
+    {
+        var page = Math.Max(1, spec.Page);
+        var pageSize = Math.Clamp(spec.PageSize, 1, 100);
+        var search = spec.Search?.Trim() ?? string.Empty;
+        var status = (spec.Status ?? "all").Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(status)) status = "all";
+
+        var query = dbContext.Vendors
+            .AsNoTracking()
+            .Where(v => !v.IsDeleted);
+
+        if (status != "all")
+        {
+            query = query.Where(v => v.AccountStatus.ToLower() == status);
+        }
+
+        if (!string.IsNullOrEmpty(search))
+        {
+            var s = search.ToLower();
+            query = query.Where(v =>
+                v.Email.ToLower().Contains(s) ||
+                (v.Profile != null && !v.Profile.IsDeleted && (
+                    v.Profile.BusinessName.ToLower().Contains(s) ||
+                    v.Profile.OwnerName.ToLower().Contains(s) ||
+                    v.Profile.City.ToLower().Contains(s))));
+        }
+
+        var totalCount = await query.CountAsync(cancellationToken);
+        var rows = await query
+            .OrderBy(v =>
+                v.Profile != null && !v.Profile.IsDeleted && v.Profile.BusinessName != ""
+                    ? v.Profile.BusinessName
+                    : v.Email)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(v => new AdminVendorListRow(
+                v.Id.ToString(),
+                v.Email,
+                v.AccountStatus,
+                v.Profile != null && !v.Profile.IsDeleted ? v.Profile.BusinessName : null,
+                v.Profile != null && !v.Profile.IsDeleted ? v.Profile.OwnerName : null,
+                v.Profile != null && !v.Profile.IsDeleted ? v.Profile.City : null,
+                v.Documents.Count(d => !d.IsDeleted),
+                v.ProductListings.Count(l => !l.IsDeleted)))
+            .ToListAsync(cancellationToken);
+
+        return new AdminVendorListResult
+        {
+            Items = rows,
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize,
+        };
+    }
+
+    public async Task<AdminVerificationListResult> SearchVendorVerificationSummariesAsync(
+        AdminVerificationListQuerySpec spec,
+        CancellationToken cancellationToken)
+    {
+        var page = Math.Max(1, spec.Page);
+        var pageSize = Math.Clamp(spec.PageSize, 1, 100);
+        var search = spec.Search?.Trim() ?? string.Empty;
+        var status = (spec.Status ?? "all").Trim().ToLowerInvariant();
+        if (string.IsNullOrWhiteSpace(status)) status = "all";
+
+        var query = dbContext.Vendors
+            .AsNoTracking()
+            .Where(v => !v.IsDeleted)
+            .Where(v => v.Profile != null && !v.Profile.IsDeleted)
+            .Where(v => v.RegistrationStage != "email_registered" && v.RegistrationStage != "profile_pending");
+
+        if (status != "all")
+        {
+            query = query.Where(v => v.AccountStatus.ToLower() == status);
+        }
+
+        if (!string.IsNullOrEmpty(search))
+        {
+            var s = search.ToLower();
+            query = query.Where(v =>
+                v.Email.ToLower().Contains(s) ||
+                (v.Profile != null && !v.Profile.IsDeleted && v.Profile.BusinessName.ToLower().Contains(s)));
+        }
+
+        var totalCount = await query.CountAsync(cancellationToken);
+        var rows = await query
+            .OrderByDescending(v => v.CreatedOnUtc)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(v => new AdminVerificationListRow(
+                v.Id.ToString(),
+                v.Email,
+                v.AccountStatus,
+                v.RegistrationStage,
+                v.IsEmailVerified,
+                v.Profile != null && !v.Profile.IsDeleted ? v.Profile.BusinessName : null))
+            .ToListAsync(cancellationToken);
+
+        return new AdminVerificationListResult
+        {
+            Items = rows,
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize,
+        };
     }
 
     public async Task AddVendorAsync(Vendor vendor, CancellationToken cancellationToken)
@@ -324,6 +440,7 @@ public sealed class VendorOnboardingRepository(
     public async Task<Product?> GetProductByIdAsync(Guid productId, CancellationToken cancellationToken)
     {
         var product = await commonDbContext.Products
+            .Include(x => x.Category)
             .Include(x => x.ChemicalProperty)
             .Include(x => x.ProductImages)
             .Include(x => x.ProductDocuments)
@@ -336,6 +453,7 @@ public sealed class VendorOnboardingRepository(
         }
 
         return await dbContext.Products
+            .Include(x => x.Category)
             .Include(x => x.ChemicalProperty)
             .Include(x => x.ProductImages)
             .Include(x => x.ProductDocuments)
@@ -633,6 +751,141 @@ public sealed class VendorOnboardingRepository(
         }
 
         return await legacyQuery.OrderBy(x => x.ProductName).ToListAsync(cancellationToken);
+    }
+
+    public async Task<ProductListResult> SearchProductSummariesAsync(ProductListQuerySpec spec, CancellationToken cancellationToken)
+    {
+        var page = Math.Max(1, spec.Page);
+        var pageSize = Math.Clamp(spec.PageSize, 1, 100);
+        var hasCommon = await commonDbContext.Products.AsNoTracking().AnyAsync(x => !x.IsDeleted, cancellationToken);
+        var catalog = hasCommon ? (ApplicationDbContext)commonDbContext : dbContext;
+        return await SearchProductSummariesInStoreAsync(catalog, spec, page, pageSize, cancellationToken);
+    }
+
+    private static async Task<ProductListResult> SearchProductSummariesInStoreAsync(
+        ApplicationDbContext catalog,
+        ProductListQuerySpec spec,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        var query = catalog.Products.AsNoTracking().Where(x => !x.IsDeleted);
+
+        if (spec.CategoryId.HasValue)
+        {
+            query = query.Where(x => x.CategoryId == spec.CategoryId.Value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(spec.Search))
+        {
+            var term = spec.Search.Trim().ToLower();
+            query = query.Where(x =>
+                x.ProductName.ToLower().Contains(term)
+                || (x.BrandName != null && x.BrandName.ToLower().Contains(term))
+                || (x.ModelName != null && x.ModelName.ToLower().Contains(term)));
+        }
+
+        if (spec.IsActive.HasValue)
+        {
+            query = query.Where(x => x.IsActive == spec.IsActive.Value);
+        }
+
+        if (spec.IsChemical == true)
+        {
+            query = query.Where(x => x.Category.IsChemical || x.ChemicalProperty != null);
+        }
+        else if (spec.IsChemical == false)
+        {
+            query = query.Where(x => !x.Category.IsChemical && x.ChemicalProperty == null);
+        }
+
+        if (spec.ProductIds is { Count: > 0 })
+        {
+            var ids = spec.ProductIds.ToList();
+            query = query.Where(x => ids.Contains(x.Id));
+        }
+
+        var totalCount = await query.CountAsync(cancellationToken);
+        if (totalCount == 0)
+        {
+            return new ProductListResult { Items = [], TotalCount = 0 };
+        }
+
+        var items = await query
+            .OrderBy(x => x.ProductName)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(x => new ProductListRow
+            {
+                Id = x.Id,
+                CategoryId = x.CategoryId,
+                ProductName = x.ProductName,
+                BrandName = x.BrandName,
+                ModelName = x.ModelName,
+                DailyRent = x.DailyRent,
+                WeeklyRent = x.WeeklyRent,
+                MonthlyRent = x.MonthlyRent,
+                SecurityDeposit = x.SecurityDeposit,
+                BuyPrice = x.BuyPrice,
+                VendorDailyRent = x.VendorDailyRent,
+                VendorWeeklyRent = x.VendorWeeklyRent,
+                VendorMonthlyRent = x.VendorMonthlyRent,
+                VendorSecurityDeposit = x.VendorSecurityDeposit,
+                VendorBuyPrice = x.VendorBuyPrice,
+                GstPercent = x.GstPercent,
+                IsRentEnabled = x.IsRentEnabled,
+                IsBuyEnabled = x.IsBuyEnabled,
+                IsActive = x.IsActive,
+                CasNumber = x.ChemicalProperty != null ? x.ChemicalProperty.CasNumber : null,
+                ChemicalFormula = x.ChemicalProperty != null ? x.ChemicalProperty.ChemicalFormula : null,
+                PurityPercentage = x.ChemicalProperty != null ? x.ChemicalProperty.PurityPercentage : null,
+                MolecularWeight = x.ChemicalProperty != null ? x.ChemicalProperty.MolecularWeight : null,
+                BaseUnit = x.ChemicalProperty != null ? x.ChemicalProperty.BaseUnit : null,
+                PrimaryImageId = x.ProductImages
+                    .Where(i => !i.IsDeleted)
+                    .OrderByDescending(i => i.IsPrimary)
+                    .ThenBy(i => i.DisplayOrder)
+                    .Select(i => (Guid?)i.Id)
+                    .FirstOrDefault(),
+                PrimaryImageUrl = x.ProductImages
+                    .Where(i => !i.IsDeleted)
+                    .OrderByDescending(i => i.IsPrimary)
+                    .ThenBy(i => i.DisplayOrder)
+                    .Select(i => i.ImageUrl)
+                    .FirstOrDefault(),
+                PrimaryThumbnailUrl = x.ProductImages
+                    .Where(i => !i.IsDeleted)
+                    .OrderByDescending(i => i.IsPrimary)
+                    .ThenBy(i => i.DisplayOrder)
+                    .Select(i => i.ThumbnailUrl)
+                    .FirstOrDefault(),
+                PrimaryImageDisplayOrder = x.ProductImages
+                    .Where(i => !i.IsDeleted)
+                    .OrderByDescending(i => i.IsPrimary)
+                    .ThenBy(i => i.DisplayOrder)
+                    .Select(i => i.DisplayOrder)
+                    .FirstOrDefault(),
+                PrimaryImageIsPrimary = x.ProductImages
+                    .Where(i => !i.IsDeleted)
+                    .OrderByDescending(i => i.IsPrimary)
+                    .ThenBy(i => i.DisplayOrder)
+                    .Select(i => i.IsPrimary)
+                    .FirstOrDefault(),
+                Variants = x.Variants.Select(v => new ProductListVariantRow
+                {
+                    Id = v.Id,
+                    ProductId = v.ProductId,
+                    Sku = v.Sku,
+                    SizeValue = v.SizeValue,
+                    SizeUnit = v.SizeUnit,
+                    VendorPrice = v.VendorPrice,
+                    BuyPrice = v.BuyPrice,
+                    IsActive = v.IsActive
+                }).ToList()
+            })
+            .ToListAsync(cancellationToken);
+
+        return new ProductListResult { Items = items, TotalCount = totalCount };
     }
 
     public async Task AddProductImageAsync(ProductImage image, CancellationToken cancellationToken)
@@ -933,6 +1186,31 @@ public sealed class VendorOnboardingRepository(
         }
     }
 
+    public async Task ClearRentalDurationIconAssignmentsAsync(Guid iconId, CancellationToken cancellationToken)
+    {
+        await ClearIconAssignmentsAsync(commonDbContext, iconId, cancellationToken);
+        await ClearIconAssignmentsAsync(dbContext, iconId, cancellationToken);
+    }
+
+    private static async Task ClearIconAssignmentsAsync(
+        ApplicationDbContext db,
+        Guid iconId,
+        CancellationToken cancellationToken)
+    {
+        var plans = await db.Set<ProductRentalPricingPlan>()
+            .Where(p => p.RentalDurationIconId == iconId)
+            .ToListAsync(cancellationToken);
+
+        foreach (var plan in plans)
+        {
+            plan.RentalDurationIconId = null;
+            plan.IconUrl = null;
+            plan.IconThumbnailUrl = null;
+            plan.ValueTier = null;
+            plan.IconName = null;
+        }
+    }
+
     private static RentalDurationIcon CloneRentalDurationIcon(RentalDurationIcon source) =>
         new()
         {
@@ -969,6 +1247,61 @@ public sealed class VendorOnboardingRepository(
     {
         return dbContext.VendorProductListings
             .FirstOrDefaultAsync(x => x.Id == listingId && x.VendorId == vendorId && !x.IsDeleted, cancellationToken);
+    }
+
+    public Task<VendorListingPriceOverride?> GetVendorListingPriceOverrideAsync(Guid listingId, CancellationToken cancellationToken)
+    {
+        return dbContext.VendorListingPriceOverrides
+            .AsNoTracking()
+            .Include(x => x.Variants)
+            .FirstOrDefaultAsync(x => x.VendorProductListingId == listingId, cancellationToken);
+    }
+
+    public async Task<HashSet<Guid>> GetListingIdsWithCustomVendorPricingAsync(
+        IReadOnlyCollection<Guid> listingIds,
+        CancellationToken cancellationToken)
+    {
+        if (listingIds.Count == 0)
+            return [];
+
+        var ids = await dbContext.VendorListingPriceOverrides
+            .AsNoTracking()
+            .Where(x => listingIds.Contains(x.VendorProductListingId) && x.IsCustomPricing)
+            .Select(x => x.VendorProductListingId)
+            .ToListAsync(cancellationToken);
+        return ids.ToHashSet();
+    }
+
+    public async Task UpsertVendorListingPriceOverrideAsync(VendorListingPriceOverride row, CancellationToken cancellationToken)
+    {
+        var existing = await dbContext.VendorListingPriceOverrides
+            .Include(x => x.Variants)
+            .FirstOrDefaultAsync(x => x.VendorProductListingId == row.VendorProductListingId, cancellationToken);
+
+        if (existing is null)
+        {
+            foreach (var variant in row.Variants)
+                variant.VendorListingPriceOverrideId = row.Id;
+            await dbContext.VendorListingPriceOverrides.AddAsync(row, cancellationToken);
+            return;
+        }
+
+        existing.IsCustomPricing = row.IsCustomPricing;
+        existing.DailyRent = row.DailyRent;
+        existing.SecurityDeposit = row.SecurityDeposit;
+        existing.BuyPrice = row.BuyPrice;
+        existing.VendorDailyRent = row.VendorDailyRent;
+        existing.VendorBuyPrice = row.VendorBuyPrice;
+        existing.ModifiedOnUtc = DateTime.UtcNow;
+
+        var previous = existing.Variants.ToList();
+        existing.Variants.Clear();
+        dbContext.VendorListingVariantPriceOverrides.RemoveRange(previous);
+        foreach (var variant in row.Variants)
+        {
+            variant.VendorListingPriceOverrideId = existing.Id;
+            existing.Variants.Add(variant);
+        }
     }
 
     public Task<VendorProductListing?> GetVendorProductListingByVendorProductAsync(Guid vendorId, Guid productId, CancellationToken cancellationToken)
@@ -1168,6 +1501,17 @@ public sealed class VendorOnboardingRepository(
             .FirstOrDefaultAsync(x => x.VendorProductListingId == listingId && !x.IsDeleted, cancellationToken);
     }
 
+    public async Task<List<VendorInventory>> GetVendorInventoriesByListingIdsAsync(
+        IReadOnlyList<Guid> listingIds,
+        CancellationToken cancellationToken)
+    {
+        if (listingIds.Count == 0) return [];
+        return await dbContext.VendorInventory
+            .AsNoTracking()
+            .Where(x => listingIds.Contains(x.VendorProductListingId) && !x.IsDeleted)
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task UpsertVendorInventoryAsync(VendorInventory inventory, CancellationToken cancellationToken)
     {
         var entry = dbContext.Entry(inventory);
@@ -1220,6 +1564,19 @@ public sealed class VendorOnboardingRepository(
         return dbContext.VendorVariantInventories
             .Include(x => x.ProductVariant)
             .Where(x => x.VendorProductListingId == listingId)
+            .OrderBy(x => x.ProductVariant.SizeValue)
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<List<VendorVariantInventory>> GetVariantInventoriesByListingIdsAsync(
+        IReadOnlyList<Guid> listingIds,
+        CancellationToken cancellationToken)
+    {
+        if (listingIds.Count == 0) return [];
+        return await dbContext.VendorVariantInventories
+            .AsNoTracking()
+            .Include(x => x.ProductVariant)
+            .Where(x => listingIds.Contains(x.VendorProductListingId))
             .OrderBy(x => x.ProductVariant.SizeValue)
             .ToListAsync(cancellationToken);
     }
@@ -1382,6 +1739,530 @@ public sealed class VendorOnboardingRepository(
             .CountAsync(x => x.VendorId == vendorId && !x.IsDeleted && x.ReadAt == null, cancellationToken);
     }
 
+    public async Task<VendorNotificationListResult> SearchVendorNotificationSummariesAsync(
+        Guid vendorId,
+        bool unreadOnly,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 50);
+        var query = dbContext.VendorNotifications
+            .AsNoTracking()
+            .Where(x => x.VendorId == vendorId && !x.IsDeleted);
+        var unreadCount = await query.CountAsync(x => x.ReadAt == null, cancellationToken);
+        if (unreadOnly)
+            query = query.Where(x => x.ReadAt == null);
+
+        var totalCount = await query.CountAsync(cancellationToken);
+        var rows = await query
+            .OrderByDescending(x => x.SentAt)
+            .ThenByDescending(x => x.CreatedOnUtc)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        return new VendorNotificationListResult
+        {
+            Items = rows.ConvertAll(x => new VendorNotificationDto(
+                x.Id.ToString(),
+                x.VendorId.ToString(),
+                x.NotificationType,
+                x.Title,
+                x.Message,
+                x.Channel,
+                x.Status,
+                x.SentAt,
+                x.ReadAt)),
+            TotalCount = totalCount,
+            UnreadCount = unreadCount,
+            Page = page,
+            PageSize = pageSize,
+        };
+    }
+
+    public async Task<HashSet<string>> GetExistingVendorExpiringNotificationTitlesAsync(
+        Guid vendorId,
+        IReadOnlyCollection<string> titles,
+        CancellationToken cancellationToken)
+    {
+        if (titles.Count == 0)
+            return [];
+
+        var existing = await dbContext.VendorNotifications
+            .AsNoTracking()
+            .Where(x =>
+                x.VendorId == vendorId &&
+                !x.IsDeleted &&
+                x.NotificationType == "order_expiring_soon" &&
+                titles.Contains(x.Title))
+            .Select(x => x.Title)
+            .ToListAsync(cancellationToken);
+        return existing.ToHashSet(StringComparer.Ordinal);
+    }
+
+    public async Task<VendorDashboardSummaryDto> GetVendorDashboardCatalogAsync(
+        Guid vendorId,
+        CancellationToken cancellationToken)
+    {
+        var profile = await GetVendorProfileAsync(vendorId, cancellationToken);
+        var docs = await GetVendorDocumentsAsync(vendorId, cancellationToken);
+        var banks = await GetVendorBankAccountsAsync(vendorId, cancellationToken);
+        var listings = await GetVendorProductListingsAsync(vendorId, cancellationToken);
+        var listingIds = listings.ConvertAll(l => l.Id);
+        var inventories = await GetVendorInventoriesByListingIdsAsync(listingIds, cancellationToken);
+        var unread = await GetUnreadNotificationCountAsync(vendorId, cancellationToken);
+        var recent = await dbContext.VendorNotifications
+            .AsNoTracking()
+            .Where(x => x.VendorId == vendorId && !x.IsDeleted)
+            .OrderByDescending(x => x.SentAt)
+            .ThenByDescending(x => x.CreatedOnUtc)
+            .Take(5)
+            .ToListAsync(cancellationToken);
+
+        var approvedDocs = docs.Count(d => string.Equals(d.VerificationStatus, "approved", StringComparison.OrdinalIgnoreCase));
+        var rejectedDocs = docs.Count(d => string.Equals(d.VerificationStatus, "rejected", StringComparison.OrdinalIgnoreCase));
+        var approvedBanks = banks.Count(b => string.Equals(b.VerificationStatus, "approved", StringComparison.OrdinalIgnoreCase));
+        var rejectedBanks = banks.Count(b => string.Equals(b.VerificationStatus, "rejected", StringComparison.OrdinalIgnoreCase));
+        var verified = docs.Count > 0 && approvedDocs == docs.Count && approvedBanks > 0;
+        var verificationMessage = verified
+            ? "All documents and bank details have been approved."
+            : rejectedDocs > 0 || rejectedBanks > 0
+                ? "Some verifications were rejected. Please review and resubmit from onboarding."
+                : $"Approved documents: {approvedDocs}/{docs.Count}. Approved bank accounts: {approvedBanks}/{banks.Count}.";
+
+        var inventoryByListing = inventories
+            .GroupBy(i => i.VendorProductListingId)
+            .ToDictionary(g => g.Key, g => g.First());
+        var productIds = listings.Select(l => l.ProductId).Distinct().ToList();
+        var products = await commonDbContext.Products
+            .AsNoTracking()
+            .Where(p => productIds.Contains(p.Id) && !p.IsDeleted)
+            .ToListAsync(cancellationToken);
+        if (products.Count == 0 && productIds.Count > 0)
+        {
+            products = await dbContext.Products
+                .AsNoTracking()
+                .Where(p => productIds.Contains(p.Id) && !p.IsDeleted)
+                .ToListAsync(cancellationToken);
+        }
+
+        var categoryIds = products.Select(p => p.CategoryId).Distinct().ToList();
+        var categories = await commonDbContext.ProductCategories
+            .AsNoTracking()
+            .Where(c => categoryIds.Contains(c.Id) && !c.IsDeleted)
+            .ToListAsync(cancellationToken);
+        if (categories.Count == 0 && categoryIds.Count > 0)
+        {
+            categories = await dbContext.ProductCategories
+                .AsNoTracking()
+                .Where(c => categoryIds.Contains(c.Id) && !c.IsDeleted)
+                .ToListAsync(cancellationToken);
+        }
+
+        var productMap = products.ToDictionary(p => p.Id);
+        var categoryMap = categories.ToDictionary(c => c.Id);
+        var topListings = listings
+            .Select(l =>
+            {
+                var stock = inventoryByListing.TryGetValue(l.Id, out var inv)
+                    ? inv.TotalQuantity
+                    : l.AvailableQuantity;
+                productMap.TryGetValue(l.ProductId, out var product);
+                var categoryName = product != null && categoryMap.TryGetValue(product.CategoryId, out var cat)
+                    ? cat.CategoryName
+                    : "N/A";
+                return new VendorDashboardListingDto
+                {
+                    Id = l.Id.ToString(),
+                    Title = l.ListingTitle,
+                    Category = categoryName,
+                    DailyRent = product?.DailyRent ?? l.DailyRent,
+                    Stock = stock,
+                    Status = l.ListingStatus,
+                };
+            })
+            .OrderByDescending(x => x.Stock)
+            .Take(4)
+            .ToList();
+
+        return new VendorDashboardSummaryDto
+        {
+            OwnerName = profile?.OwnerName ?? string.Empty,
+            BusinessName = profile?.BusinessName ?? string.Empty,
+            IsVerified = verified,
+            VerificationMessage = verificationMessage,
+            TotalListings = listings.Count,
+            ActiveListings = listings.Count(l =>
+            {
+                var s = l.ListingStatus.Trim().ToLowerInvariant();
+                return s is "approved" or "active";
+            }),
+            InventoryUnits = inventories.Sum(i => i.TotalQuantity),
+            UnreadNotifications = unread,
+            RecentActivity = recent.ConvertAll(n => new VendorDashboardActivityDto
+            {
+                Id = n.Id.ToString(),
+                Title = n.Title,
+                Message = n.Message,
+                Timestamp = (n.SentAt ?? n.CreatedOnUtc).ToString("O"),
+                NotificationType = n.NotificationType,
+                Read = n.ReadAt != null || string.Equals(n.Status, "read", StringComparison.OrdinalIgnoreCase),
+            }),
+            TopListings = topListings,
+        };
+    }
+
+    private async Task<List<ProductVariant>> LoadActiveProductVariantsAsync(
+        IReadOnlyList<Guid> productIds,
+        CancellationToken cancellationToken)
+    {
+        if (productIds.Count == 0) return [];
+        var rows = await commonDbContext.Set<ProductVariant>()
+            .AsNoTracking()
+            .Where(v => productIds.Contains(v.ProductId) && v.IsActive)
+            .ToListAsync(cancellationToken);
+        if (rows.Count == 0)
+        {
+            rows = await dbContext.Set<ProductVariant>()
+                .AsNoTracking()
+                .Where(v => productIds.Contains(v.ProductId) && v.IsActive)
+                .ToListAsync(cancellationToken);
+        }
+
+        return rows;
+    }
+
+    private static List<VendorListingChemicalSizeDto> BuildChemicalSizes(
+        Guid productId,
+        List<VendorVariantInventory>? stocks,
+        IReadOnlyDictionary<Guid, List<ProductVariant>> catalogByProduct)
+    {
+        var stockByVariant = (stocks ?? [])
+            .GroupBy(s => s.ProductVariantId)
+            .ToDictionary(g => g.Key, g => g.First());
+
+        if (catalogByProduct.TryGetValue(productId, out var catalog) && catalog.Count > 0)
+        {
+            return catalog
+                .Select(variant => ToChemicalSize(variant, stockByVariant.GetValueOrDefault(variant.Id)))
+                .ToList();
+        }
+
+        return (stocks ?? [])
+            .Where(s => s.ProductVariant is not null)
+            .OrderBy(s => s.ProductVariant.SizeValue)
+            .Select(s => ToChemicalSize(s.ProductVariant, s))
+            .ToList();
+    }
+
+    private static VendorListingChemicalSizeDto ToChemicalSize(ProductVariant variant, VendorVariantInventory? stock)
+        => new()
+        {
+            VariantId = variant.Id.ToString(),
+            Label = SizeFormatting.Format(variant.SizeValue, variant.SizeUnit),
+            Sku = variant.Sku ?? string.Empty,
+            SizeValue = variant.SizeValue,
+            SizeUnit = variant.SizeUnit ?? string.Empty,
+            BuyPrice = variant.BuyPrice,
+            TotalQuantity = stock?.TotalQuantity ?? 0,
+            AvailableQuantity = stock?.AvailableQuantity ?? 0,
+            ReservedQuantity = stock?.ReservedQuantity ?? 0,
+        };
+
+    private readonly record struct StockUnits(int Total, int Available, int Reserved, int Rented, int Blocked);
+
+    private static StockUnits SumStockUnits(
+        IEnumerable<VendorProductListing> rows,
+        IReadOnlyDictionary<Guid, VendorInventory> flatByListing,
+        IReadOnlyDictionary<Guid, List<VendorVariantInventory>> variantByListing,
+        bool useVariantQuantities)
+    {
+        var total = 0;
+        var available = 0;
+        var reserved = 0;
+        var rented = 0;
+        var blocked = 0;
+        foreach (var row in rows)
+        {
+            flatByListing.TryGetValue(row.Id, out var flat);
+            if (useVariantQuantities
+                && variantByListing.TryGetValue(row.Id, out var variants)
+                && variants.Count > 0)
+            {
+                total += variants.Sum(v => v.TotalQuantity);
+                available += variants.Sum(v => v.AvailableQuantity);
+            }
+            else
+            {
+                total += flat?.TotalQuantity ?? row.AvailableQuantity;
+                available += flat?.AvailableQuantity ?? row.AvailableQuantity;
+            }
+
+            reserved += flat?.ReservedQuantity ?? 0;
+            rented += flat?.RentedQuantity ?? 0;
+            blocked += flat?.BlockedQuantity ?? 0;
+        }
+
+        return new StockUnits(total, available, reserved, rented, blocked);
+    }
+
+    private static VendorListingStockUnitsDto ToStockUnitsDto(StockUnits units) => new()
+    {
+        TotalUnits = units.Total,
+        AvailableUnits = units.Available,
+        ReservedUnits = units.Reserved,
+        RentedUnits = units.Rented,
+        BlockedUnits = units.Blocked,
+    };
+
+    public async Task<VendorListingListResult> SearchVendorListingSummariesAsync(
+        Guid vendorId,
+        string? search,
+        string? status,
+        bool? isChemical,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 50);
+        var listings = await GetVendorProductListingsAsync(vendorId, cancellationToken);
+        var productIds = listings.Select(l => l.ProductId).Distinct().ToList();
+        var products = await commonDbContext.Products
+            .AsNoTracking()
+            .Where(p => productIds.Contains(p.Id) && !p.IsDeleted)
+            .ToListAsync(cancellationToken);
+        if (products.Count == 0 && productIds.Count > 0)
+        {
+            products = await dbContext.Products
+                .AsNoTracking()
+                .Where(p => productIds.Contains(p.Id) && !p.IsDeleted)
+                .ToListAsync(cancellationToken);
+        }
+
+        var categoryIds = products.Select(p => p.CategoryId).Distinct().ToList();
+        var categories = await commonDbContext.ProductCategories
+            .AsNoTracking()
+            .Where(c => categoryIds.Contains(c.Id) && !c.IsDeleted)
+            .ToListAsync(cancellationToken);
+        if (categories.Count == 0 && categoryIds.Count > 0)
+        {
+            categories = await dbContext.ProductCategories
+                .AsNoTracking()
+                .Where(c => categoryIds.Contains(c.Id) && !c.IsDeleted)
+                .ToListAsync(cancellationToken);
+        }
+
+        var chemicalIds = await GetChemicalProductIdsAsync(productIds, cancellationToken);
+        var productMap = products.ToDictionary(p => p.Id);
+        var categoryMap = categories.ToDictionary(c => c.Id);
+
+        IEnumerable<VendorProductListing> filtered = listings;
+        var q = search?.Trim() ?? string.Empty;
+        if (!string.IsNullOrEmpty(q))
+        {
+            filtered = filtered.Where(l =>
+            {
+                productMap.TryGetValue(l.ProductId, out var product);
+                var categoryName = product != null && categoryMap.TryGetValue(product.CategoryId, out var cat)
+                    ? cat.CategoryName
+                    : "";
+                return l.ListingTitle.Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                       (product?.ProductName ?? "").Contains(q, StringComparison.OrdinalIgnoreCase) ||
+                       categoryName.Contains(q, StringComparison.OrdinalIgnoreCase);
+            });
+        }
+
+        var afterSearch = filtered.ToList();
+        var equipmentRows = afterSearch.Where(l => !chemicalIds.Contains(l.ProductId)).ToList();
+        var chemicalRows = afterSearch.Where(l => chemicalIds.Contains(l.ProductId)).ToList();
+        var equipmentCount = equipmentRows.Count;
+        var chemicalCount = chemicalRows.Count;
+        var scoped = isChemical is null
+            ? afterSearch
+            : isChemical.Value ? chemicalRows : equipmentRows;
+        var activeCount = scoped.Count(l => NormalizeListingStatus(l.ListingStatus) == "active");
+        var inactiveCount = scoped.Count(l => NormalizeListingStatus(l.ListingStatus) == "inactive");
+        var draftCount = scoped.Count(l => NormalizeListingStatus(l.ListingStatus) == "draft");
+
+        IEnumerable<VendorProductListing> statusFiltered = afterSearch;
+        if (!string.IsNullOrWhiteSpace(status) &&
+            !string.Equals(status, "all", StringComparison.OrdinalIgnoreCase))
+        {
+            var wanted = NormalizeListingStatus(status);
+            statusFiltered = afterSearch.Where(l => NormalizeListingStatus(l.ListingStatus) == wanted);
+        }
+
+        var afterSearchAndStatus = statusFiltered.ToList();
+        var list = isChemical is null
+            ? afterSearchAndStatus
+            : afterSearchAndStatus.Where(l => chemicalIds.Contains(l.ProductId) == isChemical.Value).ToList();
+        var stockListingIds = equipmentRows.Select(l => l.Id).Concat(chemicalRows.Select(l => l.Id)).Distinct().ToList();
+        var stockInventories = await GetVendorInventoriesByListingIdsAsync(stockListingIds, cancellationToken);
+        var stockByListing = stockInventories
+            .GroupBy(i => i.VendorProductListingId)
+            .ToDictionary(g => g.Key, g => g.First());
+        var chemicalVariantRows = await GetVariantInventoriesByListingIdsAsync(
+            chemicalRows.Select(l => l.Id).ToList(),
+            cancellationToken);
+        var chemicalVariantsByListing = chemicalVariantRows
+            .GroupBy(v => v.VendorProductListingId)
+            .ToDictionary(g => g.Key, g => g.ToList());
+        var equipmentStock = SumStockUnits(equipmentRows, stockByListing, chemicalVariantsByListing, useVariantQuantities: false);
+        var chemicalStock = SumStockUnits(chemicalRows, stockByListing, chemicalVariantsByListing, useVariantQuantities: true);
+        var pageRows = list.Skip((page - 1) * pageSize).Take(pageSize).ToList();
+        var pageIds = pageRows.ConvertAll(l => l.Id);
+        var inventoryByListing = stockByListing;
+        var variantByListing = chemicalVariantsByListing;
+        var listingImages = await GetVendorProductImagesByListingIdsAsync(pageIds, cancellationToken);
+        var imagesByListing = listingImages
+            .GroupBy(i => i.VendorProductListingId)
+            .ToDictionary(g => g.Key, g => g.ToList());
+        var priceOverrides = await dbContext.VendorListingPriceOverrides
+            .AsNoTracking()
+            .Include(x => x.Variants)
+            .Where(x => pageIds.Contains(x.VendorProductListingId) && x.IsCustomPricing)
+            .ToListAsync(cancellationToken);
+        var priceOverrideByListing = priceOverrides.ToDictionary(x => x.VendorProductListingId);
+        var pageProductIds = pageRows.Select(l => l.ProductId).Distinct().ToList();
+        var chemicalPageProductIds = pageRows
+            .Where(l => chemicalIds.Contains(l.ProductId))
+            .Select(l => l.ProductId)
+            .Distinct()
+            .ToList();
+        var catalogVariants = await LoadActiveProductVariantsAsync(chemicalPageProductIds, cancellationToken);
+        var catalogVariantsByProduct = catalogVariants
+            .GroupBy(v => v.ProductId)
+            .ToDictionary(g => g.Key, g => g.OrderBy(v => v.SizeValue).ToList());
+        var productImages = await GetProductImagesByProductIdsAsync(pageProductIds, cancellationToken);
+        var imagesByProduct = productImages
+            .GroupBy(i => i.ProductId)
+            .ToDictionary(g => g.Key, g => g.ToList());
+
+        var items = pageRows.ConvertAll(l =>
+        {
+            productMap.TryGetValue(l.ProductId, out var product);
+            var categoryName = product != null && categoryMap.TryGetValue(product.CategoryId, out var cat)
+                ? cat.CategoryName
+                : "";
+            var isChem = chemicalIds.Contains(l.ProductId);
+            var inv = inventoryByListing.GetValueOrDefault(l.Id);
+            var variants = variantByListing.GetValueOrDefault(l.Id);
+            var total = isChem && variants is { Count: > 0 }
+                ? variants.Sum(v => v.TotalQuantity)
+                : inv?.TotalQuantity ?? l.AvailableQuantity;
+            var available = isChem && variants is { Count: > 0 }
+                ? variants.Sum(v => v.AvailableQuantity)
+                : inv?.AvailableQuantity ?? l.AvailableQuantity;
+            var listingImage = imagesByListing.GetValueOrDefault(l.Id)?
+                .FirstOrDefault(i =>
+                    !string.IsNullOrWhiteSpace(i.ImageUrl) ||
+                    !string.IsNullOrWhiteSpace(i.ThumbnailUrl));
+            var productImage = listingImage is null
+                ? imagesByProduct.GetValueOrDefault(l.ProductId)?
+                    .FirstOrDefault(i =>
+                        !string.IsNullOrWhiteSpace(i.ImageUrl) ||
+                        !string.IsNullOrWhiteSpace(i.ThumbnailUrl))
+                : null;
+            string? primaryImageUrl;
+            string? primaryThumbnailUrl;
+            if (listingImage is not null)
+            {
+                primaryImageUrl = listingImage.ImageUrl;
+                primaryThumbnailUrl = listingImage.ThumbnailUrl;
+            }
+            else if (productImage is not null)
+            {
+                primaryImageUrl = productImage.ImageUrl;
+                primaryThumbnailUrl = productImage.ThumbnailUrl;
+            }
+            else
+            {
+                primaryImageUrl = null;
+                primaryThumbnailUrl = null;
+            }
+            priceOverrideByListing.TryGetValue(l.Id, out var vendorPrice);
+            var hasCustomVendorPrice = vendorPrice is { IsCustomPricing: true };
+            return new VendorListingSummaryDto
+            {
+                Id = l.Id.ToString(),
+                ProductId = l.ProductId.ToString(),
+                ListingTitle = l.ListingTitle,
+                ProductName = product?.ProductName ?? l.ListingTitle,
+                CategoryName = string.IsNullOrWhiteSpace(categoryName) ? "N/A" : categoryName,
+                DailyRent = product?.DailyRent ?? l.DailyRent,
+                WeeklyRent = product?.WeeklyRent ?? l.WeeklyRent,
+                MonthlyRent = product?.MonthlyRent ?? l.MonthlyRent,
+                SecurityDeposit = product?.SecurityDeposit ?? l.SecurityDeposit,
+                AvailableQuantity = available,
+                TotalQuantity = total,
+                ReservedQuantity = inv?.ReservedQuantity ?? 0,
+                RentedQuantity = inv?.RentedQuantity ?? 0,
+                BlockedQuantity = inv?.BlockedQuantity ?? 0,
+                ListingStatus = l.ListingStatus,
+                IsChemical = isChem,
+                PrimaryImageUrl = ResolveStoredFileUrl(primaryImageUrl),
+                PrimaryThumbnailUrl = ResolveStoredFileUrl(primaryThumbnailUrl),
+                BrandName = product?.BrandName,
+                ModelName = product?.ModelName,
+                HasCustomVendorPricing = hasCustomVendorPrice,
+                VendorDailyRent = hasCustomVendorPrice && vendorPrice!.VendorDailyRent.HasValue
+                    ? vendorPrice.VendorDailyRent.Value
+                    : product?.VendorDailyRent ?? 0m,
+                VendorBuyPrice = hasCustomVendorPrice && vendorPrice!.VendorBuyPrice.HasValue
+                    ? vendorPrice.VendorBuyPrice
+                    : product?.VendorBuyPrice,
+                VariantPayouts = hasCustomVendorPrice
+                    ? vendorPrice!.Variants.Select(v => new VendorListingVariantPayoutDto
+                    {
+                        VariantId = v.ProductVariantId.ToString(),
+                        VendorPrice = v.VendorPrice,
+                    }).ToList()
+                    : [],
+                ChemicalSizes = isChem
+                    ? BuildChemicalSizes(l.ProductId, variants, catalogVariantsByProduct)
+                    : [],
+            };
+        });
+
+        return new VendorListingListResult
+        {
+            Items = items,
+            TotalCount = list.Count,
+            Page = page,
+            PageSize = pageSize,
+            TotalUnits = equipmentStock.Total + chemicalStock.Total,
+            AvailableUnits = equipmentStock.Available + chemicalStock.Available,
+            ReservedUnits = equipmentStock.Reserved + chemicalStock.Reserved,
+            RentedUnits = equipmentStock.Rented + chemicalStock.Rented,
+            BlockedUnits = equipmentStock.Blocked + chemicalStock.Blocked,
+            EquipmentCount = equipmentCount,
+            ChemicalCount = chemicalCount,
+            ActiveCount = activeCount,
+            InactiveCount = inactiveCount,
+            DraftCount = draftCount,
+            EquipmentStock = ToStockUnitsDto(equipmentStock),
+            ChemicalStock = ToStockUnitsDto(chemicalStock),
+        };
+    }
+
+    private string? ResolveStoredFileUrl(string? storedFileReference)
+    {
+        if (string.IsNullOrWhiteSpace(storedFileReference)) return null;
+        return fileUrlResolver.Resolve(storedFileReference);
+    }
+
+    private static string NormalizeListingStatus(string status)
+    {
+        var normalized = status.Trim().ToLowerInvariant();
+        if (normalized is "approved" or "active") return "active";
+        if (normalized is "inactive" or "blocked" or "rejected") return "inactive";
+        if (normalized is "draft" or "pending" or "under_review" or "submitted") return "draft";
+        return normalized;
+    }
+
     public Task<VendorPushSubscription?> GetVendorPushSubscriptionAsync(Guid vendorId, CancellationToken cancellationToken)
     {
         return dbContext.VendorPushSubscriptions
@@ -1434,6 +2315,17 @@ public sealed class VendorOnboardingRepository(
             .FirstOrDefaultAsync(x => x.Email == normalized && !x.IsDeleted, cancellationToken);
     }
 
+    public Task<AdminUser?> GetAdminUserByPhoneAsync(string phoneNumber, CancellationToken cancellationToken)
+    {
+        var normalized = IndianMobilePhone.NormalizeDigits(phoneNumber);
+        if (string.IsNullOrEmpty(normalized))
+            return Task.FromResult<AdminUser?>(null);
+
+        return adminDbContext.AdminUsers
+            .Include(x => x.AdminRole)
+            .FirstOrDefaultAsync(x => x.Phone == normalized && !x.IsDeleted, cancellationToken);
+    }
+
     public async Task AddAdminUserAsync(AdminUser adminUser, CancellationToken cancellationToken)
     {
         await adminDbContext.AdminUsers.AddAsync(adminUser, cancellationToken);
@@ -1452,6 +2344,40 @@ public sealed class VendorOnboardingRepository(
             .Where(x => !x.IsDeleted)
             .OrderBy(x => x.FullName)
             .ToListAsync(cancellationToken);
+    }
+
+    public async Task<(List<AdminUser> Items, int TotalCount)> SearchAdminUsersPagedAsync(
+        string? searchTerm,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
+        var filtered = adminDbContext.AdminUsers.AsNoTracking().Where(x => !x.IsDeleted);
+
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            var term = $"%{searchTerm.Trim()}%";
+            filtered = filtered.Where(x =>
+                EF.Functions.ILike(x.FullName, term)
+                || EF.Functions.ILike(x.Email, term)
+                || EF.Functions.ILike(x.Role, term)
+                || (x.AdminRole != null && (
+                    EF.Functions.ILike(x.AdminRole.Code, term)
+                    || EF.Functions.ILike(x.AdminRole.Name, term))));
+        }
+
+        var totalCount = await filtered.CountAsync(cancellationToken);
+        var items = await filtered
+            .Include(x => x.AdminRole)
+            .OrderBy(x => x.FullName)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+
+        return (items, totalCount);
     }
 
     public Task<int> CountActiveSuperAdminsAsync(CancellationToken cancellationToken)
@@ -1476,7 +2402,15 @@ public sealed class VendorOnboardingRepository(
 
         if (admin.RoleId is Guid roleId)
         {
-            return await GetPermissionCodesForRoleAsync(roleId, cancellationToken);
+            var roleCodes = await GetPermissionCodesForRoleAsync(roleId, cancellationToken);
+            if (string.Equals(admin.Role, SuperAdminRules.RoleCode, StringComparison.OrdinalIgnoreCase))
+            {
+                return AdminPermissions.AllCodes
+                    .Union(roleCodes, StringComparer.OrdinalIgnoreCase)
+                    .ToList();
+            }
+
+            return roleCodes;
         }
 
         // Legacy fallback: map string role via seeded system matrix
@@ -1656,6 +2590,244 @@ public sealed class VendorOnboardingRepository(
             .ToListAsync(cancellationToken);
     }
 
+    public Task<int> CountPendingVendorsAsync(CancellationToken cancellationToken)
+    {
+        return dbContext.Vendors
+            .AsNoTracking()
+            .Where(v => !v.IsDeleted && v.AccountStatus.ToLower() == "pending")
+            .CountAsync(cancellationToken);
+    }
+
+    public Task<int> CountListingPricingAlertsAsync(CancellationToken cancellationToken)
+    {
+        return adminDbContext.AdminAuditLogs
+            .AsNoTracking()
+            .Where(x => !x.IsDeleted && (
+                x.ActionType.ToLower() == "vendor.listing.created" ||
+                x.ActionType.ToLower() == "vendor.listing.updated"))
+            .CountAsync(cancellationToken);
+    }
+
+    public Task<int> CountAdminAuditLogsAsync(CancellationToken cancellationToken)
+    {
+        return adminDbContext.AdminAuditLogs
+            .AsNoTracking()
+            .Where(x => !x.IsDeleted)
+            .CountAsync(cancellationToken);
+    }
+
+    public async Task<List<AdminAlertPendingVendorRow>> SearchPendingVendorAlertsAsync(
+        int take,
+        CancellationToken cancellationToken)
+    {
+        var limit = Math.Clamp(take, 1, 200);
+        return await dbContext.Vendors
+            .AsNoTracking()
+            .Where(v => !v.IsDeleted && v.AccountStatus.ToLower() == "pending")
+            .OrderByDescending(v => v.CreatedOnUtc)
+            .Take(limit)
+            .Select(v => new AdminAlertPendingVendorRow(
+                v.Id.ToString(),
+                v.Email,
+                v.AccountStatus,
+                v.Profile != null && !v.Profile.IsDeleted ? v.Profile.BusinessName : null,
+                v.Profile != null && !v.Profile.IsDeleted ? v.Profile.OwnerName : null,
+                v.CreatedOnUtc))
+            .ToListAsync(cancellationToken);
+    }
+
+    public async Task<AdminAlertAuditLogPage> SearchAdminAlertAuditLogsAsync(
+        string kind,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        var safePage = Math.Max(1, page);
+        var safePageSize = Math.Clamp(pageSize, 1, 200);
+        var filter = (kind ?? "all").Trim().ToLowerInvariant();
+
+        var query = adminDbContext.AdminAuditLogs
+            .AsNoTracking()
+            .Where(x => !x.IsDeleted);
+
+        if (filter == "listing")
+        {
+            query = query.Where(x =>
+                x.ActionType.ToLower() == "vendor.listing.created" ||
+                x.ActionType.ToLower() == "vendor.listing.updated");
+        }
+
+        var totalCount = await query.CountAsync(cancellationToken);
+        var rows = await query
+            .Include(x => x.AdminUser)
+            .OrderByDescending(x => x.CreatedOnUtc)
+            .Skip((safePage - 1) * safePageSize)
+            .Take(safePageSize)
+            .ToListAsync(cancellationToken);
+
+        return new AdminAlertAuditLogPage
+        {
+            TotalCount = totalCount,
+            Items = rows.Select(x => new AdminAuditLogDto(
+                x.Id.ToString(),
+                x.AdminId.ToString(),
+                x.AdminUser?.FullName,
+                x.AdminUser?.Email,
+                x.ActionType,
+                x.EntityType,
+                x.EntityId?.ToString(),
+                x.OldValue,
+                x.NewValue,
+                x.Notes,
+                x.CreatedOnUtc.ToSafeDateTimeOffset())).ToList(),
+        };
+    }
+
+    public async Task<AdminDashboardVendorSnapshot> GetAdminDashboardVendorSnapshotAsync(
+        int pendingTake,
+        CancellationToken cancellationToken)
+    {
+        var limit = Math.Clamp(pendingTake, 1, 20);
+
+        var statusCounts = await dbContext.Vendors
+            .AsNoTracking()
+            .Where(v => !v.IsDeleted)
+            .GroupBy(v => v.AccountStatus.ToLower())
+            .Select(g => new { Status = g.Key, Count = g.Count() })
+            .ToListAsync(cancellationToken);
+
+        var pendingVendors = await dbContext.Vendors
+            .AsNoTracking()
+            .Where(v => !v.IsDeleted && v.AccountStatus.ToLower() == "pending")
+            .OrderByDescending(v => v.CreatedOnUtc)
+            .Take(limit)
+            .Select(v => new AdminDashboardPendingVendorRow(
+                v.Id.ToString(),
+                v.Email,
+                v.RegistrationStage,
+                v.IsEmailVerified))
+            .ToListAsync(cancellationToken);
+
+        return new AdminDashboardVendorSnapshot
+        {
+            TotalVendorCount = statusCounts.Sum(x => x.Count),
+            PendingVendorCount = statusCounts.FirstOrDefault(x => x.Status == "pending")?.Count ?? 0,
+            ActiveVendorCount = statusCounts.FirstOrDefault(x => x.Status == "active")?.Count ?? 0,
+            PendingVendors = pendingVendors,
+        };
+    }
+
+    public async Task<AdminDashboardAuditSnapshot> GetAdminDashboardAuditSnapshotAsync(
+        DateTime sinceUtc,
+        int take,
+        CancellationToken cancellationToken)
+    {
+        var limit = Math.Clamp(take, 1, 20);
+        var query = adminDbContext.AdminAuditLogs
+            .AsNoTracking()
+            .Where(x => !x.IsDeleted && x.CreatedOnUtc >= sinceUtc);
+
+        var count = await query.CountAsync(cancellationToken);
+        var rows = await query
+            .OrderByDescending(x => x.CreatedOnUtc)
+            .Take(limit)
+            .Select(x => new AdminDashboardAuditLogRow(
+                x.Id.ToString(),
+                x.ActionType,
+                x.AdminUser != null ? x.AdminUser.FullName : null,
+                x.AdminUser != null ? x.AdminUser.Email : null,
+                x.AdminId.ToString(),
+                x.EntityType))
+            .ToListAsync(cancellationToken);
+
+        return new AdminDashboardAuditSnapshot
+        {
+            AuditEventCountLast7Days = count,
+            RecentAuditLogs = rows,
+        };
+    }
+
+    public async Task<AdminAuditLogListResult> SearchAdminAuditLogSummariesAsync(
+        AdminAuditLogListQuerySpec spec,
+        CancellationToken cancellationToken)
+    {
+        var page = Math.Max(1, spec.Page);
+        var pageSize = Math.Clamp(spec.PageSize, 1, 100);
+        var search = spec.Search?.Trim() ?? string.Empty;
+        Guid? adminId = Guid.TryParse(spec.AdminUserId, out var parsed) && parsed != Guid.Empty
+            ? parsed
+            : null;
+
+        var actorRows = await adminDbContext.AdminAuditLogs
+            .AsNoTracking()
+            .Where(x => !x.IsDeleted)
+            .Select(x => new
+            {
+                x.AdminId,
+                FullName = x.AdminUser != null ? x.AdminUser.FullName : null,
+                Email = x.AdminUser != null ? x.AdminUser.Email : null,
+            })
+            .Distinct()
+            .ToListAsync(cancellationToken);
+
+        var actors = actorRows
+            .GroupBy(x => x.AdminId)
+            .OrderBy(g => g.First().FullName ?? g.First().Email ?? g.Key.ToString())
+            .Select(g =>
+            {
+                var row = g.First();
+                var label = !string.IsNullOrWhiteSpace(row.FullName)
+                    ? row.FullName
+                    : !string.IsNullOrWhiteSpace(row.Email)
+                        ? row.Email!
+                        : g.Key.ToString();
+                return new AdminAuditLogActorOption(g.Key.ToString(), label);
+            })
+            .ToList();
+
+        var query = adminDbContext.AdminAuditLogs
+            .AsNoTracking()
+            .Where(x => !x.IsDeleted);
+
+        if (adminId.HasValue)
+        {
+            query = query.Where(x => x.AdminId == adminId.Value);
+        }
+
+        if (!string.IsNullOrEmpty(search))
+        {
+            var s = search.ToLower();
+            query = query.Where(x =>
+                x.ActionType.ToLower().Contains(s) ||
+                x.EntityType.ToLower().Contains(s));
+        }
+
+        var totalCount = await query.CountAsync(cancellationToken);
+        var items = await query
+            .OrderByDescending(x => x.CreatedOnUtc)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(x => new AdminAuditLogListRow(
+                x.Id.ToString(),
+                x.ActionType,
+                x.EntityType,
+                x.AdminId.ToString(),
+                x.AdminUser != null ? x.AdminUser.FullName : null,
+                x.AdminUser != null ? x.AdminUser.Email : null,
+                x.OldValue,
+                x.NewValue))
+            .ToListAsync(cancellationToken);
+
+        return new AdminAuditLogListResult
+        {
+            Items = items,
+            TotalCount = totalCount,
+            Page = page,
+            PageSize = pageSize,
+            Actors = actors,
+        };
+    }
+
     public Task<PasswordResetToken?> GetPasswordResetTokenAsync(string token, CancellationToken cancellationToken)
     {
         return adminDbContext.PasswordResetTokens
@@ -1697,6 +2869,15 @@ public sealed class VendorOnboardingRepository(
         return Task.CompletedTask;
     }
 
+    public async Task RevokeRefreshTokensForUserAsync(string userId, CancellationToken cancellationToken)
+    {
+        var tokens = await adminDbContext.RefreshTokens
+            .Where(x => x.UserId == userId && !x.IsRevoked)
+            .ToListAsync(cancellationToken);
+        foreach (var token in tokens)
+            token.IsRevoked = true;
+    }
+
     public async Task AddSupportTicketAsync(SupportTicket ticket, CancellationToken cancellationToken)
     {
         await dbContext.SupportTickets.AddAsync(ticket, cancellationToken);
@@ -1706,7 +2887,8 @@ public sealed class VendorOnboardingRepository(
     {
         return dbContext.SupportTickets
             .Include(x => x.Messages)
-            .Include(x => x.Vendor)
+            .Include(x => x.Vendor)!
+                .ThenInclude(v => v!.Profile)
             .FirstOrDefaultAsync(x => x.Id == ticketId && !x.IsDeleted, cancellationToken);
     }
 
@@ -1728,6 +2910,87 @@ public sealed class VendorOnboardingRepository(
             .Where(x => !x.IsDeleted)
             .OrderByDescending(x => x.CreatedOnUtc)
             .ToListAsync(cancellationToken);
+    }
+
+    public async Task<(List<SupportTicket> Items, int TotalCount)> SearchSupportTicketsForAdminPagedAsync(
+        string? searchTerm,
+        string? status,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken,
+        bool unreadOnly = false)
+    {
+        page = Math.Max(1, page);
+        pageSize = Math.Clamp(pageSize, 1, 100);
+
+        var query = dbContext.SupportTickets.AsNoTracking().Where(t => !t.IsDeleted);
+
+        if (unreadOnly)
+        {
+            query = query.Where(t =>
+                t.Status.ToLower() != "closed"
+                && t.Messages.Any(m =>
+                    !m.IsDeleted
+                    && !m.IsRead
+                    && (m.SenderType == "Vendor" || m.SenderType == "AI")));
+        }
+
+        var statusKey = status?.Trim().ToLowerInvariant();
+        if (statusKey is "open")
+            query = query.Where(t => t.Status.ToLower() == "open");
+        else if (statusKey is "in progress")
+            query = query.Where(t => t.Status.ToLower() == "in progress");
+        else if (statusKey is "done")
+            query = query.Where(t => t.Status.ToLower() == "closed" || t.Status.ToLower() == "resolved");
+
+        if (!string.IsNullOrWhiteSpace(searchTerm))
+        {
+            var term = $"%{searchTerm.Trim()}%";
+            query = query.Where(t =>
+                EF.Functions.ILike(t.TicketNumber, term)
+                || EF.Functions.ILike(t.Subject, term)
+                || (t.Vendor != null && EF.Functions.ILike(t.Vendor.Email, term))
+                || (t.Vendor != null && t.Vendor.Profile != null && EF.Functions.ILike(t.Vendor.Profile.BusinessName, term)));
+        }
+
+        var totalCount = await query.CountAsync(cancellationToken);
+
+        var pageIds = await query
+            .Select(t => new
+            {
+                t.Id,
+                Unread = t.Status.ToLower() == "closed"
+                    ? 0
+                    : t.Messages.Count(m =>
+                        !m.IsDeleted
+                        && !m.IsRead
+                        && (m.SenderType == "Vendor" || m.SenderType == "AI")),
+                LastAt = t.Messages
+                    .Where(m => !m.IsDeleted)
+                    .Select(m => (DateTime?)m.CreatedOnUtc)
+                    .Max() ?? t.ModifiedOnUtc ?? t.CreatedOnUtc
+            })
+            .OrderByDescending(x => x.Unread > 0)
+            .ThenByDescending(x => x.LastAt)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .Select(x => x.Id)
+            .ToListAsync(cancellationToken);
+
+        var items = pageIds.Count == 0
+            ? []
+            : await dbContext.SupportTickets
+                .AsNoTracking()
+                .Include(t => t.Vendor)!
+                    .ThenInclude(v => v!.Profile)
+                .Include(t => t.Messages)
+                .Where(t => pageIds.Contains(t.Id))
+                .ToListAsync(cancellationToken);
+
+        var order = pageIds.Select((id, index) => (id, index)).ToDictionary(x => x.id, x => x.index);
+        items = items.OrderBy(t => order.GetValueOrDefault(t.Id, int.MaxValue)).ToList();
+
+        return (items, totalCount);
     }
 
     public async Task UpdateSupportTicketAsync(SupportTicket ticket, CancellationToken cancellationToken)

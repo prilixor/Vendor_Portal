@@ -1,8 +1,13 @@
+using System.Security.Claims;
 using FastEndpoints;
-using Prilixor.VendorPortal.API.Extensions;
-using Prilixor.VendorPortal.Application.Onboarding;
 using MediatR;
+using Microsoft.AspNetCore.Authentication.JwtBearer;
 using Microsoft.AspNetCore.Http.HttpResults;
+using Prilixor.VendorPortal.API.Extensions;
+using Prilixor.VendorPortal.Application.Abstractions;
+using Prilixor.VendorPortal.Application.Admin.LegalDocuments;
+using Prilixor.VendorPortal.Application.Onboarding;
+using Prilixor.VendorPortal.Domain.Legal;
 
 namespace Prilixor.VendorPortal.API.EndPoints.Vendors;
 
@@ -12,6 +17,9 @@ public sealed class RegisterVendorRequest
     public string Password { get; set; } = string.Empty;
     public string? SupportPhone { get; set; }
     public string? Phone { get; set; }
+    public bool AcceptedLegal { get; set; }
+    public string? SourceSurface { get; set; }
+    public List<string>? AcceptedSlugs { get; set; }
 }
 
 public sealed class UpsertVendorProfileRequest : VendorIdRequest
@@ -53,7 +61,15 @@ public sealed class RegisterVendorEndpoint(IMediator mediator)
 
     public override async Task<Results<Ok<VendorDto>, ProblemHttpResult>> ExecuteAsync(RegisterVendorRequest req, CancellationToken ct)
     {
-        var result = await mediator.Send(new RegisterVendorCommand(req.Email, req.Password, req.SupportPhone ?? req.Phone ?? string.Empty), ct);
+        var result = await mediator.Send(new RegisterVendorCommand(
+            req.Email,
+            req.Password,
+            req.SupportPhone ?? req.Phone ?? string.Empty,
+            req.AcceptedLegal,
+            req.SourceSurface,
+            req.AcceptedSlugs,
+            HttpContext.Connection.RemoteIpAddress?.ToString(),
+            HttpContext.Request.Headers.UserAgent.ToString()), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }
@@ -197,6 +213,68 @@ public sealed class GetVendorVerificationRequestsEndpoint(IMediator mediator)
     public override async Task<Results<Ok<List<VendorVerificationRequestDto>>, ProblemHttpResult>> ExecuteAsync(VendorIdRequest req, CancellationToken ct)
     {
         var result = await mediator.Send(new GetVendorVerificationRequestsQuery(req.VendorId), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class GetVendorLegalReconsentEndpoint(IMediator mediator)
+    : Endpoint<VendorIdRequest, Results<Ok<IReadOnlyList<PendingLegalReconsentDto>>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("{vendorId}/legal-reconsent");
+        AuthSchemes(JwtBearerDefaults.AuthenticationScheme);
+        Policies("VendorOnly");
+        Group<VendorOnboardingGroup>();
+    }
+
+    public override async Task<Results<Ok<IReadOnlyList<PendingLegalReconsentDto>>, ProblemHttpResult>> ExecuteAsync(VendorIdRequest req, CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var vendorId)
+            || !Guid.TryParse(req.VendorId, out var routeId)
+            || vendorId != routeId)
+            return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid token.", statusCode: 401);
+
+        var result = await mediator.Send(new PendingLegalReconsentQuery(LegalCatalog.ActorTypes.Vendor, vendorId), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class RecordVendorLegalAcceptanceRequest : VendorIdRequest
+{
+    public string Screen { get; set; } = "reconsent";
+    public bool AcceptedLegal { get; set; }
+    public string? SourceSurface { get; set; }
+    public string? SignedName { get; set; }
+}
+
+public sealed class RecordVendorLegalAcceptanceEndpoint(IMediator mediator)
+    : Endpoint<RecordVendorLegalAcceptanceRequest, Results<Ok<int>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Post("{vendorId}/legal-acceptances");
+        AuthSchemes(JwtBearerDefaults.AuthenticationScheme);
+        Policies("VendorOnly");
+        Group<VendorOnboardingGroup>();
+    }
+
+    public override async Task<Results<Ok<int>, ProblemHttpResult>> ExecuteAsync(RecordVendorLegalAcceptanceRequest req, CancellationToken ct)
+    {
+        if (!Guid.TryParse(User.FindFirstValue(ClaimTypes.NameIdentifier), out var vendorId)
+            || !Guid.TryParse(req.VendorId, out var routeId)
+            || vendorId != routeId)
+            return TypedResults.Problem(title: "auth.forbidden", detail: "Invalid token.", statusCode: 401);
+
+        var result = await mediator.Send(new RecordLegalAcceptanceCommand(
+            LegalCatalog.ActorTypes.Vendor,
+            vendorId,
+            req.Screen,
+            req.AcceptedLegal,
+            req.SourceSurface ?? LegalCatalog.Surfaces.VendorWeb,
+            req.SignedName,
+            HttpContext.Connection.RemoteIpAddress?.ToString(),
+            HttpContext.Request.Headers.UserAgent.ToString()), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }

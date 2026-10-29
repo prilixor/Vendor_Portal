@@ -1,4 +1,5 @@
 import { useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { customerApi } from "@/app/services/customerApi";
 import { Button } from "@/app/components/ui/button";
@@ -15,7 +16,9 @@ import {
 } from "@/app/components/ui/select";
 import { MapPicker } from "@/app/components/shared/MapPicker";
 import { FieldError } from "@/app/components/shared/FieldError";
-import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { PageContentGate } from "@/app/components/shared/PageLoader";
+import { BackLink } from "@/app/components/shared/BackLink";
+import { lastShopHref } from "@/app/helpers/customerShopBrowse";
 import { missingAddressFieldLabels } from "@/app/helpers/reverseGeocode";
 import { toast } from "sonner";
 import { Trash2, Edit2 } from "lucide-react";
@@ -24,7 +27,18 @@ const DEFAULT_MAP_LAT = 23.0225;
 const DEFAULT_MAP_LNG = 72.5714;
 
 const CustomerAddresses = () => {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
+
+  const goBack = () => {
+    const historyIndex = (window.history.state as { idx?: number } | null)?.idx ?? 0;
+    if (window.history.length > 1 && historyIndex > 0) {
+      navigate(-1);
+      return;
+    }
+    navigate(lastShopHref());
+  };
+
   const { data, isLoading, error } = useQuery({
     queryKey: ["customer-addresses"],
     queryFn: () => customerApi.getAddresses(),
@@ -168,13 +182,19 @@ const CustomerAddresses = () => {
   });
 
   if (error) {
-    return <p className="text-sm text-destructive">{error instanceof Error ? error.message : "Failed to load."}</p>;
+    return (
+      <div className="space-y-4">
+        <BackLink onClick={goBack} label="Back" />
+        <p className="text-sm text-destructive">{error instanceof Error ? error.message : "Failed to load."}</p>
+      </div>
+    );
   }
 
   return (
     <div className="space-y-10">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Addresses</h1>
+        <BackLink onClick={goBack} label="Back" />
+        <h1 className="mt-1 text-2xl font-bold tracking-tight">Addresses</h1>
         <p className="mt-1 text-sm text-muted-foreground">Used for rental delivery at checkout.</p>
       </div>
 
@@ -184,10 +204,10 @@ const CustomerAddresses = () => {
             <p className="font-medium">Saved</p>
           </CardHeader>
           <CardContent className="space-y-4">
-            {isLoading && <PageLoaderSlot className="min-h-[6rem] py-0" />}
-            {!isLoading && data?.length === 0 && (
+            <PageContentGate loading={isLoading} className="min-h-[6rem] py-0">
+            {!data?.length ? (
               <p className="text-sm text-muted-foreground">No addresses yet.</p>
-            )}
+            ) : null}
             {(data ?? []).map((a) => (
               <div key={a.id} className="flex items-start justify-between gap-3 rounded-lg border p-3">
                 <div className="text-sm">
@@ -232,7 +252,7 @@ const CustomerAddresses = () => {
                 </div>
               </div>
             ))}
-          </CardContent>
+            </PageContentGate>          </CardContent>
         </Card>
 
         <Card>

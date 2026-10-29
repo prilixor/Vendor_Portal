@@ -36,6 +36,11 @@ public class WebsiteHomeContentConfiguration : IEntityTypeConfiguration<WebsiteH
             .WithOne(f => f.HomeContent)
             .HasForeignKey(f => f.HomeContentId)
             .OnDelete(DeleteBehavior.Cascade);
+
+        builder.HasMany(x => x.HeroSlides)
+            .WithOne(s => s.HomeContent)
+            .HasForeignKey(s => s.HomeContentId)
+            .OnDelete(DeleteBehavior.Cascade);
     }
 }
 
@@ -53,6 +58,31 @@ public class WebsiteHomeFeatureConfiguration : IEntityTypeConfiguration<WebsiteH
         builder.Property(x => x.CustomIconUrl).HasColumnName("custom_icon_url");
         builder.Property(x => x.SortOrder).HasColumnName("sort_order");
         builder.Property(x => x.IsActive).HasColumnName("is_active");
+
+        builder.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
+        builder.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
+        builder.Property(x => x.IsDeleted).HasColumnName("is_deleted");
+
+        builder.Ignore(x => x.CreatedBy);
+        builder.Ignore(x => x.ModifiedBy);
+        builder.Ignore(x => x.DeletedAt);
+        builder.Ignore(x => x.DeletedBy);
+
+        builder.HasQueryFilter(x => !x.IsDeleted);
+    }
+}
+
+public class WebsiteHomeHeroSlideConfiguration : IEntityTypeConfiguration<WebsiteHomeHeroSlide>
+{
+    public void Configure(EntityTypeBuilder<WebsiteHomeHeroSlide> builder)
+    {
+        builder.ToTable("website_home_hero_slides");
+        builder.HasKey(x => x.Id);
+        builder.Property(x => x.Id).HasColumnName("id");
+        builder.Property(x => x.HomeContentId).HasColumnName("home_content_id");
+        builder.Property(x => x.Label).HasColumnName("label").HasMaxLength(80).IsRequired();
+        builder.Property(x => x.ImageUrl).HasColumnName("image_url").IsRequired();
+        builder.Property(x => x.SortOrder).HasColumnName("sort_order");
 
         builder.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
         builder.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");

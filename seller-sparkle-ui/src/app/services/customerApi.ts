@@ -47,6 +47,25 @@ export interface ProductVariantDto {
   availableQuantity?: number;
 }
 
+export interface CustomerCatalogListingSummariesResult {
+  items: CustomerCatalogListingApi[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  allCount: number;
+  categoryCounts: Record<string, number>;
+}
+
+export interface CustomerCatalogListingSummariesParams {
+  search?: string;
+  category?: string;
+  isChemical?: boolean;
+  stock?: "all" | "low_stock" | "out_of_stock";
+  favoritesOnly?: boolean;
+  page?: number;
+  pageSize?: number;
+}
+
 export interface CustomerCatalogCategoryApi {
   id: string;
   categoryName: string;
@@ -114,6 +133,8 @@ export interface CustomerListingDetailApi {
   availabilityStatus: "available" | "low_stock" | "out_of_stock" | string;
   description: string;
   imageUrls: string[];
+  /** Same order as imageUrls; empty string when that slot has no generated thumb. */
+  imageThumbnailUrls?: string[];
   buyPrice?: number;
   isRentEnabled?: boolean;
   isBuyEnabled?: boolean;
@@ -139,9 +160,11 @@ export interface CustomerListingDetailApi {
 
 export interface CustomerProfileApi {
   id: string;
-  email: string;
+  email?: string | null;
   fullName: string;
   phone?: string | null;
+  isPhoneVerified?: boolean;
+  isEmailVerified?: boolean;
 }
 
 export interface CustomerAddressApi {
@@ -156,6 +179,11 @@ export interface CustomerAddressApi {
   isDefault: boolean;
 }
 
+export interface CustomerGstLineApi {
+  gstPercent: number;
+  gstAmount: number;
+}
+
 export interface CustomerOrderQuoteApi {
   subtotalAmount: number;
   depositAmount: number;
@@ -163,6 +191,8 @@ export interface CustomerOrderQuoteApi {
   distanceFeeAmount: number;
   expressFeeAmount: number;
   gstAmount: number;
+  /** One row per GST slab. A mixed cart lists 12% and 18% separately. */
+  gstLines?: CustomerGstLineApi[];
   totalAmount: number;
   buySuggestions: Array<{
     listingId: string;
@@ -171,6 +201,7 @@ export interface CustomerOrderQuoteApi {
     buyAmount: number;
     savingsAmount: number;
   }>;
+  razorpayTestMode?: boolean;
 }
 
 export interface CustomerOrderApi {
@@ -213,17 +244,43 @@ export interface CustomerOrderApi {
   rentalDiscountType?: RentalDiscountType | string | null;
   rentalDiscountValue?: number | null;
   rentalFinalPrice?: number | null;
+  prescriptionFiles?: CustomerPrescriptionFileApi[] | null;
+  /** True only after a paid rental extension on this product line. */
+  isExtended?: boolean;
+  returnSettlement?: import("@/app/helpers/orderReturn").OrderReturnApi | null;
+  cancellationRefund?: import("@/app/helpers/orderCancellation").OrderCancellationApi | null;
+}
+
+export interface CustomerPrescriptionFileApi {
+  id: string;
+  orderId: string;
+  fileUrl: string;
+  originalFileName?: string | null;
+  contentType?: string | null;
+  sortOrder: number;
+  uploadSource?: string;
+  createdAt: string;
 }
 
 export interface CustomerOrderImageApi {
   id: string;
   orderId: string;
   requestId?: string | null;
+  optionId?: string | null;
   fileUrl: string;
+  thumbnailUrl?: string | null;
   originalFileName?: string | null;
   contentType?: string | null;
   sortOrder: number;
   createdAt: string;
+}
+
+export interface CustomerOrderImageOptionApi {
+  id: string;
+  optionNumber: number;
+  label: string;
+  description?: string | null;
+  images: CustomerOrderImageApi[];
 }
 
 export interface CustomerOrderImageRequestApi {
@@ -234,6 +291,11 @@ export interface CustomerOrderImageRequestApi {
   message: string;
   requestedAt: string;
   images: CustomerOrderImageApi[];
+  options?: CustomerOrderImageOptionApi[];
+  optionCount?: number;
+  maxImagesPerOption?: number;
+  maxDescriptionLength?: number;
+  selectedOptionId?: string | null;
 }
 
 export interface ExtensionQuoteApi {
@@ -243,6 +305,32 @@ export interface ExtensionQuoteApi {
   serviceFeeAmount: number;
   gstAmount: number;
   totalAmount: number;
+  gstPercent?: number;
+  /** Days already waiting on an open extension. The quote total includes these. */
+  pendingDays?: number;
+}
+
+export interface CustomerExtensionApi {
+  extensionId: string;
+  status: string;
+  additionalDays: number;
+  extensionAmount: number;
+  serviceFeeAmount: number;
+  gstAmount: number;
+  totalAmount: number;
+  originalEndDate: string;
+  newEndDate: string;
+  gstPercent?: number;
+}
+
+export interface ExtensionPaymentApi {
+  checkoutSessionId: string;
+  razorpayKeyId: string;
+  razorpayOrderId?: string | null;
+  amount: number;
+  currency: string;
+  extensionId: string;
+  orderId: string;
 }
 
 export interface BuyoutQuoteApi {
@@ -251,6 +339,7 @@ export interface BuyoutQuoteApi {
   serviceFeeAmount: number;
   gstAmount: number;
   totalAmount: number;
+  gstPercent?: number;
 }
 
 export interface HospitalApi {
@@ -287,6 +376,7 @@ export interface CartLinePayload {
   productVariantId?: string;
   /** Optional Admin-curated doctor reference (Unique ID lookup). */
   doctorId?: string;
+  hasPrescriptionFile?: boolean;
   rentalPricingPlanId?: string;
   /** ISO date YYYY-MM-DD when using a duration pricing plan. */
   rentalStartDate?: string;
@@ -314,6 +404,17 @@ export interface PlaceCustomerOrdersResultApi {
   }>;
 }
 
+export interface CustomerCheckoutApi {
+  checkoutSessionId: string;
+  razorpayKeyId: string;
+  razorpayOrderId?: string | null;
+  amount: number;
+  currency: string;
+  paymentLinkUrl?: string | null;
+  orders: CustomerOrderApi[];
+  failedLines: PlaceCustomerOrdersResultApi["failedLines"];
+}
+
 export interface CustomerNotificationApi {
   id: string;
   title: string;
@@ -338,6 +439,50 @@ export interface ExpiringOrderApi {
   orderType: string;
   endDate: string;
   daysLeft: number;
+  listingPrimaryImageUrl?: string | null;
+}
+
+export interface CustomerOrderListResult {
+  items: CustomerOrderApi[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  statusCounts: Record<string, number>;
+}
+
+export interface CustomerNotificationListResult {
+  items: CustomerNotificationApi[];
+  totalCount: number;
+  unreadCount: number;
+  page: number;
+  pageSize: number;
+}
+
+export interface CustomerDashboardActivityApi {
+  status: string;
+  orderNumber: string;
+  listingTitle: string;
+}
+
+export interface CustomerDashboardSummaryApi {
+  activeRentals: number;
+  activeTotal: number;
+  upcomingDeliveries: number;
+  inStockListings: number;
+  outOfStockListings: number;
+  recentActivity: CustomerDashboardActivityApi[];
+}
+
+export interface CustomerExpirationGroupApi {
+  baseOrderNumber: string;
+  items: ExpiringOrderApi[];
+}
+
+export interface CustomerExpirationListResult {
+  items: CustomerExpirationGroupApi[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
 }
 
 export interface IndianStateLookupApi {
@@ -366,6 +511,19 @@ export const customerApi = {
     return apiClient.get<CustomerCatalogListingApi[]>(`/customers/catalog/listings${catalogQuery(category, search)}`);
   },
 
+  getCatalogListingSummaries(params: CustomerCatalogListingSummariesParams = {}): Promise<CustomerCatalogListingSummariesResult> {
+    const qs = new URLSearchParams();
+    const search = params.search?.trim();
+    if (search) qs.set("search", search);
+    if (params.category?.trim()) qs.set("category", params.category.trim());
+    if (params.isChemical != null) qs.set("isChemical", String(params.isChemical));
+    if (params.stock && params.stock !== "all") qs.set("stock", params.stock);
+    if (params.favoritesOnly) qs.set("favoritesOnly", "true");
+    qs.set("page", String(params.page && params.page > 0 ? params.page : 1));
+    qs.set("pageSize", String(params.pageSize && params.pageSize > 0 ? params.pageSize : 9));
+    return apiClient.get<CustomerCatalogListingSummariesResult>(`/customers/catalog/listings/summaries?${qs.toString()}`);
+  },
+
   getListingDetail(listingId: string): Promise<CustomerListingDetailApi> {
     return apiClient.get<CustomerListingDetailApi>(`/customers/catalog/listings/${encodeURIComponent(listingId)}`);
   },
@@ -378,8 +536,12 @@ export const customerApi = {
     return apiClient.get<CustomerProfileApi>("/customers/me/profile");
   },
 
-  updateProfile(fullName: string, phone?: string): Promise<CustomerProfileApi> {
-    return apiClient.put<CustomerProfileApi>("/customers/me/profile", { fullName, phone: phone?.trim() || undefined });
+  updateProfile(fullName: string, phone?: string, email?: string | null): Promise<CustomerProfileApi> {
+    return apiClient.put<CustomerProfileApi>("/customers/me/profile", {
+      fullName,
+      phone: phone?.trim() || undefined,
+      email: email?.trim() || undefined,
+    });
   },
 
   getAddresses(): Promise<CustomerAddressApi[]> {
@@ -431,18 +593,50 @@ export const customerApi = {
     return apiClient.get<CustomerOrderApi[]>("/customers/me/orders");
   },
 
+  getOrderSummaries(params: {
+    search?: string;
+    status?: string;
+    page?: number;
+    pageSize?: number;
+  } = {}, options?: ApiClientOptions): Promise<CustomerOrderListResult> {
+    const qs = new URLSearchParams();
+    const search = params.search?.trim();
+    if (search) qs.set("search", search);
+    if (params.status && params.status !== "All") qs.set("status", params.status);
+    qs.set("page", String(params.page && params.page > 0 ? params.page : 1));
+    qs.set("pageSize", String(params.pageSize && params.pageSize > 0 ? params.pageSize : 8));
+    return apiClient.get<CustomerOrderListResult>(`/customers/me/orders/summaries?${qs.toString()}`, options);
+  },
+
   getOrder(orderId: string): Promise<CustomerOrderApi> {
     return apiClient.get<CustomerOrderApi>(`/customers/me/orders/${encodeURIComponent(orderId)}`);
+  },
+
+  getOrderGroup(orderId: string, options?: ApiClientOptions): Promise<CustomerOrderApi[]> {
+    return apiClient.get<CustomerOrderApi[]>(
+      `/customers/me/orders/${encodeURIComponent(orderId)}/group`,
+      options,
+    );
+  },
+
+  getDashboardSummary(options?: ApiClientOptions): Promise<CustomerDashboardSummaryApi> {
+    return apiClient.get<CustomerDashboardSummaryApi>("/customers/me/dashboard/summary", options);
   },
 
   placeOrders(payload: {
     customerAddressId?: string | null;
     deliveryOption: string;
     lines: CartLinePayload[];
+    acceptedLegal?: boolean;
+    acceptedPrescriptionLegal?: boolean;
+    sourceSurface?: string;
   }): Promise<PlaceCustomerOrdersResultApi> {
     return apiClient.post<PlaceCustomerOrdersResultApi>("/customers/me/orders", {
       customerAddressId: payload.customerAddressId ?? undefined,
       deliveryOption: payload.deliveryOption,
+      acceptedLegal: payload.acceptedLegal ?? false,
+      acceptedPrescriptionLegal: payload.acceptedPrescriptionLegal ?? false,
+      sourceSurface: payload.sourceSurface ?? "customer_web",
       lines: payload.lines.map((l) => ({
         listingId: l.listingId,
         quantity: l.quantity,
@@ -451,10 +645,49 @@ export const customerApi = {
         orderType: l.orderType ?? "rent",
         productVariantId: l.productVariantId,
         doctorId: l.doctorId || undefined,
+        hasPrescriptionFile: l.hasPrescriptionFile || undefined,
         rentalPricingPlanId: l.rentalPricingPlanId || undefined,
         rentalStartDate: l.rentalStartDate || undefined,
       })),
     });
+  },
+
+  createCheckout(payload: {
+    customerAddressId?: string | null;
+    deliveryOption: string;
+    lines: CartLinePayload[];
+    acceptedLegal?: boolean;
+    acceptedPrescriptionLegal?: boolean;
+    sourceSurface?: string;
+  }): Promise<CustomerCheckoutApi> {
+    return apiClient.post<CustomerCheckoutApi>("/customers/me/payments/checkout", {
+      customerAddressId: payload.customerAddressId ?? undefined,
+      deliveryOption: payload.deliveryOption,
+      acceptedLegal: payload.acceptedLegal ?? false,
+      acceptedPrescriptionLegal: payload.acceptedPrescriptionLegal ?? false,
+      sourceSurface: payload.sourceSurface ?? "customer_web",
+      lines: payload.lines.map((l) => ({
+        listingId: l.listingId,
+        quantity: l.quantity,
+        rentalDays: l.rentalDays,
+        rentalPeriodUnit: l.rentalPeriodUnit ?? "day",
+        orderType: l.orderType ?? "rent",
+        productVariantId: l.productVariantId,
+        doctorId: l.doctorId || undefined,
+        hasPrescriptionFile: l.hasPrescriptionFile || undefined,
+        rentalPricingPlanId: l.rentalPricingPlanId || undefined,
+        rentalStartDate: l.rentalStartDate || undefined,
+      })),
+    });
+  },
+
+  verifyCheckout(payload: {
+    checkoutSessionId: string;
+    razorpayOrderId: string;
+    razorpayPaymentId: string;
+    razorpaySignature: string;
+  }): Promise<CustomerCheckoutApi> {
+    return apiClient.post<CustomerCheckoutApi>("/customers/me/payments/verify", payload);
   },
 
   quoteOrders(payload: {
@@ -497,6 +730,13 @@ export const customerApi = {
     );
   },
 
+  selectOrderImageOption(orderId: string, optionId: string): Promise<CustomerOrderImageRequestApi> {
+    return apiClient.patch<CustomerOrderImageRequestApi>(
+      `/customers/me/orders/${encodeURIComponent(orderId)}/image-request/selection`,
+      { optionId },
+    );
+  },
+
   quoteExtension(orderId: string, additionalDays: number): Promise<ExtensionQuoteApi> {
     return apiClient.post<ExtensionQuoteApi>(`/customers/me/orders/${encodeURIComponent(orderId)}/extensions/quote`, {
       additionalDays
@@ -507,6 +747,33 @@ export const customerApi = {
     return apiClient.post<void>(`/customers/me/orders/${encodeURIComponent(orderId)}/extensions`, {
       additionalDays
     });
+  },
+
+  getOrderExtensions(orderId: string): Promise<CustomerExtensionApi[]> {
+    return apiClient.get<CustomerExtensionApi[]>(`/customers/me/orders/${encodeURIComponent(orderId)}/extensions`);
+  },
+
+  startExtensionPayment(orderId: string, extensionId: string): Promise<ExtensionPaymentApi> {
+    return apiClient.post<ExtensionPaymentApi>(
+      `/customers/me/orders/${encodeURIComponent(orderId)}/extensions/${encodeURIComponent(extensionId)}/pay`,
+      {},
+    );
+  },
+
+  verifyExtensionPayment(
+    orderId: string,
+    extensionId: string,
+    payload: {
+      checkoutSessionId: string;
+      razorpayOrderId: string;
+      razorpayPaymentId: string;
+      razorpaySignature: string;
+    },
+  ): Promise<void> {
+    return apiClient.post<void>(
+      `/customers/me/orders/${encodeURIComponent(orderId)}/extensions/${encodeURIComponent(extensionId)}/verify`,
+      payload,
+    );
   },
 
   quoteBuyout(orderId: string): Promise<BuyoutQuoteApi> {
@@ -521,8 +788,39 @@ export const customerApi = {
     return apiClient.get<CustomerNotificationApi[]>("/customers/me/notifications", options);
   },
 
+  getNotificationSummaries(
+    params: { page?: number; pageSize?: number } = {},
+    options?: ApiClientOptions,
+  ): Promise<CustomerNotificationListResult> {
+    const qs = new URLSearchParams();
+    qs.set("page", String(params.page && params.page > 0 ? params.page : 1));
+    qs.set("pageSize", String(params.pageSize && params.pageSize > 0 ? params.pageSize : 15));
+    return apiClient.get<CustomerNotificationListResult>(
+      `/customers/me/notifications/summaries?${qs.toString()}`,
+      options,
+    );
+  },
+
+  getUnreadNotificationCount(options?: ApiClientOptions): Promise<number> {
+    return apiClient.get<number>("/customers/me/notifications/unread-count", options);
+  },
+
   getOrderExpirations(withinDays = 7): Promise<ExpiringOrderApi[]> {
     return apiClient.get<ExpiringOrderApi[]>(`/customers/me/orders/expirations?withinDays=${withinDays}`);
+  },
+
+  getExpirationSummaries(
+    params: { withinDays?: number; page?: number; pageSize?: number } = {},
+    options?: ApiClientOptions,
+  ): Promise<CustomerExpirationListResult> {
+    const qs = new URLSearchParams();
+    qs.set("withinDays", String(params.withinDays && params.withinDays > 0 ? params.withinDays : 30));
+    qs.set("page", String(params.page && params.page > 0 ? params.page : 1));
+    qs.set("pageSize", String(params.pageSize && params.pageSize > 0 ? params.pageSize : 8));
+    return apiClient.get<CustomerExpirationListResult>(
+      `/customers/me/orders/expirations/summaries?${qs.toString()}`,
+      options,
+    );
   },
 
   markNotificationRead(notificationId: string): Promise<CustomerNotificationApi> {
@@ -570,6 +868,34 @@ export const customerApi = {
   removeFavorite(listingId: string): Promise<void> {
     return apiClient.delete(`/customers/me/favorites/${encodeURIComponent(listingId)}`);
   },
+
+  getOrderPrescriptions(orderId: string): Promise<CustomerPrescriptionFileApi[]> {
+    return apiClient.get<CustomerPrescriptionFileApi[]>(
+      `/customers/me/orders/${encodeURIComponent(orderId)}/prescriptions`,
+    );
+  },
+
+  uploadOrderPrescription(
+    orderId: string,
+    file: File,
+    options?: { acceptedPrescriptionLegal?: boolean; uploadSource?: "checkout" | "order_detail" },
+  ): Promise<CustomerPrescriptionFileApi> {
+    const data = new FormData();
+    data.append("file", file);
+    data.append("acceptedPrescriptionLegal", options?.acceptedPrescriptionLegal ? "true" : "false");
+    data.append("uploadSource", options?.uploadSource ?? "order_detail");
+    data.append("sourceSurface", "customer_web");
+    return apiClient.postForm<CustomerPrescriptionFileApi>(
+      `/customers/me/orders/${encodeURIComponent(orderId)}/prescriptions`,
+      data,
+    );
+  },
+
+  deleteOrderPrescription(orderId: string, fileId: string): Promise<void> {
+    return apiClient.delete(
+      `/customers/me/orders/${encodeURIComponent(orderId)}/prescriptions/${encodeURIComponent(fileId)}`,
+    );
+  },
 };
 
 export interface CustomerFavoriteApi {
@@ -586,6 +912,7 @@ export interface CustomerNotificationPreferenceApi {
   depositRefundsEnabled: boolean;
   directMessagesEnabled: boolean;
   marketingEmailsEnabled: boolean;
+  smsNotificationsEnabled?: boolean;
 }
 
 /** @deprecated Use HospitalApi / DoctorApi */

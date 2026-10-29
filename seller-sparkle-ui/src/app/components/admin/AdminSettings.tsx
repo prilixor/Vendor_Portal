@@ -33,6 +33,7 @@ const AdminSettings = () => {
   const [savingPassword, setSavingPassword] = useState(false);
   const [passwordUpdatedAt, setPasswordUpdatedAt] = useState<string | null>(null);
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [loadingProfile, setLoadingProfile] = useState(false);
   const passwordsMatch = passwordsMeetConfirm(newPassword, confirmPassword);
 
   const SETTINGS_PAIR_KEYS = { password: "newPassword", confirm: "confirmPassword" } as const;
@@ -52,6 +53,17 @@ const AdminSettings = () => {
     if (!user) return;
     setFullName(user.name || "");
     setEmail(user.email || "");
+    setLoadingProfile(true);
+    void adminApi
+      .getOwnAdminProfile()
+      .then((profile) => {
+        setFullName(profile.fullName || user.name || "");
+        setEmail(profile.email || user.email || "");
+      })
+      .catch(() => {
+        /* keep session name/email */
+      })
+      .finally(() => setLoadingProfile(false));
   }, [user]);
 
   const clearFieldError = (key: string) => {
@@ -208,7 +220,7 @@ const AdminSettings = () => {
                   setEmail(e.target.value);
                   clearFieldError("email");
                 }}
-                disabled={savingProfile}
+                disabled={savingProfile || loadingProfile}
                 className={fieldErrors.email ? "border-destructive" : ""}
               />
               <FieldError message={fieldErrors.email} />
@@ -225,7 +237,7 @@ const AdminSettings = () => {
           <Button
             className="mt-5 bg-gradient-primary shadow-glow"
             onClick={() => void saveProfile()}
-            disabled={savingProfile}
+            disabled={savingProfile || loadingProfile}
           >
             {savingProfile ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Save className="mr-2 h-4 w-4" />}
             Save profile
@@ -354,6 +366,7 @@ const AdminSettings = () => {
           </div>
         </Card>
       </div>
+
     </div>
   );
 };

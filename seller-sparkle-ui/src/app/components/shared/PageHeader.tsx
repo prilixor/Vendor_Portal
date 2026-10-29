@@ -53,7 +53,7 @@ export const PageHeader = ({
           <h1 className="text-xl font-bold tracking-tight sm:text-3xl">{title}</h1>
           {description && <p className="mt-0.5 text-sm text-muted-foreground max-w-2xl sm:mt-1">{description}</p>}
         </div>
-        {actions && <div className="flex min-w-0 flex-nowrap items-center gap-2">{actions}</div>}
+        {actions && <div className="flex min-w-0 flex-wrap items-center gap-2">{actions}</div>}
       </div>
     </div>
   );

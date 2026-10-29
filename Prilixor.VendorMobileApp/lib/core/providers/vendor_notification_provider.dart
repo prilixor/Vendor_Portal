@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart';
 
 import '../api/api_client.dart';
 import '../models/vendor_notification_model.dart';
+import '../utils/paged_json.dart';
 import '../utils/vendor_notification_utils.dart';
 
 class VendorNotificationProvider extends ChangeNotifier {
@@ -26,8 +27,16 @@ class VendorNotificationProvider extends ChangeNotifier {
   final Set<String> _optimisticReadIds = {};
   final Set<String> _optimisticUnreadIds = {};
 
-  int get unreadCount =>
-      _notifications.where((n) => _isEffectivelyUnread(n)).length;
+  static const pageSize = 15;
+
+  int _page = 1;
+  int _totalCount = 0;
+  int _unreadCount = 0;
+  bool _isLoadingMore = false;
+  bool get isLoadingMore => _isLoadingMore;
+  bool get hasMore => _notifications.length < _totalCount;
+
+  int get unreadCount => _unreadCount;
 
   bool _isEffectivelyUnread(VendorNotification n) {
     if (_optimisticReadIds.contains(n.id)) return false;
@@ -48,11 +57,26 @@ class VendorNotificationProvider extends ChangeNotifier {
   Future<void> fetchNotifications(
     String vendorId, {
     bool silent = false,
+    bool reset = true,
+    bool unreadOnly = false,
   }) async {
     if (vendorId.isEmpty) return;
+    if (!reset) {
+      await _fetchNotificationsInternal(
+        vendorId,
+        silent: true,
+        reset: false,
+        unreadOnly: unreadOnly,
+      );
+      return;
+    }
     if (_notificationsInflight != null) return _notificationsInflight!;
-    _notificationsInflight =
-        _fetchNotificationsInternal(vendorId, silent: silent);
+    _notificationsInflight = _fetchNotificationsInternal(
+      vendorId,
+      silent: silent,
+      reset: true,
+      unreadOnly: unreadOnly,
+    );
     try {
       await _notificationsInflight;
     } finally {
@@ -62,18 +86,34 @@ class VendorNotificationProvider extends ChangeNotifier {
 
   Future<void> _fetchNotificationsInternal(
     String vendorId, {
-    bool silent = false,
+    required bool silent,
+    required bool reset,
+    bool unreadOnly = false,
   }) async {
-    final showLoading = !silent || _notifications.isEmpty;
-    if (showLoading) {
-      _isLoading = true;
-      _error = null;
+    if (!reset) {
+      if (_isLoading || _isLoadingMore || !hasMore) return;
+      _isLoadingMore = true;
       notifyListeners();
+      _page += 1;
+    } else {
+      _page = 1;
+      final showLoading = !silent || _notifications.isEmpty;
+      if (showLoading) {
+        _isLoading = true;
+        _error = null;
+        notifyListeners();
+      }
     }
     try {
+      final query = <String, dynamic>{
+        'page': reset ? 1 : _page,
+        'pageSize': pageSize,
+        '_': DateTime.now().millisecondsSinceEpoch,
+      };
+      if (unreadOnly) query['unreadOnly'] = true;
       final response = await _api.dio.get(
-        '/vendors/$vendorId/notifications',
-        queryParameters: {'_': DateTime.now().millisecondsSinceEpoch},
+        '/vendors/$vendorId/notifications/summaries',
+        queryParameters: query,
         options: Options(
           headers: const {
             'Cache-Control': 'no-cache',
@@ -81,24 +121,32 @@ class VendorNotificationProvider extends ChangeNotifier {
           },
         ),
       );
-      final data = response.data is List ? response.data as List : const [];
-      final fetched = data
-          .whereType<Map>()
-          .map((e) =>
-              VendorNotification.fromJson(Map<String, dynamic>.from(e)))
-          .toList();
-      _notifications = _mergeOptimistic(fetched);
-      _error = null;
+      if (response.statusCode == 200) {
+        final body = asJsonMap(response.data);
+        final fetched = asJsonList(body?['items'] ?? response.data)
+            .whereType<Map>()
+            .map((e) =>
+                VendorNotification.fromJson(Map<String, dynamic>.from(e)))
+            .toList();
+        _totalCount = asJsonInt(body?['totalCount'], fetched.length);
+        _unreadCount = asJsonInt(body?['unreadCount'], _unreadCount);
+        final merged = _mergeOptimistic(fetched);
+        _notifications = reset ? merged : [..._notifications, ...merged];
+        _error = null;
+      }
     } on DioException catch (e) {
+      if (!reset) _page = (_page - 1).clamp(1, 1 << 20);
       if (_notifications.isEmpty) {
         _error = e.response?.statusCode == 401
             ? 'auth_required'
             : 'Failed to load alerts.';
       }
     } catch (_) {
+      if (!reset) _page = (_page - 1).clamp(1, 1 << 20);
       if (_notifications.isEmpty) _error = 'Failed to load alerts.';
     } finally {
       _isLoading = false;
+      _isLoadingMore = false;
       notifyListeners();
     }
   }
@@ -108,10 +156,11 @@ class VendorNotificationProvider extends ChangeNotifier {
     try {
       final response =
           await _api.dio.get('/vendors/$vendorId/notifications/unread-count');
-      // Prefer list-derived count when we already have notifications;
-      // still refresh list silently so badge stays accurate.
       if (response.statusCode == 200) {
-        await fetchNotifications(vendorId, silent: true);
+        final map = asJsonMap(response.data);
+        _unreadCount =
+            asJsonInt(map?['unreadCount'] ?? map?['count'] ?? response.data);
+        notifyListeners();
       }
     } catch (_) {
       // Ignore background badge errors.
@@ -126,6 +175,7 @@ class VendorNotificationProvider extends ChangeNotifier {
             ? n.copyWith(readAt: DateTime.now().toUtc(), status: 'read')
             : n)
         .toList();
+    if (_unreadCount > 0) _unreadCount--;
     notifyListeners();
     try {
       await _api.dio.patch(
@@ -145,6 +195,7 @@ class VendorNotificationProvider extends ChangeNotifier {
             ? n.copyWith(clearReadAt: true, status: 'unread')
             : n)
         .toList();
+    _unreadCount += 1;
     notifyListeners();
     try {
       await _api.dio.patch(
@@ -162,6 +213,7 @@ class VendorNotificationProvider extends ChangeNotifier {
     _notifications = _notifications
         .map((n) => n.copyWith(readAt: DateTime.now().toUtc(), status: 'read'))
         .toList();
+    _unreadCount = 0;
     notifyListeners();
     try {
       await _api.dio.patch(

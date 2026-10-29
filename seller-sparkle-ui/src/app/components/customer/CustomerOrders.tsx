@@ -1,17 +1,19 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
-import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { keepPreviousData, useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { ChevronRight } from "lucide-react";
 import { customerApi, type CustomerOrderApi } from "@/app/services/customerApi";
 import { Button } from "@/app/components/ui/button";
-import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { PageContentGate } from "@/app/components/shared/PageLoader";
 import { TablePagination } from "@/app/components/shared/TablePagination";
 import { ListingThumb } from "@/app/components/shared/ListingThumb";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/app/components/ui/table";
 import { toast } from "sonner";
-import { formatCustomerOrderStatusTitle, formatOrderStatusLabel, formatOrderTypeLabel, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
+import { formatCustomerOrderStatusTitle, formatCustomerOrderStatusLabel, formatOrderTypeLabel, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
 import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
+import { customerRefundChip } from "@/app/helpers/orderReturn";
+import { customerCancellationChip } from "@/app/helpers/orderCancellation";
 import { Badge } from "@/app/components/ui/badge";
+import { CancelOrderConfirm } from "@/app/components/legal/CancelOrderConfirm";
 import {
   ActiveFilterChips,
   FilterPanel,
@@ -30,7 +32,6 @@ const STATUS_FILTERS = [
   "In transit",
   "Active",
   "Returned",
-  "Dispatch failed",
   "Cancelled",
   "Bought Out",
 ] as const;
@@ -98,28 +99,6 @@ function orderTypeBadgeClass(orderType: string): string {
   return "bg-teal-50 text-teal-700 border-teal-200 dark:bg-teal-950/40 dark:text-teal-300 dark:border-teal-900";
 }
 
-function matchesStatusFilter(status: string, filter: StatusFilter): boolean {
-  if (filter === "All") return true;
-
-  const s = status.trim().toLowerCase().replace(/_/g, " ");
-  if (filter === "Pending") {
-    return s === "pending" || s === "awaiting vendor acceptance";
-  }
-  if (filter === "In transit") {
-    return s.includes("transit");
-  }
-  if (filter === "Cancelled") {
-    return s === "cancelled" || s === "canceled";
-  }
-  if (filter === "Dispatch failed") {
-    return s === "dispatch failed";
-  }
-  if (filter === "Bought Out") {
-    return s === "bought out";
-  }
-  return s === filter.toLowerCase();
-}
-
 function isCustomerOrderCancellable(status: string): boolean {
   const s = status.trim().toLowerCase();
   return s === "pending" || s === "awaiting vendor acceptance";
@@ -136,6 +115,7 @@ const CustomerOrders = () => {
   const [appliedFilter, setAppliedFilter] = useState<StatusFilter>(
     initialStatus && STATUS_FILTERS.includes(initialStatus) ? initialStatus : "All"
   );
+  const [cancelOrderId, setCancelOrderId] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [draftFilter, setDraftFilter] = useState<StatusFilter>("All");
 
@@ -172,52 +152,33 @@ const CustomerOrders = () => {
     setPage(1);
   }, [debouncedSearch, appliedFilter]);
 
-  const { data, isLoading, error } = useQuery({
-    queryKey: ["customer-orders"],
-    queryFn: () => customerApi.getOrders(),
+  const { data, isLoading, isPlaceholderData, error } = useQuery({
+    queryKey: ["customer-order-summaries", page, debouncedSearch, appliedFilter],
+    queryFn: () =>
+      customerApi.getOrderSummaries({
+        search: debouncedSearch,
+        status: appliedFilter,
+        page,
+        pageSize: PAGE_SIZE,
+      }, { quiet: true }),
+    placeholderData: keepPreviousData,
+    refetchInterval: 30_000,
   });
+  const isPageChanging = isPlaceholderData && !isLoading;
 
   const cancelMut = useMutation({
     mutationFn: (id: string) => customerApi.cancelOrder(id),
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["customer-order-summaries"] });
       queryClient.invalidateQueries({ queryKey: ["customer-orders"] });
       toast.success("Order cancelled.");
     },
     onError: (err: Error) => toast.error(err.message),
   });
 
-  const filtered = useMemo(() => {
-    let list = data ?? [];
-    const q = debouncedSearch.toLowerCase();
-    if (q) {
-      list = list.filter(
-        (o) =>
-          o.orderNumber.toLowerCase().includes(q) ||
-          o.listingTitle.toLowerCase().includes(q) ||
-          o.id.toLowerCase().includes(q),
-      );
-    }
-    list = list.filter((o) => matchesStatusFilter(o.status, appliedFilter));
-    return list;
-  }, [data, debouncedSearch, appliedFilter]);
-
-  const statusCounts = useMemo(() => {
-    let searchable = data ?? [];
-    const q = debouncedSearch.toLowerCase();
-    if (q) {
-      searchable = searchable.filter(
-        (o) =>
-          o.orderNumber.toLowerCase().includes(q) ||
-          o.listingTitle.toLowerCase().includes(q) ||
-          o.id.toLowerCase().includes(q),
-      );
-    }
-
-    return STATUS_FILTERS.reduce<Record<StatusFilter, number>>((acc, filter) => {
-      acc[filter] = filter === "All" ? searchable.length : searchable.filter((o) => matchesStatusFilter(o.status, filter)).length;
-      return acc;
-    }, {} as Record<StatusFilter, number>);
-  }, [data, debouncedSearch]);
+  const pageSlice = data?.items ?? [];
+  const totalCount = data?.totalCount ?? 0;
+  const statusCounts = data?.statusCounts ?? {};
 
   const statusOptions = STATUS_FILTERS.filter(
     (label) => label !== "Bought Out" || (statusCounts["Bought Out"] ?? 0) > 0,
@@ -234,12 +195,12 @@ const CustomerOrders = () => {
           },
         ];
 
-  const totalPages = Math.max(1, Math.ceil(filtered.length / PAGE_SIZE));
+  const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
-  const pageSlice = useMemo(
-    () => filtered.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
-    [filtered, safePage],
-  );
+
+  useEffect(() => {
+    if (page > totalPages) setPage(totalPages);
+  }, [page, totalPages]);
 
   if (error) {
     return <p className="text-sm text-destructive">{error instanceof Error ? error.message : "Failed to load orders."}</p>;
@@ -290,16 +251,14 @@ const CustomerOrders = () => {
       </FilterPanel>
 
       <p className="text-xs text-muted-foreground">
-        Status note: <span className="font-medium">Cancelled</span> means customer cancelled the request.
-        {" "}
-        <span className="font-medium">Dispatch failed</span> means no replacement supplier was available.
+        Status note: <span className="font-medium">Cancelled</span> includes requests you stopped
+        and orders no supplier accepted.
       </p>
 
-      {isLoading ? (
-        <PageLoaderSlot />
-      ) : (
+      <PageContentGate loading={isLoading && !data}>
         <>
-          {filtered.length > 0 ? (
+          <div className={cn("transition-opacity duration-200", isPageChanging && "opacity-50")}>
+          {pageSlice.length > 0 ? (
             <div className="space-y-6">
               {(() => {
                 // Group the pageSlice items by their baseOrderNumber prefix
@@ -361,22 +320,22 @@ const CustomerOrders = () => {
                             <div className="min-w-0 flex-1">
                               <Link
                                 to={`/customer/orders/${encodeURIComponent(o.id)}`}
-                                className="block truncate text-sm font-semibold text-foreground hover:underline"
+                                className="block truncate text-sm font-semibold text-foreground no-underline transition-colors hover:text-[#052A72] hover:no-underline dark:hover:text-[#8BB4FF]"
                               >
                                 {o.listingTitle}
                               </Link>
                               {o.orderType?.toLowerCase() === "buy" ? (
-                                <p className="mt-1 truncate text-xs text-muted-foreground">
-                                  {formatOrderDate(o.startDate)}
-                                  <span className="text-muted-foreground/40"> · </span>
-                                  Qty {o.quantity}
+                                <p className="mt-1 truncate font-sans text-xs font-semibold">
+                                  <span className="text-[#052A72] dark:text-[#8BB4FF]">{formatOrderDate(o.startDate)}</span>
+                                  <span className="text-[#3FA40B]/50 dark:text-[#6BC73A]/50"> · </span>
+                                  <span className="text-[#3FA40B] dark:text-[#6BC73A]">Qty {o.quantity}</span>
                                 </p>
                               ) : (
-                                <div className="mt-1 space-y-0.5 text-xs text-muted-foreground">
-                                  <p className="truncate">
+                                <div className="mt-1 space-y-0.5 font-sans text-xs font-semibold">
+                                  <p className="truncate text-[#052A72] dark:text-[#8BB4FF]">
                                     {formatDateRange(o.startDate, o.endDate)}
                                   </p>
-                                  <p className="truncate">
+                                  <p className="truncate text-[#3FA40B] dark:text-[#6BC73A]">
                                     {durationText ? `${durationText} · ` : null}
                                     Qty {o.quantity}
                                   </p>
@@ -390,12 +349,27 @@ const CustomerOrders = () => {
                               <Badge className={cn("h-5 shrink-0 whitespace-nowrap px-1.5 py-0 text-[10px] font-semibold leading-none sm:px-2", orderTypeBadgeClass(o.orderType))} variant="outline">
                                 {formatOrderTypeLabel(o.orderType)}
                               </Badge>
+                              {o.isExtended && o.orderType?.toLowerCase() !== "buy" ? (
+                                <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold leading-none text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                                  EXTENDED
+                                </span>
+                              ) : null}
+                              {customerRefundChip(o.returnSettlement) ? (
+                                <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold leading-none text-sky-900 dark:bg-sky-950/50 dark:text-sky-200">
+                                  {customerRefundChip(o.returnSettlement)}
+                                </span>
+                              ) : null}
+                              {customerCancellationChip(o.cancellationRefund) ? (
+                                <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold leading-none text-sky-900 dark:bg-sky-950/50 dark:text-sky-200">
+                                  {customerCancellationChip(o.cancellationRefund)}
+                                </span>
+                              ) : null}
                               <Badge
                                 title={formatCustomerOrderStatusTitle(o.status)}
                                 className={cn("shrink-0", orderStatusBadgeSizeClass, "px-1.5 sm:px-2", orderStatusBadgeClass(o.status))}
                                 variant="outline"
                               >
-                                {formatOrderStatusLabel(o.status)}
+                                {formatCustomerOrderStatusLabel(o.status)}
                               </Badge>
                             </div>
                             <div className="flex shrink-0 flex-nowrap items-center gap-1 sm:gap-3">
@@ -406,7 +380,7 @@ const CustomerOrders = () => {
                                   size="sm"
                                   className="h-7 shrink-0 px-1.5 text-xs font-semibold text-destructive hover:bg-destructive/10 hover:text-destructive sm:h-8 sm:px-2"
                                   disabled={cancelMut.isPending}
-                                  onClick={() => cancelMut.mutate(o.id)}
+                                  onClick={() => setCancelOrderId(o.id)}
                                 >
                                   Cancel
                                 </Button>
@@ -434,9 +408,9 @@ const CustomerOrders = () => {
             </div>
           ) : null}
 
-          {filtered.length === 0 && (
+          {pageSlice.length === 0 && (
             <p className="text-sm text-muted-foreground">
-              {data?.length === 0 ? (
+              {totalCount === 0 && appliedFilter === "All" && !debouncedSearch ? (
                 <>
                   No orders yet.{" "}
                   <Link to="/customer/shop" className="font-medium text-primary hover:underline">
@@ -452,12 +426,24 @@ const CustomerOrders = () => {
           <TablePagination
             page={safePage}
             pageSize={PAGE_SIZE}
-            total={filtered.length}
+            total={totalCount}
             onPageChange={setPage}
             label="orders"
           />
+          </div>
         </>
-      )}
+      </PageContentGate>
+      <CancelOrderConfirm
+        open={!!cancelOrderId}
+        onOpenChange={(open) => {
+          if (!open) setCancelOrderId(null);
+        }}
+        pending={cancelMut.isPending}
+        onConfirm={() => {
+          if (!cancelOrderId) return;
+          cancelMut.mutate(cancelOrderId, { onSettled: () => setCancelOrderId(null) });
+        }}
+      />
     </div>
   );
 };

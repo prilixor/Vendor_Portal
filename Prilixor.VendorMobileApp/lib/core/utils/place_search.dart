@@ -6,11 +6,13 @@ class PlaceSearchResult {
   final String label;
   final double lat;
   final double lng;
+  final ReverseGeocodeResult? address;
 
   const PlaceSearchResult({
     required this.label,
     required this.lat,
     required this.lng,
+    this.address,
   });
 }
 
@@ -33,6 +35,29 @@ class ReverseGeocodeResult {
       (city != null && city!.isNotEmpty) ||
       (state != null && state!.isNotEmpty) ||
       (postal != null && postal!.isNotEmpty);
+
+  /// Prefer [primary] per field, then fill gaps from [fallback].
+  static ReverseGeocodeResult? merge(
+    ReverseGeocodeResult? primary,
+    ReverseGeocodeResult? fallback,
+  ) {
+    if (primary == null && fallback == null) return null;
+    String? pick(String? first, String? second) {
+      final a = first?.trim();
+      if (a != null && a.isNotEmpty) return a;
+      final b = second?.trim();
+      if (b != null && b.isNotEmpty) return b;
+      return null;
+    }
+
+    final merged = ReverseGeocodeResult(
+      line1: pick(primary?.line1, fallback?.line1),
+      city: pick(primary?.city, fallback?.city),
+      state: pick(primary?.state, fallback?.state),
+      postal: pick(primary?.postal, fallback?.postal),
+    );
+    return merged.hasAnyField ? merged : null;
+  }
 }
 
 /// Client-side geocoding used by map pickers.
@@ -58,48 +83,118 @@ class PlaceSearch {
   void close() => _dio.close();
 
   /// Reverse-geocode pin → address line / state / city / postal when available.
+  /// Nominatim first (same as the website), then Photon if that lookup is empty.
   Future<ReverseGeocodeResult?> reverse({
     required double latitude,
     required double longitude,
   }) async {
+    ReverseGeocodeResult? nominatim;
     try {
-      final response = await _dio.get<Map<String, dynamic>>(
-        'https://nominatim.openstreetmap.org/reverse',
-        queryParameters: {
-          'format': 'jsonv2',
-          'lat': latitude,
-          'lon': longitude,
-          'addressdetails': 1,
-        },
-      );
-      final data = response.data;
-      if (data == null) return null;
-      final address = data['address'];
-      if (address is! Map) return null;
-
-      final state = _trim(address['state']?.toString());
-      final city = _trim(
-        (address['city'] ??
-                address['town'] ??
-                address['village'] ??
-                address['municipality'] ??
-                address['county'] ??
-                address['state_district'])
-            ?.toString(),
-      );
-      final postal = _trim(address['postcode']?.toString());
-      final line1 = _buildLine1(address, data['name']?.toString());
-
-      return ReverseGeocodeResult(
-        line1: line1,
-        city: city,
-        state: state,
-        postal: postal,
-      );
+      nominatim = await _reverseNominatim(latitude, longitude);
     } catch (e, st) {
-      debugPrint('Reverse geocode failed: $e\n$st');
-      return null;
+      debugPrint('Nominatim reverse failed: $e\n$st');
     }
+    if (nominatim != null &&
+        nominatim.line1 != null &&
+        nominatim.city != null &&
+        nominatim.state != null &&
+        nominatim.postal != null) {
+      return nominatim;
+    }
+
+    ReverseGeocodeResult? photon;
+    try {
+      photon = await _reversePhoton(latitude, longitude);
+    } catch (e, st) {
+      debugPrint('Photon reverse failed: $e\n$st');
+    }
+    return ReverseGeocodeResult.merge(nominatim, photon);
+  }
+
+  Future<ReverseGeocodeResult?> _reverseNominatim(double latitude, double longitude) async {
+    final response = await _dio.get(
+      'https://nominatim.openstreetmap.org/reverse',
+      queryParameters: {
+        'format': 'jsonv2',
+        'lat': latitude,
+        'lon': longitude,
+        'addressdetails': 1,
+      },
+    );
+    final data = response.data;
+    if (data is! Map) return null;
+    final address = data['address'];
+    if (address is! Map) return null;
+    return _fromNominatimAddress(address, data['name']?.toString());
+  }
+
+  Future<ReverseGeocodeResult?> _reversePhoton(double latitude, double longitude) async {
+    final response = await _dio.get(
+      'https://photon.komoot.io/reverse',
+      queryParameters: {
+        'lat': latitude,
+        'lon': longitude,
+        'lang': 'en',
+      },
+    );
+    final data = response.data;
+    if (data is! Map) return null;
+    final features = data['features'];
+    if (features is! List || features.isEmpty) return null;
+    final first = features.first;
+    if (first is! Map) return null;
+    final props = first['properties'];
+    if (props is! Map) return null;
+    return _fromPhotonProperties(props);
+  }
+
+  ReverseGeocodeResult? _fromNominatimAddress(Map address, String? placeName) {
+    final state = _trim(address['state']?.toString());
+    final city = _trim(
+      (address['city'] ??
+              address['town'] ??
+              address['village'] ??
+              address['municipality'] ??
+              address['county'] ??
+              address['state_district'])
+          ?.toString(),
+    );
+    final postal = _trim(address['postcode']?.toString());
+    final line1 = _buildLine1(address, placeName);
+    final resolved = ReverseGeocodeResult(
+      line1: line1,
+      city: city,
+      state: state,
+      postal: postal,
+    );
+    return resolved.hasAnyField ? resolved : null;
+  }
+
+  ReverseGeocodeResult? _fromPhotonProperties(Map properties) {
+    final house = _trim(properties['housenumber']?.toString());
+    final street = _trim(properties['street']?.toString());
+    final name = _trim(properties['name']?.toString());
+    final String? line1;
+    if (street != null) {
+      line1 = house != null ? '$house $street' : street;
+    } else {
+      line1 = name ??
+          _trim(properties['district']?.toString()) ??
+          _trim(properties['locality']?.toString());
+    }
+    final city = _trim(properties['city']?.toString()) ??
+        _trim(properties['district']?.toString()) ??
+        _trim(properties['county']?.toString()) ??
+        _trim(properties['locality']?.toString());
+    final state = _trim(properties['state']?.toString());
+    final postal = _trim(properties['postcode']?.toString());
+    final resolved = ReverseGeocodeResult(
+      line1: line1,
+      city: city,
+      state: state,
+      postal: postal,
+    );
+    return resolved.hasAnyField ? resolved : null;
   }
 
   static String? _trim(String? value) {
@@ -163,7 +258,7 @@ class PlaceSearch {
     required double longitude,
     required int limit,
   }) async {
-    final response = await _dio.get<Map<String, dynamic>>(
+    final response = await _dio.get(
       'https://photon.komoot.io/api/',
       queryParameters: {
         'q': query,
@@ -186,11 +281,13 @@ class PlaceSearch {
       final lng = (coords[0] as num).toDouble();
       final lat = (coords[1] as num).toDouble();
       final props = item['properties'];
+      final propMap = props is Map ? props : const {};
       parsed.add(
         PlaceSearchResult(
-          label: _formatPhotonLabel(props is Map ? props : const {}),
+          label: _formatPhotonLabel(propMap),
           lat: lat,
           lng: lng,
+          address: props is Map ? _fromPhotonProperties(props) : null,
         ),
       );
     }
@@ -209,7 +306,7 @@ class PlaceSearch {
     final top = latitude + nearbyDelta;
     final bottom = latitude - nearbyDelta;
 
-    final nearby = await _dio.get<List<dynamic>>(
+    final nearby = await _dio.get(
       'https://nominatim.openstreetmap.org/search',
       queryParameters: {
         'format': 'jsonv2',
@@ -221,9 +318,9 @@ class PlaceSearch {
       },
     );
 
-    var merged = _parseNominatim(nearby.data);
+    var merged = _parseNominatim(nearby.data is List ? nearby.data as List : null);
     if (merged.length < 6) {
-      final global = await _dio.get<List<dynamic>>(
+      final global = await _dio.get(
         'https://nominatim.openstreetmap.org/search',
         queryParameters: {
           'format': 'jsonv2',
@@ -232,7 +329,7 @@ class PlaceSearch {
           'q': query,
         },
       );
-      final globalParsed = _parseNominatim(global.data);
+      final globalParsed = _parseNominatim(global.data is List ? global.data as List : null);
       final seen = <String>{for (final p in merged) '${p.lat},${p.lng}'};
       for (final item in globalParsed) {
         final key = '${item.lat},${item.lng}';
@@ -255,11 +352,15 @@ class PlaceSearch {
       final lng = double.tryParse(item['lon']?.toString() ?? '');
       if (lat == null || lng == null) continue;
       final label = item['display_name']?.toString().trim();
+      final address = item['address'];
       out.add(
         PlaceSearchResult(
           label: (label == null || label.isEmpty) ? 'Unnamed place' : label,
           lat: lat,
           lng: lng,
+          address: address is Map
+              ? _fromNominatimAddress(address, item['name']?.toString())
+              : null,
         ),
       );
     }
