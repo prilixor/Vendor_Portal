@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import '../../core/theme.dart';
 import 'package:provider/provider.dart';
 import '../../core/auth/auth_provider.dart';
@@ -822,11 +823,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
                 ],
               ),
               const SizedBox(height: 10),
-              Wrap(
-                spacing: 6,
-                runSpacing: 4,
-                crossAxisAlignment: WrapCrossAlignment.center,
-                children: [
+              _OrderItemMeta(
+                badges: () => [
                   _buildOrderTypeBadge(context, order.orderType),
                   if (order.isExtended && order.orderType.toLowerCase() != 'buy')
                     _buildExtendedBadge(context),
@@ -836,42 +834,43 @@ class _OrdersScreenState extends State<OrdersScreen> {
                     _buildRefundBadge(context, order.cancellationRefund!.chipLabel!),
                   _buildStatusBadge(context, order.status),
                 ],
-              ),
-              const SizedBox(height: 8),
-              Row(
-                children: [
-                  Text(
-                    '₹${order.totalAmount.toStringAsFixed(0)}',
-                    style: TextStyle(
-                      color: context.appColors.textPrimary,
-                      fontSize: 14,
-                      fontWeight: FontWeight.w700,
-                    ),
-                  ),
-                  const Spacer(),
-                  if (_isCancellable(order.status))
-                    TextButton(
-                      style: TextButton.styleFrom(
-                        foregroundColor: Colors.redAccent,
-                        padding: const EdgeInsets.symmetric(horizontal: 8),
-                        minimumSize: Size.zero,
-                        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                        visualDensity: VisualDensity.compact,
+                trailing: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Text(
+                      '₹${order.totalAmount.toStringAsFixed(0)}',
+                      style: TextStyle(
+                        color: context.appColors.textPrimary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
                       ),
-                      onPressed: () => _confirmCancelOrder(order),
-                      child: const Text('Cancel', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
                     ),
-                  const SizedBox(width: 4),
-                  const Text(
-                    'Details',
-                    style: TextStyle(
-                      color: Color(0xFF6C63FF),
-                      fontSize: 12,
-                      fontWeight: FontWeight.w700,
+                    if (_isCancellable(order.status)) ...[
+                      const SizedBox(width: 8),
+                      TextButton(
+                        style: TextButton.styleFrom(
+                          foregroundColor: Colors.redAccent,
+                          padding: const EdgeInsets.symmetric(horizontal: 6),
+                          minimumSize: Size.zero,
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        onPressed: () => _confirmCancelOrder(order),
+                        child: const Text('Cancel', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                      ),
+                    ],
+                    const SizedBox(width: 10),
+                    const Text(
+                      'Details',
+                      style: TextStyle(
+                        color: Color(0xFF6C63FF),
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
-                  ),
-                  const Icon(Icons.chevron_right, color: Color(0xFF6C63FF), size: 16),
-                ],
+                    const Icon(Icons.chevron_right, color: Color(0xFF6C63FF), size: 16),
+                  ],
+                ),
               ),
             ],
           ),
@@ -890,6 +889,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
       ),
       child: Text(
         'EXTENDED',
+        maxLines: 1,
+        softWrap: false,
         style: TextStyle(
           color: isDark ? const Color(0xFFFCD34D) : const Color(0xFF92400E),
           fontSize: 10,
@@ -910,6 +911,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
       ),
       child: Text(
         label,
+        maxLines: 1,
+        softWrap: false,
         style: TextStyle(
           color: isDark ? const Color(0xFFBAE6FD) : const Color(0xFF0C4A6E),
           fontSize: 10,
@@ -941,6 +944,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
       ),
       child: Text(
         formatOrderTypeLabel(orderType),
+        maxLines: 1,
+        softWrap: false,
         style: TextStyle(
           color: fg,
           fontSize: 10,
@@ -1195,5 +1200,137 @@ class _OrdersStatusRow extends StatelessWidget {
         ),
       ),
     );
+  }
+}
+
+/// Keeps the amount and Details on the badge row when they fit, and moves
+/// them to a right-aligned second line when the chips need the full width.
+class _OrderItemMeta extends StatelessWidget {
+  final List<Widget> Function() badges;
+  final Widget trailing;
+
+  const _OrderItemMeta({required this.badges, required this.trailing});
+
+  List<Widget> _spaced(List<Widget> children) {
+    return [
+      for (var i = 0; i < children.length; i++) ...[
+        if (i > 0) const SizedBox(width: 6),
+        children[i],
+      ],
+    ];
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return _OrderItemMetaBar(
+      inlineBadges: Row(mainAxisSize: MainAxisSize.min, children: _spaced(badges())),
+      wrappedBadges: Wrap(
+        spacing: 6,
+        runSpacing: 4,
+        crossAxisAlignment: WrapCrossAlignment.center,
+        children: badges(),
+      ),
+      trailing: trailing,
+    );
+  }
+}
+
+class _OrderItemMetaBar extends MultiChildRenderObjectWidget {
+  _OrderItemMetaBar({
+    required Widget inlineBadges,
+    required Widget wrappedBadges,
+    required Widget trailing,
+  }) : super(children: [inlineBadges, wrappedBadges, trailing]);
+
+  @override
+  RenderObject createRenderObject(BuildContext context) => _RenderOrderItemMetaBar();
+}
+
+class _MetaParentData extends ContainerBoxParentData<RenderBox> {}
+
+class _RenderOrderItemMetaBar extends RenderBox
+    with ContainerRenderObjectMixin<RenderBox, _MetaParentData>, RenderBoxContainerDefaultsMixin<RenderBox, _MetaParentData> {
+  static const double _gap = 8;
+  bool _oneLine = true;
+
+  @override
+  void setupParentData(RenderBox child) {
+    if (child.parentData is! _MetaParentData) {
+      child.parentData = _MetaParentData();
+    }
+  }
+
+  @override
+  void performLayout() {
+    final children = getChildrenAsList();
+    final inline = children[0];
+    final wrapped = children[1];
+    final trailing = children[2];
+    final maxWidth = constraints.maxWidth;
+
+    inline.layout(const BoxConstraints(), parentUsesSize: true);
+    trailing.layout(BoxConstraints(maxWidth: maxWidth), parentUsesSize: true);
+    wrapped.layout(BoxConstraints(maxWidth: maxWidth), parentUsesSize: true);
+    final inlineSize = inline.size;
+    final trailingSize = trailing.size;
+    final wrapSize = wrapped.size;
+
+    _oneLine = inlineSize.width + _gap + trailingSize.width <= maxWidth;
+    if (_oneLine) {
+      final height = inlineSize.height > trailingSize.height ? inlineSize.height : trailingSize.height;
+      size = Size(maxWidth, height);
+      (inline.parentData as _MetaParentData).offset = Offset(0, (height - inlineSize.height) / 2);
+      (trailing.parentData as _MetaParentData).offset = Offset(
+        (maxWidth - trailingSize.width).clamp(0.0, maxWidth),
+        (height - trailingSize.height) / 2,
+      );
+      (wrapped.parentData as _MetaParentData).offset = Offset.zero;
+    } else {
+      size = Size(maxWidth, wrapSize.height + _gap + trailingSize.height);
+      (wrapped.parentData as _MetaParentData).offset = Offset.zero;
+      (trailing.parentData as _MetaParentData).offset = Offset(
+        (maxWidth - trailingSize.width).clamp(0.0, maxWidth),
+        wrapSize.height + _gap,
+      );
+      (inline.parentData as _MetaParentData).offset = Offset.zero;
+    }
+  }
+
+  @override
+  void visitChildrenForSemantics(RenderObjectVisitor visitor) {
+    final children = getChildrenAsList();
+    if (children.length < 3) return;
+    final visible = _oneLine ? [children[0], children[2]] : [children[1], children[2]];
+    for (final child in visible) {
+      visitor(child);
+    }
+  }
+
+  @override
+  void paint(PaintingContext context, Offset offset) {
+    final children = getChildrenAsList();
+    final visible = _oneLine ? [children[0], children[2]] : [children[1], children[2]];
+    for (final child in visible) {
+      final childParentData = child.parentData as _MetaParentData;
+      context.paintChild(child, offset + childParentData.offset);
+    }
+  }
+
+  @override
+  bool hitTestChildren(BoxHitTestResult result, {required Offset position}) {
+    final children = getChildrenAsList();
+    final visible = _oneLine ? [children[2], children[0]] : [children[2], children[1]];
+    for (final child in visible) {
+      final childParentData = child.parentData as _MetaParentData;
+      final hit = result.addWithPaintOffset(
+        offset: childParentData.offset,
+        position: position,
+        hitTest: (BoxHitTestResult result, Offset transformed) {
+          return child.hitTest(result, position: transformed);
+        },
+      );
+      if (hit) return true;
+    }
+    return false;
   }
 }
