@@ -499,9 +499,9 @@ const CustomerListingDetail = () => {
                   </div>
                 )}
                 {canBuy && (
-                  <div className="flex items-baseline justify-between rounded-lg border border-emerald-200/70 bg-emerald-50/50 px-3 py-2 dark:border-emerald-500/20 dark:bg-emerald-500/10">
+                  <div className="flex items-baseline justify-between rounded-lg border border-blue-200/80 bg-blue-50/60 px-3 py-2 dark:border-blue-500/25 dark:bg-blue-500/10">
                     <span className="text-sm text-muted-foreground">Buy price</span>
-                    <span className="text-lg font-bold tabular-nums text-emerald-700 dark:text-emerald-400">
+                    <span className="text-lg font-bold tabular-nums text-blue-600 dark:text-blue-400">
                       ₹{data.buyPrice?.toFixed(0) ?? 0}
                       <span className="ml-1 text-xs font-medium text-muted-foreground">
                         / {data.baseUnit ?? "Unit"}
@@ -689,9 +689,9 @@ const CustomerListingDetail = () => {
               ) : null}
 
               {actualOrderType === "buy" ? (
-                <div className="rounded-xl border border-emerald-200/80 bg-emerald-50/60 px-4 py-4 dark:border-emerald-500/20 dark:bg-emerald-500/10">
+                <div className="rounded-xl border border-blue-200/80 bg-blue-50/60 px-4 py-4 dark:border-blue-500/25 dark:bg-blue-500/10">
                   <p className="text-xs font-medium text-muted-foreground">You pay to buy</p>
-                  <p className="mt-1 text-3xl font-bold tracking-tight tabular-nums text-emerald-700 dark:text-emerald-400">
+                  <p className="mt-1 text-3xl font-bold tracking-tight tabular-nums text-blue-600 dark:text-blue-400">
                     {formatInr(rentEstimate)}
                   </p>
                   <p className="mt-1 text-xs text-muted-foreground">

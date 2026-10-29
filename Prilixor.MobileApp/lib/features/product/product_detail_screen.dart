@@ -728,7 +728,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                                 Text(
                                                   formatPlanInr(selectedVariant?.buyPrice ?? 0),
                                                   style: TextStyle(
-                                                    color: colors.success,
+                                                    color: context.isDarkMode
+                                                        ? const Color(0xFF60A5FA)
+                                                        : const Color(0xFF2563EB),
                                                     fontSize: 18,
                                                     fontWeight: FontWeight.bold,
                                                   ),
@@ -919,7 +921,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                             : (isDark ? colors.border : const Color(0xFFE5E7EB));
                                         final priceColor = recommended
                                             ? (isDark ? const Color(0xFF60A5FA) : const Color(0xFF2563EB))
-                                            : colors.textPrimary;
+                                            : (isDark ? const Color(0xFFA78BFA) : colors.accent);
                                         final cardBg = recommended
                                             ? (isDark ? const Color(0xFF1E3A5F).withValues(alpha: 0.35) : const Color(0xFFEFF6FF))
                                             : colors.surface;
@@ -1392,6 +1394,60 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                   ],
                                 ],
 
+                                 if (actualOrderType == 'buy') ...[
+                                   const SizedBox(height: 12),
+                                   Container(
+                                     width: double.infinity,
+                                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                                     decoration: BoxDecoration(
+                                       color: context.isDarkMode
+                                           ? const Color(0xFF1E3A5F).withValues(alpha: 0.35)
+                                           : const Color(0xFFEFF6FF),
+                                       borderRadius: BorderRadius.circular(12),
+                                       border: Border.all(
+                                         color: context.isDarkMode
+                                             ? const Color(0xFF60A5FA).withValues(alpha: 0.45)
+                                             : const Color(0xFFBFDBFE),
+                                       ),
+                                     ),
+                                     child: Column(
+                                       crossAxisAlignment: CrossAxisAlignment.start,
+                                       children: [
+                                         Text(
+                                           'You pay to buy',
+                                           style: TextStyle(
+                                             color: colors.textMuted,
+                                             fontSize: 12,
+                                             fontWeight: FontWeight.w500,
+                                           ),
+                                         ),
+                                         const SizedBox(height: 4),
+                                         Text(
+                                           formatPlanInr(estimate),
+                                           style: TextStyle(
+                                             color: context.isDarkMode
+                                                 ? const Color(0xFF60A5FA)
+                                                 : const Color(0xFF2563EB),
+                                             fontSize: 30,
+                                             fontWeight: FontWeight.w800,
+                                             height: 1.1,
+                                             letterSpacing: -0.4,
+                                           ),
+                                         ),
+                                         const SizedBox(height: 4),
+                                         Text(
+                                           'Own the unit · no rental return',
+                                           style: TextStyle(
+                                             color: colors.textMuted,
+                                             fontSize: 12,
+                                             fontWeight: FontWeight.w500,
+                                           ),
+                                         ),
+                                       ],
+                                     ),
+                                   ),
+                                 ],
+
                                  // Quantity lives inside the rent checkout strip when plans exist.
                                  if (!(actualOrderType == 'rent' &&
                                      detail.hasActiveRentalPlans &&
@@ -1501,11 +1557,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                        ),
                                      ),
                                    ),
-                                   const SizedBox(height: 8),
-                                   Text(
-                                     'Estimated ${actualOrderType == 'buy' ? 'buy amount' : 'rent'}: ${formatPlanInr(estimate)}',
-                                     style: TextStyle(color: colors.textMuted, fontSize: 13),
-                                   ),
+                                   if (actualOrderType != 'buy') ...[
+                                     const SizedBox(height: 8),
+                                     Text(
+                                       'Estimated rent: ${formatPlanInr(estimate)}',
+                                       style: TextStyle(color: colors.textMuted, fontSize: 13),
+                                     ),
+                                   ],
                                  ],
                                 const SizedBox(height: 16),
                                 ListingDeliveryCheck(
@@ -2200,7 +2258,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           Text(
             value,
             style: TextStyle(
-              color: highlight ? colors.success : colors.textPrimary,
+              color: highlight
+                  ? (context.isDarkMode ? const Color(0xFF60A5FA) : const Color(0xFF2563EB))
+                  : colors.textPrimary,
               fontWeight: FontWeight.bold,
             ),
           ),
