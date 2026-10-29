@@ -60,6 +60,17 @@ namespace Prilixor.VendorPortal.Infrastructure
 
             services.AddScoped<IEmailService, SmtpEmailService>();
             services.AddScoped<IPushNotificationService, WebPushNotificationService>();
+            services.Configure<SmsOptions>(configuration.GetSection(SmsOptions.SectionName));
+            services.Configure<ShreeSmsOptions>(configuration.GetSection(ShreeSmsOptions.SectionName));
+            services.AddHttpClient("ShreeSms", client =>
+            {
+                client.Timeout = TimeSpan.FromSeconds(30);
+            });
+            services.AddScoped<ISmsService, ShreeSmsService>();
+            services.AddSingleton<IPhoneVerificationService, ShreeSmsPhoneVerificationService>();
+
+            services.AddScoped<IPlatformSmsSettingsService, PlatformSmsSettingsService>();
+            services.AddMemoryCache();
             services.AddScoped<IWebsiteContentRepository, WebsiteContentRepository>();
             services.Configure<WebPushOptions>(configuration.GetSection(WebPushOptions.SectionName));
 
@@ -70,6 +81,20 @@ namespace Prilixor.VendorPortal.Infrastructure
                 client.Timeout = TimeSpan.FromSeconds(30);
             });
             services.AddScoped<IAiSupportService, GroqSupportService>();
+
+            services.AddHttpClient("Razorpay", client =>
+            {
+                client.Timeout = TimeSpan.FromSeconds(30);
+            });
+            services.AddScoped<IRazorpayPaymentService, RazorpayPaymentService>();
+
+            // Configure Cashfree Verification Suite (Secure ID)
+            services.Configure<CashfreeOptions>(configuration.GetSection(CashfreeOptions.SectionName));
+            services.AddHttpClient("Cashfree", client =>
+            {
+                client.Timeout = TimeSpan.FromSeconds(30);
+            });
+            services.AddScoped<ICashfreeVerificationService, CashfreeVerificationService>();
 
             RegisterVendorStorage(services, configuration, environment);
 
@@ -152,6 +177,12 @@ namespace Prilixor.VendorPortal.Infrastructure
 
             services.Configure<CustomerPricingOptions>(
                 configuration.GetSection(CustomerPricingOptions.SectionName));
+
+            services.Configure<RazorpayOptions>(
+                configuration.GetSection(RazorpayOptions.SectionName));
+
+            services.Configure<OrderImageRequestOptions>(
+                configuration.GetSection(OrderImageRequestOptions.SectionName));
 
             services.Configure<RentalPricingOptions>(
                 configuration.GetSection(RentalPricingOptions.SectionName));

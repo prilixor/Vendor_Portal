@@ -1,15 +1,14 @@
-import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
-import 'package:url_launcher/url_launcher.dart';
 
-import '../../core/api/api_client.dart';
 import '../../core/auth/auth_provider.dart';
-import '../../core/config/app_urls.dart';
+import '../../core/auth/phone_otp_setting.dart';
 import '../../core/utils/indian_mobile_phone.dart';
 import '../../core/utils/password_validation.dart';
 import '../../shared/widgets/custom_text_field.dart';
 import '../../shared/widgets/indian_mobile_field.dart';
+import '../../shared/widgets/legal_policy_links.dart';
+import '../../shared/widgets/phone_otp_dialog.dart';
 import '../../shared/widgets/required_field_ux.dart';
 import '../../core/theme.dart';
 import 'login_screen.dart';
@@ -105,7 +104,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
     if (!_agreedToTerms) {
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(
-          content: Text('Please agree to the Terms & Conditions and Privacy Policy.'),
+          content: Text('Please agree to the Terms, Privacy Policy, and Vendor / Seller Policy.'),
         ),
       );
       return false;
@@ -113,30 +112,42 @@ class _RegisterScreenState extends State<RegisterScreen> {
     return true;
   }
 
-  Future<void> _openPortalPage(String path) async {
-    final uri = Uri.parse('${ApiClient().portalWebBaseUrl}$path');
-    if (!await launchUrl(uri, mode: LaunchMode.externalApplication)) {
-      if (!mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(content: Text('Could not open $uri')),
-      );
-    }
-  }
-
   Future<void> _submit() async {
     if (!_validate()) return;
 
     final provider = Provider.of<AuthProvider>(context, listen: false);
     final email = _emailController.text.trim();
+    final normalizedPhone = IndianMobilePhone.normalizeDigits(_phoneController.text);
+
     final success = await provider.registerVendor(
       email: email,
       password: _passwordController.text,
-      supportPhone: IndianMobilePhone.normalizeDigits(_phoneController.text),
+      supportPhone: normalizedPhone,
     );
 
     if (!mounted) return;
 
     if (success) {
+      if (!await PhoneOtpSetting.isEnabled()) {
+        if (!mounted) return;
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+            builder: (_) => VerifyEmailSentScreen(initialEmail: email),
+          ),
+        );
+        return;
+      }
+      final otpOk = await PhoneOtpDialog.show(
+        context,
+        phone: normalizedPhone,
+        role: 'vendor',
+        required: true,
+        title: 'Verify your phone',
+        description: 'Enter the 6-digit code we sent to +91 $normalizedPhone. After this, we will ask you to verify your email.',
+      );
+
+      if (!mounted || otpOk != true) return;
+
       Navigator.of(context).pushReplacement(
         MaterialPageRoute(
           builder: (_) => VerifyEmailSentScreen(initialEmail: email),
@@ -165,7 +176,7 @@ class _RegisterScreenState extends State<RegisterScreen> {
       ),
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.all(24),
+          padding: const EdgeInsets.all(24.0),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
@@ -263,54 +274,12 @@ class _RegisterScreenState extends State<RegisterScreen> {
                 onChanged: (_) => _syncPasswordPair(),
               ),
               const SizedBox(height: 16),
-              Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Checkbox(
-                    value: _agreedToTerms,
-                    activeColor: const Color(0xFF6C63FF),
-                    onChanged: (value) {
-                      setState(() => _agreedToTerms = value == true);
-                    },
-                  ),
-                  Expanded(
-                    child: Padding(
-                      padding: const EdgeInsets.only(top: 10),
-                      child: Text.rich(
-                        TextSpan(
-                          style: TextStyle(
-                            color: context.appColors.textMuted,
-                            fontSize: 12,
-                            height: 1.45,
-                          ),
-                          children: [
-                            const TextSpan(text: 'By creating an account, you agree to our '),
-                            TextSpan(
-                              text: 'Terms & Conditions',
-                              style: const TextStyle(
-                                color: Color(0xFF6C63FF),
-                                fontWeight: FontWeight.w600,
-                              ),
-                              recognizer: TapGestureRecognizer()
-                                ..onTap = () => _openPortalPage(AppUrls.termsPath),
-                            ),
-                            const TextSpan(text: ' and '),
-                            TextSpan(
-                              text: 'Privacy Policy',
-                              style: const TextStyle(
-                                color: Color(0xFF6C63FF),
-                                fontWeight: FontWeight.w600,
-                              ),
-                              recognizer: TapGestureRecognizer()
-                                ..onTap = () => _openPortalPage(AppUrls.privacyPath),
-                            ),
-                            const TextSpan(text: '.'),
-                          ],
-                        ),
-                      ),
-                    ),
-                  ),
-                ],
+              LegalAgreeCheckbox(
+                screen: 'register',
+                value: _agreedToTerms,
+                onChanged: (value) => setState(() => _agreedToTerms = value),
+                prefix: 'By creating an account, you agree to our',
+                activeColor: const Color(0xFF6C63FF),
               ),
               const SizedBox(height: 8),
               SizedBox(

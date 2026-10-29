@@ -6,6 +6,8 @@ import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/auth/auth_provider.dart';
+import '../../core/auth/phone_otp_setting.dart';
+import '../../core/config/app_urls.dart';
 import '../../core/models/vendor_onboarding_model.dart';
 import '../../core/models/vendor_profile_model.dart';
 import '../../core/providers/vendor_location_provider.dart';
@@ -21,6 +23,8 @@ import '../../core/utils/place_search.dart';
 import 'document_preview_screen.dart';
 import '../../shared/widgets/admin_comment_hint.dart';
 import '../../shared/widgets/indian_mobile_field.dart';
+import '../../shared/widgets/legal_policy_links.dart';
+import '../../shared/widgets/phone_otp_dialog.dart';
 import 'onboarding_widgets.dart';
 import '../service_areas/service_area_map_picker.dart';
 import '../support/support_chat_screen.dart';
@@ -98,9 +102,66 @@ class _OnboardingScreenState extends State<OnboardingScreen>
     final vendorId =
         Provider.of<AuthProvider>(context, listen: false).vendorId;
     if (vendorId == null) return;
+    final nameController = TextEditingController();
+    final signedName = await showDialog<String>(
+      context: context,
+      builder: (dialogContext) {
+        return AlertDialog(
+          title: const Text('Sign Vendor / Seller Policy'),
+          content: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Type your full legal name to electronically sign commission, indemnity, and arbitration terms.',
+              ),
+              const SizedBox(height: 8),
+              TextButton(
+                onPressed: () => openLegalPolicy(
+                  dialogContext,
+                  AppUrls.vendorSellerPath,
+                  title: 'Vendor / Seller Policy',
+                ),
+                child: const Text('Open agreement'),
+              ),
+              const VendorOnboardingPolicyLinks(),
+              const SizedBox(height: 8),
+              TextField(
+                controller: nameController,
+                decoration: const InputDecoration(
+                  labelText: 'Full legal name',
+                ),
+                textCapitalization: TextCapitalization.words,
+              ),
+            ],
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext),
+              child: const Text('Cancel'),
+            ),
+            TextButton(
+              onPressed: () => Navigator.pop(dialogContext, nameController.text.trim()),
+              child: const Text('Sign and submit'),
+            ),
+          ],
+        );
+      },
+    );
+    nameController.dispose();
+    if (!mounted || signedName == null) return;
+    if (signedName.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Type your full name to sign the Vendor / Seller Policy.'),
+          backgroundColor: Colors.redAccent,
+        ),
+      );
+      return;
+    }
     final provider =
         Provider.of<VendorOnboardingProvider>(context, listen: false);
-    final ok = await provider.submitVerification(vendorId);
+    final ok = await provider.submitVerification(vendorId, signedName: signedName);
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -219,6 +280,9 @@ class _ProfileTabState extends State<_ProfileTab> with AutomaticKeepAliveClientM
   final _lngController = TextEditingController();
   bool _locating = false;
   bool _resolvingAddress = false;
+  bool _phoneVerified = false;
+  bool _phoneOtpEnabled = true;
+  String? _phoneError;
   int _stateCityKey = 0;
   final PlaceSearch _placeSearch = PlaceSearch();
 
@@ -234,6 +298,9 @@ class _ProfileTabState extends State<_ProfileTab> with AutomaticKeepAliveClientM
   void initState() {
     super.initState();
     _syncFromProfile(widget.profile);
+    PhoneOtpSetting.isEnabled().then((enabled) {
+      if (mounted) setState(() => _phoneOtpEnabled = enabled);
+    });
   }
 
   @override
@@ -249,6 +316,7 @@ class _ProfileTabState extends State<_ProfileTab> with AutomaticKeepAliveClientM
     _businessController.text = p.businessName;
     _ownerController.text = p.ownerName;
     _phoneController.text = IndianMobilePhone.normalizeDigits(p.supportPhone);
+    _phoneVerified = p.isPhoneVerified;
     _gstController.text = p.gstNumber ?? '';
     _address1Controller.text = p.addressLine1;
     _address2Controller.text = p.addressLine2 ?? '';
@@ -276,19 +344,12 @@ class _ProfileTabState extends State<_ProfileTab> with AutomaticKeepAliveClientM
     super.dispose();
   }
 
-  Future<void> _applyReverseGeocode(
-    double lat,
-    double lng, {
-    bool announceIfComplete = false,
-  }) async {
-    setState(() => _resolvingAddress = true);
-    final rev = await _placeSearch.reverse(latitude: lat, longitude: lng);
-    if (!mounted) return;
-
-    final line1 = rev?.line1?.trim();
-    final state = rev?.state?.trim();
-    final city = rev?.city?.trim();
-    final postal = rev?.postal?.trim();
+  void _writeResolvedAddress(ReverseGeocodeResult? rev) {
+    if (rev == null) return;
+    final line1 = rev.line1?.trim();
+    final state = rev.state?.trim();
+    final city = rev.city?.trim();
+    final postal = rev.postal?.trim();
     var remountPicker = false;
 
     if (line1 != null && line1.isNotEmpty) {
@@ -306,6 +367,21 @@ class _ProfileTabState extends State<_ProfileTab> with AutomaticKeepAliveClientM
       remountPicker = true;
     }
     if (remountPicker) _stateCityKey++;
+  }
+
+  Future<void> _applyReverseGeocode(
+    double lat,
+    double lng, {
+    ReverseGeocodeResult? preset,
+    bool announceIfComplete = false,
+  }) async {
+    if (preset != null && preset.hasAnyField) {
+      _writeResolvedAddress(preset);
+    }
+    setState(() => _resolvingAddress = true);
+    final rev = await _placeSearch.reverse(latitude: lat, longitude: lng);
+    if (!mounted) return;
+    _writeResolvedAddress(ReverseGeocodeResult.merge(rev, preset));
 
     setState(() => _resolvingAddress = false);
 
@@ -334,6 +410,7 @@ class _ProfileTabState extends State<_ProfileTab> with AutomaticKeepAliveClientM
   Future<void> _setMapLocation(
     double lat,
     double lng, {
+    ReverseGeocodeResult? preset,
     bool announceIfComplete = false,
   }) async {
     setState(() {
@@ -343,8 +420,32 @@ class _ProfileTabState extends State<_ProfileTab> with AutomaticKeepAliveClientM
     await _applyReverseGeocode(
       lat,
       lng,
+      preset: preset,
       announceIfComplete: announceIfComplete,
     );
+  }
+
+  Future<void> _verifyPhoneSms() async {
+    final raw = IndianMobilePhone.normalizeDigits(_phoneController.text);
+    if (!IndianMobilePhone.isValid(raw)) return;
+
+    final verified = await PhoneOtpDialog.show(
+      context,
+      phone: raw,
+      role: 'vendor',
+      title: 'Verify support phone',
+      description: 'Enter the 6-digit code sent to +91 $raw.',
+      successMessage: 'Phone number verified successfully.',
+    );
+    if (verified == true && mounted) {
+      setState(() => _phoneVerified = true);
+      final vendorId =
+          Provider.of<AuthProvider>(context, listen: false).vendorId;
+      if (vendorId != null) {
+        await Provider.of<VendorProfileProvider>(context, listen: false)
+            .fetchProfile(vendorId);
+      }
+    }
   }
 
   Future<void> _save() async {
@@ -355,6 +456,7 @@ class _ProfileTabState extends State<_ProfileTab> with AutomaticKeepAliveClientM
 
     final phoneErr = IndianMobilePhone.requiredError(_phoneController.text);
     if (phoneErr != null) {
+      setState(() => _phoneError = phoneErr);
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(content: Text(phoneErr), backgroundColor: Colors.redAccent),
       );
@@ -383,8 +485,16 @@ class _ProfileTabState extends State<_ProfileTab> with AutomaticKeepAliveClientM
       await Provider.of<VendorProfileProvider>(context, listen: false)
           .fetchProfile(vendorId);
       if (!mounted) return;
+      final isVerified = _phoneVerified;
+      final hasPhone = _phoneController.text.trim().isNotEmpty;
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Profile saved.')),
+        SnackBar(
+          content: Text(
+            hasPhone && !isVerified
+                ? 'Profile saved. Verify your phone to receive SMS order alerts.'
+                : 'Profile saved.',
+          ),
+        ),
       );
     } else if (onboarding.error != null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -465,6 +575,7 @@ class _ProfileTabState extends State<_ProfileTab> with AutomaticKeepAliveClientM
   @override
   Widget build(BuildContext context) {
     super.build(context);
+    final colors = context.appColors;
     final saving = Provider.of<VendorOnboardingProvider>(context).saving;
 
     if (widget.profile == null) {
@@ -488,6 +599,10 @@ class _ProfileTabState extends State<_ProfileTab> with AutomaticKeepAliveClientM
       );
     }
 
+    final normalizedPhone =
+        IndianMobilePhone.normalizeDigits(_phoneController.text);
+    final isValidPhone = IndianMobilePhone.isValid(normalizedPhone);
+
     return ListView(
       padding: const EdgeInsets.fromLTRB(16, 12, 16, 32),
       children: [
@@ -502,11 +617,77 @@ class _ProfileTabState extends State<_ProfileTab> with AutomaticKeepAliveClientM
             children: [
               OnboardingTextField(controller: _businessController, label: 'Business name'),
               OnboardingTextField(controller: _ownerController, label: 'Owner name'),
-              IndianMobileField(
-                controller: _phoneController,
-                label: 'Support phone',
-                required: true,
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Expanded(
+                    child: IndianMobileField(
+                      controller: _phoneController,
+                      label: 'Support phone',
+                      required: true,
+                      errorText: _phoneError,
+                      onChanged: (_) {
+                        setState(() {
+                          _phoneVerified = false;
+                          if (_phoneError != null) _phoneError = null;
+                        });
+                      },
+                    ),
+                  ),
+                  if (_phoneOtpEnabled) ...[
+                  const SizedBox(width: 8),
+                  Padding(
+                    padding: const EdgeInsets.only(top: 28),
+                    child: SizedBox(
+                      height: 52,
+                      child: OutlinedButton(
+                        onPressed: (!isValidPhone || _phoneVerified)
+                            ? null
+                            : _verifyPhoneSms,
+                        style: OutlinedButton.styleFrom(
+                          foregroundColor: _phoneVerified
+                              ? const Color(0xFF10B981)
+                              : colors.accent,
+                          side: BorderSide(
+                            color: _phoneVerified
+                                ? const Color(0xFF10B981)
+                                : colors.accent,
+                          ),
+                          shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12),
+                          ),
+                        ),
+                        child: Text(
+                          _phoneVerified ? 'Verified' : 'Verify SMS',
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w600,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                  ],
+                ],
               ),
+              if (_phoneError == null)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4, left: 4, bottom: 8),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: Text(
+                      _phoneVerified
+                          ? 'Verified — SMS order alerts can be delivered.'
+                          : '10-digit Indian mobile starting with 6-9. Verify to enable SMS alerts.',
+                      style: TextStyle(
+                        color: _phoneVerified
+                            ? const Color(0xFF10B981)
+                            : colors.textMuted,
+                        fontSize: 11,
+                      ),
+                    ),
+                  ),
+                ),
               const SizedBox(height: 12),
               OnboardingTextField(
                 controller: _gstController,
@@ -533,19 +714,19 @@ class _ProfileTabState extends State<_ProfileTab> with AutomaticKeepAliveClientM
                     : widget.profile?.city,
               ),
               if (_resolvingAddress)
-                const Padding(
-                  padding: EdgeInsets.only(bottom: 8),
+                Padding(
+                  padding: const EdgeInsets.only(bottom: 8),
                   child: Row(
                     children: [
-                      SizedBox(
+                      const SizedBox(
                         width: 14,
                         height: 14,
                         child: CircularProgressIndicator(strokeWidth: 2),
                       ),
-                      SizedBox(width: 8),
+                      const SizedBox(width: 8),
                       Text(
                         'Resolving address from pin…',
-                        style: TextStyle(color: Colors.white54, fontSize: 12),
+                        style: TextStyle(color: context.appColors.textMuted, fontSize: 12),
                       ),
                     ],
                   ),
@@ -588,8 +769,8 @@ class _ProfileTabState extends State<_ProfileTab> with AutomaticKeepAliveClientM
                 label: const Text('Open in Google Maps'),
                 style: OutlinedButton.styleFrom(
                   minimumSize: const Size.fromHeight(44),
-                  foregroundColor: Colors.white70,
-                  side: BorderSide(color: Colors.white.withValues(alpha: 0.12)),
+                  foregroundColor: context.appColors.textPrimary,
+                  side: BorderSide(color: context.appColors.border),
                 ),
               ),
               const SizedBox(height: 12),
@@ -598,8 +779,12 @@ class _ProfileTabState extends State<_ProfileTab> with AutomaticKeepAliveClientM
                 longitude: _mapLng,
                 showRadius: false,
                 height: 260,
-                onLocationChanged: (point) =>
-                    _setMapLocation(point.latitude, point.longitude),
+                onLocationChanged: (point, fromSearch) => _setMapLocation(
+                  point.latitude,
+                  point.longitude,
+                  preset: fromSearch?.address,
+                  announceIfComplete: true,
+                ),
               ),
               const SizedBox(height: 12),
               Row(
@@ -630,7 +815,7 @@ class _ProfileTabState extends State<_ProfileTab> with AutomaticKeepAliveClientM
                 '• Or open Google Maps → long-press your shop → copy lat/long\n'
                 '• Paste the numbers below, then Save profile',
                 style: TextStyle(
-                  color: Colors.white.withValues(alpha: 0.45),
+                  color: context.appColors.textMuted,
                   fontSize: 11,
                   height: 1.45,
                 ),
@@ -739,10 +924,10 @@ class _DocumentsTabState extends State<_DocumentsTab> with AutomaticKeepAliveCli
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: AppTheme.card(context),
-        title: const Text('Delete document?', style: TextStyle(color: Colors.white)),
+        title: Text('Delete document?', style: TextStyle(color: ctx.appColors.textPrimary)),
         content: Text(
           'Remove ${doc.documentType}? You can upload a new file after deleting.',
-          style: TextStyle(color: Colors.white.withValues(alpha: 0.75)),
+          style: TextStyle(color: ctx.appColors.textSecondary),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
@@ -1289,23 +1474,15 @@ class _BankTabState extends State<_BankTab> with AutomaticKeepAliveClientMixin {
                   margin: const EdgeInsets.only(bottom: 4),
                   padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
                   decoration: BoxDecoration(
-                    color: context.isDarkMode
-                        ? const Color(0xFF34D399).withValues(alpha: 0.1)
-                        : const Color(0xFFECFDF5),
+                    color: context.appColors.successSoft,
                     borderRadius: BorderRadius.circular(12),
-                    border: Border.all(
-                      color: context.isDarkMode
-                          ? const Color(0xFF34D399).withValues(alpha: 0.25)
-                          : const Color(0xFFA7F3D0),
-                    ),
+                    border: Border.all(color: context.appColors.successBorder),
                   ),
                   child: Row(
                     children: [
                       Icon(
                         Icons.check_circle_rounded,
-                        color: context.isDarkMode
-                            ? const Color(0xFF34D399)
-                            : const Color(0xFF047857),
+                        color: context.appColors.success,
                         size: 18,
                       ),
                       const SizedBox(width: 8),
@@ -1313,9 +1490,7 @@ class _BankTabState extends State<_BankTab> with AutomaticKeepAliveClientMixin {
                         child: Text(
                           'Account numbers match.',
                           style: TextStyle(
-                            color: context.isDarkMode
-                                ? const Color(0xFF34D399)
-                                : const Color(0xFF047857),
+                            color: context.appColors.success,
                             fontSize: 12,
                             fontWeight: FontWeight.w600,
                           ),
@@ -1394,7 +1569,7 @@ class _BankTabState extends State<_BankTab> with AutomaticKeepAliveClientMixin {
           'Your bank details are encrypted and used only for vendor payouts.',
           textAlign: TextAlign.center,
           style: TextStyle(
-            color: Colors.white.withValues(alpha: 0.38),
+            color: context.appColors.textMuted,
             fontSize: 11,
             height: 1.35,
           ),

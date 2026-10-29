@@ -74,7 +74,6 @@ export const AuthLayout = ({
     <div className="auth-shell relative flex min-h-screen w-full min-w-0 max-w-full overflow-x-clip bg-background transition-colors duration-300">
       <div className="auth-grain pointer-events-none absolute inset-0 z-[1] hidden dark:block" aria-hidden />
 
-      {/* Left — brand panel. Stack logo + copy; leftover space sits above the footer. */}
       <div className="auth-brand-panel relative z-[2] hidden w-[46%] flex-col overflow-hidden p-10 text-white lg:flex xl:p-12">
         <div className="auth-brand-mesh absolute inset-0" />
         <div className="absolute -right-28 -top-28 h-[28rem] w-[28rem] rounded-full bg-white/10 blur-3xl dark:hidden" />
@@ -83,7 +82,7 @@ export const AuthLayout = ({
         <div className="pointer-events-none absolute inset-y-8 right-0 hidden w-px bg-gradient-to-b from-transparent via-white/10 to-transparent dark:block" />
 
         <div className="relative flex items-center gap-3.5">
-          <BrandMark size="lg" rounded="2xl" tone="onBrand" />
+          <BrandMark variant="auth" size="lg" rounded="2xl" tone="onBrand" />
           <div>
             <p className="text-[15px] font-semibold leading-tight tracking-tight text-white dark:text-zinc-100">
               {content.brandTitle}
@@ -121,7 +120,6 @@ export const AuthLayout = ({
         </p>
       </div>
 
-      {/* Right — form. Top-aligned with the brand column so tall pages (register) do not float. */}
       <div className="relative z-[2] flex w-full justify-center overflow-y-auto px-5 pb-10 pt-14 sm:px-8 lg:w-[54%] lg:items-start lg:px-10 lg:pb-12 lg:pt-12">
         <Button
           type="button"
@@ -141,7 +139,7 @@ export const AuthLayout = ({
             </div>
           )}
           <div className="mb-7 flex items-center gap-3 lg:hidden">
-            <BrandMark size="md" rounded="xl" />
+            <BrandMark variant="auth" size="md" rounded="xl" />
             <p className="text-sm font-semibold text-foreground">{content.brandTitle}</p>
           </div>
           <div className="mb-6">

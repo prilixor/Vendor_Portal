@@ -2,6 +2,7 @@ import { useEffect, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Eye, EyeOff } from "lucide-react";
 import {
+  isValidIndianMobile,
   normalizeIndianMobileDigits,
   optionalIndianMobileError,
 } from "@/app/helpers/indianMobilePhone";
@@ -12,7 +13,8 @@ import { Label } from "@/app/components/ui/label";
 import { FieldError } from "@/app/components/shared/FieldError";
 import { FormGrid } from "@/app/components/shared/FormGrid";
 import { IndianMobileInput } from "@/app/components/shared/IndianMobileInput";
-import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { PhoneOtpDialog } from "@/app/components/shared/PhoneOtpDialog";
+import { PageContentGate } from "@/app/components/shared/PageLoader";
 import { Switch } from "@/app/components/ui/switch";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { useAuth } from "@/app/guards/AuthContext";
@@ -27,9 +29,11 @@ import {
   submitPasswordLengthError,
 } from "@/app/helpers/passwordValidation";
 import { cn } from "@/app/helpers/utils";
+import { LegalPolicyLinks } from "@/app/components/legal/LegalPolicyLinks";
+import { fetchPhoneOtpEnabled } from "@/app/helpers/phoneOtpSetting";
 
 const CustomerSettings = () => {
-  const { user } = useAuth();
+  const { user, setSessionUser } = useAuth();
   const queryClient = useQueryClient();
 
   const { data, isLoading, error } = useQuery({
@@ -43,12 +47,37 @@ const CustomerSettings = () => {
   });
 
   const [fullName, setFullName] = useState("");
+  const [email, setEmail] = useState("");
   const [phone, setPhone] = useState("");
+  const [phoneVerified, setPhoneVerified] = useState(false);
+  const [verifiedPhone, setVerifiedPhone] = useState("");
+  const [otpOpen, setOtpOpen] = useState(false);
+  const [phoneOtpEnabled, setPhoneOtpEnabled] = useState(true);
+  const [resendingEmail, setResendingEmail] = useState(false);
+
+  const hasStoredEmail = !!(data?.email?.trim());
+  const emailLocked = hasStoredEmail;
+  const emailVerified = !!data?.isEmailVerified;
+
+  useEffect(() => {
+    let cancelled = false;
+    void fetchPhoneOtpEnabled().then((enabled) => {
+      if (!cancelled) setPhoneOtpEnabled(enabled);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
 
   useEffect(() => {
     if (data) {
       setFullName(data.fullName);
-      setPhone(data.phone ? normalizeIndianMobileDigits(data.phone) : "");
+      setEmail(data.email?.trim() || "");
+      const digits = data.phone ? normalizeIndianMobileDigits(data.phone) : "";
+      setPhone(digits);
+      const verified = !!data.isPhoneVerified && !!digits;
+      setPhoneVerified(verified);
+      setVerifiedPhone(verified ? digits : "");
     }
   }, [data]);
 
@@ -113,6 +142,7 @@ const CustomerSettings = () => {
       depositRefundsEnabled: dbPrefs.depositRefundsEnabled,
       directMessagesEnabled: dbPrefs.directMessagesEnabled,
       marketingEmailsEnabled: dbPrefs.marketingEmailsEnabled,
+      smsNotificationsEnabled: dbPrefs.smsNotificationsEnabled !== false,
       [key]: value,
     };
     updatePrefsMut.mutate(next);
@@ -123,12 +153,34 @@ const CustomerSettings = () => {
       customerApi.updateProfile(
         fullName.trim(),
         phone.trim() ? normalizeIndianMobileDigits(phone) : undefined,
+        emailLocked ? undefined : email.trim() || undefined,
       ),
-    onSuccess: () => {
-      toast.success("Profile updated.");
+    onSuccess: (updated) => {
+      const addedEmail = !hasStoredEmail && !!updated.email?.trim();
+      toast.success(
+        addedEmail
+          ? "Profile updated. Check your inbox to verify the new email."
+          : "Profile updated.",
+      );
       queryClient.invalidateQueries({ queryKey: ["customer-profile"] });
+      if (user && updated.email?.trim()) {
+        setSessionUser({ ...user, email: updated.email.trim() });
+      }
     },
-    onError: (err: Error) => toast.error(err.message),
+    onError: (err: Error) => {
+      const message = err.message || "Failed to update profile.";
+      const lower = message.toLowerCase();
+      const code = (err as Error & { code?: string }).code;
+      if (code === "customers.phone_exists" || (lower.includes("phone") && (lower.includes("already") || lower.includes("exists") || lower.includes("in use") || lower.includes("can't be used")))) {
+        setProfileFieldErrors({ phone: "This phone number can't be used. Enter a different mobile number." });
+      } else if (
+        lower.includes("email") &&
+        (lower.includes("already") || lower.includes("exists") || lower.includes("in use"))
+      ) {
+        setProfileFieldErrors({ email: "This email can't be used. Enter a different email address." });
+      }
+      toast.error(message);
+    },
   });
 
   const saveProfile = (e: FormEvent) => {
@@ -139,6 +191,16 @@ const CustomerSettings = () => {
     }
     const phoneErr = optionalIndianMobileError(phone);
     if (phoneErr) errors.phone = phoneErr;
+    const emailTrimmed = email.trim();
+    if (!emailLocked && emailTrimmed && !/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(emailTrimmed)) {
+      errors.email = "Enter a valid email address.";
+    }
+    if (!phone.trim() && !emailLocked && !emailTrimmed) {
+      errors.phone = "Add a phone number, or add an email first.";
+    }
+    if (!phone.trim() && emailLocked && !hasStoredEmail) {
+      errors.phone = "Add a phone number (this account has no email).";
+    }
     if (Object.keys(errors).length > 0) {
       setProfileFieldErrors(errors);
       toast.error("Please fill in the required fields.");
@@ -148,9 +210,28 @@ const CustomerSettings = () => {
     saveProfileMut.mutate();
   };
 
+  const resendVerificationEmail = async () => {
+    const mail = (data?.email || email).trim();
+    if (!mail) {
+      toast.error("Add and save an email first.");
+      return;
+    }
+    setResendingEmail(true);
+    try {
+      await authApi.resendVerification(mail, "customer");
+      toast.success("Verification email sent.");
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to resend verification email.");
+    } finally {
+      setResendingEmail(false);
+    }
+  };
+
   const updatePassword = async (e: FormEvent) => {
     e.preventDefault();
-    if (!user?.email) {
+    const accountIdentifier =
+      (data?.email?.trim() || user?.email?.trim() || data?.phone?.trim() || phone.trim() || "");
+    if (!accountIdentifier) {
       toast.error("You must be signed in.");
       return;
     }
@@ -172,7 +253,7 @@ const CustomerSettings = () => {
 
     try {
       await authApi.changePassword({
-        email: user.email,
+        email: accountIdentifier,
         currentPassword,
         newPassword,
       });
@@ -209,14 +290,14 @@ const CustomerSettings = () => {
           <TabsTrigger value="profile">Profile</TabsTrigger>
           <TabsTrigger value="security">Security</TabsTrigger>
           <TabsTrigger value="preferences">Preferences</TabsTrigger>
+          <TabsTrigger value="policies">Policies</TabsTrigger>
         </TabsList>
 
         <TabsContent value="profile" className="mt-4">
           <Card className="max-w-2xl border-border/60">
             <CardContent className="p-5 sm:p-6">
-              {isLoading || !data ? (
-                <PageLoaderSlot className="min-h-[8rem] py-0" />
-              ) : (
+              <PageContentGate loading={isLoading} className="min-h-[8rem] py-0">
+              {!data ? null : (
                 <form onSubmit={saveProfile}>
                   <h2 className="mb-1 text-sm font-semibold">Account</h2>
                   <p className="mb-4 text-xs text-muted-foreground">
@@ -238,31 +319,88 @@ const CustomerSettings = () => {
                     </div>
                     <div className="space-y-1.5">
                       <Label htmlFor="customer-settings-email">Email</Label>
-                      <Input
-                        id="customer-settings-email"
-                        type="email"
-                        value={data.email}
-                        disabled
-                        className="bg-muted/50"
-                      />
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+                        <div className="flex-1 space-y-1.5">
+                          <Input
+                            id="customer-settings-email"
+                            type="email"
+                            value={email}
+                            onChange={(e) => {
+                              setEmail(e.target.value);
+                              clearProfileFieldError("email");
+                            }}
+                            placeholder={emailLocked ? undefined : "you@example.com"}
+                            disabled={emailLocked}
+                            className={
+                              emailLocked
+                                ? "bg-muted/50"
+                                : profileFieldErrors.email
+                                  ? "border-destructive"
+                                  : ""
+                            }
+                          />
+                          <FieldError message={profileFieldErrors.email} />
+                          {!profileFieldErrors.email && (
+                            <p className="text-[11px] text-muted-foreground">
+                              {!hasStoredEmail
+                                ? "Optional. Add an email to sign in with email/password and receive email alerts. We'll send a verification link."
+                                : emailVerified
+                                  ? "Verified email on this account."
+                                  : "Email added but not verified yet — open the link we sent, or resend."}
+                            </p>
+                          )}
+                        </div>
+                        {hasStoredEmail && !emailVerified ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            className="shrink-0"
+                            disabled={resendingEmail}
+                            onClick={() => void resendVerificationEmail()}
+                          >
+                            {resendingEmail ? "Sending…" : "Resend verify"}
+                          </Button>
+                        ) : null}
+                      </div>
                     </div>
                     <div className="space-y-1.5">
                       <Label htmlFor="customer-settings-phone">Phone</Label>
-                      <IndianMobileInput
-                        id="customer-settings-phone"
-                        value={phone}
-                        onChange={(v) => {
-                          setPhone(v);
-                          clearProfileFieldError("phone");
-                        }}
-                        invalid={!!profileFieldErrors.phone}
-                      />
-                      <FieldError message={profileFieldErrors.phone} />
-                      {!profileFieldErrors.phone && (
-                        <p className="text-[11px] text-muted-foreground">
-                          10-digit Indian mobile starting with 6–9 (optional).
-                        </p>
-                      )}
+                      <div className="flex flex-col gap-2 sm:flex-row sm:items-start">
+                        <div className="flex-1 space-y-1.5">
+                          <IndianMobileInput
+                            id="customer-settings-phone"
+                            value={phone}
+                            onChange={(v) => {
+                              setPhone(v);
+                              const digits = normalizeIndianMobileDigits(v);
+                              setPhoneVerified(verifiedPhone.length > 0 && digits === verifiedPhone);
+                              clearProfileFieldError("phone");
+                            }}
+                            invalid={!!profileFieldErrors.phone}
+                          />
+                          <FieldError message={profileFieldErrors.phone} />
+                          {!profileFieldErrors.phone && (
+                            <p className="text-[11px] text-muted-foreground">
+                              {phoneVerified
+                                ? "Verified — SMS order updates can be delivered."
+                                : phoneOtpEnabled
+                                  ? "10-digit Indian mobile starting with 6–9. Verify to enable SMS alerts."
+                                  : "10-digit Indian mobile starting with 6–9."}
+                            </p>
+                          )}
+                        </div>
+                        {phoneOtpEnabled ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          className="shrink-0"
+                          disabled={!isValidIndianMobile(phone) || phoneVerified}
+                          onClick={() => setOtpOpen(true)}
+                        >
+                          {phoneVerified ? "Verified" : "Verify SMS"}
+                        </Button>
+                        ) : null}
+                      </div>
                     </div>
                   </FormGrid>
                   <Button type="submit" className="mt-5" disabled={saveProfileMut.isPending}>
@@ -270,6 +408,7 @@ const CustomerSettings = () => {
                   </Button>
                 </form>
               )}
+              </PageContentGate>
             </CardContent>
           </Card>
         </TabsContent>
@@ -390,9 +529,8 @@ const CustomerSettings = () => {
         <TabsContent value="preferences" className="mt-4">
           <Card className="max-w-2xl border-border/60">
             <CardContent className="space-y-3 p-5 sm:p-6">
-              {loadingPrefs || !dbPrefs ? (
-                <PageLoaderSlot className="min-h-[8rem] py-0" />
-              ) : (
+              <PageContentGate loading={loadingPrefs} className="min-h-[8rem] py-0">
+              {!dbPrefs ? null : (
                 <>
                   <PrefRow
                     title="Order Status Updates"
@@ -424,12 +562,62 @@ const CustomerSettings = () => {
                     checked={dbPrefs.marketingEmailsEnabled}
                     onChange={(v) => togglePref("marketingEmailsEnabled", v)}
                   />
+                  {phoneOtpEnabled && (!phone.trim() || !phoneVerified) && (
+                    <div className="rounded-lg border border-amber-200 bg-amber-50 px-3 py-2.5 text-sm text-amber-950">
+                      {!phone.trim()
+                        ? "Add and verify a phone number in Profile to receive SMS alerts."
+                        : "Verify your phone number in Profile to enable SMS alerts."}
+                    </div>
+                  )}
+                  <PrefRow
+                    title="SMS notifications"
+                    desc="Text alerts for order updates (requires a verified phone number)."
+                    checked={dbPrefs.smsNotificationsEnabled !== false}
+                    onChange={(v) => {
+                      if (v && phoneOtpEnabled && (!phone.trim() || !phoneVerified)) {
+                        toast.message(
+                          !phone.trim()
+                            ? "Add and verify a phone in Profile first."
+                            : "Verify your phone in Profile first.",
+                        );
+                        return;
+                      }
+                      togglePref("smsNotificationsEnabled", v);
+                    }}
+                  />
                 </>
               )}
+              </PageContentGate>
             </CardContent>
           </Card>
         </TabsContent>
+
+        <TabsContent value="policies" className="mt-4">
+          <Card className="max-w-md border-border/60 p-4 sm:p-6">
+            <h2 className="mb-1 font-semibold">Legal</h2>
+            <p className="mb-3 text-xs text-muted-foreground">
+              Agreements for your customer account.
+            </p>
+            <LegalPolicyLinks
+              surface="customer_web"
+              screen="profile_settings"
+              layout="quiet"
+            />
+          </Card>
+        </TabsContent>
       </Tabs>
+      <PhoneOtpDialog
+        open={otpOpen}
+        onOpenChange={setOtpOpen}
+        phone={normalizeIndianMobileDigits(phone)}
+        role="customer"
+        onVerified={() => {
+          const digits = normalizeIndianMobileDigits(phone);
+          setVerifiedPhone(digits);
+          setPhoneVerified(true);
+          queryClient.invalidateQueries({ queryKey: ["customer-profile"] });
+        }}
+      />
     </div>
   );
 };

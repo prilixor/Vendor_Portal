@@ -4,6 +4,7 @@ import '../api/api_client.dart';
 import '../models/order_model.dart';
 import '../models/order_action_model.dart';
 import '../models/order_image_request_model.dart';
+import '../utils/platform_file_payload.dart';
 
 class OrderDetailProvider extends ChangeNotifier {
   final ApiClient _apiClient = ApiClient();
@@ -32,6 +33,10 @@ class OrderDetailProvider extends ChangeNotifier {
 
   /// Open photo requests keyed by order line item id.
   final Map<String, OrderImageRequestModel> _imageRequestsByOrderId = {};
+  final Map<String, List<CustomerExtensionModel>> _extensionsByOrderId = {};
+
+  List<CustomerExtensionModel> extensionsFor(String orderId) =>
+      _extensionsByOrderId[orderId] ?? const [];
   Map<String, OrderImageRequestModel> get imageRequestsByOrderId =>
       Map.unmodifiable(_imageRequestsByOrderId);
 
@@ -44,8 +49,27 @@ class OrderDetailProvider extends ChangeNotifier {
 
   List<OrderImageModel> get orderImages => imageRequest?.images ?? const [];
 
+  List<PrescriptionFileModel> _prescriptionFiles = [];
+  List<PrescriptionFileModel> get prescriptionFiles => List.unmodifiable(_prescriptionFiles);
+  String? _prescriptionOrderId;
+  bool prescriptionsReadyFor(String orderId) => _prescriptionOrderId == orderId;
+  bool _prescriptionLoading = false;
+  bool get prescriptionLoading => _prescriptionLoading;
+
+  /// Bumps on every detail fetch so a slower response for a previous line
+  /// cannot overwrite the order the user is looking at now.
+  int _detailEpoch = 0;
+  int _groupImageEpoch = 0;
+
   Future<void> fetchOrderDetail(String orderId, {bool silent = false}) async {
-    final showLoading = !silent || _currentOrder == null;
+    final epoch = ++_detailEpoch;
+    final switching = _currentOrder?.id != orderId;
+    final showLoading = _currentOrder == null || (!silent && switching);
+    if (switching) {
+      _prescriptionFiles = [];
+      _prescriptionOrderId = null;
+      _errorMessage = null;
+    }
     if (showLoading) {
       _isLoading = true;
       _errorMessage = null;
@@ -63,11 +87,16 @@ class OrderDetailProvider extends ChangeNotifier {
           },
         ),
       );
+      if (epoch != _detailEpoch) return;
       if (response.statusCode == 200) {
         _currentOrder = OrderModel.fromJson(response.data);
+        notifyListeners();
         await fetchImageRequest(orderId, silent: true);
+        if (epoch != _detailEpoch) return;
+        await fetchPrescriptions(orderId, silent: true);
       }
     } on DioException catch (e) {
+      if (epoch != _detailEpoch) return;
       if (e.type == DioExceptionType.cancel ||
           e.type == DioExceptionType.connectionTimeout ||
           e.type == DioExceptionType.receiveTimeout ||
@@ -78,14 +107,17 @@ class OrderDetailProvider extends ChangeNotifier {
         _errorMessage = 'Failed to load order: ${e.message}';
       }
     } catch (e) {
+      if (epoch != _detailEpoch) return;
       if (!silent || _currentOrder == null) {
         _errorMessage = 'An unexpected error occurred.';
       }
     } finally {
-      if (showLoading) {
-        _isLoading = false;
+      if (epoch == _detailEpoch) {
+        if (showLoading) {
+          _isLoading = false;
+        }
+        notifyListeners();
       }
-      notifyListeners();
     }
   }
 
@@ -93,8 +125,10 @@ class OrderDetailProvider extends ChangeNotifier {
     List<String> orderIds, {
     bool silent = false,
   }) async {
+    final epoch = ++_groupImageEpoch;
     final ids = orderIds.where((id) => id.isNotEmpty).toSet().toList();
     if (ids.isEmpty) {
+      if (epoch != _groupImageEpoch) return;
       _imageRequestsByOrderId.clear();
       notifyListeners();
       return;
@@ -105,12 +139,15 @@ class OrderDetailProvider extends ChangeNotifier {
     }
     try {
       await Future.wait(ids.map((id) => fetchImageRequest(id, silent: true)));
+      if (epoch != _groupImageEpoch) return;
       _imageRequestsByOrderId.removeWhere((key, _) => !ids.contains(key));
     } finally {
-      if (!silent) {
-        _imageRequestLoading = false;
+      if (epoch == _groupImageEpoch) {
+        if (!silent) {
+          _imageRequestLoading = false;
+        }
+        notifyListeners();
       }
-      notifyListeners();
     }
   }
 
@@ -189,6 +226,42 @@ class OrderDetailProvider extends ChangeNotifier {
     return (succeeded: succeeded, failed: failed);
   }
 
+  Future<bool> selectImageOption(String orderId, String optionId) async {
+    if (orderId.isEmpty || optionId.isEmpty) return false;
+    _isActionLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      final response = await _apiClient.dio.patch(
+        '/customers/me/orders/$orderId/image-request/selection',
+        data: {'optionId': optionId},
+        options: Options(contentType: Headers.jsonContentType),
+      );
+      if (response.statusCode == 200 && response.data is Map) {
+        _imageRequestsByOrderId[orderId] = OrderImageRequestModel.fromJson(
+          Map<String, dynamic>.from(response.data as Map),
+        );
+        return true;
+      }
+      _errorMessage = 'Failed to select option.';
+      return false;
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      if (data is Map) {
+        _errorMessage = (data['detail'] ?? data['title'] ?? 'Failed to select option.').toString();
+      } else {
+        _errorMessage = 'Failed to select option.';
+      }
+      return false;
+    } catch (_) {
+      _errorMessage = 'Failed to select option.';
+      return false;
+    } finally {
+      _isActionLoading = false;
+      notifyListeners();
+    }
+  }
+
   Future<bool> cancelOrder(String orderId) async {
     _isActionLoading = true;
     notifyListeners();
@@ -212,26 +285,99 @@ class OrderDetailProvider extends ChangeNotifier {
     return success;
   }
 
+  int _extensionQuoteRequest = 0;
+
   Future<void> quoteExtension(String orderId, int days) async {
-    _isActionLoading = true;
+    final requestId = ++_extensionQuoteRequest;
     _errorMessage = null;
-    notifyListeners();
+    // Keep the current quote on screen while the next day count is priced.
+    if (_extensionQuote == null) {
+      _isActionLoading = true;
+      notifyListeners();
+    }
 
     try {
       final response = await _apiClient.dio.post(
         '/customers/me/orders/$orderId/extensions/quote',
         data: {'additionalDays': days},
       );
+      if (requestId != _extensionQuoteRequest) return;
       if (response.statusCode == 200) {
         _extensionQuote = ExtensionQuoteModel.fromJson(response.data);
       }
     } catch (e) {
+      if (requestId != _extensionQuoteRequest) return;
       _errorMessage = 'Failed to quote extension.';
-      _extensionQuote = null;
     } finally {
-      _isActionLoading = false;
-      notifyListeners();
+      if (requestId == _extensionQuoteRequest) {
+        _isActionLoading = false;
+        notifyListeners();
+      }
     }
+  }
+
+  Future<void> fetchExtensionHistory(List<String> orderIds) async {
+    if (orderIds.isEmpty) return;
+    await Future.wait(orderIds.map((id) async {
+      try {
+        final response = await _apiClient.dio.get('/customers/me/orders/$id/extensions');
+        if (response.statusCode == 200 && response.data is List) {
+          _extensionsByOrderId[id] = (response.data as List)
+              .whereType<Map>()
+              .map((e) => CustomerExtensionModel.fromJson(Map<String, dynamic>.from(e)))
+              .toList();
+        }
+      } catch (_) {}
+    }));
+    notifyListeners();
+  }
+
+  Future<ExtensionPaymentSession?> startExtensionPayment(String orderId, String extensionId) async {
+    _errorMessage = null;
+    try {
+      final response = await _apiClient.dio.post(
+        '/customers/me/orders/$orderId/extensions/$extensionId/pay',
+        data: <String, dynamic>{},
+      );
+      if (response.statusCode == 200 && response.data is Map) {
+        return ExtensionPaymentSession.fromJson(Map<String, dynamic>.from(response.data as Map));
+      }
+    } catch (e) {
+      _errorMessage = 'Unable to start the extension payment.';
+    }
+    notifyListeners();
+    return null;
+  }
+
+  Future<bool> verifyExtensionPayment({
+    required String orderId,
+    required String extensionId,
+    required String checkoutSessionId,
+    required String razorpayOrderId,
+    required String razorpayPaymentId,
+    required String razorpaySignature,
+  }) async {
+    _errorMessage = null;
+    try {
+      final response = await _apiClient.dio.post(
+        '/customers/me/orders/$orderId/extensions/$extensionId/verify',
+        data: {
+          'checkoutSessionId': checkoutSessionId,
+          'razorpayOrderId': razorpayOrderId,
+          'razorpayPaymentId': razorpayPaymentId,
+          'razorpaySignature': razorpaySignature,
+        },
+      );
+      if (response.statusCode == 200) {
+        await fetchOrderDetail(orderId, silent: true);
+        await fetchExtensionHistory([orderId]);
+        return true;
+      }
+    } catch (e) {
+      _errorMessage = 'Payment verification failed. If money was taken, refresh this order before paying again.';
+    }
+    notifyListeners();
+    return false;
   }
 
   Future<bool> processExtension(String orderId, int days) async {
@@ -246,6 +392,7 @@ class OrderDetailProvider extends ChangeNotifier {
       if (response.statusCode == 200 || response.statusCode == 204) {
         success = true;
         await fetchOrderDetail(orderId);
+        await fetchExtensionHistory([orderId]);
       }
     } catch (e) {
       _errorMessage = 'Failed to process extension.';
@@ -300,5 +447,86 @@ class OrderDetailProvider extends ChangeNotifier {
     _extensionQuote = null;
     _buyoutQuote = null;
     notifyListeners();
+  }
+
+  Future<void> fetchPrescriptions(String orderId, {bool silent = false}) async {
+    final epoch = _detailEpoch;
+    if (!silent) {
+      _prescriptionLoading = true;
+      notifyListeners();
+    }
+    List<PrescriptionFileModel>? next;
+    var failed = false;
+    try {
+      final response = await _apiClient.dio.get('/customers/me/orders/$orderId/prescriptions');
+      final data = response.data;
+      if (data is List) {
+        next = data
+            .whereType<Map>()
+            .map((e) => PrescriptionFileModel.fromJson(Map<String, dynamic>.from(e)))
+            .toList();
+      } else {
+        next = [];
+      }
+    } catch (_) {
+      failed = true;
+    } finally {
+      if (epoch == _detailEpoch) {
+        if (next != null) {
+          _prescriptionFiles = next;
+          _prescriptionOrderId = orderId;
+        } else if (failed) {
+          if (!silent) _prescriptionFiles = [];
+          _prescriptionOrderId = orderId;
+        }
+        if (!silent) _prescriptionLoading = false;
+        notifyListeners();
+      }
+    }
+  }
+
+  Future<bool> uploadPrescription({
+    required String orderId,
+    required String fileName,
+    String? path,
+    List<int>? bytes,
+    bool acceptedPrescriptionLegal = false,
+  }) async {
+    try {
+      final multipart = await multipartFromPickedFile(
+        fileName: fileName,
+        path: path,
+        bytes: bytes,
+      );
+      if (multipart == null) return false;
+      final form = FormData.fromMap({
+        'file': multipart,
+        'acceptedPrescriptionLegal': acceptedPrescriptionLegal ? 'true' : 'false',
+        'uploadSource': 'order_detail',
+        'sourceSurface': 'customer_mobile',
+      });
+      final response = await _apiClient.dio.post(
+        '/customers/me/orders/$orderId/prescriptions',
+        data: form,
+      );
+      if (response.statusCode == 200) {
+        await fetchPrescriptions(orderId, silent: true);
+        return true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  Future<bool> deletePrescription(String orderId, String fileId) async {
+    try {
+      final response = await _apiClient.dio.delete(
+        '/customers/me/orders/$orderId/prescriptions/$fileId',
+      );
+      if (response.statusCode == 200 || response.statusCode == 204) {
+        await fetchPrescriptions(orderId, silent: true);
+        return true;
+      }
+    } catch (_) {}
+    return false;
   }
 }

@@ -18,7 +18,9 @@ public sealed record ExtensionQuoteDto(
     decimal ExtensionAmount,
     decimal ServiceFeeAmount,
     decimal GstAmount,
-    decimal TotalAmount);
+    decimal TotalAmount,
+    decimal GstPercent,
+    int PendingDays = 0);
 
 public sealed record QuoteExtensionCommand(Guid CustomerId, Guid OrderId, int AdditionalDays) : ICommand<ExtensionQuoteDto>;
 
@@ -49,24 +51,14 @@ internal sealed class QuoteExtensionCommandHandler(
         if (request.AdditionalDays <= 0)
             return Result.Failure<ExtensionQuoteDto>(new Error("customers.order.invalid_extension_days", "Additional days must be greater than zero.", ErrorCategory.Validation));
 
-        var extensionAmount = listingAggregate.DailyRent * order.Quantity * request.AdditionalDays;
-        var serviceFeeAmount = options.ExtensionServiceFee;
-        var subtotalForGst = extensionAmount + serviceFeeAmount;
-        var gstAmount = subtotalForGst * (options.GstPercent / 100m);
-        var totalAmount = subtotalForGst + gstAmount;
+        var paymentDue = await RentalExtensionGuard.PaymentDueAsync(customers, order.Id, cancellationToken);
+        if (paymentDue is not null)
+            return Result.Failure<ExtensionQuoteDto>(paymentDue);
 
-        var currentEndDate = order.EndDate ?? DateOnly.FromDateTime(DateTime.UtcNow.Date);
-        var newEndDate = currentEndDate.AddDays(request.AdditionalDays);
-
-        var dto = new ExtensionQuoteDto(
-            order.Id,
-            currentEndDate,
-            newEndDate,
-            request.AdditionalDays,
-            extensionAmount,
-            serviceFeeAmount,
-            gstAmount,
-            totalAmount);
+        var pending = await customers.GetPendingCustomerRentalOrderExtensionsAsync(order.Id, cancellationToken);
+        var pendingDays = pending.Sum(x => x.AdditionalDays);
+        var combinedDays = pendingDays + request.AdditionalDays;
+        var dto = RentalExtensionQuote.Build(order, listingAggregate.DailyRent, combinedDays, pendingDays, options);
 
         return Result.Success(dto);
     }
@@ -103,30 +95,40 @@ internal sealed class RequestExtensionCommandHandler(
         if (request.AdditionalDays <= 0)
             return Result.Failure<Guid>(new Error("customers.order.invalid_extension_days", "Additional days must be greater than zero.", ErrorCategory.Validation));
 
-        // In cash flow, no upfront payment intent check is required
+        var paymentDue = await RentalExtensionGuard.PaymentDueAsync(customers, order.Id, cancellationToken);
+        if (paymentDue is not null)
+            return Result.Failure<Guid>(paymentDue);
 
-        var extensionAmount = listingAggregate.DailyRent * order.Quantity * request.AdditionalDays;
-        var serviceFeeAmount = options.ExtensionServiceFee;
-        var subtotalForGst = extensionAmount + serviceFeeAmount;
-        var gstAmount = subtotalForGst * (options.GstPercent / 100m);
-        var totalAmount = subtotalForGst + gstAmount;
+        // Payment happens on the order page after the vendor approves. A later request updates the open pending row.
+        await PendingExtensionMerger.MergeDuplicatesForOrderAsync(customers, options, order.Id, cancellationToken);
+        var pending = await customers.GetPendingCustomerRentalOrderExtensionsAsync(order.Id, cancellationToken);
+        var keeper = pending.OrderBy(x => x.CreatedOnUtc).ThenBy(x => x.Id).FirstOrDefault();
 
-        var currentEndDate = order.EndDate ?? DateOnly.FromDateTime(DateTime.UtcNow.Date);
-        var newEndDate = currentEndDate.AddDays(request.AdditionalDays);
+        if (keeper is not null)
+        {
+            var combinedDays = keeper.AdditionalDays + request.AdditionalDays;
+            RentalExtensionQuote.Apply(keeper, order, listingAggregate.DailyRent, combinedDays, options);
+            await customers.UpdateCustomerRentalOrderExtensionAsync(keeper, cancellationToken);
+            await customers.SaveChangesAsync(cancellationToken);
+
+            await mediator.Send(new CreateVendorNotificationCommand(
+                listingAggregate.VendorId.ToString(),
+                "order_extension_requested",
+                "Extension Updated",
+                $"The customer updated the pending rental extension for order {order.OrderNumber} ({listingAggregate.ListingTitle}) to {combinedDays} days. Please review and approve this request. [ID: {order.Id}]",
+                "push",
+                "pending"
+            ), cancellationToken);
+
+            return Result.Success(keeper.Id);
+        }
 
         var extension = new CustomerRentalOrderExtension
         {
-            CustomerRentalOrderId = order.Id,
-            OriginalEndDate = currentEndDate,
-            NewEndDate = newEndDate,
-            AdditionalDays = request.AdditionalDays,
-            ExtensionAmount = extensionAmount,
-            ServiceFeeAmount = serviceFeeAmount,
-            GstAmount = gstAmount,
-            TotalAmount = totalAmount,
-            Status = "pending_approval"
+            CustomerRentalOrderId = order.Id
         };
-        
+        RentalExtensionQuote.Apply(extension, order, listingAggregate.DailyRent, request.AdditionalDays, options);
+
         await customers.AddCustomerRentalOrderExtensionAsync(extension, cancellationToken);
         await customers.SaveChangesAsync(cancellationToken);
         
@@ -151,7 +153,8 @@ public sealed record BuyoutQuoteDto(
     decimal RentDeductionAmount,
     decimal ServiceFeeAmount,
     decimal GstAmount,
-    decimal TotalAmount);
+    decimal TotalAmount,
+    decimal GstPercent);
 
 public sealed record QuoteBuyoutCommand(Guid CustomerId, Guid OrderId) : ICommand<BuyoutQuoteDto>;
 
@@ -203,7 +206,8 @@ internal sealed class QuoteBuyoutCommandHandler(
             rentDeductionAmount,
             serviceFeeAmount,
             gstAmount,
-            totalAmount);
+            totalAmount,
+            options.GstPercent);
 
         return Result.Success(dto);
     }
@@ -294,7 +298,10 @@ public sealed record PendingExtensionDto(
     decimal TotalAmount,
     DateOnly OriginalEndDate,
     DateOnly NewEndDate,
-    DateTime CreatedAtUtc);
+    DateTime CreatedAtUtc,
+    decimal GstPercent,
+    string Status,
+    decimal VendorPayoutAmount);
 
 public sealed record PendingBuyoutDto(
     Guid BuyoutId,
@@ -304,25 +311,218 @@ public sealed record PendingBuyoutDto(
     decimal ServiceFeeAmount,
     decimal GstAmount,
     decimal TotalAmount,
-    DateTime CreatedAtUtc);
+    DateTime CreatedAtUtc,
+    decimal GstPercent);
 
 public sealed record GetOrderContinuationsQuery(Guid OrderId) : IQuery<OrderContinuationsDto>;
 
-internal sealed class GetOrderContinuationsQueryHandler(ICustomerRepository customers)
+internal sealed class GetOrderContinuationsQueryHandler(
+    ICustomerRepository customers,
+    IOptions<CustomerPricingOptions> pricingOptions)
     : IQueryHandler<GetOrderContinuationsQuery, OrderContinuationsDto>
 {
     public async Task<Result<OrderContinuationsDto>> Handle(GetOrderContinuationsQuery request, CancellationToken cancellationToken)
     {
-        var extensions = await customers.GetPendingCustomerRentalOrderExtensionsAsync(request.OrderId, cancellationToken);
+        await PendingExtensionMerger.MergeDuplicatesForOrderAsync(customers, pricingOptions.Value, request.OrderId, cancellationToken);
+        await PendingExtensionFeeSync.ApplyAsync(customers, pricingOptions.Value, request.OrderId, cancellationToken);
+        var extensions = await customers.GetOpenCustomerRentalOrderExtensionsAsync(request.OrderId, cancellationToken);
         var buyouts = await customers.GetPendingCustomerRentalOrderBuyoutsAsync(request.OrderId, cancellationToken);
+        var gstPercent = pricingOptions.Value.GstPercent;
+        var orderRow = await customers.GetCustomerOrderByIdAsync(request.OrderId, cancellationToken);
+        var listing = orderRow?.Order is null
+            ? null
+            : await customers.GetListingForCustomerAsync(orderRow.Order.VendorProductListingId, cancellationToken);
 
         var extensionsDto = extensions.Select(e => new PendingExtensionDto(
-            e.Id, e.CustomerRentalOrderId, e.AdditionalDays, e.ExtensionAmount, e.ServiceFeeAmount, e.GstAmount, e.TotalAmount, e.OriginalEndDate, e.NewEndDate, e.CreatedOnUtc)).ToList();
+            e.Id,
+            e.CustomerRentalOrderId,
+            e.AdditionalDays,
+            e.ExtensionAmount,
+            e.ServiceFeeAmount,
+            e.GstAmount,
+            e.TotalAmount,
+            e.OriginalEndDate,
+            e.NewEndDate,
+            e.CreatedOnUtc,
+            gstPercent,
+            e.Status,
+            RentalExtensionPayout.For(orderRow?.Order, listing, e.AdditionalDays, e.ExtensionAmount))).ToList();
 
         var buyoutsDto = buyouts.Select(b => new PendingBuyoutDto(
-            b.Id, b.CustomerRentalOrderId, b.BaseBuyoutAmount, b.RentDeductionAmount, b.ServiceFeeAmount, b.GstAmount, b.TotalAmount, b.CreatedOnUtc)).ToList();
+            b.Id, b.CustomerRentalOrderId, b.BaseBuyoutAmount, b.RentDeductionAmount, b.ServiceFeeAmount, b.GstAmount, b.TotalAmount, b.CreatedOnUtc, gstPercent)).ToList();
 
         return Result.Success(new OrderContinuationsDto(extensionsDto, buyoutsDto));
+    }
+}
+
+internal static class RentalExtensionQuote
+{
+    public static ExtensionQuoteDto Build(
+        CustomerRentalOrder order,
+        decimal dailyRent,
+        int additionalDays,
+        int pendingDays,
+        CustomerPricingOptions options)
+    {
+        var extensionAmount = dailyRent * order.Quantity * additionalDays;
+        var serviceFeeAmount = options.ExtensionServiceFee;
+        var subtotalForGst = extensionAmount + serviceFeeAmount;
+        var gstAmount = subtotalForGst * (options.GstPercent / 100m);
+        var totalAmount = subtotalForGst + gstAmount;
+        var currentEndDate = order.EndDate ?? DateOnly.FromDateTime(DateTime.UtcNow.Date);
+        var newEndDate = currentEndDate.AddDays(additionalDays);
+
+        return new ExtensionQuoteDto(
+            order.Id,
+            currentEndDate,
+            newEndDate,
+            additionalDays,
+            extensionAmount,
+            serviceFeeAmount,
+            gstAmount,
+            totalAmount,
+            options.GstPercent,
+            pendingDays);
+    }
+
+    public static void Apply(
+        CustomerRentalOrderExtension extension,
+        CustomerRentalOrder order,
+        decimal dailyRent,
+        int additionalDays,
+        CustomerPricingOptions options)
+    {
+        var quote = Build(order, dailyRent, additionalDays, pendingDays: 0, options);
+        extension.OriginalEndDate = quote.OriginalEndDate;
+        extension.NewEndDate = quote.NewEndDate;
+        extension.AdditionalDays = additionalDays;
+        extension.ExtensionAmount = quote.ExtensionAmount;
+        extension.ServiceFeeAmount = quote.ServiceFeeAmount;
+        extension.GstAmount = quote.GstAmount;
+        extension.TotalAmount = quote.TotalAmount;
+        extension.Status = "pending_approval";
+    }
+}
+
+internal static class RentalExtensionPayout
+{
+    public static decimal For(
+        CustomerRentalOrder? order,
+        VendorProductListingAggregate? listing,
+        int additionalDays,
+        decimal customerExtensionAmount)
+    {
+        if (order is null || listing is null || additionalDays <= 0)
+            return customerExtensionAmount;
+
+        var quantity = order.Quantity > 0 ? order.Quantity : 1;
+        var daily = ResolveDailyRate(listing, order.ProductVariantId);
+        if (daily <= 0m)
+            return customerExtensionAmount;
+
+        return decimal.Round(daily * quantity * additionalDays, 2, MidpointRounding.AwayFromZero);
+    }
+
+    private static decimal ResolveDailyRate(VendorProductListingAggregate listing, Guid? productVariantId)
+    {
+        if (productVariantId is Guid variantId && variantId != Guid.Empty)
+        {
+            var variant = listing.Variants.FirstOrDefault(v =>
+                string.Equals(v.Id, variantId.ToString(), StringComparison.OrdinalIgnoreCase));
+            if (variant is not null)
+            {
+                if (variant.VendorPrice > 0m)
+                    return variant.VendorPrice;
+                if (variant.BuyPrice > 0m)
+                    return variant.BuyPrice;
+            }
+        }
+
+        var vendorDaily = CustomerOrderPricingRules.ResolveVendorDailyEquivalent(listing);
+        return vendorDaily > 0m ? vendorDaily : listing.DailyRent;
+    }
+}
+
+internal static class PendingExtensionMerger
+{
+    public static async Task MergeDuplicatesForOrderAsync(
+        ICustomerRepository customers,
+        CustomerPricingOptions options,
+        Guid orderId,
+        CancellationToken cancellationToken)
+    {
+        var pending = await customers.GetPendingCustomerRentalOrderExtensionsAsync(orderId, cancellationToken);
+        if (pending.Count <= 1)
+            return;
+
+        var row = await customers.GetCustomerOrderByIdAsync(orderId, cancellationToken);
+        if (row is null || row.Order.IsDeleted)
+            return;
+
+        var order = row.Order;
+        var listing = await customers.GetListingForCustomerAsync(order.VendorProductListingId, cancellationToken);
+        if (listing is null)
+            return;
+
+        var keeper = pending.OrderBy(x => x.CreatedOnUtc).ThenBy(x => x.Id).First();
+        var days = pending.Sum(x => x.AdditionalDays);
+        if (days <= 0)
+            return;
+
+        RentalExtensionQuote.Apply(keeper, order, listing.DailyRent, days, options);
+        await customers.UpdateCustomerRentalOrderExtensionAsync(keeper, cancellationToken);
+
+        var removedAt = DateTimeOffset.UtcNow;
+        foreach (var extra in pending)
+        {
+            if (extra.Id == keeper.Id)
+                continue;
+
+            extra.Status = "superseded";
+            extra.IsDeleted = true;
+            extra.DeletedAt = removedAt;
+            await customers.UpdateCustomerRentalOrderExtensionAsync(extra, cancellationToken);
+        }
+
+        await customers.SaveChangesAsync(cancellationToken);
+    }
+
+    public static async Task MergeAllVisibleDuplicatesAsync(
+        ICustomerRepository customers,
+        CustomerPricingOptions options,
+        CancellationToken cancellationToken)
+    {
+        var orderIds = await customers.GetOrderIdsWithDuplicatePendingExtensionsAsync(cancellationToken);
+        foreach (var orderId in orderIds)
+            await MergeDuplicatesForOrderAsync(customers, options, orderId, cancellationToken);
+    }
+}
+
+internal static class PendingExtensionFeeSync
+{
+    public static async Task ApplyAsync(
+        ICustomerRepository customers,
+        CustomerPricingOptions options,
+        Guid orderId,
+        CancellationToken cancellationToken)
+    {
+        var pending = await customers.GetPendingCustomerRentalOrderExtensionsAsync(orderId, cancellationToken);
+        var changed = false;
+        foreach (var extension in pending)
+        {
+            if (extension.ServiceFeeAmount == options.ExtensionServiceFee)
+                continue;
+
+            extension.ServiceFeeAmount = options.ExtensionServiceFee;
+            var subtotal = extension.ExtensionAmount + extension.ServiceFeeAmount;
+            extension.GstAmount = subtotal * (options.GstPercent / 100m);
+            extension.TotalAmount = subtotal + extension.GstAmount;
+            await customers.UpdateCustomerRentalOrderExtensionAsync(extension, cancellationToken);
+            changed = true;
+        }
+
+        if (changed)
+            await customers.SaveChangesAsync(cancellationToken);
     }
 }
 

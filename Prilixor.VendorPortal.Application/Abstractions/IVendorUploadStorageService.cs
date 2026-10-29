@@ -7,7 +7,9 @@ public enum VendorFileFolderType
     ProductDocuments,
     Support,
     RentalIcons,
-    OrderImages
+    OrderImages,
+    WebsiteHero,
+    Prescriptions
 }
 
 public sealed record VendorFilePersistResult(
@@ -38,4 +40,6 @@ public interface IVendorUploadStorageService
     /// Returns thumbnail stored reference, or null when skipped/failed.
     /// </summary>
     Task<string?> CreateThumbnailForExistingImageAsync(string storedImageReference, CancellationToken cancellationToken);
+
+    Task<byte[]?> ReadStoredBytesAsync(string storedReference, CancellationToken cancellationToken = default);
 }

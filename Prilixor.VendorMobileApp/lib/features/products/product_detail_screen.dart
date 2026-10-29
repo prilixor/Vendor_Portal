@@ -24,6 +24,21 @@ class ProductDetailScreen extends StatefulWidget {
 }
 
 class _ProductDetailScreenState extends State<ProductDetailScreen> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) => _hydrateCatalog());
+  }
+
+  Future<void> _hydrateCatalog() async {
+    final provider =
+        Provider.of<VendorCatalogProvider>(context, listen: false);
+    final row = provider.rowForListing(widget.listingId);
+    final productId = row?.listing.productId ?? '';
+    if (productId.isEmpty) return;
+    await provider.fetchProduct(productId);
+  }
+
   Future<void> _toggleStatus(VendorListingRow row, bool active) async {
     final vendorId =
         Provider.of<AuthProvider>(context, listen: false).vendorId;
@@ -807,7 +822,10 @@ class _ListingDetailsPanel extends StatelessWidget {
             icon: Icons.payments_outlined,
             badge: 'Read-only',
             children: [
-              AdminSizingPricingBody(product: catalogProduct),
+              AdminSizingPricingBody(
+                product: catalogProduct,
+                vendorPayoutByVariantId: listing.hasCustomVendorPricing ? listing.variantPayouts : const {},
+              ),
             ],
           ),
         ] else ...[
@@ -833,16 +851,24 @@ class _ListingDetailsPanel extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           _DetailSection(
-            title: 'Your pricing',
+            title: listing.hasCustomVendorPricing ? 'Your pricing · set for you' : 'Your pricing',
             icon: Icons.storefront_outlined,
             children: [
               _DetailRow(
                 label: 'Daily rate',
-                value: _money(catalogProduct?.vendorDailyRent ?? 0),
+                value: _money(
+                  listing.hasCustomVendorPricing
+                      ? listing.vendorDailyRent
+                      : (catalogProduct?.vendorDailyRent ?? 0),
+                ),
               ),
               _DetailRow(
                 label: 'Buy price',
-                value: _moneyOrDash(catalogProduct?.vendorBuyPrice),
+                value: _moneyOrDash(
+                  listing.hasCustomVendorPricing
+                      ? listing.vendorBuyPrice
+                      : catalogProduct?.vendorBuyPrice,
+                ),
               ),
             ],
           ),
@@ -858,20 +884,20 @@ class _StatusChip extends StatelessWidget {
 
   const _StatusChip({required this.status, required this.label});
 
-  Color _tone() {
+  Color _tone(BuildContext context) {
     switch (status) {
       case ListingUiStatus.active:
-        return const Color(0xFF22C55E);
+        return context.appColors.success;
       case ListingUiStatus.inactive:
-        return const Color(0xFF94A3B8);
+        return context.appColors.textMuted;
       case ListingUiStatus.draft:
-        return const Color(0xFFF59E0B);
+        return context.appColors.warning;
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final tone = _tone();
+    final tone = _tone(context);
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
       decoration: BoxDecoration(

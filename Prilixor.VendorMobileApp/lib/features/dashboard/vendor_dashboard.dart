@@ -4,16 +4,18 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/auth/auth_provider.dart';
+import '../../core/auth/phone_otp_setting.dart';
 import '../../core/providers/vendor_notification_provider.dart';
 import '../../core/providers/vendor_onboarding_provider.dart';
 import '../../core/providers/vendor_order_provider.dart';
 import '../../core/providers/vendor_profile_provider.dart';
 import '../../core/providers/vendor_home_provider.dart';
 import '../../core/providers/vendor_support_provider.dart';
+import '../../core/utils/indian_mobile_phone.dart';
 import '../../shared/widgets/pending_approval_banner.dart';
+import '../../shared/widgets/phone_otp_dialog.dart';
 import '../../shared/widgets/support_fab.dart';
 import '../../shared/widgets/vendor_app_bar_badge.dart';
-import '../../shared/widgets/vendor_doctor_lookup_sheet.dart';
 import '../home/home_screen.dart';
 import '../notifications/notifications_screen.dart';
 import '../orders/order_requests_screen.dart';
@@ -36,6 +38,7 @@ class _VendorDashboardState extends State<VendorDashboard>
   bool _refreshInFlight = false;
   bool _paused = false;
   bool _secondaryPrimed = false;
+  bool _isCheckingPhone = false;
 
   /// Lazy-mount tabs so Requests/Orders/Alerts don't fetch until first open.
   final Set<int> _builtTabs = {0};
@@ -55,6 +58,7 @@ class _VendorDashboardState extends State<VendorDashboard>
     WidgetsBinding.instance.addPostFrameCallback((_) {
       _refreshShell(silent: true, includeSecondary: true);
       _startPolling();
+      _checkPhoneVerification();
     });
   }
 
@@ -72,6 +76,7 @@ class _VendorDashboardState extends State<VendorDashboard>
         _paused = false;
         _startPolling();
         _refreshShell(silent: true, includeSecondary: true);
+        _checkPhoneVerification();
         break;
       case AppLifecycleState.inactive:
       case AppLifecycleState.paused:
@@ -81,6 +86,43 @@ class _VendorDashboardState extends State<VendorDashboard>
         _pollTimer?.cancel();
         _pollTimer = null;
         break;
+    }
+  }
+
+  Future<void> _checkPhoneVerification() async {
+    final auth = Provider.of<AuthProvider>(context, listen: false);
+    if (!auth.isAuthenticated || _isCheckingPhone) return;
+    final vendorId = auth.vendorId;
+    if (vendorId == null || vendorId.isEmpty) return;
+
+    _isCheckingPhone = true;
+    try {
+      final profileProvider = Provider.of<VendorProfileProvider>(context, listen: false);
+      if (profileProvider.profile == null) {
+        await profileProvider.fetchProfile(vendorId);
+      }
+      if (!mounted) return;
+      final profile = profileProvider.profile;
+      final rawPhone = profile?.supportPhone.trim() ?? '';
+      if (await PhoneOtpSetting.isEnabled() &&
+          rawPhone.isNotEmpty &&
+          !(profile?.isPhoneVerified ?? false)) {
+        final normalizedPhone = IndianMobilePhone.normalizeDigits(rawPhone);
+        await PhoneOtpDialog.show(
+          context,
+          phone: normalizedPhone,
+          role: 'vendor',
+          required: true,
+          title: 'Verify phone number',
+          description:
+              'Enter the 6-digit code sent to +91 $normalizedPhone. Verification is required to continue.',
+        );
+        if (mounted) {
+          await profileProvider.fetchProfile(vendorId);
+        }
+      }
+    } finally {
+      _isCheckingPhone = false;
     }
   }
 
@@ -113,8 +155,8 @@ class _VendorDashboardState extends State<VendorDashboard>
 
       // Critical path for nav badges + pending banner status (3 calls).
       await Future.wait([
-        orders.fetchOffers(vendorId, silent: silent),
-        alerts.fetchNotifications(vendorId, silent: silent),
+        orders.fetchPendingOfferCount(vendorId),
+        alerts.fetchUnreadCount(vendorId),
         profile.fetchStatus(vendorId, silent: silent),
       ]);
 
@@ -194,7 +236,7 @@ class _VendorDashboardState extends State<VendorDashboard>
   @override
   Widget build(BuildContext context) {
     final pendingCount =
-        Provider.of<VendorOrderProvider>(context).pendingOffers.length;
+        Provider.of<VendorOrderProvider>(context).pendingOfferCount;
     final unread =
         Provider.of<VendorNotificationProvider>(context).unreadCount;
     final supportUnread =
@@ -209,11 +251,6 @@ class _VendorDashboardState extends State<VendorDashboard>
         centerTitle: true,
         title: Text(_titles[_index]),
         actions: [
-          IconButton(
-            tooltip: 'Find doctor by Unique ID',
-            icon: const Icon(Icons.medical_services_outlined),
-            onPressed: () => showVendorDoctorLookupSheet(context),
-          ),
           const VendorAppBarBadge(),
         ],
       ),

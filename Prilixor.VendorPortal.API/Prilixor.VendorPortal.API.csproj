@@ -27,4 +27,15 @@
     <AspNetCoreHostingModel>OutOfProcess</AspNetCoreHostingModel>
   </PropertyGroup>
 
+  <!-- Git ignores this file, so it is not in source control. It still sits beside the project
+       on the machine that holds live settings, and Release publish must copy it into the zip. -->
+  <ItemGroup Condition="Exists('appsettings.Production.json')">
+    <Content Update="appsettings.Production.json" CopyToOutputDirectory="PreserveNewest" CopyToPublishDirectory="Always" />
+  </ItemGroup>
+
+  <Target Name="EnsureProductionSettingsInPublish" BeforeTargets="Publish" Condition="'$(Configuration)' == 'Release'">
+    <Error Condition="!Exists('appsettings.Production.json')"
+           Text="appsettings.Production.json is missing beside the API project. Release publish will not include live settings in the AWS zip." />
+  </Target>
+
 </Project>

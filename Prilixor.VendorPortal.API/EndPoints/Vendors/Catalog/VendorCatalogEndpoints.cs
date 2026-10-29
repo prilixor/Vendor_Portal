@@ -21,6 +21,11 @@ public sealed class GetProductsRequest
     public string? CategoryId { get; set; }
 }
 
+public sealed class GetVendorCatalogProductRequest
+{
+    public string Id { get; set; } = string.Empty;
+}
+
 public sealed class CreateProductRequest
 {
     public string CategoryId { get; set; } = string.Empty;
@@ -176,6 +181,25 @@ public sealed class GetProductsEndpoint(IMediator mediator)
     }
 }
 
+public sealed class GetVendorCatalogProductByIdEndpoint(IMediator mediator)
+    : Endpoint<GetVendorCatalogProductRequest, Results<Ok<ProductDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("catalog/products/{id}");
+        Group<VendorOnboardingGroup>();
+    }
+
+    public override async Task<Results<Ok<ProductDto>, ProblemHttpResult>> ExecuteAsync(
+        GetVendorCatalogProductRequest req,
+        CancellationToken ct)
+    {
+        req.Id = Route<string>("id") ?? req.Id;
+        var result = await mediator.Send(new GetProductQuery(req.Id), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
 public sealed class CreateVendorProductListingEndpoint(IMediator mediator)
     : Endpoint<UpsertVendorProductListingRequest, Results<Ok<VendorProductListingDto>, ProblemHttpResult>>
 {
@@ -218,6 +242,55 @@ public sealed class UpdateVendorProductListingEndpoint(IMediator mediator)
             req.AvailableQuantity,
             req.ListingStatus), ct);
 
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class GetVendorListingSummariesRequest : VendorIdRequest
+{
+    public string? Search { get; set; }
+    public string? Status { get; set; }
+    public bool? IsChemical { get; set; }
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 8;
+}
+
+public sealed class GetVendorListingSummariesEndpoint(IMediator mediator)
+    : Endpoint<GetVendorListingSummariesRequest, Results<Ok<VendorListingListResult>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("{vendorId}/listings/summaries");
+        Group<VendorOnboardingGroup>();
+    }
+
+    public override async Task<Results<Ok<VendorListingListResult>, ProblemHttpResult>> ExecuteAsync(
+        GetVendorListingSummariesRequest req,
+        CancellationToken ct)
+    {
+        var page = req.Page < 1 ? 1 : req.Page;
+        var pageSize = req.PageSize is < 1 or > 50 ? 8 : req.PageSize;
+        var result = await mediator.Send(
+            new GetVendorListingListQuery(req.VendorId, req.Search, req.Status, req.IsChemical, page, pageSize),
+            ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class GetVendorDashboardSummaryEndpoint(IMediator mediator)
+    : Endpoint<VendorIdRequest, Results<Ok<VendorDashboardSummaryDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("{vendorId}/dashboard/summary");
+        Group<VendorOnboardingGroup>();
+    }
+
+    public override async Task<Results<Ok<VendorDashboardSummaryDto>, ProblemHttpResult>> ExecuteAsync(
+        VendorIdRequest req,
+        CancellationToken ct)
+    {
+        var result = await mediator.Send(new GetVendorDashboardSummaryQuery(req.VendorId), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }

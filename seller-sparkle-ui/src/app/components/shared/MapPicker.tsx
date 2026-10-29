@@ -21,7 +21,7 @@ interface MapPickerProps {
   onAddressResolved?: (address: ResolvedMapAddress | null) => void;
   radiusKm?: number;
   onRadiusChange?: (km: number) => void;
-  /** Max value for the radius slider (default 30). Admin can pass 100+. */
+  /** Max value for the radius slider (default 30). Admin coverage dialog uses 500. */
   maxRadiusKm?: number;
   /** Optional quick-select presets shown next to the slider (e.g. [15, 30, 100]). */
   radiusPresetsKm?: number[];
@@ -357,7 +357,7 @@ export const MapPicker = ({
               onChange={(e) => onRadiusChange(Number(e.target.value))}
               className="flex-1 accent-primary"
             />
-            <span className="w-16 text-right text-sm font-semibold text-primary">{radiusKm} km</span>
+            <span className="w-[4.5rem] text-right text-sm font-semibold text-primary">{radiusKm} km</span>
           </div>
           {radiusPresetsKm && radiusPresetsKm.length > 0 && (
             <div className="flex flex-wrap gap-2">

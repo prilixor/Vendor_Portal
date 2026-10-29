@@ -1,4 +1,5 @@
 using Microsoft.EntityFrameworkCore;
+using Npgsql;
 using Prilixor.VendorPortal.Application.Abstractions;
 using Prilixor.VendorPortal.Domain.WebsiteContent;
 
@@ -8,16 +9,52 @@ public class WebsiteContentRepository(CommonPortalDbContext dbContext) : IWebsit
 {
     public async Task<WebsiteHomeContent?> GetHomeContentAsync(CancellationToken ct = default)
     {
-        return await dbContext.Set<WebsiteHomeContent>()
+        var home = await dbContext.Set<WebsiteHomeContent>()
             .Include(x => x.Features.Where(f => !f.IsDeleted))
             .AsNoTracking()
             .FirstOrDefaultAsync(ct);
+
+        if (home is null)
+            return null;
+
+        try
+        {
+            home.HeroSlides = await dbContext.Set<WebsiteHomeHeroSlide>()
+                .AsNoTracking()
+                .Where(s => s.HomeContentId == home.Id && !s.IsDeleted)
+                .OrderBy(s => s.SortOrder)
+                .ToListAsync(ct);
+        }
+        catch (Exception ex) when (IsMissingHeroSlidesTable(ex))
+        {
+            home.HeroSlides = [];
+        }
+
+        return home;
     }
 
-    public async Task UpdateHomeContentAsync(WebsiteHomeContent home, List<WebsiteHomeFeature> features, CancellationToken ct = default)
+    private static bool IsMissingHeroSlidesTable(Exception ex)
+    {
+        for (var e = ex; e != null; e = e.InnerException)
+        {
+            if (e is PostgresException pg && pg.SqlState == PostgresErrorCodes.UndefinedTable)
+                return true;
+            if (e.Message.Contains("website_home_hero_slides", StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+
+        return false;
+    }
+
+    public async Task UpdateHomeContentAsync(
+        WebsiteHomeContent home,
+        List<WebsiteHomeFeature> features,
+        List<WebsiteHomeHeroSlide>? heroSlides = null,
+        CancellationToken ct = default)
     {
         var existing = await dbContext.Set<WebsiteHomeContent>()
             .Include(x => x.Features)
+            .Include(x => x.HeroSlides)
             .FirstOrDefaultAsync(ct);
 
         if (existing == null)
@@ -56,6 +93,25 @@ public class WebsiteContentRepository(CommonPortalDbContext dbContext) : IWebsit
                     CustomIconUrl = f.CustomIconUrl,
                     SortOrder = sort++,
                     IsActive = true
+                });
+            }
+        }
+
+        if (heroSlides != null)
+        {
+            existing.HeroSlides ??= [];
+            dbContext.Set<WebsiteHomeHeroSlide>().RemoveRange(existing.HeroSlides);
+            existing.HeroSlides.Clear();
+
+            int slideSort = 1;
+            foreach (var slide in heroSlides)
+            {
+                existing.HeroSlides.Add(new WebsiteHomeHeroSlide
+                {
+                    HomeContentId = existing.Id,
+                    Label = slide.Label,
+                    ImageUrl = slide.ImageUrl,
+                    SortOrder = slideSort++
                 });
             }
         }

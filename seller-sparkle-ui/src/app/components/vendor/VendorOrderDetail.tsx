@@ -1,28 +1,44 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
-import { Check, Barcode, CheckCircle2, ImagePlus, Images, Loader2, Plus, Stethoscope, X } from "lucide-react";
-import { formatOrderStatusLabel, formatOrderStatusTitle, formatOrderTypeLabel, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
-import { cn, originalUrlFromThumb, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
+import { Check, Barcode, CheckCircle2, ImageOff, ImagePlus, Images, Info, Loader2, Pencil, Plus, X } from "lucide-react";
+import { formatGstRateLabel } from "@/app/helpers/gstLabel";
+import { mediaObjectKey, useStableMediaUrls } from "@/app/helpers/stableMediaUrl";
+import { formatOrderStatusLabel, formatOrderStatusTitle, formatOrderTypeLabel, orderShowsVendorPayout, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
+import { cn, orderPhotoTileUrl, originalUrlFromThumb, photoAtSlot, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
 import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import { ZoomableImageStage } from "@/app/components/shared/ZoomableImageStage";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/app/components/ui/alert-dialog";
 import { Label } from "@/app/components/ui/label";
 import { Input } from "@/app/components/ui/input";
+import { Textarea } from "@/app/components/ui/textarea";
 import { useAuth } from "@/app/guards/AuthContext";
 import {
   vendorOnboardingApi,
   type VendorOrderApiDto,
+  type VendorOrderImageApiDto,
   type VendorOrderImageRequestApiDto,
   type VendorProductAssetApiDto,
   type OrderContinuationsDto,
+  extensionVendorPayout,
 } from "@/app/services/vendorOnboardingApi";
+import { formatInr, vendorClaimLabel } from "@/app/helpers/orderReturn";
 import { toast } from "sonner";
 import { BackLink } from "@/app/components/shared/BackLink";
-import { VendorDoctorLookupDialog } from "@/app/components/vendor/VendorDoctorLookupDialog";
-import { OrderMedicalReferenceCard } from "@/app/components/shared/OrderMedicalReferenceCard";
+import { OrderPrescriptionFilesCard } from "@/app/components/shared/OrderPrescriptionFilesCard";
+import type { CustomerPrescriptionFileApi } from "@/app/services/customerApi";
 
 const filterAssetsForOrder = (
   assets: VendorProductAssetApiDto[],
@@ -180,7 +196,7 @@ const AssignedSerialNumbersList = ({ tags }: { tags: string[] }) => {
   );
 };
 
-const getTimelineSteps = (orderType?: string) => {
+const getTimelineSteps = (orderType?: string, status?: string) => {
   const isBuy = orderType?.toLowerCase() === "buy";
   if (isBuy) {
     return [
@@ -190,15 +206,19 @@ const getTimelineSteps = (orderType?: string) => {
       { key: "active", label: "Delivered & Purchased" },
     ];
   }
-  return [
+  const steps = [
     { key: "placed", label: "Order Placed" },
     { key: "confirmed", label: "Vendor Confirmed" },
     { key: "out", label: "Out for Delivery" },
     { key: "delivered", label: "Delivered" },
     { key: "active", label: "Rental Active" },
     { key: "returned", label: "Returned" },
-    { key: "bought_out", label: "Bought Out" },
   ];
+  // Customers can no longer request a buyout. Keep the stage only for an order that was already bought out.
+  if (status?.trim().toLowerCase().replace(/\s+/g, "_") === "bought_out") {
+    steps.push({ key: "bought_out", label: "Bought Out" });
+  }
+  return steps;
 };
 
 function formatDetailDate(value?: string): string {
@@ -220,6 +240,9 @@ function timelineProgress(status: string, orderType?: string): { completedThroug
     return isBuy
       ? { completedThrough: 3, currentIndex: null }
       : { completedThrough: 4, currentIndex: null };
+  }
+  if (isBuy && (compact === "returned" || compact === "bought_out")) {
+    return { completedThrough: 3, currentIndex: null };
   }
   if (compact === "returned") return { completedThrough: 5, currentIndex: null };
   if (compact === "bought_out") return { completedThrough: 6, currentIndex: null };
@@ -255,9 +278,23 @@ function orderStatusBadgeClass(status: string): string {
   return "bg-muted text-foreground";
 }
 
+function isShortTimeline(status: string): boolean {
+  const raw = status.toLowerCase().trim();
+  const compact = raw.replace(/\s+/g, "_");
+  return compact === "cancelled" || compact === "canceled" || compact === "dispatch_failed" || raw.includes("dispatch failed");
+}
+
 function OrderTimeline({ status, orderType }: { status: string; orderType?: string }) {
+  const raw = status.toLowerCase().trim();
+  const compact = raw.replace(/\s+/g, "_");
+  if (compact === "cancelled" || compact === "canceled") {
+    return <p className="text-sm text-muted-foreground">This product was cancelled.</p>;
+  }
+  if (compact === "dispatch_failed" || raw.includes("dispatch failed")) {
+    return <p className="text-sm text-muted-foreground">No vendor accepted this product.</p>;
+  }
   const { completedThrough, currentIndex } = timelineProgress(status, orderType);
-  const steps = getTimelineSteps(orderType);
+  const steps = getTimelineSteps(orderType, status);
 
   return (
     <ol className="relative space-y-0">
@@ -318,6 +355,251 @@ function itemPayout(item: VendorOrderApiDto): number {
     : item.totalAmount;
 }
 
+function formatRupee(value: number): string {
+  const rounded = Math.round(value * 100) / 100;
+  const hasPaise = Math.abs(rounded % 1) > 0.001;
+  return rounded.toLocaleString("en-IN", {
+    minimumFractionDigits: hasPaise ? 2 : 0,
+    maximumFractionDigits: hasPaise ? 2 : 0,
+  });
+}
+
+function reuseImageUrls(
+  previous: VendorOrderImageApiDto[] | undefined,
+  next: VendorOrderImageApiDto[],
+): VendorOrderImageApiDto[] {
+  if (!previous?.length) return next;
+  const prior = new Map(previous.map((photo) => [photo.id, photo]));
+  return next.map((photo) => {
+    const kept = prior.get(photo.id);
+    if (!kept) return photo;
+    return {
+      ...photo,
+      fileUrl: kept.fileUrl || photo.fileUrl,
+      thumbnailUrl: kept.thumbnailUrl || photo.thumbnailUrl,
+    };
+  });
+}
+
+function mergeImageRequest(
+  previous: VendorOrderImageRequestApiDto | null,
+  next: VendorOrderImageRequestApiDto | null,
+): VendorOrderImageRequestApiDto | null {
+  if (!next || !previous) return next;
+  return {
+    ...next,
+    images: reuseImageUrls(previous.images, next.images),
+    options: next.options?.map((option) => {
+      const prior = previous.options?.find((row) => row.id === option.id);
+      return { ...option, images: reuseImageUrls(prior?.images, option.images) };
+    }),
+  };
+}
+
+function addImageToRequest(
+  previous: VendorOrderImageRequestApiDto,
+  uploaded: VendorOrderImageApiDto,
+  optionId: string,
+): VendorOrderImageRequestApiDto {
+  const images = [...previous.images.filter((photo) => photo.id !== uploaded.id), uploaded];
+  return {
+    ...previous,
+    images,
+    options: previous.options?.map((option) =>
+      option.id === optionId
+        ? { ...option, images: [...option.images.filter((photo) => photo.id !== uploaded.id), uploaded] }
+        : option,
+    ),
+  };
+}
+
+function removeImageFromRequest(
+  previous: VendorOrderImageRequestApiDto,
+  imageId: string,
+): VendorOrderImageRequestApiDto {
+  return {
+    ...previous,
+    images: previous.images.filter((photo) => photo.id !== imageId),
+    options: previous.options?.map((option) => ({
+      ...option,
+      images: option.images.filter((photo) => photo.id !== imageId),
+    })),
+  };
+}
+
+function VendorOptionEmptySlot() {
+  return (
+    <div
+      className="flex aspect-square w-full flex-col items-center justify-center gap-1 rounded-xl bg-muted/55 px-1 ring-1 ring-inset ring-border/70 dark:bg-muted/25"
+      aria-label="No image"
+    >
+      <ImageOff className="h-5 w-5 text-muted-foreground/55" />
+      <span className="text-[9px] font-medium uppercase tracking-[0.08em] text-muted-foreground/80">
+        Empty
+      </span>
+    </div>
+  );
+}
+
+function VendorOptionAddSlot({
+  busy,
+  disabled,
+  onAdd,
+}: {
+  busy: boolean;
+  disabled: boolean;
+  onAdd: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onAdd}
+      disabled={disabled}
+      className="flex aspect-square w-full flex-col items-center justify-center gap-1.5 rounded-xl bg-muted/40 text-muted-foreground ring-1 ring-inset ring-border/70 transition-colors hover:bg-primary/5 hover:text-primary hover:ring-primary/30 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 disabled:opacity-60"
+    >
+      <span className="flex h-8 w-8 items-center justify-center rounded-full bg-background shadow-sm ring-1 ring-border/60">
+        {busy ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImagePlus className="h-4 w-4" />}
+      </span>
+      <span className="text-[9px] font-semibold uppercase tracking-[0.08em]">
+        {busy ? "Uploading" : "Add"}
+      </span>
+    </button>
+  );
+}
+
+function OptionNoteField({
+  initial,
+  maxLength,
+  disabled,
+  saving,
+  optionLabel,
+  onSave,
+}: {
+  initial: string;
+  maxLength: number;
+  disabled: boolean;
+  saving: boolean;
+  optionLabel: string;
+  onSave: (value: string) => void;
+}) {
+  const [value, setValue] = useState(initial);
+  const [editorOpen, setEditorOpen] = useState(false);
+  const [viewOpen, setViewOpen] = useState(false);
+
+  useEffect(() => {
+    setValue(initial);
+  }, [initial]);
+
+  const saved = initial.trim();
+
+  const openEditor = () => {
+    setValue(initial);
+    setViewOpen(false);
+    setEditorOpen(true);
+  };
+
+  const saveAndClose = () => {
+    onSave(value.trim());
+    setEditorOpen(false);
+  };
+
+  return (
+    <>
+      {saved ? (
+        <div className="flex flex-wrap items-center gap-1">
+          <button
+            type="button"
+            className="inline-flex h-7 w-7 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground"
+            aria-label={`View description for ${optionLabel}`}
+            onClick={() => setViewOpen(true)}
+          >
+            <Info className="h-3.5 w-3.5" />
+          </button>
+          {disabled ? (
+            <button
+              type="button"
+              className="text-xs font-medium text-muted-foreground hover:text-foreground hover:underline"
+              onClick={() => setViewOpen(true)}
+            >
+              View description
+            </button>
+          ) : (
+            <button
+              type="button"
+              className="inline-flex items-center gap-1 rounded-md px-1.5 py-1 text-xs font-medium text-primary hover:underline"
+              onClick={openEditor}
+            >
+              <Pencil className="h-3 w-3" />
+              Edit
+            </button>
+          )}
+        </div>
+      ) : disabled ? null : (
+        <button
+          type="button"
+          className="inline-flex items-center gap-1 text-xs font-medium text-muted-foreground transition-colors hover:text-foreground"
+          onClick={openEditor}
+        >
+          <Plus className="h-3.5 w-3.5" />
+          Add optional description?
+        </button>
+      )}
+
+      <Dialog open={editorOpen} onOpenChange={setEditorOpen}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{saved ? "Edit description" : "Add description"} · {optionLabel}</DialogTitle>
+          </DialogHeader>
+          <Textarea
+            autoFocus
+            value={value}
+            maxLength={maxLength}
+            placeholder="e.g. front view, serial plate"
+            className="min-h-[140px] text-sm"
+            onChange={(e) => setValue(e.target.value)}
+          />
+          <div className="flex items-center justify-between gap-2">
+            <p className="text-[11px] tabular-nums text-muted-foreground">
+              {saving ? "Saving…" : `${value.length}/${maxLength}`}
+            </p>
+            <DialogFooter className="mt-0">
+              <Button type="button" variant="ghost" onClick={() => setEditorOpen(false)}>
+                Cancel
+              </Button>
+              <Button type="button" onClick={saveAndClose} disabled={saving}>
+                Save
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={viewOpen} onOpenChange={setViewOpen}>
+        <DialogContent className="flex max-h-[min(92dvh,720px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-lg">
+          <DialogHeader className="border-b border-border px-4 py-3 pr-12">
+            <DialogTitle className="text-base font-semibold">{optionLabel}</DialogTitle>
+          </DialogHeader>
+          <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+            <p className="whitespace-pre-wrap break-words text-sm leading-relaxed text-foreground">
+              {saved}
+            </p>
+          </div>
+          {!disabled ? (
+            <DialogFooter className="border-t border-border px-4 py-3">
+              <Button type="button" variant="secondary" onClick={openEditor}>
+                Edit
+              </Button>
+            </DialogFooter>
+          ) : null}
+        </DialogContent>
+      </Dialog>
+    </>
+  );
+}
+
+/** Keep photo requests and order status in sync while vendor stays on this page. */
+const VENDOR_ORDER_POLL_MS = 5_000;
+
 const VendorOrderDetail = () => {
   const { orderId } = useParams();
   const navigate = useNavigate();
@@ -325,28 +607,45 @@ const VendorOrderDetail = () => {
 
   const [selectedItemId, setSelectedItemId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [hasLoadedOrder, setHasLoadedOrder] = useState(false);
   const [updating, setUpdating] = useState(false);
   const [order, setOrder] = useState<VendorOrderApiDto | null>(null);
   const [allOrders, setAllOrders] = useState<VendorOrderApiDto[]>([]);
   const [continuations, setContinuations] = useState<OrderContinuationsDto | null>(null);
 
   const [dispatchDialogOpen, setDispatchDialogOpen] = useState(false);
+  const [returnDialogOpen, setReturnDialogOpen] = useState(false);
+  const [returnIssue, setReturnIssue] = useState(false);
+  const [returnDamage, setReturnDamage] = useState("");
+  const [returnReason, setReturnReason] = useState("");
+  const [returnPhotos, setReturnPhotos] = useState<File[]>([]);
+  const [returnPhotoPreviews, setReturnPhotoPreviews] = useState<string[]>([]);
+  const [damagePreviewUrl, setDamagePreviewUrl] = useState<string | null>(null);
+  const returnPhotoInputRef = useRef<HTMLInputElement>(null);
   const [serialDialogMode, setSerialDialogMode] = useState<"dispatch" | "assign">("dispatch");
   const [dispatchAssetTags, setDispatchAssetTags] = useState<string[]>([]);
   const [availableAssets, setAvailableAssets] = useState<VendorProductAssetApiDto[]>([]);
   const [loadingAssets, setLoadingAssets] = useState(false);
   const [openDropdowns, setOpenDropdowns] = useState<Record<number, boolean>>({});
-  const [doctorLookupOpen, setDoctorLookupOpen] = useState(false);
-  const [doctorLookupCode, setDoctorLookupCode] = useState("");
   const [imageRequest, setImageRequest] = useState<VendorOrderImageRequestApiDto | null>(null);
   const [imageRequestLoading, setImageRequestLoading] = useState(false);
   /** Open photo requests across the order group — for item-list badges. */
   const [groupPhotoMeta, setGroupPhotoMeta] = useState<Map<string, { count: number }>>(new Map());
   const [uploadingOrderImage, setUploadingOrderImage] = useState(false);
+  const [uploadOptionId, setUploadOptionId] = useState<string | null>(null);
+  const [uploadSlotIndex, setUploadSlotIndex] = useState<number | null>(null);
+  const [savingOptionId, setSavingOptionId] = useState<string | null>(null);
   const [deletingOrderImageId, setDeletingOrderImageId] = useState<string | null>(null);
+  const [prescriptionFiles, setPrescriptionFiles] = useState<CustomerPrescriptionFileApi[]>([]);
   const [previewImageUrl, setPreviewImageUrl] = useState<string | null>(null);
+  const [pendingSlotPreviews, setPendingSlotPreviews] = useState<Record<string, string>>({});
+  const [clearDescriptionPrompt, setClearDescriptionPrompt] = useState<{
+    optionId: string;
+    label: string;
+  } | null>(null);
+  const liveRefreshInFlight = useRef(false);
   const orderImageInputRef = useRef<HTMLInputElement>(null);
-  const MAX_ORDER_IMAGES = 5;
+  const orderImageUploadTargetRef = useRef<{ optionId: string; slotIndex: number } | null>(null);
 
   const currentItemId = selectedItemId || orderId;
 
@@ -354,13 +653,21 @@ const VendorOrderDetail = () => {
     setSelectedItemId(null);
   }, [orderId]);
 
-  const loadOrder = async (itemId?: string | null) => {
+  const loadOrder = async (
+    itemId?: string | null,
+    options?: { silent?: boolean },
+  ) => {
     const id = itemId ?? currentItemId;
     if (!user || !id) return;
     try {
-      setLoading(true);
+      if (!options?.silent) setLoading(true);
       const row = await vendorOnboardingApi.getVendorOrder(user.id, id);
       setOrder(row);
+      try {
+        setPrescriptionFiles(await vendorOnboardingApi.getVendorOrderPrescriptions(user.id, id));
+      } catch {
+        setPrescriptionFiles([]);
+      }
       try {
         const conts = await vendorOnboardingApi.getVendorOrderContinuations(id);
         setContinuations(conts);
@@ -369,17 +676,22 @@ const VendorOrderDetail = () => {
         setContinuations(null);
       }
     } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to load order detail.";
-      toast.error(message);
+      if (!options?.silent) {
+        const message = error instanceof Error ? error.message : "Failed to load order detail.";
+        toast.error(message);
+      }
     } finally {
-      setLoading(false);
+      if (!options?.silent) {
+        setLoading(false);
+        setHasLoadedOrder(true);
+      }
     }
   };
 
   const loadAllOrders = async () => {
-    if (!user) return;
+    if (!user || !currentItemId) return;
     try {
-      const rows = await vendorOnboardingApi.getVendorOrders(user.id);
+      const rows = await vendorOnboardingApi.getVendorOrderGroup(user.id, currentItemId, { quiet: true });
       setAllOrders(rows);
     } catch (error) {
       console.error("Failed to load vendor orders for grouping", error);
@@ -387,36 +699,47 @@ const VendorOrderDetail = () => {
   };
 
   useEffect(() => {
+    setHasLoadedOrder(false);
+  }, [orderId]);
+
+  useEffect(() => {
     void loadOrder(currentItemId);
   }, [user?.id, currentItemId]);
 
   useEffect(() => {
     void loadAllOrders();
-  }, [user?.id]);
-
-  const loadImageRequest = useCallback(async (itemId?: string | null) => {
-    const id = itemId ?? currentItemId;
-    if (!user?.id || !id) {
-      setImageRequest(null);
-      return;
-    }
-    try {
-      setImageRequestLoading(true);
-      const row = await vendorOnboardingApi.getVendorOrderImageRequest(user.id, id);
-      setImageRequest(row);
-    } catch (error) {
-      console.error("Failed to load order photo request", error);
-      setImageRequest(null);
-    } finally {
-      setImageRequestLoading(false);
-    }
   }, [user?.id, currentItemId]);
+
+  const loadImageRequest = useCallback(
+    async (itemId?: string | null, options?: { silent?: boolean }) => {
+      const id = itemId ?? currentItemId;
+      if (!user?.id || !id) {
+        setImageRequest(null);
+        return;
+      }
+      try {
+        if (!options?.silent) setImageRequestLoading(true);
+        const row = await vendorOnboardingApi.getVendorOrderImageRequest(user.id, id);
+        setImageRequest((prev) => mergeImageRequest(prev, row));
+      } catch (error) {
+        console.error("Failed to load order photo request", error);
+        setImageRequest(null);
+      } finally {
+        if (!options?.silent) setImageRequestLoading(false);
+      }
+    },
+    [user?.id, currentItemId],
+  );
 
   useEffect(() => {
     void loadImageRequest(currentItemId);
   }, [loadImageRequest, currentItemId]);
 
   const orderImages = imageRequest?.images ?? [];
+  const photoOptions = imageRequest?.options?.length ? imageRequest.options : [];
+  const maxDescriptionLength = imageRequest?.maxDescriptionLength ?? 500;
+  const maxImagesPerOption = imageRequest?.maxImagesPerOption ?? 3;
+  const selectedPhotoOption = photoOptions.find((o) => o.id === imageRequest?.selectedOptionId);
   const canUploadOrderImages = Boolean(imageRequest) && (
     (order?.status.trim().toLowerCase() === "confirmed") ||
     (order?.status.trim().toLowerCase().replace(/\s+/g, "_") === "in_transit") ||
@@ -443,39 +766,72 @@ const VendorOrderDetail = () => {
     [orderGroupItems],
   );
 
-  useEffect(() => {
+  const loadGroupPhotoMeta = useCallback(async () => {
     if (!user?.id || !groupPhotoKey) {
       setGroupPhotoMeta(new Map());
       return;
     }
-    let cancelled = false;
     const ids = groupPhotoKey.split("|").filter(Boolean);
-    void (async () => {
-      const entries = await Promise.all(
-        ids.map(async (id) => {
-          try {
-            const row = await vendorOnboardingApi.getVendorOrderImageRequest(user.id, id);
-            if (!row) return [id, null] as const;
-            return [id, { count: row.images?.length ?? 0 }] as const;
-          } catch {
-            return [id, null] as const;
-          }
-        }),
-      );
-      if (cancelled) return;
-      const map = new Map<string, { count: number }>();
-      for (const [id, meta] of entries) {
-        if (meta) map.set(id, meta);
-      }
-      setGroupPhotoMeta(map);
-    })();
-    return () => {
-      cancelled = true;
+    const entries = await Promise.all(
+      ids.map(async (id) => {
+        try {
+          const row = await vendorOnboardingApi.getVendorOrderImageRequest(user.id, id);
+          if (!row) return [id, null] as const;
+          return [id, { count: row.images?.length ?? 0 }] as const;
+        } catch {
+          return [id, null] as const;
+        }
+      }),
+    );
+    const map = new Map<string, { count: number }>();
+    for (const [id, meta] of entries) {
+      if (meta) map.set(id, meta);
+    }
+    setGroupPhotoMeta(map);
+  }, [user?.id, groupPhotoKey]);
+
+  const refreshLive = useCallback(async () => {
+    if (!user?.id || !currentItemId || liveRefreshInFlight.current) return;
+    liveRefreshInFlight.current = true;
+    try {
+      await Promise.all([
+        loadOrder(currentItemId, { silent: true }),
+        loadAllOrders(),
+        loadImageRequest(currentItemId, { silent: true }),
+        loadGroupPhotoMeta(),
+      ]);
+    } finally {
+      liveRefreshInFlight.current = false;
+    }
+  }, [user?.id, currentItemId, loadImageRequest, loadGroupPhotoMeta]);
+
+  useEffect(() => {
+    void loadGroupPhotoMeta();
+  }, [loadGroupPhotoMeta, imageRequest?.id, orderImages.length]);
+
+  useEffect(() => {
+    if (!user?.id || !currentItemId) return;
+
+    const interval = window.setInterval(() => {
+      void refreshLive();
+    }, VENDOR_ORDER_POLL_MS);
+
+    return () => window.clearInterval(interval);
+  }, [user?.id, currentItemId, refreshLive]);
+
+  useEffect(() => {
+    if (!user?.id || !currentItemId) return;
+
+    const handleFocus = () => {
+      void refreshLive();
     };
-  }, [user?.id, groupPhotoKey, imageRequest?.id, orderImages.length]);
+
+    window.addEventListener("focus", handleFocus);
+    return () => window.removeEventListener("focus", handleFocus);
+  }, [user?.id, currentItemId, refreshLive]);
 
   const groupPayoutAmount = useMemo(
-    () => orderGroupItems.reduce((sum, item) => sum + itemPayout(item), 0),
+    () => orderGroupItems.reduce((sum, item) => sum + (orderShowsVendorPayout(item.status) ? itemPayout(item) : 0), 0),
     [orderGroupItems],
   );
 
@@ -565,7 +921,10 @@ const VendorOrderDetail = () => {
     setSelectedItemId(itemId);
   };
 
-  const handleStatusChange = async (status: "in_transit" | "active" | "returned") => {
+  const handleStatusChange = async (
+    status: "in_transit" | "active" | "returned",
+    returnClaim?: { damageAmount: number; damageReason?: string | null },
+  ) => {
     const dispatchOrder = activeOrder ?? order;
     if (!dispatchOrder) return;
 
@@ -599,9 +958,26 @@ const VendorOrderDetail = () => {
             ? undefined
             : tagsToAssign
           : undefined;
-      await vendorOnboardingApi.updateVendorOrderStatus(user.id, currentItemId, status, assetTagsToSubmit);
-      toast.success("Order status updated.");
+      if (status === "returned" && (returnClaim?.damageAmount ?? 0) > 0) {
+        await vendorOnboardingApi.markProductReturned(
+          user.id,
+          currentItemId,
+          returnClaim!.damageAmount,
+          returnClaim?.damageReason ?? "",
+          returnPhotos,
+        );
+      } else {
+        await vendorOnboardingApi.updateVendorOrderStatus(
+          user.id,
+          currentItemId,
+          status,
+          assetTagsToSubmit,
+          status === "returned" ? (returnClaim ?? { damageAmount: 0 }) : undefined,
+        );
+      }
+      toast.success(status === "returned" ? "Product marked returned." : "Order status updated.");
       handleDispatchDialogChange(false);
+      setReturnDialogOpen(false);
       await Promise.all([loadOrder(currentItemId), loadAllOrders(), loadImageRequest(currentItemId)]);
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to update status.";
@@ -658,50 +1034,117 @@ const VendorOrderDetail = () => {
   };
 
   const handleOrderImagePick = async (files: FileList | null) => {
-    if (!files?.length || !user?.id || !currentItemId || !imageRequest) return;
-    const remaining = MAX_ORDER_IMAGES - orderImages.length;
-    if (remaining <= 0) {
-      toast.error(`You can upload at most ${MAX_ORDER_IMAGES} photos for this request.`);
+    const target = orderImageUploadTargetRef.current;
+    const optionId = target?.optionId ?? uploadOptionId;
+    const startSlot = target?.slotIndex ?? 0;
+    if (!files?.length || !user?.id || !currentItemId || !imageRequest || !optionId) return;
+    const option = photoOptions.find((o) => o.id === optionId);
+    const occupied = new Set((option?.images ?? []).map((photo) => photo.sortOrder));
+    const emptySlots = Array.from({ length: maxImagesPerOption }, (_, slot) => slot).filter(
+      (slot) => !occupied.has(slot),
+    );
+    const orderedSlots = [
+      ...emptySlots.filter((slot) => slot >= startSlot),
+      ...emptySlots.filter((slot) => slot < startSlot),
+    ];
+    if (orderedSlots.length === 0) {
+      toast.error(`This option already has ${maxImagesPerOption} photos. Remove one to upload a different photo.`);
       return;
     }
-    const selected = Array.from(files).slice(0, remaining);
+    const picked = Array.from(files).slice(0, orderedSlots.length);
+    const objectUrls: string[] = [];
     try {
       setUploadingOrderImage(true);
-      for (const file of selected) {
+      const nextPending: Record<string, string> = {};
+      for (let i = 0; i < picked.length; i++) {
+        const previewUrl = URL.createObjectURL(picked[i]);
+        objectUrls.push(previewUrl);
+        nextPending[`${optionId}:${orderedSlots[i]}`] = previewUrl;
+      }
+      setPendingSlotPreviews((current) => ({ ...current, ...nextPending }));
+      for (let i = 0; i < picked.length; i++) {
+        const file = picked[i];
         if (!file.type.startsWith("image/")) {
           toast.error("Only image files are allowed.");
-          continue;
+          return;
         }
         if (file.size > 5 * 1024 * 1024) {
           toast.error(`${file.name} is larger than 5 MB.`);
-          continue;
+          return;
         }
-        await vendorOnboardingApi.uploadVendorOrderImage(user.id, currentItemId, file);
+        const uploaded = await vendorOnboardingApi.uploadVendorOrderImage(
+          user.id,
+          currentItemId,
+          file,
+          optionId,
+          orderedSlots[i],
+        );
+        setImageRequest((prev) => (prev ? addImageToRequest(prev, uploaded, optionId) : prev));
       }
-      toast.success("Photo uploaded.");
-      await loadImageRequest(currentItemId);
+      toast.success(picked.length === 1 ? "Photo uploaded." : `${picked.length} photos uploaded.`);
+      await loadImageRequest(currentItemId, { silent: true });
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to upload photo.";
       toast.error(message);
     } finally {
+      objectUrls.forEach((url) => URL.revokeObjectURL(url));
+      setPendingSlotPreviews({});
       setUploadingOrderImage(false);
+      setUploadOptionId(null);
+      setUploadSlotIndex(null);
+      orderImageUploadTargetRef.current = null;
       if (orderImageInputRef.current) orderImageInputRef.current.value = "";
     }
   };
 
-  const handleDeleteOrderImage = async (imageId: string) => {
+  const handleSaveOptionDescription = async (optionId: string, description: string) => {
     if (!user?.id || !currentItemId) return;
+    const option = photoOptions.find((o) => o.id === optionId);
+    if ((option?.description ?? "") === description) return;
+    try {
+      setSavingOptionId(optionId);
+      const row = await vendorOnboardingApi.updateVendorOrderImageOption(
+        user.id,
+        currentItemId,
+        optionId,
+        description,
+      );
+      setImageRequest(row);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Failed to save description.";
+      toast.error(message);
+    } finally {
+      setSavingOptionId(null);
+    }
+  };
+
+  const handleDeleteOrderImage = async (imageId: string, optionId: string) => {
+    if (!user?.id || !currentItemId) return;
+    const option = photoOptions.find((o) => o.id === optionId);
+    const hadDescription = Boolean(option?.description?.trim());
+    const label = option?.label ?? "this option";
     try {
       setDeletingOrderImageId(imageId);
       await vendorOnboardingApi.deleteVendorOrderImage(user.id, currentItemId, imageId);
+      setImageRequest((prev) => (prev ? removeImageFromRequest(prev, imageId) : prev));
       toast.success("Photo removed.");
-      await loadImageRequest(currentItemId);
+      await loadImageRequest(currentItemId, { silent: true });
+      if (hadDescription && (option?.images.length ?? 1) <= 1) {
+        setClearDescriptionPrompt({ optionId, label });
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to remove photo.";
       toast.error(message);
     } finally {
       setDeletingOrderImageId(null);
     }
+  };
+
+  const handleClearOptionDescription = async () => {
+    const prompt = clearDescriptionPrompt;
+    if (!prompt) return;
+    setClearDescriptionPrompt(null);
+    await handleSaveOptionDescription(prompt.optionId, "");
   };
 
   const hasPendingRequests = Boolean(continuations && (continuations.pendingExtensions.length > 0 || continuations.pendingBuyouts.length > 0));
@@ -762,7 +1205,7 @@ const VendorOrderDetail = () => {
     try {
       setUpdating(true);
       await vendorOnboardingApi.approveVendorExtension(currentItemId, extensionId);
-      toast.success("Extension request approved.");
+      toast.success("Extension approved. The customer pays on the order page before the end date changes.");
       await Promise.all([loadOrder(currentItemId), loadAllOrders()]);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to approve request.");
@@ -771,20 +1214,71 @@ const VendorOrderDetail = () => {
     }
   };
 
+  const resetReturnForm = () => {
+    setReturnIssue(false);
+    setReturnDamage("");
+    setReturnReason("");
+    setReturnPhotos([]);
+    setReturnPhotoPreviews((current) => {
+      current.forEach((url) => URL.revokeObjectURL(url));
+      return [];
+    });
+  };
+
+  const addReturnPhotos = (list: FileList | null) => {
+    if (!list || list.length === 0) return;
+    const next = [...returnPhotos];
+    for (const file of Array.from(list)) {
+      if (next.length >= 3) {
+        toast.error("You can add up to 3 damage photos.");
+        break;
+      }
+      const type = file.type.toLowerCase();
+      if (!["image/jpeg", "image/jpg", "image/png", "image/webp"].includes(type)) {
+        toast.error("Damage photos must be JPG, PNG, or WebP.");
+        continue;
+      }
+      if (file.size > 5 * 1024 * 1024) {
+        toast.error("Each damage photo must be under 5 MB.");
+        continue;
+      }
+      next.push(file);
+    }
+    setReturnPhotoPreviews((current) => {
+      current.forEach((url) => URL.revokeObjectURL(url));
+      return next.map((file) => URL.createObjectURL(file));
+    });
+    setReturnPhotos(next);
+  };
+
+  const removeReturnPhoto = (index: number) => {
+    const next = returnPhotos.filter((_, i) => i !== index);
+    setReturnPhotoPreviews((current) => {
+      current.forEach((url) => URL.revokeObjectURL(url));
+      return next.map((file) => URL.createObjectURL(file));
+    });
+    setReturnPhotos(next);
+  };
+
   const nextAction = useMemo(() => {
     if (hasPendingRequests) return { label: "Review customer request", disabled: true };
-    if (canMarkReturned) return { label: "Mark returned", action: () => handleStatusChange("returned") };
+    if (canMarkReturned) return { label: "Mark returned", action: () => {
+      resetReturnForm();
+      setReturnDialogOpen(true);
+    } };
     if (canMarkActive) return { label: "Mark delivered", action: () => handleStatusChange("active") };
     if (canMarkTransit) return { label: "Mark out for delivery", action: () => handleStatusChange("in_transit") };
     return null;
   }, [canMarkActive, canMarkReturned, canMarkTransit, hasPendingRequests]);
 
+  const damagePhotoUrls = useStableMediaUrls(order?.returnSettlement?.damageImageUrls ?? []);
+
   return (
-    <div className="mx-auto w-full max-w-6xl space-y-4 sm:space-y-6">
+    <div className="w-full min-w-0 space-y-4 sm:space-y-6">
       <BackLink to="/vendor/orders" label="Back to orders" />
 
       <Card className="overflow-hidden border-border/80 shadow-sm">
-        {!order ? (
+        {!order && !hasLoadedOrder ? (
           <CardContent className="p-4 sm:p-6">
             <PageLoaderSlot className="min-h-[8rem] py-0" />
           </CardContent>
@@ -796,14 +1290,16 @@ const VendorOrderDetail = () => {
                 <h1 className="break-all text-xl font-bold tracking-tight tabular-nums sm:text-2xl lg:text-3xl">{baseOrderNumber}</h1>
                 <p className="text-xs text-muted-foreground sm:text-sm">Consolidated fulfillment overview</p>
               </div>
-              <div className="flex shrink-0 flex-col items-start border-t border-border pt-4 sm:pt-6 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0">
-                <p className="text-2xl font-bold tabular-nums tracking-tight sm:text-3xl">
-                  ₹{groupPayoutAmount.toFixed(2)}
-                </p>
-                <p className="mt-1 text-[11px] text-muted-foreground uppercase font-semibold tracking-wider sm:text-xs">
-                  Estimated Vendor Payout{orderGroupItems.length > 1 ? " (Combined)" : ""}
-                </p>
-              </div>
+              {orderGroupItems.some((item) => orderShowsVendorPayout(item.status)) ? (
+                <div className="flex shrink-0 flex-col items-start border-t border-border pt-4 sm:pt-6 lg:border-l lg:border-t-0 lg:pl-8 lg:pt-0">
+                  <p className="text-2xl font-bold tabular-nums tracking-tight sm:text-3xl">
+                    ₹{formatRupee(groupPayoutAmount)}
+                  </p>
+                  <p className="mt-1 text-[11px] text-muted-foreground uppercase font-semibold tracking-wider sm:text-xs">
+                    Estimated Vendor Payout{orderGroupItems.length > 1 ? " (Combined)" : ""}
+                  </p>
+                </div>
+              ) : null}
             </div>
           </CardContent>
         )}
@@ -830,7 +1326,7 @@ const VendorOrderDetail = () => {
                   type="button"
                   onClick={() => handleSelectItem(item.orderId)}
                   className={cn(
-                    "w-full text-left flex flex-col sm:flex-row sm:items-center sm:justify-between p-3 rounded-lg border transition-all",
+                    "flex w-full min-w-0 flex-col overflow-hidden rounded-lg border p-3 text-left transition-all sm:flex-row sm:items-center sm:justify-between",
                     isSelected
                       ? "bg-accent/40 border-foreground/60 shadow-sm"
                       : "bg-transparent border-border/60 hover:bg-accent/20",
@@ -851,10 +1347,10 @@ const VendorOrderDetail = () => {
                     )}
                     <div className="min-w-0">
                       <p className="truncate text-sm font-semibold text-foreground">{item.listingTitle}</p>
-                      <p className="mt-0.5 text-xs text-muted-foreground">
-                        Qty: {item.quantity}
+                      <p className="mt-0.5 break-words text-xs text-muted-foreground">
+                        <span>Qty: {item.quantity}</span>
                         {item.orderNumber.includes("-") ? (
-                          <span className="ml-2 break-all tabular-nums">· {item.orderNumber}</span>
+                          <span className="mt-0.5 block break-all tabular-nums sm:ml-2 sm:mt-0 sm:inline">· {item.orderNumber}</span>
                         ) : null}
                       </p>
                       {item.assignedAssetTags && item.assignedAssetTags.length > 0 ? (
@@ -874,26 +1370,40 @@ const VendorOrderDetail = () => {
                       {photoReceived ? (
                         <p className="mt-1 inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-700 dark:text-emerald-300">
                           <Images className="h-3 w-3" />
-                          {photoMeta.count}/{MAX_ORDER_IMAGES} customer photos uploaded
+                          {photoMeta.count} customer photo{photoMeta.count === 1 ? "" : "s"} uploaded
                         </p>
                       ) : null}
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-between sm:justify-end gap-4 mt-3 sm:mt-0">
+                  <div className="mt-3 flex w-full min-w-0 items-center justify-between gap-2 sm:mt-0 sm:w-auto sm:justify-end sm:gap-3">
+                    <div className="flex min-w-0 flex-wrap items-center gap-1.5">
+                    {item.isExtended ? (
+                      <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                        EXTENDED
+                      </span>
+                    ) : null}
+                    {vendorClaimLabel(item.returnSettlement) ? (
+                      <span className="max-w-full whitespace-normal rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold leading-snug text-sky-900 dark:bg-sky-950/50 dark:text-sky-200">
+                        {vendorClaimLabel(item.returnSettlement)}
+                      </span>
+                    ) : null}
                     <span
                       title={formatOrderStatusTitle(item.status)}
                       className={cn(
-                        "inline-flex items-center rounded-full",
+                        "inline-flex shrink-0 items-center rounded-full",
                         orderStatusBadgeSizeClass,
                         orderStatusBadgeClass(item.status),
                       )}
                     >
                       {formatOrderStatusLabel(item.status)}
                     </span>
-                    <span className="font-semibold tabular-nums text-xs sm:w-20 sm:text-right">
-                      ₹{itemPayout(item).toFixed(0)}
-                    </span>
+                    </div>
+                    {orderShowsVendorPayout(item.status) ? (
+                      <span className="shrink-0 text-sm font-semibold tabular-nums">
+                        ₹{formatRupee(itemPayout(item))}
+                      </span>
+                    ) : null}
                   </div>
                 </button>
               );
@@ -902,7 +1412,7 @@ const VendorOrderDetail = () => {
         </Card>
       )}
 
-      {order && (
+      {order && (nextAction || hasPendingRequests) ? (
         <Card className="border-border/80 shadow-sm">
           <CardContent className="flex flex-col gap-3 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-4">
             <div className="min-w-0">
@@ -926,7 +1436,7 @@ const VendorOrderDetail = () => {
             )}
           </CardContent>
         </Card>
-      )}
+      ) : null}
 
       {order && (
         <>
@@ -949,25 +1459,20 @@ const VendorOrderDetail = () => {
                         <p className="text-muted-foreground">New End Date:</p>
                         <p className="font-medium text-right">{formatDetailDate(ext.newEndDate)}</p>
                         <p className="col-span-2 my-0.5 border-t border-amber-200/50"></p>
-                        <p className="text-muted-foreground">Base Extension Rent:</p>
-                        <p className="text-right">₹{ext.extensionAmount.toFixed(2)}</p>
-                        {/* Service fee UI hidden — keep for future re-enable */}
-                        {false && (
-                          <>
-                            <p className="text-muted-foreground">Service Fee:</p>
-                            <p className="text-right">₹{ext.serviceFeeAmount.toFixed(2)}</p>
-                          </>
-                        )}
-                        <p className="text-muted-foreground">GST:</p>
-                        <p className="text-right">₹{ext.gstAmount.toFixed(2)}</p>
-                        <p className="font-semibold text-amber-900 dark:text-amber-400">Total to Collect:</p>
-                        <p className="font-bold text-right text-amber-900 dark:text-amber-400">₹{ext.totalAmount.toFixed(2)}</p>
+                        <p className="font-semibold text-amber-900 dark:text-amber-400">Your payout:</p>
+                        <p className="font-bold text-right text-amber-900 dark:text-amber-400">₹{extensionVendorPayout(ext).toFixed(2)}</p>
                       </div>
                     </div>
+                    {ext.status === "awaiting_payment" ? (
+                      <p className="mt-4 text-sm text-amber-900 dark:text-amber-300 sm:mt-0 sm:max-w-[14rem] sm:text-right">
+                        Approved. The customer still has to pay. The end date stays the same until then.
+                      </p>
+                    ) : (
                     <div className="mt-4 flex w-full gap-2 sm:mt-0 sm:w-auto sm:items-start">
                       <Button variant="outline" size="sm" className="flex-1 sm:flex-none" onClick={() => handleCancelExtension(ext.extensionId)} disabled={updating}>Reject</Button>
                       <Button size="sm" className="flex-1 sm:flex-none" onClick={() => handleApproveExtension(ext.extensionId)} disabled={updating}>Approve</Button>
                     </div>
+                    )}
                   </div>
                 ))}
                 {continuations.pendingBuyouts.map((buy) => (
@@ -989,7 +1494,7 @@ const VendorOrderDetail = () => {
                             <p className="text-right">₹{buy.serviceFeeAmount.toFixed(2)}</p>
                           </>
                         )}
-                        <p className="text-muted-foreground">GST:</p>
+                        <p className="text-muted-foreground">{formatGstRateLabel(buy.gstPercent)}:</p>
                         <p className="text-right">₹{buy.gstAmount.toFixed(2)}</p>
                         <p className="col-span-2 my-0.5 border-t border-amber-200/50"></p>
                         <p className="font-semibold text-amber-900 dark:text-amber-400">Total to Collect:</p>
@@ -1006,7 +1511,23 @@ const VendorOrderDetail = () => {
             </Card>
           )}
 
-          <div className="grid gap-4 lg:grid-cols-2 lg:items-start sm:gap-6">
+          <div className={cn(
+            "grid items-start gap-4 sm:gap-6",
+            isShortTimeline(order.status) ? "items-stretch lg:grid-cols-2" : "items-start lg:grid-cols-[minmax(260px,420px)_minmax(0,1fr)]",
+          )}>
+            {isShortTimeline(order.status) ? (
+              <Card className="border-border/80 shadow-sm lg:col-span-2">
+                <CardContent className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between sm:gap-6 sm:p-5">
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold">Order timeline</p>
+                    <p className="mt-0.5 text-xs text-muted-foreground">
+                      Tracking: <span className="font-semibold text-foreground">{order.listingTitle}</span>
+                    </p>
+                  </div>
+                  <OrderTimeline status={order.status} orderType={order.orderType} />
+                </CardContent>
+              </Card>
+            ) : (
             <Card className="border-border/80 shadow-sm">
               <CardHeader className="p-4 pb-2 sm:p-6 sm:pb-2">
                 <p className="text-lg font-semibold">Order timeline</p>
@@ -1018,13 +1539,14 @@ const VendorOrderDetail = () => {
                 <OrderTimeline status={order.status} orderType={order.orderType} />
               </CardContent>
             </Card>
+            )}
 
-            <div className="space-y-4 sm:space-y-6">
-              <Card className="border-border/80 shadow-sm">
+            <div className={cn("flex flex-col gap-4 sm:gap-6", isShortTimeline(order.status) && "contents")}>
+              <Card className={cn("border-border/80 shadow-sm", isShortTimeline(order.status) && "h-full")}>
                 <CardHeader className="p-4 pb-3 sm:p-6 sm:pb-4">
                   <p className="text-lg font-semibold">Customer</p>
                 </CardHeader>
-                <CardContent className="grid grid-cols-1 gap-4 px-4 pb-4 sm:grid-cols-2 sm:gap-6 sm:px-6 sm:pb-6">
+                <CardContent className={cn("grid grid-cols-1 gap-4 px-4 pb-4 sm:gap-6 sm:px-6 sm:pb-6", !isShortTimeline(order.status) && "sm:grid-cols-2")}>
                   <div className="space-y-1">
                     <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">Name</p>
                     <p className="text-sm font-medium break-words">{order.customerName}</p>
@@ -1036,11 +1558,14 @@ const VendorOrderDetail = () => {
                 </CardContent>
               </Card>
 
-              <Card className="border-border/80 shadow-sm">
+              <Card className={cn("flex flex-col border-border/80 shadow-sm", isShortTimeline(order.status) && "h-full")}>
                 <CardHeader className="p-4 pb-3 sm:p-6 sm:pb-4">
                   <p className="text-lg font-semibold">{order.orderType?.toLowerCase() === "buy" ? "Purchase details" : "Rental details"}</p>
                 </CardHeader>
-                <CardContent className="grid grid-cols-2 gap-x-4 gap-y-4 px-4 pb-4 sm:gap-6 sm:px-6 sm:pb-6">
+                <CardContent className="flex flex-1 flex-col p-0">
+                  <div
+                    className="grid grid-cols-2 content-start gap-x-4 gap-y-4 px-4 pb-4 sm:gap-x-6 sm:px-6"
+                  >
                   {order.orderType?.toLowerCase() === "buy" ? (
                     <>
                       <div className="space-y-1">
@@ -1103,24 +1628,6 @@ const VendorOrderDetail = () => {
                             {order.rentalDurationDays} day{order.rentalDurationDays === 1 ? "" : "s"}
                           </p>
                         ) : null}
-                        {order.rentalFinalPrice != null ? (
-                          <div className="mt-1 flex flex-col gap-0.5 text-xs text-muted-foreground tabular-nums sm:flex-row sm:flex-wrap sm:items-center sm:gap-x-2">
-                            {order.rentalNormalPrice != null &&
-                            Number(order.rentalNormalPrice) > Number(order.rentalFinalPrice) ? (
-                              <span className="strike-diagonal w-fit font-semibold text-rose-500 dark:text-rose-400">
-                                ₹{Number(order.rentalNormalPrice).toLocaleString("en-IN", {
-                                  maximumFractionDigits: 0,
-                                })}
-                              </span>
-                            ) : null}
-                            <span>
-                              Plan price ₹
-                              {Number(order.rentalFinalPrice).toLocaleString("en-IN", {
-                                maximumFractionDigits: 0,
-                              })}
-                            </span>
-                          </div>
-                        ) : null}
                       </div>
                       <div className="space-y-1">
                         <div className="flex flex-wrap items-center gap-2">
@@ -1135,10 +1642,99 @@ const VendorOrderDetail = () => {
                       </div>
                     </>
                   )}
+                  </div>
+                  <div className="grid grid-cols-2 gap-3 border-t border-border/70 px-4 py-4 sm:grid-cols-3 sm:px-6">
+                    <div className="space-y-1">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">Quantity</p>
+                      <p className="text-sm font-medium tabular-nums">{order.quantity}</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">Amount</p>
+                      <p className="text-sm font-semibold tabular-nums">₹{formatRupee(order.totalAmount)}</p>
+                    </div>
+                    <div className="space-y-1">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">Deposit</p>
+                      <p className="text-sm font-medium tabular-nums">₹{formatInr(order.depositAmount ?? 0)}</p>
+                    </div>
+                  </div>
+                  {orderShowsVendorPayout(order.status) ? (
+                    <div className="mt-auto flex items-center justify-between gap-3 rounded-b-lg border-t border-border/70 bg-muted/40 px-4 py-3 sm:px-6">
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">Your payout</p>
+                      <p className="text-base font-semibold tabular-nums text-emerald-700 dark:text-emerald-400 sm:text-lg">
+                        ₹{formatRupee(itemPayout(order))}
+                      </p>
+                    </div>
+                  ) : null}
                 </CardContent>
               </Card>
             </div>
           </div>
+
+          {vendorClaimLabel(order.returnSettlement) ? (
+            <Card className="min-w-0 overflow-hidden border-border/80 shadow-sm">
+              <CardHeader className="p-4 pb-2 sm:p-6 sm:pb-2">
+                <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+                  <div className="min-w-0">
+                    <p className="text-lg font-semibold">Your return claim</p>
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Sent with this product. You cannot change it.
+                    </p>
+                  </div>
+                  <span
+                    className={cn(
+                      "w-fit shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold",
+                      order.returnSettlement?.status === "refunded" || order.returnSettlement?.status === "settled"
+                        ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200"
+                        : "bg-amber-100 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200",
+                    )}
+                  >
+                    {order.returnSettlement?.status === "refunded" || order.returnSettlement?.status === "settled"
+                      ? "Reviewed"
+                      : "With BlinksMed"}
+                  </span>
+                </div>
+              </CardHeader>
+              <CardContent className={cn(
+                "grid gap-4 p-4 pt-0 text-sm sm:p-6",
+                order.returnSettlement?.damageReason && "lg:grid-cols-[minmax(220px,280px)_minmax(0,1fr)] lg:items-start",
+              )}>
+                <div className="flex items-center justify-between gap-3 rounded-lg bg-muted/50 px-3 py-2.5">
+                  <p className="text-muted-foreground">Damage claim</p>
+                  <p className="font-semibold tabular-nums">
+                    ₹{formatInr(order.returnSettlement?.damageAmount ?? 0)}
+                  </p>
+                </div>
+                {order.returnSettlement?.damageReason ? (
+                  <div className="space-y-1">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">What you reported</p>
+                    <p className="rounded-lg border border-border/70 px-3 py-2 leading-relaxed">
+                      {order.returnSettlement.damageReason}
+                    </p>
+                  </div>
+                ) : null}
+                {damagePhotoUrls.length > 0 ? (
+                  <div className="space-y-1.5 lg:col-span-2">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
+                      Damage photos · tap to enlarge
+                    </p>
+                    <div className="grid grid-cols-3 gap-2 sm:flex sm:flex-wrap">
+                      {damagePhotoUrls.map((url, index) => (
+                        <button
+                          key={mediaObjectKey(url)}
+                          type="button"
+                          className="aspect-square w-full min-w-0 overflow-hidden rounded-lg bg-muted ring-1 ring-inset ring-black/[0.06] dark:ring-white/10 sm:aspect-auto sm:h-28 sm:w-28"
+                          onClick={() => setDamagePreviewUrl(url)}
+                          aria-label={`Damage photo ${index + 1}`}
+                        >
+                          <img src={url} alt="" className="h-full w-full object-cover" />
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ) : null}
+              </CardContent>
+            </Card>
+          ) : null}
 
           {(order.assignedAssetTags && order.assignedAssetTags.length > 0) || canAssignOrderSerials(order.status) ? (
             <AssignedSerialNumbersCard
@@ -1153,7 +1749,14 @@ const VendorOrderDetail = () => {
           ) : null}
 
           {/* Customer photo request — vendor uploads (hidden when no open request) */}
-          {!imageRequestLoading && imageRequest && (
+          {imageRequestLoading && !imageRequest ? (
+            <Card className="border-border/80 shadow-sm">
+              <CardContent className="p-4">
+                <PageLoaderSlot className="min-h-[8rem] py-0" />
+              </CardContent>
+            </Card>
+          ) : null}
+          {imageRequest && (
             <>
               <Card className="border-border/80 shadow-sm border-amber-200/70 dark:border-amber-500/30">
                 <CardHeader className="pb-3">
@@ -1165,7 +1768,8 @@ const VendorOrderDetail = () => {
                       <div className="flex flex-wrap items-center gap-2">
                         <p className="text-lg font-semibold leading-tight">Customer photo request</p>
                         <Badge variant="secondary" className="font-normal tabular-nums">
-                          {orderImages.length}/{MAX_ORDER_IMAGES}
+                          {orderImages.length} photo{orderImages.length === 1 ? "" : "s"}
+                          {photoOptions.length ? ` · ${photoOptions.length} options` : ""}
                         </Badge>
                         {orderImages.length === 0 ? (
                           <Badge className="border-0 bg-amber-100 text-amber-900 hover:bg-amber-100 dark:bg-amber-950/50 dark:text-amber-200">
@@ -1176,9 +1780,9 @@ const VendorOrderDetail = () => {
                       <p className="mt-1 text-sm font-semibold text-foreground">
                         {order.listingTitle}
                       </p>
-                      <p className="text-xs text-muted-foreground mt-1">
-                        From the customer for this product only — upload here (not Admin chat).{" "}
-                        {imageRequest.message}
+                      <p className="mt-1 text-xs leading-relaxed text-muted-foreground">
+                        Upload up to {maxImagesPerOption} photos per option. The customer will select one option.
+                        Add photos here — not in Admin chat.
                       </p>
                     </div>
                   </div>
@@ -1192,62 +1796,132 @@ const VendorOrderDetail = () => {
                     className="hidden"
                     onChange={(e) => void handleOrderImagePick(e.target.files)}
                   />
-                  <div className="grid grid-cols-3 gap-3 sm:grid-cols-5">
-                    {orderImages.map((img) => (
+                  {selectedPhotoOption ? (
+                    <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <CheckCircle2 className="h-4 w-4 text-primary" />
+                      Customer selected{" "}
+                      <span className="font-semibold text-foreground">{selectedPhotoOption.label}</span>
+                    </p>
+                  ) : (
+                    <p className="text-xs text-muted-foreground">
+                      Waiting for the customer to select an option.
+                    </p>
+                  )}
+                  <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+                  {photoOptions.map((option) => {
+                    const photos = option.images ?? [];
+                    const optionBusy = uploadingOrderImage && uploadOptionId === option.id;
+                    const chosen = imageRequest.selectedOptionId === option.id;
+                    return (
                       <div
-                        key={img.id}
-                        className="group relative aspect-square overflow-hidden rounded-lg border border-border bg-muted"
-                      >
-                        <button
-                          type="button"
-                          className="h-full w-full"
-                          onClick={() => setPreviewImageUrl(img.fileUrl)}
-                          aria-label={img.originalFileName || "Order photo"}
-                        >
-                          <img
-                            src={img.fileUrl}
-                            alt={img.originalFileName || "Order photo"}
-                            className="h-full w-full object-cover"
-                            onError={retryOriginalOnImageError}
-                          />
-                        </button>
-                        {canUploadOrderImages && (
-                          <button
-                            type="button"
-                            className="absolute right-1 top-1 rounded-full bg-black/70 p-1 text-white opacity-100 sm:opacity-0 sm:group-hover:opacity-100"
-                            disabled={deletingOrderImageId === img.id}
-                            onClick={() => void handleDeleteOrderImage(img.id)}
-                            aria-label="Remove photo"
-                          >
-                            {deletingOrderImageId === img.id ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                              <X className="h-3.5 w-3.5" />
-                            )}
-                          </button>
+                        key={option.id}
+                        className={cn(
+                          "space-y-2.5 rounded-xl border bg-card p-3 shadow-sm",
+                          chosen
+                            ? "border-primary/35 ring-1 ring-primary/15"
+                            : "border-border/70",
                         )}
+                      >
+                        <div className="flex items-center gap-2">
+                          <p className="min-w-0 flex-1 truncate text-sm font-semibold text-foreground">{option.label}</p>
+                          {chosen ? (
+                            <span className="shrink-0 rounded-full bg-primary/10 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-primary">
+                              Chosen
+                            </span>
+                          ) : null}
+                          <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground">
+                            {photos.length} of {maxImagesPerOption}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-2">
+                          {Array.from({ length: maxImagesPerOption }).map((_, slot) => {
+                            const photo = photoAtSlot(photos, slot);
+                            const pendingUrl = pendingSlotPreviews[`${option.id}:${slot}`];
+                            if (photo) {
+                              return (
+                                <div
+                                  key={photo.id}
+                                  className="group relative aspect-square w-full overflow-hidden rounded-xl bg-muted ring-1 ring-inset ring-black/[0.06] dark:ring-white/10"
+                                >
+                                  <button
+                                    type="button"
+                                    className="h-full w-full"
+                                    onClick={() => setPreviewImageUrl(photo.fileUrl)}
+                                    aria-label={photo.originalFileName || option.label}
+                                  >
+                                    <img
+                                      src={orderPhotoTileUrl(photo)}
+                                      alt={photo.originalFileName || option.label}
+                                      loading="lazy"
+                                      decoding="async"
+                                      className="h-full w-full object-cover transition-transform duration-200 group-hover:scale-[1.03]"
+                                      onError={retryOriginalOnImageError}
+                                    />
+                                  </button>
+                                  {canUploadOrderImages && (
+                                    <button
+                                      type="button"
+                                      className="absolute right-1.5 top-1.5 rounded-full bg-black/65 p-1 text-white shadow-sm backdrop-blur-sm"
+                                      disabled={deletingOrderImageId === photo.id}
+                                      onClick={() => void handleDeleteOrderImage(photo.id, option.id)}
+                                      aria-label="Remove photo"
+                                    >
+                                      {deletingOrderImageId === photo.id ? (
+                                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                                      ) : (
+                                        <X className="h-3.5 w-3.5" />
+                                      )}
+                                    </button>
+                                  )}
+                                </div>
+                              );
+                            }
+                            if (pendingUrl) {
+                              return (
+                                <div
+                                  key={`${option.id}-pending-${slot}`}
+                                  className="relative aspect-square w-full overflow-hidden rounded-xl bg-muted ring-1 ring-inset ring-black/[0.06] dark:ring-white/10"
+                                >
+                                  <img src={pendingUrl} alt="" className="h-full w-full object-cover" />
+                                  <div className="absolute inset-0 flex items-center justify-center bg-black/30">
+                                    <Loader2 className="h-5 w-5 animate-spin text-white" />
+                                  </div>
+                                </div>
+                              );
+                            }
+                            if (canUploadOrderImages) {
+                              return (
+                                <VendorOptionAddSlot
+                                  key={`${option.id}-add-${slot}`}
+                                  busy={optionBusy && uploadSlotIndex === slot}
+                                  disabled={uploadingOrderImage}
+                                  onAdd={() => {
+                                    orderImageUploadTargetRef.current = { optionId: option.id, slotIndex: slot };
+                                    setUploadOptionId(option.id);
+                                    setUploadSlotIndex(slot);
+                                    orderImageInputRef.current?.click();
+                                  }}
+                                />
+                              );
+                            }
+                            return <VendorOptionEmptySlot key={`${option.id}-empty-${slot}`} />;
+                          })}
+                        </div>
+                        <OptionNoteField
+                          optionLabel={option.label}
+                          initial={option.description ?? ""}
+                          maxLength={maxDescriptionLength}
+                          disabled={!canUploadOrderImages}
+                          saving={savingOptionId === option.id}
+                          onSave={(value) => void handleSaveOptionDescription(option.id, value)}
+                        />
                       </div>
-                    ))}
-                    {canUploadOrderImages && orderImages.length < MAX_ORDER_IMAGES && (
-                      <button
-                        type="button"
-                        onClick={() => orderImageInputRef.current?.click()}
-                        disabled={uploadingOrderImage}
-                        className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-border bg-muted/40 text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:opacity-60"
-                      >
-                        {uploadingOrderImage ? (
-                          <Loader2 className="h-5 w-5 animate-spin" />
-                        ) : (
-                          <ImagePlus className="h-5 w-5" />
-                        )}
-                        <span className="text-[11px] font-medium">
-                          {uploadingOrderImage ? "Uploading…" : "Add photo"}
-                        </span>
-                      </button>
-                    )}
+                    );
+                  })}
                   </div>
                   <p className="text-xs text-muted-foreground">
-                    JPEG, PNG, or WebP · max 5 MB each · cleared after delivery, cancel, or dispatch failure
+                    Up to {maxImagesPerOption} photos per option · JPEG, PNG, or WebP · max 5 MB · optional note up to {maxDescriptionLength} characters ·
+                    cleared after delivery, cancel, or dispatch failure
                   </p>
                 </CardContent>
               </Card>
@@ -1266,38 +1940,186 @@ const VendorOrderDetail = () => {
                   ) : null}
                 </DialogContent>
               </Dialog>
+
+              <AlertDialog
+                open={!!clearDescriptionPrompt}
+                onOpenChange={(open) => !open && setClearDescriptionPrompt(null)}
+              >
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Clear the description too?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      You removed the photo from {clearDescriptionPrompt?.label ?? "this option"}.
+                      That option still has a description. Do you want to clear it?
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Keep description</AlertDialogCancel>
+                    <AlertDialogAction onClick={() => void handleClearOptionDescription()}>
+                      Clear description
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
             </>
           )}
 
-          {/* Medical Reference */}
-          {(order.doctorId || order.hospitalId || order.doctorName || order.doctorUniqueCode) && (
-            <OrderMedicalReferenceCard
-              doctorName={order.doctorName}
-              doctorSpecialization={order.doctorSpecialization}
-              doctorUniqueCode={order.doctorUniqueCode}
-              doctorContactNumber={order.doctorContactNumber}
-              hospitalName={order.hospitalName}
-              hospitalCity={order.hospitalCity}
-              action={
-                order.doctorUniqueCode ? (
+          <OrderPrescriptionFilesCard files={prescriptionFiles} />
+
+          <Dialog open={returnDialogOpen} onOpenChange={setReturnDialogOpen}>
+            <DialogContent className="flex max-h-[min(92dvh,820px)] flex-col gap-0 overflow-hidden p-0 sm:max-w-md">
+              <DialogHeader className="border-b border-border px-4 py-4 pr-12">
+                <DialogTitle>Mark this product returned</DialogTitle>
+              </DialogHeader>
+              <div className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4 text-sm">
+                <p className="rounded-lg bg-muted/60 px-3 py-2.5 text-muted-foreground">
+                  Security deposit on this product: ₹{formatInr((activeOrder ?? order)?.depositAmount ?? 0)}. Rent and fees stay with the order.
+                </p>
+                <div className="grid grid-cols-2 gap-2">
                   <Button
                     type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-8"
-                    onClick={() => {
-                      setDoctorLookupCode(order.doctorUniqueCode || "");
-                      setDoctorLookupOpen(true);
-                    }}
+                    variant={returnIssue ? "outline" : "default"}
+                    className="h-auto whitespace-normal px-3 py-2.5"
+                    onClick={() => setReturnIssue(false)}
                   >
-                    <Stethoscope className="mr-1.5 h-3.5 w-3.5" />
-                    View doctor
+                    Good condition
                   </Button>
-                ) : null
-              }
-            />
-          )}
+                  <Button
+                    type="button"
+                    variant={returnIssue ? "default" : "outline"}
+                    className="h-auto whitespace-normal px-3 py-2.5"
+                    onClick={() => setReturnIssue(true)}
+                  >
+                    There is an issue
+                  </Button>
+                </div>
+                {returnIssue ? (
+                  <div className="space-y-4">
+                    <div className="space-y-1.5">
+                      <Label htmlFor="return-damage">Damage charge</Label>
+                      <Input
+                        id="return-damage"
+                        inputMode="decimal"
+                        value={returnDamage}
+                        onChange={(event) => setReturnDamage(event.target.value)}
+                        placeholder="Amount in ₹"
+                      />
+                      <p className="text-xs text-muted-foreground">
+                        Cannot be more than this product&apos;s deposit.
+                      </p>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label htmlFor="return-reason">What is wrong</Label>
+                      <Textarea
+                        id="return-reason"
+                        value={returnReason}
+                        maxLength={500}
+                        rows={3}
+                        onChange={(event) => setReturnReason(event.target.value)}
+                        placeholder="Example: torn corner, stain, missing part"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <Label htmlFor="return-photos">Damage photos</Label>
+                        <span className="text-xs tabular-nums text-muted-foreground">{returnPhotoPreviews.length} of 3</span>
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Optional. JPG, PNG, or WebP, each under 5 MB. BlinksMed uses these to check the charge.
+                      </p>
+                      <input
+                        ref={returnPhotoInputRef}
+                        id="return-photos"
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        multiple
+                        className="hidden"
+                        onChange={(event) => {
+                          addReturnPhotos(event.target.files);
+                          event.target.value = "";
+                        }}
+                      />
+                      <div className="grid grid-cols-3 gap-2">
+                        {returnPhotoPreviews.map((url, index) => (
+                          <div key={url} className="relative aspect-square overflow-hidden rounded-lg bg-muted ring-1 ring-inset ring-black/[0.06]">
+                            <img src={url} alt="" className="h-full w-full object-cover" />
+                            <button
+                              type="button"
+                              className="absolute right-1.5 top-1.5 rounded-full bg-black/70 p-1 text-white"
+                              onClick={() => removeReturnPhoto(index)}
+                              aria-label={`Remove photo ${index + 1}`}
+                            >
+                              <X className="h-3.5 w-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                        {returnPhotoPreviews.length < 3 ? (
+                          <button
+                            type="button"
+                            className="flex aspect-square flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-border bg-muted/30 text-xs font-medium text-muted-foreground hover:bg-muted/60"
+                            onClick={() => returnPhotoInputRef.current?.click()}
+                          >
+                            <ImagePlus className="h-4 w-4" />
+                            Add photo
+                          </button>
+                        ) : null}
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground">No damage charge. BlinksMed refunds the full deposit for this product.</p>
+                )}
+              </div>
+              <DialogFooter className="mt-0 border-t border-border px-4 py-3">
+                <Button type="button" variant="outline" onClick={() => setReturnDialogOpen(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  type="button"
+                  disabled={updating}
+                  onClick={() => {
+                    const deposit = (activeOrder ?? order)?.depositAmount ?? 0;
+                    if (!returnIssue) {
+                      void handleStatusChange("returned", { damageAmount: 0 });
+                      return;
+                    }
+                    const amount = Number(returnDamage);
+                    if (!Number.isFinite(amount) || amount <= 0) {
+                      toast.error("Enter the damage charge.");
+                      return;
+                    }
+                    if (amount > deposit + 0.001) {
+                      toast.error(`Damage charge cannot be more than this product's deposit of ₹${formatInr(deposit)}.`);
+                      return;
+                    }
+                    if (!returnReason.trim()) {
+                      toast.error("Add a short reason for the damage charge.");
+                      return;
+                    }
+                    void handleStatusChange("returned", {
+                      damageAmount: Math.round(amount * 100) / 100,
+                      damageReason: returnReason.trim(),
+                    });
+                  }}
+                >
+                  {updating ? "Saving…" : "Mark returned"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
 
+          <Dialog open={!!damagePreviewUrl} onOpenChange={(open) => !open && setDamagePreviewUrl(null)}>
+            <DialogContent className="flex max-h-[min(92dvh,880px)] w-[calc(100vw-1rem)] max-w-[calc(100vw-1rem)] flex-col gap-0 overflow-hidden p-0 sm:max-w-3xl">
+              <DialogHeader className="border-b border-border px-4 py-3 pr-12">
+                <DialogTitle className="text-sm font-semibold">Damage photo</DialogTitle>
+              </DialogHeader>
+              {damagePreviewUrl ? (
+                <ZoomableImageStage src={damagePreviewUrl} alt="Damage photo" resetKey={damagePreviewUrl} />
+              ) : null}
+            </DialogContent>
+          </Dialog>
+
+          {(canMarkTransit || canMarkActive || canMarkReturned || canCancel) ? (
           <Card className="mb-[max(4.5rem,env(safe-area-inset-bottom))] border-border/80 shadow-sm sm:mb-0">
             <CardContent className="grid grid-cols-2 gap-2 p-3 sm:grid-cols-4 sm:p-4">
               <Button
@@ -1320,7 +2142,10 @@ const VendorOrderDetail = () => {
                 variant="outline"
                 className="h-11 w-full px-2 text-xs sm:h-10 sm:px-3 sm:text-sm disabled:opacity-100 disabled:border-border disabled:bg-muted/60 disabled:text-foreground/70"
                 disabled={!canMarkReturned || actionsLocked}
-                onClick={() => void handleStatusChange("returned")}
+                onClick={() => {
+                  resetReturnForm();
+                  setReturnDialogOpen(true);
+                }}
               >
                 Mark Returned
               </Button>
@@ -1334,6 +2159,7 @@ const VendorOrderDetail = () => {
               </Button>
             </CardContent>
           </Card>
+          ) : null}
         </>
       )}
 
@@ -1456,11 +2282,6 @@ const VendorOrderDetail = () => {
         </DialogContent>
       </Dialog>
 
-      <VendorDoctorLookupDialog
-        open={doctorLookupOpen}
-        onOpenChange={setDoctorLookupOpen}
-        initialCode={doctorLookupCode}
-      />
     </div>
   );
 };

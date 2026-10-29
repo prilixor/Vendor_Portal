@@ -27,4 +27,11 @@ class AppUrls {
   static const String termsPath = '/terms-and-conditions';
   static const String privacyPath = '/privacy-policy';
   static const String contactPath = '/contact-us';
+  static const String rentalPath = '/rental-and-purchase-policy';
+  static const String cancellationPath = '/cancellation-refund-policy';
+  static const String shippingPath = '/shipping-delivery-policy';
+  static const String grievancePath = '/grievance-redressal-policy';
+
+  /// Public page required by Google Play. Same URL for customer and vendor.
+  static const String deleteAccountUrl = 'https://blinksmed.com/delete-account';
 }

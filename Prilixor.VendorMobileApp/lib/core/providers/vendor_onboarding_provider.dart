@@ -255,11 +255,21 @@ class VendorOnboardingProvider extends ChangeNotifier {
     }
   }
 
-  Future<bool> submitVerification(String vendorId) async {
+  Future<bool> submitVerification(String vendorId, {required String signedName}) async {
     _saving = true;
     _error = null;
     notifyListeners();
     try {
+      await _api.dio.post(
+        '/vendors/$vendorId/legal-acceptances',
+        data: {
+          'vendorId': vendorId,
+          'screen': 'onboarding',
+          'acceptedLegal': true,
+          'sourceSurface': 'vendor_mobile',
+          'signedName': signedName,
+        },
+      );
       await _api.dio.post(
         '/vendors/$vendorId/verification-requests',
         data: {'vendorId': vendorId},

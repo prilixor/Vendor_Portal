@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState, type CSSProperties, type ReactEventHandler } from "react";
 import { ChevronLeft, ChevronRight, Search, ZoomIn, ZoomOut, X } from "lucide-react";
 import { Dialog, DialogContent, DialogTitle } from "@/app/components/ui/dialog";
 import { Button } from "@/app/components/ui/button";
@@ -6,6 +6,9 @@ import { cn, retryOriginalOnImageError } from "@/app/helpers/utils";
 
 type ProductImageGalleryProps = {
   images: string[];
+  thumbnails?: Array<string | null | undefined>;
+  /** Shop-card image (usually a thumb already in cache) used for the first slide. */
+  placeholder?: string | null;
   alt?: string;
   className?: string;
 };
@@ -18,12 +21,84 @@ function clamp(n: number, min: number, max: number) {
   return Math.min(max, Math.max(min, n));
 }
 
+function previewSrc(original: string, thumbnail?: string) {
+  const thumb = thumbnail?.trim() ?? "";
+  return thumb && thumb !== original ? thumb : "";
+}
+
+/** Placeholder only — never scaled. Hover/lightbox zoom always uses `original`. */
+function ProgressiveCatalogImg({
+  original,
+  thumbnail,
+  alt,
+  className,
+  previewClassName,
+  style,
+  eager = false,
+  draggable,
+  onError,
+}: {
+  original: string;
+  thumbnail?: string;
+  alt: string;
+  className?: string;
+  previewClassName?: string;
+  style?: CSSProperties;
+  eager?: boolean;
+  draggable?: boolean;
+  onError?: ReactEventHandler<HTMLImageElement>;
+}) {
+  const [hiResLoaded, setHiResLoaded] = useState(false);
+  const thumb = previewSrc(original, thumbnail);
+
+  useEffect(() => {
+    setHiResLoaded(false);
+  }, [original, thumb]);
+
+  return (
+    <>
+      {thumb && !hiResLoaded ? (
+        <img
+          src={thumb}
+          alt=""
+          aria-hidden
+          className={cn(previewClassName ?? className, "absolute inset-0")}
+          decoding="async"
+          draggable={draggable}
+        />
+      ) : null}
+      <img
+        src={original}
+        alt={alt}
+        className={cn(className, thumb && !hiResLoaded && "opacity-0")}
+        style={style}
+        loading={eager ? "eager" : "lazy"}
+        fetchPriority={eager ? "high" : "low"}
+        decoding="async"
+        draggable={draggable}
+        ref={(el) => {
+          if (el?.complete && el.naturalWidth > 0) setHiResLoaded(true);
+        }}
+        onLoad={() => setHiResLoaded(true)}
+        onError={onError}
+      />
+    </>
+  );
+}
+
 /**
  * Marketplace-style product gallery with hover preview + centered lightbox zoom.
  */
-export function ProductImageGallery({ images, alt = "Product", className }: ProductImageGalleryProps) {
+export function ProductImageGallery({
+  images,
+  thumbnails,
+  placeholder,
+  alt = "Product",
+  className,
+}: ProductImageGalleryProps) {
   const [imgIx, setImgIx] = useState(0);
   const [lightboxOpen, setLightboxOpen] = useState(false);
+  const [lightboxOriginalReady, setLightboxOriginalReady] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [origin, setOrigin] = useState("50% 50%");
   const [pan, setPan] = useState({ x: 0, y: 0 });
@@ -34,6 +109,14 @@ export function ProductImageGallery({ images, alt = "Product", className }: Prod
 
   const safeImages = images.length > 0 ? images : [];
   const current = safeImages[imgIx % Math.max(safeImages.length, 1)];
+  const preview = placeholder?.trim() || "";
+
+  const thumbFor = (index: number, original: string) => {
+    const fromApi = thumbnails?.[index]?.trim();
+    if (fromApi) return fromApi;
+    if (index === 0 && preview) return preview;
+    return "";
+  };
 
   const maxPanFor = useCallback((z: number) => {
     const stage = stageRef.current;
@@ -73,6 +156,7 @@ export function ProductImageGallery({ images, alt = "Product", className }: Prod
   const openLightbox = (index = imgIx) => {
     if (safeImages.length === 0) return;
     setImgIx(index);
+    setLightboxOriginalReady(false);
     resetZoom();
     setLightboxOpen(true);
   };
@@ -80,6 +164,7 @@ export function ProductImageGallery({ images, alt = "Product", className }: Prod
   const changeImage = useCallback(
     (next: number) => {
       if (safeImages.length === 0) return;
+      setLightboxOriginalReady(false);
       setImgIx((next + safeImages.length) % safeImages.length);
       resetZoom();
     },
@@ -91,12 +176,18 @@ export function ProductImageGallery({ images, alt = "Product", className }: Prod
     const onKey = (e: KeyboardEvent) => {
       if (e.key === "ArrowLeft") changeImage(imgIx - 1);
       if (e.key === "ArrowRight") changeImage(imgIx + 1);
-      if (e.key === "+" || e.key === "=") setZoomCentered(zoom + ZOOM_STEP);
-      if (e.key === "-") setZoomCentered(zoom - ZOOM_STEP);
+      if (e.key === "+" || e.key === "=") {
+        if (!lightboxOriginalReady) return;
+        setZoomCentered(zoom + ZOOM_STEP);
+      }
+      if (e.key === "-") {
+        if (!lightboxOriginalReady) return;
+        setZoomCentered(zoom - ZOOM_STEP);
+      }
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [lightboxOpen, imgIx, changeImage, setZoomCentered, zoom]);
+  }, [lightboxOpen, imgIx, changeImage, setZoomCentered, zoom, lightboxOriginalReady]);
 
   const onHoverMove = (e: React.MouseEvent<HTMLDivElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
@@ -178,13 +269,14 @@ export function ProductImageGallery({ images, alt = "Product", className }: Prod
             onMouseMove={onHoverMove}
             onMouseLeave={() => setOrigin("50% 50%")}
           >
-            <img
-              src={current}
+            <ProgressiveCatalogImg
+              original={current}
+              thumbnail={thumbFor(imgIx, current)}
               alt={alt}
+              eager
+              previewClassName="customer-catalog-media-img pointer-events-none absolute inset-0 h-full w-full object-contain object-center"
               className="customer-catalog-media-img pointer-events-none absolute inset-0 h-full w-full object-contain object-center transition-transform duration-150 ease-out md:group-hover:scale-[1.85]"
               style={{ transformOrigin: origin, maxWidth: "none", maxHeight: "none" }}
-              loading="lazy"
-              decoding="async"
               onError={retryOriginalOnImageError}
             />
           </div>
@@ -211,11 +303,11 @@ export function ProductImageGallery({ images, alt = "Product", className }: Prod
               aria-label={`View image ${i + 1}`}
             >
               <img
-                src={url}
+                src={thumbFor(i, url) || url}
                 alt=""
                 className="customer-catalog-media-img absolute inset-0 h-full w-full object-contain object-center"
                 style={{ maxWidth: "none", maxHeight: "none" }}
-                loading="lazy"
+                loading={i < 4 ? "eager" : "lazy"}
                 decoding="async"
                 onError={retryOriginalOnImageError}
               />
@@ -249,7 +341,7 @@ export function ProductImageGallery({ images, alt = "Product", className }: Prod
                 variant="ghost"
                 className="text-white hover:bg-white/10 hover:text-white"
                 onClick={() => setZoomCentered(zoom - ZOOM_STEP)}
-                disabled={zoom <= MIN_ZOOM}
+                disabled={zoom <= MIN_ZOOM || !lightboxOriginalReady}
                 aria-label="Zoom out"
               >
                 <ZoomOut className="h-5 w-5" />
@@ -260,7 +352,7 @@ export function ProductImageGallery({ images, alt = "Product", className }: Prod
                 variant="ghost"
                 className="text-white hover:bg-white/10 hover:text-white"
                 onClick={() => setZoomCentered(zoom + ZOOM_STEP)}
-                disabled={zoom >= MAX_ZOOM}
+                disabled={zoom >= MAX_ZOOM || !lightboxOriginalReady}
                 aria-label="Zoom in"
               >
                 <ZoomIn className="h-5 w-5" />
@@ -307,32 +399,58 @@ export function ProductImageGallery({ images, alt = "Product", className }: Prod
               ref={stageRef}
               className={cn(
                 "absolute inset-0 overflow-hidden touch-none",
-                zoom > 1 ? "cursor-grab active:cursor-grabbing" : "cursor-zoom-in",
+                zoom > 1 && lightboxOriginalReady ? "cursor-grab active:cursor-grabbing" : "cursor-zoom-in",
               )}
-              onWheel={onWheelZoom}
-              onPointerDown={onPointerDown}
+              onWheel={(e) => {
+                if (!lightboxOriginalReady) return;
+                onWheelZoom(e);
+              }}
+              onPointerDown={(e) => {
+                if (!lightboxOriginalReady) return;
+                onPointerDown(e);
+              }}
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}
               onPointerCancel={onPointerUp}
               onDoubleClick={() => {
+                if (!lightboxOriginalReady) return;
                 if (zoom > 1) resetZoom();
                 else setZoomCentered(2);
               }}
             >
               {/* Centered zoom stage — scale from the middle so the photo never jumps off-screen */}
-              <div className="flex h-full w-full items-center justify-center p-3">
+              <div className="relative flex h-full w-full items-center justify-center p-3">
+                {previewSrc(safeImages[imgIx], thumbFor(imgIx, safeImages[imgIx])) && !lightboxOriginalReady ? (
+                  <img
+                    src={previewSrc(safeImages[imgIx], thumbFor(imgIx, safeImages[imgIx]))}
+                    alt=""
+                    aria-hidden
+                    draggable={false}
+                    className="max-h-full max-w-full select-none object-contain"
+                  />
+                ) : null}
                 <img
                   src={safeImages[imgIx]}
                   alt={alt}
                   draggable={false}
-                  className="max-h-full max-w-full select-none object-contain"
+                  className={cn(
+                    "max-h-full max-w-full select-none object-contain",
+                    !lightboxOriginalReady && "absolute opacity-0",
+                  )}
                   style={{
                     transform: `translate3d(${pan.x}px, ${pan.y}px, 0) scale(${zoom})`,
                     transformOrigin: "center center",
                     transition: dragRef.current || pinchRef.current ? "none" : "transform 120ms ease-out",
                     willChange: "transform",
                   }}
-                  onError={retryOriginalOnImageError}
+                  ref={(el) => {
+                    if (el?.complete && el.naturalWidth > 0) setLightboxOriginalReady(true);
+                  }}
+                  onLoad={() => setLightboxOriginalReady(true)}
+                  onError={(event) => {
+                    retryOriginalOnImageError(event);
+                    setLightboxOriginalReady(true);
+                  }}
                 />
               </div>
             </div>
@@ -350,7 +468,12 @@ export function ProductImageGallery({ images, alt = "Product", className }: Prod
                     i === imgIx ? "border-white" : "border-transparent opacity-70 hover:opacity-100",
                   )}
                 >
-                  <img src={url} alt="" className="h-full w-full object-contain" onError={retryOriginalOnImageError} />
+                  <img
+                    src={thumbFor(i, url) || url}
+                    alt=""
+                    className="h-full w-full object-contain"
+                    onError={retryOriginalOnImageError}
+                  />
                 </button>
               ))}
             </div>

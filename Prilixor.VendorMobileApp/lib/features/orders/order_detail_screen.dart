@@ -1,19 +1,24 @@
 import 'dart:async';
 
-import 'package:flutter/foundation.dart';
+import 'package:file_picker/file_picker.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import '../../core/auth/auth_provider.dart';
 import '../../core/models/order_continuations_model.dart';
 import '../../core/models/order_image_model.dart';
+import '../../core/models/prescription_file_model.dart';
 import '../../core/models/vendor_order_model.dart';
 import '../../core/providers/vendor_order_provider.dart';
 import '../../core/theme.dart';
+import '../../core/utils/gst_label.dart';
+import '../../core/utils/media_url.dart';
 import '../../core/utils/vendor_photo_picker.dart';
 import '../../shared/widgets/brand_page_loader.dart';
-import '../../shared/widgets/struck_price.dart';
-import '../../shared/widgets/vendor_doctor_lookup_sheet.dart';
+import '../../shared/widgets/catalog_image.dart';
+import '../../shared/widgets/catalog_image_viewer_screen.dart';
 import 'dispatch_details_sheet.dart';
 import 'order_group_utils.dart';
 
@@ -38,7 +43,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
   bool _refreshInFlight = false;
 
   /// Match Customer Mobile: keep status/photos/continuations fresh while open.
-  static const _pollInterval = Duration(seconds: 15);
+  static const _pollInterval = Duration(seconds: 5);
 
   @override
   void initState() {
@@ -82,16 +87,17 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       if (vendorId == null) return;
       final provider = Provider.of<VendorOrderProvider>(context, listen: false);
       await Future.wait([
-        provider.fetchOrders(vendorId, silent: true),
+        provider.fetchOrderGroup(vendorId, _selectedOrderId),
         provider.fetchOrderDetail(vendorId, _selectedOrderId, silent: silent),
       ]);
       if (!mounted) return;
       final selected = provider.selectedOrder;
       if (selected == null) return;
-      final groupIds = orderGroupItems(
-        anchor: selected,
-        allOrders: provider.orders,
-      ).map((o) => o.orderId).toList();
+      final groupIds = (provider.orderGroup.isNotEmpty
+              ? provider.orderGroup
+              : orderGroupItems(anchor: selected, allOrders: provider.orders))
+          .map((o) => o.orderId)
+          .toList();
       await provider.fetchGroupPhotoRequestMeta(
         vendorId,
         groupIds,
@@ -111,7 +117,169 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     await provider.fetchOrderDetail(vendorId, orderId);
   }
 
-  Future<void> _updateStatus(String status, {List<String>? assetTags}) async {
+  Future<void> _openReturnDialog(VendorOrder order) async {
+    var issue = false;
+    final amountCtrl = TextEditingController();
+    final reasonCtrl = TextEditingController();
+    final photos = <PlatformFile>[];
+    final confirmed = await showModalBottomSheet<({double damage, String? reason, List<PlatformFile> photos})>(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (ctx, setLocal) {
+            final colors = ctx.appColors;
+            return Padding(
+              padding: EdgeInsets.only(
+                left: 16,
+                right: 16,
+                top: 16,
+                bottom: MediaQuery.viewInsetsOf(ctx).bottom + 16,
+              ),
+              child: SingleChildScrollView(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Text(
+                    'Mark this product returned',
+                    style: TextStyle(color: colors.textPrimary, fontSize: 16, fontWeight: FontWeight.w700),
+                  ),
+                  const SizedBox(height: 8),
+                  Text(
+                    'Security deposit ${formatVendorMoney(order.depositAmount)}. Rent and fees are not refunded.',
+                    style: TextStyle(color: colors.textMuted, fontSize: 13),
+                  ),
+                  const SizedBox(height: 12),
+                  SegmentedButton<bool>(
+                    segments: const [
+                      ButtonSegment(value: false, label: Text('Good condition')),
+                      ButtonSegment(value: true, label: Text('Issue')),
+                    ],
+                    selected: {issue},
+                    onSelectionChanged: (value) => setLocal(() => issue = value.first),
+                  ),
+                  if (issue) ...[
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: amountCtrl,
+                      keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                      decoration: const InputDecoration(labelText: 'Damage charge'),
+                    ),
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: reasonCtrl,
+                      maxLength: 500,
+                      decoration: const InputDecoration(labelText: 'What is wrong'),
+                    ),
+                    const SizedBox(height: 8),
+                    Text(
+                      'Damage photos (optional, up to 3)',
+                      style: TextStyle(color: colors.textMuted, fontSize: 12),
+                    ),
+                    if (photos.isNotEmpty) ...[
+                      const SizedBox(height: 6),
+                      ...photos.asMap().entries.map((entry) => Row(
+                            children: [
+                              Expanded(
+                                child: Text(
+                                  entry.value.name,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(color: colors.textPrimary, fontSize: 13),
+                                ),
+                              ),
+                              TextButton(
+                                onPressed: () => setLocal(() => photos.removeAt(entry.key)),
+                                child: const Text('Remove'),
+                              ),
+                            ],
+                          )),
+                    ],
+                    if (photos.length < 3)
+                      OutlinedButton(
+                        onPressed: () async {
+                          final source = await showVendorPhotoSourceSheet(ctx);
+                          if (source == null) return;
+                          final picked = await pickVendorPhotoFiles(
+                            source: source,
+                            maxCount: 3 - photos.length,
+                          );
+                          if (picked.isEmpty) return;
+                          setLocal(() => photos.addAll(picked.take(3 - photos.length)));
+                        },
+                        child: const Text('Add photo'),
+                      ),
+                  ] else ...[
+                    const SizedBox(height: 12),
+                    Text(
+                      'No damage charge. The full deposit stays with BlinksMed to refund.',
+                      style: TextStyle(color: colors.textMuted, fontSize: 13),
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  FilledButton(
+                    onPressed: () {
+                      if (!issue) {
+                        Navigator.pop(ctx, (damage: 0.0, reason: null, photos: <PlatformFile>[]));
+                        return;
+                      }
+                      final amount = double.tryParse(amountCtrl.text.trim());
+                      if (amount == null || amount <= 0) {
+                        ScaffoldMessenger.of(ctx).showSnackBar(
+                          const SnackBar(content: Text('Enter the damage charge.')),
+                        );
+                        return;
+                      }
+                      if (amount > order.depositAmount + 0.001) {
+                        ScaffoldMessenger.of(ctx).showSnackBar(
+                          SnackBar(content: Text('Damage charge cannot be more than ${formatVendorMoney(order.depositAmount)}.')),
+                        );
+                        return;
+                      }
+                      final reason = reasonCtrl.text.trim();
+                      if (reason.isEmpty) {
+                        ScaffoldMessenger.of(ctx).showSnackBar(
+                          const SnackBar(content: Text('Add a short reason for the damage charge.')),
+                        );
+                        return;
+                      }
+                      Navigator.pop(ctx, (
+                        damage: amount,
+                        reason: reason,
+                        photos: List<PlatformFile>.from(photos),
+                      ));
+                    },
+                    child: const Text('Mark returned'),
+                  ),
+                ],
+              ),
+              ),
+            );
+          },
+        );
+      },
+    );
+    Future<void>.delayed(const Duration(milliseconds: 400), () {
+      amountCtrl.dispose();
+      reasonCtrl.dispose();
+    });
+    if (confirmed == null || !mounted) return;
+    await _updateStatus(
+      'returned',
+      damageAmount: confirmed.damage,
+      damageReason: confirmed.reason,
+      damagePhotos: confirmed.photos,
+    );
+  }
+
+  Future<void> _updateStatus(
+    String status, {
+    List<String>? assetTags,
+    double? damageAmount,
+    String? damageReason,
+    List<PlatformFile> damagePhotos = const [],
+  }) async {
     final vendorId = Provider.of<AuthProvider>(context, listen: false).vendorId;
     if (vendorId == null) return;
     final provider = Provider.of<VendorOrderProvider>(context, listen: false);
@@ -120,6 +288,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       _selectedOrderId,
       status,
       assetTags: assetTags,
+      damageAmount: damageAmount,
+      damageReason: damageReason,
+      damagePhotos: damagePhotos,
     );
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
@@ -203,22 +374,28 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     }
     final confirm = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.card(context),
-        title: const Text('Cancel order?', style: TextStyle(color: Colors.white)),
+      builder: (ctx) {
+        final colors = ctx.appColors;
+        return AlertDialog(
+        backgroundColor: colors.surface,
+        title: Text('Cancel order?', style: TextStyle(color: colors.textPrimary)),
         content: Text(
           'This releases the assignment so another vendor can receive it.',
-          style: TextStyle(color: Colors.white.withValues(alpha: 0.75)),
+          style: TextStyle(color: colors.textSecondary),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Keep')),
           ElevatedButton(
             onPressed: () => Navigator.pop(ctx, true),
-            style: ElevatedButton.styleFrom(backgroundColor: Colors.redAccent),
-            child: const Text('Cancel order'),
+            style: ElevatedButton.styleFrom(
+              backgroundColor: colors.danger,
+              foregroundColor: Colors.white,
+            ),
+            child: const Text('Cancel order', style: TextStyle(color: Colors.white)),
           ),
         ],
-      ),
+      );
+      },
     );
     if (confirm != true || !mounted) return;
 
@@ -238,14 +415,35 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     );
   }
 
-  Future<void> _pickAndUploadPhotos([VendorPhotoPickSource? source]) async {
+  Future<void> _pickAndUploadPhotos(
+    String optionId, {
+    VendorPhotoPickSource? source,
+    int? slotIndex,
+  }) async {
     final vendorId = Provider.of<AuthProvider>(context, listen: false).vendorId;
     if (vendorId == null) return;
     final provider = Provider.of<VendorOrderProvider>(context, listen: false);
-    final remaining = 5 - provider.orderImages.length;
-    if (remaining <= 0) {
+    final matches = provider.imageRequest?.options
+            .where((o) => o.id == optionId)
+            .toList() ??
+        const <OrderImageOption>[];
+    final option = matches.isEmpty ? null : matches.first;
+    final maxPerOption = provider.imageRequest?.maxImagesPerOption ?? 3;
+    final occupied = {
+      for (final photo in option?.images ?? const <OrderImage>[]) photo.sortOrder,
+    };
+    final emptySlots = [
+      for (var slot = 0; slot < maxPerOption; slot++)
+        if (!occupied.contains(slot)) slot,
+    ];
+    final startSlot = slotIndex ?? 0;
+    final orderedSlots = [
+      ...emptySlots.where((slot) => slot >= startSlot),
+      ...emptySlots.where((slot) => slot < startSlot),
+    ];
+    if (orderedSlots.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('You can upload at most 5 photos.')),
+        SnackBar(content: Text('This option already has $maxPerOption photos. Remove one to upload a different photo.')),
       );
       return;
     }
@@ -255,16 +453,18 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
 
     final files = await pickVendorPhotoFiles(
       source: pickedSource,
-      maxCount: remaining,
+      maxCount: orderedSlots.length,
     );
     if (files.isEmpty || !mounted) return;
 
     var uploaded = 0;
-    for (final file in files) {
+    for (var i = 0; i < files.length; i++) {
       final ok = await provider.uploadOrderImage(
         vendorId: vendorId,
         orderId: _selectedOrderId,
-        file: file,
+        optionId: optionId,
+        file: files[i],
+        slotIndex: orderedSlots[i],
       );
       if (!ok) {
         if (!mounted) return;
@@ -284,10 +484,36 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     );
   }
 
-  Future<void> _deletePhoto(String imageId) async {
+  Future<void> _saveOptionDescription(String optionId, String description) async {
     final vendorId = Provider.of<AuthProvider>(context, listen: false).vendorId;
     if (vendorId == null) return;
     final provider = Provider.of<VendorOrderProvider>(context, listen: false);
+    final ok = await provider.updateOrderImageOptionDescription(
+      vendorId: vendorId,
+      orderId: _selectedOrderId,
+      optionId: optionId,
+      description: description,
+    );
+    if (!mounted || ok) return;
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text(provider.error ?? 'Failed to save description.'),
+        backgroundColor: Colors.redAccent,
+      ),
+    );
+  }
+
+  Future<void> _deletePhoto(String imageId, String optionId) async {
+    final vendorId = Provider.of<AuthProvider>(context, listen: false).vendorId;
+    if (vendorId == null) return;
+    final provider = Provider.of<VendorOrderProvider>(context, listen: false);
+    final option = provider.imageRequest?.options
+        .where((o) => o.id == optionId)
+        .toList();
+    final hadDescription =
+        option != null && option.isNotEmpty && (option.first.description ?? '').trim().isNotEmpty;
+    final isLastPhoto = option != null && option.isNotEmpty && option.first.images.length <= 1;
+    final label = option != null && option.isNotEmpty ? option.first.label : 'this option';
     final ok = await provider.deleteOrderImage(
       vendorId: vendorId,
       orderId: _selectedOrderId,
@@ -300,6 +526,30 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
         backgroundColor: ok ? null : Colors.redAccent,
       ),
     );
+    if (!ok || !hadDescription || !isLastPhoto || !mounted) return;
+
+    final clear = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Clear the description too?'),
+        content: Text(
+          'You removed the photo from $label. That option still has a description. Do you want to clear it?',
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Keep description'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Clear description'),
+          ),
+        ],
+      ),
+    );
+    if (clear == true && mounted) {
+      await _saveOptionDescription(optionId, '');
+    }
   }
 
   Future<void> _approveExtension(PendingExtension ext) async {
@@ -310,7 +560,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
-        content: Text(ok ? 'Extension approved.' : (provider.error ?? 'Approve failed')),
+        content: Text(ok
+            ? 'Extension approved. The customer pays before the end date changes.'
+            : (provider.error ?? 'Approve failed')),
         backgroundColor: ok ? null : Colors.redAccent,
       ),
     );
@@ -374,15 +626,23 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
     final continuations = provider.continuations;
     final groupItems = order == null
         ? const <VendorOrder>[]
-        : orderGroupItems(anchor: order, allOrders: provider.orders);
+        : orderGroupItems(
+            anchor: order,
+            allOrders: provider.orderGroup.isNotEmpty
+                ? provider.orderGroup
+                : provider.orders,
+          );
     final activeItem = order == null
         ? null
         : groupItems.firstWhere(
             (item) => item.orderId == _selectedOrderId,
             orElse: () => order,
           );
-    final groupPayout =
-        groupItems.fold(0.0, (sum, item) => sum + item.payoutAmount);
+    final groupPayout = groupItems.fold(
+      0.0,
+      (sum, item) => sum + (vendorEarnsPayout(item.status) ? item.payoutAmount : 0),
+    );
+    final showGroupPayout = groupItems.any((item) => vendorEarnsPayout(item.status));
     final baseOrderNumber =
         order == null ? '' : getBaseOrderNumber(order.orderNumber);
 
@@ -402,7 +662,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
               ? Center(
                   child: Text(
                     provider.error ?? 'Order not found',
-                    style: const TextStyle(color: Colors.white54),
+                    style: TextStyle(color: context.appColors.textMuted),
                   ),
                 )
               : CustomScrollView(
@@ -415,6 +675,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                             baseOrderNumber: baseOrderNumber,
                             itemCount: groupItems.length,
                             groupPayout: groupPayout,
+                            showPayout: showGroupPayout,
                           ),
                           const SizedBox(height: 10),
                           _SectionCard(
@@ -474,6 +735,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                                                     children: [
                                                       OrderTypeChip(orderType: item.orderType),
                                                       OrderMetaChip(label: 'Qty ${item.quantity}'),
+                                                      if (item.isExtended && item.orderType.toLowerCase() != 'buy')
+                                                        OrderMetaChip(label: 'EXTENDED', highlight: true),
+                                                      if (item.returnSettlement?.listDamageLabel != null)
+                                                        OrderMetaChip(label: item.returnSettlement!.listDamageLabel!),
                                                       if (item.assignedAssetTags.isNotEmpty)
                                                         OrderMetaChip(
                                                           label: item.assignedAssetTags.length == 1
@@ -511,14 +776,14 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                                                         Icon(
                                                           Icons.photo_library_outlined,
                                                           size: 12,
-                                                          color: context.isDarkMode ? const Color(0xFF34D399) : const Color(0xFF059669),
+                                                          color: context.appColors.success,
                                                         ),
                                                         const SizedBox(width: 4),
                                                         Expanded(
                                                           child: Text(
                                                             '$photoCount/5 customer photos uploaded',
                                                             style: TextStyle(
-                                                              color: context.isDarkMode ? const Color(0xFF34D399) : const Color(0xFF059669),
+                                                              color: context.appColors.success,
                                                               fontSize: 10.5,
                                                               fontWeight: FontWeight.w700,
                                                             ),
@@ -535,15 +800,17 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                                               crossAxisAlignment: CrossAxisAlignment.end,
                                               children: [
                                                 OrderStatusChip(status: item.status),
-                                                const SizedBox(height: 4),
-                                                Text(
-                                                  '₹${item.payoutAmount.toStringAsFixed(0)}',
-                                                  style: TextStyle(
-                                                    color: context.appColors.textPrimary,
-                                                    fontWeight: FontWeight.w700,
-                                                    fontSize: 11,
+                                                if (vendorEarnsPayout(item.status)) ...[
+                                                  const SizedBox(height: 4),
+                                                  Text(
+                                                    formatVendorMoney(item.payoutAmount),
+                                                    style: TextStyle(
+                                                      color: context.appColors.textPrimary,
+                                                      fontWeight: FontWeight.w700,
+                                                      fontSize: 11,
+                                                    ),
                                                   ),
-                                                ),
+                                                ],
                                               ],
                                             ),
                                           ],
@@ -560,8 +827,21 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                             order: activeItem ?? order,
                             onAddSerials: () => _openAssignSerials(activeItem ?? order),
                           ),
-                          if (!provider.orderImagesLoading &&
-                              provider.imageRequest != null) ...[
+                          const SizedBox(height: 10),
+                          _OrderTimelineCard(
+                            status: (activeItem ?? order).status,
+                            orderType: (activeItem ?? order).orderType,
+                            listingTitle: (activeItem ?? order).listingTitle,
+                          ),
+                          if (provider.prescriptionLoading ||
+                              provider.prescriptionFiles.isNotEmpty) ...[
+                            const SizedBox(height: 10),
+                            _OrderPrescriptionCard(
+                              files: provider.prescriptionFiles,
+                              loading: provider.prescriptionLoading,
+                            ),
+                          ],
+                          if (provider.imageRequest != null) ...[
                             const SizedBox(height: 10),
                             _PhotoRequestCard(
                               request: provider.imageRequest!,
@@ -579,6 +859,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                                     s == 'in_transit';
                               }(),
                               onAdd: _pickAndUploadPhotos,
+                              onSaveDescription: _saveOptionDescription,
                               onDelete: _deletePhoto,
                             ),
                           ],
@@ -610,7 +891,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
               hasPendingRequests: hasPending,
               onMarkTransit: () => _openDispatchSheet(activeItem ?? order),
               onMarkActive: () => _updateStatus('active'),
-              onMarkReturned: () => _updateStatus('returned'),
+              onMarkReturned: () => _openReturnDialog(activeItem ?? order),
             ),
     );
   }
@@ -637,11 +918,13 @@ class _GroupHeroCard extends StatelessWidget {
   final String baseOrderNumber;
   final int itemCount;
   final double groupPayout;
+  final bool showPayout;
 
   const _GroupHeroCard({
     required this.baseOrderNumber,
     required this.itemCount,
     required this.groupPayout,
+    required this.showPayout,
   });
 
   @override
@@ -684,26 +967,27 @@ class _GroupHeroCard extends StatelessWidget {
               ],
             ),
           ),
-          Column(
-            crossAxisAlignment: CrossAxisAlignment.end,
-            children: [
-              Text(
-                '₹${groupPayout.toStringAsFixed(0)}',
-                style: TextStyle(
-                  color: context.appColors.textPrimary,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 18,
+          if (showPayout)
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                Text(
+                  formatVendorMoney(groupPayout),
+                  style: TextStyle(
+                    color: context.appColors.textPrimary,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 18,
+                  ),
                 ),
-              ),
-              Text(
-                itemCount > 1 ? 'Combined' : 'Payout',
-                style: TextStyle(
-                  color: context.appColors.textMuted,
-                  fontSize: 10,
+                Text(
+                  itemCount > 1 ? 'Estimated payout (combined)' : 'Estimated payout',
+                  style: TextStyle(
+                    color: context.appColors.textMuted,
+                    fontSize: 10,
+                  ),
                 ),
-              ),
-            ],
-          ),
+              ],
+            ),
         ],
       ),
     );
@@ -788,6 +1072,9 @@ class _OrderActionBar extends StatelessWidget {
                 style: ElevatedButton.styleFrom(
                   minimumSize: const Size.fromHeight(48),
                   backgroundColor: AppTheme.accent,
+                  foregroundColor: Colors.white,
+                  disabledBackgroundColor: AppTheme.accent.withValues(alpha: 0.38),
+                  disabledForegroundColor: Colors.white,
                 ),
                 child: busy
                     ? const SizedBox(
@@ -795,7 +1082,10 @@ class _OrderActionBar extends StatelessWidget {
                         height: 20,
                         child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white),
                       )
-                    : Text(label, style: const TextStyle(fontWeight: FontWeight.bold)),
+                    : Text(
+                        label,
+                        style: const TextStyle(fontWeight: FontWeight.bold, color: Colors.white),
+                      ),
               ),
             ],
           ),
@@ -826,20 +1116,14 @@ class _PendingContinuationsCard extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final isDark = context.isDarkMode;
+    final dark = context.isDarkMode;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(14),
       decoration: BoxDecoration(
-        color: isDark
-            ? const Color(0xFF78350F).withValues(alpha: 0.35)
-            : const Color(0xFFFFFBEB),
+        color: dark ? const Color(0xFF3F2A12) : context.appColors.warningSoft,
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(
-          color: isDark
-              ? Colors.amber.withValues(alpha: 0.45)
-              : const Color(0xFFFDE68A),
-        ),
+        border: Border.all(color: dark ? const Color(0xFFFBBF24) : context.appColors.warningBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -847,26 +1131,28 @@ class _PendingContinuationsCard extends StatelessWidget {
           Text(
             'Pending customer requests',
             style: TextStyle(
-              color: isDark ? const Color(0xFFFBBF24) : const Color(0xFF92400E),
+              color: context.appColors.warning,
               fontWeight: FontWeight.w800,
               fontSize: 16,
             ),
           ),
           const SizedBox(height: 10),
           ...continuations.pendingExtensions.map((ext) {
+            final waitingForPayment = ext.status == 'awaiting_payment';
             return Padding(
               padding: const EdgeInsets.only(bottom: 10),
               child: _RequestBox(
-                title: 'Rent extension request',
-                subtitle: 'Customer wants to extend by ${ext.additionalDays} days.',
+                title: waitingForPayment ? 'Extension approved' : 'Rent extension request',
+                subtitle: waitingForPayment
+                    ? 'The customer still has to pay. The end date stays the same until then.'
+                    : 'Customer wants to extend by ${ext.additionalDays} days.',
                 rows: [
                   ('Original end date', formatDate(ext.originalEndDate)),
                   ('New end date', formatDate(ext.newEndDate)),
-                  ('Base extension rent', '₹${ext.extensionAmount.toStringAsFixed(2)}'),
-                  ('GST', '₹${ext.gstAmount.toStringAsFixed(2)}'),
-                  ('Total to collect', '₹${ext.totalAmount.toStringAsFixed(2)}'),
+                  ('Your payout', '₹${ext.vendorPayout.toStringAsFixed(2)}'),
                 ],
                 busy: busy,
+                showActions: !waitingForPayment,
                 onReject: () => onRejectExtension(ext),
                 onApprove: () => onApproveExtension(ext),
               ),
@@ -881,7 +1167,7 @@ class _PendingContinuationsCard extends StatelessWidget {
                 rows: [
                   ('Base buyout value', '₹${buy.baseBuyoutAmount.toStringAsFixed(2)}'),
                   ('Rent deduction', '-₹${buy.rentDeductionAmount.toStringAsFixed(2)}'),
-                  ('GST', '₹${buy.gstAmount.toStringAsFixed(2)}'),
+                  (formatGstLabel(buy.gstPercent), '₹${buy.gstAmount.toStringAsFixed(2)}'),
                   ('Total to collect', '₹${buy.totalAmount.toStringAsFixed(2)}'),
                 ],
                 busy: busy,
@@ -901,6 +1187,7 @@ class _RequestBox extends StatelessWidget {
   final String subtitle;
   final List<(String, String)> rows;
   final bool busy;
+  final bool showActions;
   final VoidCallback onReject;
   final VoidCallback onApprove;
 
@@ -909,31 +1196,29 @@ class _RequestBox extends StatelessWidget {
     required this.subtitle,
     required this.rows,
     required this.busy,
+    this.showActions = true,
     required this.onReject,
     required this.onApprove,
   });
 
   @override
   Widget build(BuildContext context) {
-    final isDark = context.isDarkMode;
+    final colors = context.appColors;
+    final dark = context.isDarkMode;
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
-        color: context.appColors.surface,
+        color: dark ? const Color(0xFF1E293B) : colors.surface,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(
-          color: isDark
-              ? Colors.amber.withValues(alpha: 0.25)
-              : const Color(0xFFFDE68A),
-        ),
+        border: Border.all(color: dark ? const Color(0xFF92400E) : colors.warningBorder),
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: TextStyle(color: context.appColors.textPrimary, fontWeight: FontWeight.w700)),
+          Text(title, style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w700)),
           const SizedBox(height: 4),
-          Text(subtitle, style: TextStyle(color: context.appColors.textSecondary, fontSize: 13)),
+          Text(subtitle, style: TextStyle(color: dark ? const Color(0xFFE2E8F0) : colors.textSecondary, fontSize: 13)),
           const SizedBox(height: 10),
           ...rows.map(
             (r) => Padding(
@@ -943,17 +1228,18 @@ class _RequestBox extends StatelessWidget {
                   Expanded(
                     child: Text(
                       r.$1,
-                      style: TextStyle(color: context.appColors.textMuted, fontSize: 12),
+                      style: TextStyle(color: dark ? const Color(0xFFCBD5E1) : colors.textMuted, fontSize: 12),
                     ),
                   ),
                   Text(
                     r.$2,
-                    style: TextStyle(color: context.appColors.textPrimary, fontWeight: FontWeight.w600, fontSize: 12),
+                    style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w600, fontSize: 12),
                   ),
                 ],
               ),
             ),
           ),
+          if (showActions) ...[
           const SizedBox(height: 10),
           Row(
             children: [
@@ -961,8 +1247,8 @@ class _RequestBox extends StatelessWidget {
                 child: OutlinedButton(
                   onPressed: busy ? null : onReject,
                   style: OutlinedButton.styleFrom(
-                    foregroundColor: context.appColors.textSecondary,
-                    side: BorderSide(color: context.appColors.border),
+                    foregroundColor: colors.textPrimary,
+                    side: BorderSide(color: colors.border),
                   ),
                   child: const Text('Reject'),
                 ),
@@ -971,12 +1257,18 @@ class _RequestBox extends StatelessWidget {
               Expanded(
                 child: ElevatedButton(
                   onPressed: busy ? null : onApprove,
-                  style: ElevatedButton.styleFrom(backgroundColor: AppTheme.accent),
-                  child: const Text('Approve'),
+                  style: ElevatedButton.styleFrom(
+                    backgroundColor: AppTheme.accent,
+                    foregroundColor: Colors.white,
+                    disabledBackgroundColor: AppTheme.accent.withValues(alpha: 0.38),
+                    disabledForegroundColor: Colors.white,
+                  ),
+                  child: const Text('Approve', style: TextStyle(color: Colors.white, fontWeight: FontWeight.w700)),
                 ),
               ),
             ],
           ),
+          ],
         ],
       ),
     );
@@ -984,15 +1276,18 @@ class _RequestBox extends StatelessWidget {
 }
 
 class _PhotoRequestCard extends StatelessWidget {
-  static const int maxImages = 5;
-
   final OrderImageRequest request;
   final String listingTitle;
   final List<OrderImage> images;
   final bool busy;
   final bool canUpload;
-  final Future<void> Function([VendorPhotoPickSource? source]) onAdd;
-  final Future<void> Function(String imageId) onDelete;
+  final Future<void> Function(
+    String optionId, {
+    VendorPhotoPickSource? source,
+    int? slotIndex,
+  }) onAdd;
+  final Future<void> Function(String optionId, String description) onSaveDescription;
+  final Future<void> Function(String imageId, String optionId) onDelete;
 
   const _PhotoRequestCard({
     required this.request,
@@ -1001,42 +1296,134 @@ class _PhotoRequestCard extends StatelessWidget {
     required this.busy,
     required this.canUpload,
     required this.onAdd,
+    required this.onSaveDescription,
     required this.onDelete,
   });
 
-  void _preview(BuildContext context, OrderImage image) {
-    showDialog<void>(
-      context: context,
-      builder: (ctx) => Dialog(
-        backgroundColor: Colors.black,
-        insetPadding: const EdgeInsets.all(16),
-        child: Stack(
+  void _preview(BuildContext context, List<OrderImage> photos, int index, {String title = 'Photo preview'}) {
+    if (photos.isEmpty) return;
+    final urls = photos.map((p) => p.fileUrl).where((u) => u.trim().isNotEmpty).toList();
+    if (urls.isEmpty) return;
+    Navigator.of(context).push(
+      MaterialPageRoute<void>(
+        builder: (_) => CatalogImageViewerScreen(
+          imageUrls: urls,
+          initialIndex: index.clamp(0, urls.length - 1),
+          title: title,
+        ),
+      ),
+    );
+  }
+
+  ButtonStyle _compactFillStyle() {
+    return ElevatedButton.styleFrom(
+      elevation: 0,
+      backgroundColor: AppTheme.accent,
+      foregroundColor: Colors.white,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      minimumSize: const Size(0, 44),
+      maximumSize: const Size(double.infinity, 44),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      visualDensity: VisualDensity.compact,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    );
+  }
+
+  ButtonStyle _compactOutlineStyle(Color foreground, Color border) {
+    return OutlinedButton.styleFrom(
+      foregroundColor: foreground,
+      padding: const EdgeInsets.symmetric(horizontal: 14),
+      minimumSize: const Size(0, 44),
+      maximumSize: const Size(double.infinity, 44),
+      tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+      visualDensity: VisualDensity.compact,
+      side: BorderSide(color: border),
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+    );
+  }
+
+  Widget _capturePad(BuildContext context, String optionId) {
+    final colors = context.appColors;
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: AppTheme.accent.withValues(alpha: 0.04),
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: AppTheme.accent.withValues(alpha: 0.28)),
+      ),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(12, 12, 12, 10),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            InteractiveViewer(
-              child: AspectRatio(
-                aspectRatio: 1,
-                child: Image.network(
-                  image.fileUrl,
-                  fit: BoxFit.contain,
-                  errorBuilder: (_, __, ___) => const Center(
-                    child: Icon(Icons.broken_image_outlined, color: Colors.white54, size: 48),
-                  ),
+            SizedBox(
+              height: 44,
+              child: ElevatedButton(
+                onPressed: busy
+                    ? null
+                    : () => onAdd(
+                          optionId,
+                          source: VendorPhotoPickSource.camera,
+                          slotIndex: 0,
+                        ),
+                style: _compactFillStyle(),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.photo_camera_outlined, size: 18),
+                    SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        'Take photo',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5),
+                      ),
+                    ),
+                  ],
                 ),
               ),
             ),
-            Positioned(
-              top: 8,
-              right: 8,
-              child: Material(
-                color: Colors.black.withValues(alpha: 0.62),
-                shape: const CircleBorder(),
-                elevation: 2,
-                child: IconButton(
-                  tooltip: 'Close',
-                  onPressed: () => Navigator.pop(ctx),
-                  icon: const Icon(Icons.close, color: Colors.white, size: 20),
-                  visualDensity: VisualDensity.compact,
+            const SizedBox(height: 8),
+            SizedBox(
+              height: 44,
+              child: OutlinedButton(
+                onPressed: busy
+                    ? null
+                    : () => onAdd(
+                          optionId,
+                          source: VendorPhotoPickSource.gallery,
+                          slotIndex: 0,
+                        ),
+                style: _compactOutlineStyle(colors.textPrimary, colors.border),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.photo_library_outlined, size: 18, color: colors.textPrimary),
+                    const SizedBox(width: 8),
+                    Flexible(
+                      child: Text(
+                        'Choose from gallery',
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: TextStyle(
+                          color: colors.textPrimary,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 13.5,
+                        ),
+                      ),
+                    ),
+                  ],
                 ),
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              busy ? 'Uploading\u2026' : 'Up to ${request.maxImagesPerOption} photos',
+              textAlign: TextAlign.center,
+              style: TextStyle(
+                color: colors.textMuted,
+                fontSize: 11.5,
+                fontWeight: FontWeight.w600,
               ),
             ),
           ],
@@ -1045,143 +1432,9 @@ class _PhotoRequestCard extends StatelessWidget {
     );
   }
 
-  Widget _emptyUploadZone(BuildContext context) {
-    final colors = context.appColors;
-    return CustomPaint(
-      painter: _DashedBorderPainter(
-        color: AppTheme.accent.withValues(alpha: 0.55),
-        radius: 14,
-      ),
-      child: Ink(
-        decoration: BoxDecoration(
-          color: AppTheme.accent.withValues(alpha: 0.06),
-          borderRadius: BorderRadius.circular(14),
-        ),
-        child: Padding(
-          padding: const EdgeInsets.fromLTRB(14, 16, 14, 14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.stretch,
-            children: [
-              if (!kIsWeb) ...[
-                SizedBox(
-                  height: 46,
-                  child: ElevatedButton.icon(
-                    onPressed: busy ? null : () => onAdd(VendorPhotoPickSource.camera),
-                    icon: const Icon(Icons.photo_camera_outlined, size: 20),
-                    label: const Text('Take photo'),
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.accent,
-                      foregroundColor: Colors.white,
-                      shape: RoundedRectangleBorder(
-                        borderRadius: BorderRadius.circular(12),
-                      ),
-                    ),
-                  ),
-                ),
-                const SizedBox(height: 8),
-              ],
-              SizedBox(
-                height: 46,
-                child: OutlinedButton.icon(
-                  onPressed: busy
-                      ? null
-                      : () => onAdd(
-                            kIsWeb ? null : VendorPhotoPickSource.gallery,
-                          ),
-                  icon: const Icon(Icons.photo_library_outlined, size: 20),
-                  label: Text(kIsWeb ? 'Choose photos' : 'Choose from gallery'),
-                  style: OutlinedButton.styleFrom(
-                    foregroundColor: colors.textPrimary,
-                    side: BorderSide(color: colors.border),
-                    shape: RoundedRectangleBorder(
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 10),
-              Text(
-                busy ? 'Uploading\u2026' : 'Up to $maxImages photos',
-                textAlign: TextAlign.center,
-                style: TextStyle(
-                  color: colors.textMuted,
-                  fontSize: 11.5,
-                  fontWeight: FontWeight.w600,
-                ),
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
-  Widget _addTile({required bool large, required BuildContext context}) {
-    final radius = BorderRadius.circular(large ? 14 : 10);
-    return Material(
-      color: Colors.transparent,
-      child: InkWell(
-        onTap: busy ? null : () => onAdd(),
-        borderRadius: radius,
-        child: CustomPaint(
-          painter: _DashedBorderPainter(
-            color: AppTheme.accent.withValues(alpha: 0.55),
-            radius: large ? 14 : 10,
-          ),
-          child: Ink(
-            decoration: BoxDecoration(
-              color: AppTheme.accent.withValues(alpha: 0.08),
-              borderRadius: radius,
-            ),
-            child: Center(
-              child: Padding(
-                padding: EdgeInsets.symmetric(vertical: large ? 22 : 8, horizontal: 12),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      busy ? Icons.hourglass_top_rounded : Icons.add_photo_alternate_outlined,
-                      color: AppTheme.accent,
-                      size: large ? 32 : 22,
-                    ),
-                    SizedBox(height: large ? 8 : 4),
-                    Text(
-                      busy ? 'Uploading\u2026' : (large ? 'Add photo' : 'Add'),
-                      textAlign: TextAlign.center,
-                      style: TextStyle(
-                        color: context.appColors.textPrimary,
-                        fontSize: large ? 13 : 11,
-                        fontWeight: FontWeight.w700,
-                      ),
-                    ),
-                    if (large) ...[
-                      const SizedBox(height: 4),
-                      Text(
-                        'Camera or gallery',
-                        style: TextStyle(
-                          color: context.appColors.textMuted,
-                          fontSize: 11,
-                        ),
-                      ),
-                    ],
-                  ],
-                ),
-              ),
-            ),
-          ),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
-    final message = request.message.trim().isEmpty
-        ? 'Please upload up to $maxImages photos so we can proceed.'
-        : request.message;
-    final showAdd = canUpload && images.length < maxImages;
-    final emptyUpload = images.isEmpty && showAdd;
+    final options = request.options;
 
     return Container(
       padding: const EdgeInsets.all(14),
@@ -1231,7 +1484,7 @@ class _PhotoRequestCard extends StatelessWidget {
                             border: Border.all(color: context.appColors.border),
                           ),
                           child: Text(
-                            '${images.length}/$maxImages',
+                            '${images.length} photos',
                             style: TextStyle(
                               color: context.appColors.textSecondary,
                               fontSize: 11,
@@ -1244,19 +1497,17 @@ class _PhotoRequestCard extends StatelessWidget {
                           Container(
                             padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
                             decoration: BoxDecoration(
-                              color: context.isDarkMode ? Colors.amber.withValues(alpha: 0.2) : const Color(0xFFFEF3C7),
+                              color: context.appColors.warningSoft,
                               borderRadius: BorderRadius.circular(999),
                               border: Border.all(
-                                color: context.isDarkMode
-                                    ? Colors.amber.withValues(alpha: 0.35)
-                                    : const Color(0xFFFDE68A),
+                                color: context.appColors.warningBorder,
                                 width: 1,
                               ),
                             ),
                             child: Text(
                               'Action needed',
                               style: TextStyle(
-                                color: context.isDarkMode ? Colors.amber.shade200 : const Color(0xFF92400E),
+                                color: context.appColors.warning,
                                 fontSize: 10,
                                 fontWeight: FontWeight.w800,
                               ),
@@ -1278,7 +1529,7 @@ class _PhotoRequestCard extends StatelessWidget {
                     ],
                     const SizedBox(height: 4),
                     Text(
-                      'From the customer for this product only \u2014 upload here (not Admin chat).',
+                      'Upload up to ${request.maxImagesPerOption} photos per option. The customer will select one option. Add photos here \u2014 not in Admin chat.',
                       style: TextStyle(
                         color: context.appColors.textMuted,
                         fontSize: 11.5,
@@ -1291,100 +1542,259 @@ class _PhotoRequestCard extends StatelessWidget {
             ],
           ),
           const SizedBox(height: 10),
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-            decoration: BoxDecoration(
-              color: context.appColors.surface,
-              borderRadius: BorderRadius.circular(10),
-              border: Border.all(color: context.appColors.border),
-            ),
-            child: Text(
-              message,
-              style: TextStyle(
-                color: context.appColors.textSecondary,
-                fontSize: 12.5,
-                height: 1.4,
-                fontWeight: FontWeight.w500,
-              ),
-            ),
-          ),
-          const SizedBox(height: 12),
-          if (emptyUpload)
-            _emptyUploadZone(context)
-          else if (images.isEmpty)
-            Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 18, horizontal: 12),
-              decoration: BoxDecoration(
-                color: context.appColors.surface,
-                borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: context.appColors.border),
-              ),
-              child: Text(
-                'No photos uploaded yet.',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: context.appColors.textMuted, fontSize: 13),
+          if (request.selectedOptionId != null &&
+              options.any((o) => o.id == request.selectedOptionId))
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Row(
+                children: [
+                  Icon(Icons.check_circle_rounded, size: 16, color: AppTheme.accent),
+                  const SizedBox(width: 6),
+                  Expanded(
+                    child: Text(
+                      'Customer selected ${options.firstWhere((o) => o.id == request.selectedOptionId).label}',
+                      style: TextStyle(
+                        color: context.appColors.textSecondary,
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  ),
+                ],
               ),
             )
           else
-            GridView.builder(
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              itemCount: images.length + (showAdd ? 1 : 0),
-              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                crossAxisCount: 3,
-                mainAxisSpacing: 8,
-                crossAxisSpacing: 8,
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Text(
+                'Waiting for the customer to select an option.',
+                style: TextStyle(color: context.appColors.textMuted, fontSize: 12),
               ),
-              itemBuilder: (context, index) {
-                if (showAdd && index == images.length) {
-                  return _addTile(large: false, context: context);
-                }
-
-                final image = images[index];
-                return Stack(
-                  fit: StackFit.expand,
+            ),
+          ...options.map((option) {
+            final photos = option.images;
+            final chosen = request.selectedOptionId == option.id;
+            return Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: context.appColors.surface,
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(
+                    color: chosen
+                        ? AppTheme.accent.withValues(alpha: 0.45)
+                        : context.appColors.border,
+                    width: chosen ? 1.4 : 1,
+                  ),
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Material(
-                      color: context.appColors.surface,
-                      borderRadius: BorderRadius.circular(10),
-                      clipBehavior: Clip.antiAlias,
-                      child: InkWell(
-                        onTap: () => _preview(context, image),
-                        child: Image.network(
-                          image.fileUrl,
-                          fit: BoxFit.cover,
-                          errorBuilder: (_, __, ___) => Center(
-                            child: Icon(Icons.broken_image_outlined, color: context.appColors.textMuted),
-                          ),
-                        ),
-                      ),
-                    ),
-                    if (canUpload)
-                      Positioned(
-                        top: 4,
-                        right: 4,
-                        child: Material(
-                          color: Colors.black.withValues(alpha: 0.65),
-                          shape: const CircleBorder(),
-                          child: InkWell(
-                            customBorder: const CircleBorder(),
-                            onTap: busy ? null : () => onDelete(image.id),
-                            child: const Padding(
-                              padding: EdgeInsets.all(5),
-                              child: Icon(Icons.close, size: 14, color: Colors.white),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            option.label,
+                            style: TextStyle(
+                              color: context.appColors.textPrimary,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 13.5,
                             ),
                           ),
                         ),
+                        if (chosen)
+                          Container(
+                            margin: const EdgeInsets.only(right: 6),
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                            decoration: BoxDecoration(
+                              color: AppTheme.accent.withValues(alpha: context.isDarkMode ? 0.18 : 0.12),
+                              borderRadius: BorderRadius.circular(999),
+                            ),
+                            child: Text(
+                              'Chosen',
+                              style: TextStyle(
+                                color: context.isDarkMode
+                                    ? const Color(0xFFC4B5FD)
+                                    : AppTheme.accent,
+                                fontSize: 10,
+                                fontWeight: FontWeight.w800,
+                                letterSpacing: 0.2,
+                              ),
+                            ),
+                          ),
+                        Text(
+                          '${photos.length} of ${request.maxImagesPerOption}',
+                          style: TextStyle(
+                            color: context.appColors.textMuted,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                      ],
+                    ),
+                    const SizedBox(height: 8),
+                    if (canUpload && photos.isEmpty && !kIsWeb)
+                      _capturePad(context, option.id)
+                    else
+                    GridView.builder(
+                      shrinkWrap: true,
+                      physics: const NeverScrollableScrollPhysics(),
+                      itemCount: request.maxImagesPerOption,
+                      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                        crossAxisCount: 3,
+                        mainAxisSpacing: 8,
+                        crossAxisSpacing: 8,
                       ),
+                      itemBuilder: (context, i) {
+                        final photo = imageAtSlot(photos, i);
+                        if (photo != null) {
+                          final previewIndex = photos.indexOf(photo);
+                          return Stack(
+                            children: [
+                              Positioned.fill(
+                                child: Material(
+                                  color: context.appColors.surface,
+                                  borderRadius: BorderRadius.circular(12),
+                                  clipBehavior: Clip.antiAlias,
+                                  child: InkWell(
+                                    onTap: () => _preview(
+                                      context,
+                                      photos,
+                                      previewIndex < 0 ? 0 : previewIndex,
+                                      title: option.label,
+                                    ),
+                                    child: CatalogImage(
+                                      url: photo.tileUrl,
+                                      fit: BoxFit.cover,
+                                      width: double.infinity,
+                                      height: double.infinity,
+                                      borderRadius: BorderRadius.circular(12),
+                                    ),
+                                  ),
+                                ),
+                              ),
+                              if (canUpload)
+                                Positioned(
+                                  top: 4,
+                                  right: 4,
+                                  child: Material(
+                                    color: Colors.black.withValues(alpha: 0.65),
+                                    shape: const CircleBorder(),
+                                    child: InkWell(
+                                      customBorder: const CircleBorder(),
+                                      onTap: busy ? null : () => onDelete(photo.id, option.id),
+                                      child: const Padding(
+                                        padding: EdgeInsets.all(5),
+                                        child: Icon(Icons.close, size: 14, color: Colors.white),
+                                      ),
+                                    ),
+                                  ),
+                                ),
+                            ],
+                          );
+                        }
+                        if (canUpload) {
+                          return Material(
+                            color: context.appColors.surfaceElevated,
+                            borderRadius: BorderRadius.circular(12),
+                            child: InkWell(
+                              onTap: busy ? null : () => onAdd(option.id, slotIndex: i),
+                              borderRadius: BorderRadius.circular(12),
+                              child: DecoratedBox(
+                                decoration: BoxDecoration(
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: context.isDarkMode
+                                        ? Colors.white.withValues(alpha: 0.06)
+                                        : context.appColors.border.withValues(alpha: 0.85),
+                                  ),
+                                ),
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Container(
+                                      width: 28,
+                                      height: 28,
+                                      decoration: BoxDecoration(
+                                        color: context.appColors.surface,
+                                        shape: BoxShape.circle,
+                                        border: Border.all(color: context.appColors.border),
+                                      ),
+                                      child: Icon(
+                                        busy ? Icons.hourglass_top_rounded : Icons.add,
+                                        size: 16,
+                                        color: context.appColors.textMuted,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 6),
+                                    Text(
+                                      busy ? 'UPLOADING' : 'ADD',
+                                      style: TextStyle(
+                                        color: context.appColors.textMuted,
+                                        fontSize: 8.5,
+                                        fontWeight: FontWeight.w700,
+                                        letterSpacing: 0.7,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          );
+                        }
+                        return DecoratedBox(
+                          decoration: BoxDecoration(
+                            color: context.appColors.surfaceElevated,
+                            borderRadius: BorderRadius.circular(12),
+                            border: Border.all(
+                              color: context.isDarkMode
+                                  ? Colors.white.withValues(alpha: 0.06)
+                                  : context.appColors.border.withValues(alpha: 0.85),
+                            ),
+                          ),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                Icons.image_not_supported_outlined,
+                                size: 20,
+                                color: context.isDarkMode
+                                    ? Colors.white.withValues(alpha: 0.35)
+                                    : context.appColors.textMuted.withValues(alpha: 0.65),
+                              ),
+                              const SizedBox(height: 4),
+                              Text(
+                                'EMPTY',
+                                style: TextStyle(
+                                  color: context.appColors.textMuted,
+                                  fontSize: 8.5,
+                                  fontWeight: FontWeight.w700,
+                                  letterSpacing: 0.7,
+                                ),
+                              ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                    const SizedBox(height: 10),
+                    _OptionNoteField(
+                      key: ValueKey('${option.id}-${option.description ?? ''}'),
+                      label: option.label,
+                      initial: option.description ?? '',
+                      maxLength: request.maxDescriptionLength,
+                      enabled: canUpload,
+                      onSave: (value) => onSaveDescription(option.id, value),
+                    ),
                   ],
-                );
-              },
-            ),
-          const SizedBox(height: 10),
+                ),
+              ),
+            );
+          }),
           Text(
-            'JPEG, PNG, or WebP \u00b7 max 5 MB each \u00b7 cleared after delivery, cancel, or dispatch failure',
+            'Up to ${request.maxImagesPerOption} photos per option \u00b7 JPEG, PNG, or WebP \u00b7 max 5 MB \u00b7 optional note up to ${request.maxDescriptionLength} characters \u00b7 cleared after delivery, cancel, or dispatch failure',
             style: TextStyle(
               color: context.appColors.textMuted,
               fontSize: 10.5,
@@ -1397,38 +1807,318 @@ class _PhotoRequestCard extends StatelessWidget {
   }
 }
 
-class _DashedBorderPainter extends CustomPainter {
-  final Color color;
-  final double radius;
+class _OptionNoteField extends StatefulWidget {
+  final String label;
+  final String initial;
+  final int maxLength;
+  final bool enabled;
+  final Future<void> Function(String value) onSave;
 
-  _DashedBorderPainter({required this.color, required this.radius});
+  const _OptionNoteField({
+    super.key,
+    required this.label,
+    required this.initial,
+    required this.maxLength,
+    required this.enabled,
+    required this.onSave,
+  });
 
   @override
-  void paint(Canvas canvas, Size size) {
-    final rrect = RRect.fromRectAndRadius(
-      Rect.fromLTWH(0.75, 0.75, size.width - 1.5, size.height - 1.5),
-      Radius.circular(radius),
+  State<_OptionNoteField> createState() => _OptionNoteFieldState();
+}
+
+class _OptionNoteFieldState extends State<_OptionNoteField> {
+  String get _saved => widget.initial.trim();
+
+  Future<void> _edit() async {
+    final controller = TextEditingController(text: widget.initial);
+    final saved = await showDialog<String>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(_saved.isEmpty ? 'Add description · ${widget.label}' : 'Edit description · ${widget.label}'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          maxLength: widget.maxLength,
+          minLines: 4,
+          maxLines: 8,
+          decoration: const InputDecoration(
+            hintText: 'e.g. front view, serial plate',
+          ),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Cancel'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, controller.text.trim()),
+            child: const Text('Save'),
+          ),
+        ],
+      ),
     );
-    final path = Path()..addRRect(rrect);
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 1.4;
-    const dash = 5.0;
-    const gap = 3.5;
-    for (final metric in path.computeMetrics()) {
-      var distance = 0.0;
-      while (distance < metric.length) {
-        final next = (distance + dash).clamp(0.0, metric.length);
-        canvas.drawPath(metric.extractPath(distance, next), paint);
-        distance = next + gap;
-      }
+    controller.dispose();
+    if (saved == null || !mounted) return;
+    await widget.onSave(saved);
+  }
+
+  void _view() {
+    final colors = context.appColors;
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text(widget.label),
+        content: SingleChildScrollView(
+          child: SelectableText(
+            _saved,
+            style: TextStyle(color: colors.textSecondary, fontSize: 14, height: 1.4),
+          ),
+        ),
+        actions: [
+          if (widget.enabled)
+            TextButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                _edit();
+              },
+              child: const Text('Edit'),
+            ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              _showFullScreen();
+            },
+            child: const Text('Read full screen'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text('Close'),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showFullScreen() {
+    final colors = context.appColors;
+    showDialog<void>(
+      context: context,
+      builder: (ctx) => Dialog.fullscreen(
+        child: Scaffold(
+          backgroundColor: colors.background,
+          appBar: AppBar(
+            backgroundColor: colors.surface,
+            foregroundColor: colors.textPrimary,
+            title: Text(widget.label),
+            leading: IconButton(
+              icon: const Icon(Icons.close),
+              onPressed: () => Navigator.pop(ctx),
+            ),
+          ),
+          body: SafeArea(
+            child: SingleChildScrollView(
+              padding: const EdgeInsets.fromLTRB(20, 16, 20, 24),
+              child: SelectableText(
+                _saved,
+                style: TextStyle(color: colors.textPrimary, fontSize: 16, height: 1.5),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+    if (_saved.isNotEmpty) {
+      return Row(
+        children: [
+          InkWell(
+            onTap: _view,
+            customBorder: const CircleBorder(),
+            child: Padding(
+              padding: const EdgeInsets.all(4),
+              child: Icon(Icons.info_outline, size: 18, color: colors.textMuted),
+            ),
+          ),
+          if (widget.enabled)
+            TextButton(
+              onPressed: _edit,
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: const Text('Edit', style: TextStyle(fontSize: 12)),
+            )
+          else
+            TextButton(
+              onPressed: _view,
+              style: TextButton.styleFrom(
+                padding: const EdgeInsets.symmetric(horizontal: 6),
+                minimumSize: Size.zero,
+                tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+              ),
+              child: const Text('View description', style: TextStyle(fontSize: 12)),
+            ),
+        ],
+      );
+    }
+
+    if (!widget.enabled) return const SizedBox.shrink();
+
+    return TextButton.icon(
+      onPressed: _edit,
+      style: TextButton.styleFrom(
+        padding: EdgeInsets.zero,
+        minimumSize: Size.zero,
+        tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+        alignment: Alignment.centerLeft,
+      ),
+      icon: Icon(Icons.add, size: 16, color: colors.textMuted),
+      label: Text(
+        'Add optional description?',
+        style: TextStyle(color: colors.textMuted, fontSize: 12, fontWeight: FontWeight.w600),
+      ),
+    );
+  }
+}
+
+class _OrderPrescriptionCard extends StatelessWidget {
+  final List<PrescriptionFileModel> files;
+  final bool loading;
+
+  const _OrderPrescriptionCard({required this.files, required this.loading});
+
+  Future<void> _open(BuildContext context, PrescriptionFileModel file) async {
+    if (file.isImage) {
+      if (!context.mounted) return;
+      await Navigator.of(context).push(
+        MaterialPageRoute(
+          builder: (_) => CatalogImageViewerScreen(
+            imageUrls: [file.fileUrl],
+            title: file.originalFileName ?? 'Prescription',
+          ),
+        ),
+      );
+      return;
+    }
+    final url = resolveMediaUrl(file.fileUrl) ?? file.fileUrl;
+    final uri = Uri.tryParse(url);
+    if (uri != null) {
+      await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
   }
 
   @override
-  bool shouldRepaint(covariant _DashedBorderPainter oldDelegate) =>
-      oldDelegate.color != color || oldDelegate.radius != radius;
+  Widget build(BuildContext context) {
+    return _SectionCard(
+      title: 'Prescription',
+      compact: true,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            'Image or PDF.',
+            style: TextStyle(color: context.appColors.textSecondary, fontSize: 12),
+          ),
+          const SizedBox(height: 10),
+          if (loading)
+            const Padding(
+              padding: EdgeInsets.symmetric(vertical: 8),
+              child: Center(child: CircularProgressIndicator(strokeWidth: 2)),
+            )
+          else if (files.isEmpty)
+            Text(
+              'No prescription uploaded yet.',
+              style: TextStyle(color: context.appColors.textMuted, fontSize: 13),
+            )
+          else
+            ...files.map((file) => Padding(
+              padding: const EdgeInsets.only(bottom: 8),
+              child: _PrescriptionFileTile(
+                fileName: file.originalFileName ?? 'Prescription file',
+                fileUrl: file.fileUrl,
+                isImage: file.isImage,
+                onOpen: () => _open(context, file),
+              ),
+            )),
+        ],
+      ),
+    );
+  }
+}
+
+class _PrescriptionFileTile extends StatelessWidget {
+  final String fileName;
+  final String fileUrl;
+  final bool isImage;
+  final VoidCallback onOpen;
+
+  const _PrescriptionFileTile({
+    required this.fileName,
+    required this.fileUrl,
+    required this.isImage,
+    required this.onOpen,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+    return Material(
+      color: colors.background,
+      borderRadius: BorderRadius.circular(12),
+      child: InkWell(
+        onTap: onOpen,
+        borderRadius: BorderRadius.circular(12),
+        child: Container(
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: colors.border),
+          ),
+          child: Row(
+            children: [
+              ClipRRect(
+                borderRadius: BorderRadius.circular(8),
+                child: isImage
+                    ? CatalogImage(
+                        url: fileUrl,
+                        width: 48,
+                        height: 48,
+                        fit: BoxFit.cover,
+                        borderRadius: BorderRadius.circular(8),
+                      )
+                    : Container(
+                        width: 48,
+                        height: 48,
+                        color: context.appColors.successSoft,
+                        child: Icon(Icons.picture_as_pdf, color: context.appColors.success),
+                      ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  fileName,
+                  maxLines: 2,
+                  overflow: TextOverflow.ellipsis,
+                  style: TextStyle(
+                    color: colors.success,
+                    fontWeight: FontWeight.w600,
+                    decoration: TextDecoration.underline,
+                    decorationColor: colors.success,
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
 }
 
 class _ItemDetailsPanel extends StatelessWidget {
@@ -1440,8 +2130,6 @@ class _ItemDetailsPanel extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isBuy = order.orderType.toLowerCase() == 'buy';
-    final hasMedical =
-        order.doctorName != null || order.hospitalName != null || order.doctorUniqueCode != null;
 
     return _SectionCard(
       title: 'Selected item details',
@@ -1475,7 +2163,9 @@ class _ItemDetailsPanel extends StatelessWidget {
                         OrderStatusChip(status: order.status),
                         OrderTypeChip(orderType: order.orderType),
                         if (order.isExtended && !isBuy)
-                          OrderMetaChip(label: 'Extended', highlight: true),
+                          OrderMetaChip(label: 'EXTENDED', highlight: true),
+                        if (order.returnSettlement?.listDamageLabel != null)
+                          OrderMetaChip(label: order.returnSettlement!.listDamageLabel!),
                       ],
                     ),
                   ],
@@ -1496,24 +2186,17 @@ class _ItemDetailsPanel extends StatelessWidget {
                   : '${order.rentalDays} day${order.rentalDays == 1 ? '' : 's'}',
               style: TextStyle(color: context.appColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w600),
             ),
-            if (order.rentalFinalPrice != null) ...[
-              const SizedBox(height: 4),
-              Wrap(
-                crossAxisAlignment: WrapCrossAlignment.center,
-                spacing: 6,
-                children: [
-                  if (order.rentalNormalPrice != null &&
-                      order.rentalNormalPrice! > order.rentalFinalPrice!)
-                    StruckPrice(
-                      '₹${order.rentalNormalPrice!.toStringAsFixed(0)}',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: context.appColors.textMuted),
-                    ),
-                  Text(
-                    'Plan price ₹${order.rentalFinalPrice!.toStringAsFixed(0)}',
-                    style: TextStyle(color: context.appColors.textMuted, fontSize: 12),
-                  ),
-                ],
+            if (order.isExtended)
+              Padding(
+                padding: const EdgeInsets.only(top: 4),
+                child: Text(
+                  'This product includes a paid extension',
+                  style: TextStyle(color: context.appColors.textMuted, fontSize: 11),
+                ),
               ),
+            if (order.returnSettlement != null) ...[
+              const SizedBox(height: 10),
+              _ReturnClaimCard(settlement: order.returnSettlement!),
             ],
           ],
           const SizedBox(height: 8),
@@ -1529,34 +2212,152 @@ class _ItemDetailsPanel extends StatelessWidget {
               onAdd: order.assignedAssetTags.isEmpty ? onAddSerials : null,
             ),
           ],
-          if (hasMedical) ...[
-            const SizedBox(height: 8),
-            _SubsectionLabel('Medical reference'),
-            const SizedBox(height: 4),
-            _CompactDetailList(rows: [
-              if (order.doctorName != null) ('Doctor', order.doctorName!),
-              if (order.doctorUniqueCode != null) ('Unique ID', order.doctorUniqueCode!),
-              if (order.doctorContactNumber != null)
-                ('Contact', order.doctorContactNumber!),
-              if (order.doctorSpecialization != null)
-                ('Specialization', order.doctorSpecialization!),
-              if (order.hospitalName != null) ('Hospital', order.hospitalName!),
-              if (order.hospitalCity != null) ('City', order.hospitalCity!),
-            ]),
-            if (order.doctorUniqueCode != null) ...[
-              const SizedBox(height: 8),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: TextButton.icon(
-                  onPressed: () => showVendorDoctorLookupSheet(
-                    context,
-                    initialCode: order.doctorUniqueCode,
-                  ),
-                  icon: const Icon(Icons.medical_services_outlined, size: 16, color: Color(0xFF2DD4BF)),
-                  label: const Text('View doctor profile', style: TextStyle(color: Color(0xFF2DD4BF))),
+        ],
+      ),
+    );
+  }
+}
+
+class _ReturnClaimCard extends StatelessWidget {
+  final OrderReturnInfo settlement;
+
+  const _ReturnClaimCard({required this.settlement});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+    final reviewed = settlement.claimReviewed;
+    final reason = settlement.damageReason?.trim() ?? '';
+    final urls = settlement.damageImageUrls.map(resolveMediaUrl).whereType<String>().toList();
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: colors.border),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      'Your return claim',
+                      style: TextStyle(color: colors.textPrimary, fontSize: 16, fontWeight: FontWeight.w700),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      'Sent with this product. You cannot change it.',
+                      style: TextStyle(color: colors.textMuted, fontSize: 12, height: 1.35),
+                    ),
+                  ],
                 ),
               ),
+              const SizedBox(width: 8),
+              OrderMetaChip(
+                label: reviewed ? 'Reviewed' : 'With BlinksMed',
+                highlight: !reviewed,
+              ),
             ],
+          ),
+          const SizedBox(height: 10),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            decoration: BoxDecoration(
+              color: colors.surfaceElevated.withValues(alpha: 0.65),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text('Damage claim', style: TextStyle(color: colors.textMuted, fontSize: 13)),
+                ),
+                Text(
+                  formatVendorMoney(settlement.damageAmount),
+                  style: TextStyle(color: colors.textPrimary, fontSize: 14, fontWeight: FontWeight.w700),
+                ),
+              ],
+            ),
+          ),
+          if (reason.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              'WHAT YOU REPORTED',
+              style: TextStyle(
+                color: colors.textMuted,
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.4,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: colors.border),
+              ),
+              child: Text(
+                reason,
+                style: TextStyle(color: colors.textPrimary, fontSize: 13, height: 1.4),
+              ),
+            ),
+          ],
+          if (urls.isNotEmpty) ...[
+            const SizedBox(height: 10),
+            Text(
+              'DAMAGE PHOTOS · TAP TO ENLARGE',
+              style: TextStyle(
+                color: colors.textMuted,
+                fontSize: 10,
+                fontWeight: FontWeight.w700,
+                letterSpacing: 0.4,
+              ),
+            ),
+            const SizedBox(height: 6),
+            LayoutBuilder(
+              builder: (context, constraints) {
+                const gap = 8.0;
+                final tile = (constraints.maxWidth - gap * 2) / 3;
+                return Wrap(
+                  spacing: gap,
+                  runSpacing: gap,
+                  children: [
+                    for (var index = 0; index < urls.length; index++)
+                      GestureDetector(
+                        onTap: () {
+                          Navigator.of(context).push(
+                            MaterialPageRoute<void>(
+                              builder: (_) => CatalogImageViewerScreen(
+                                imageUrls: urls,
+                                initialIndex: index,
+                                title: 'Damage photos',
+                              ),
+                            ),
+                          );
+                        },
+                        child: ClipRRect(
+                          borderRadius: BorderRadius.circular(8),
+                          child: Image.network(
+                            urls[index],
+                            width: tile,
+                            height: tile,
+                            fit: BoxFit.cover,
+                          ),
+                        ),
+                      ),
+                  ],
+                );
+              },
+            ),
           ],
         ],
       ),
@@ -1730,9 +2531,7 @@ class _AssignedSerialNumbersBlock extends StatelessWidget {
                     ),
                     Icon(
                       Icons.check_circle_rounded,
-                      color: context.isDarkMode
-                          ? Colors.greenAccent.withValues(alpha: 0.85)
-                          : const Color(0xFF059669),
+                      color: context.appColors.success,
                       size: 18,
                     ),
                   ],
@@ -1754,7 +2553,8 @@ class _MetricStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isBuy = order.orderType.toLowerCase() == 'buy';
-    final payout = '₹${order.payoutAmount.toStringAsFixed(0)}';
+    final payout = formatVendorMoney(order.payoutAmount);
+    final showPayout = vendorEarnsPayout(order.status);
 
     if (isBuy) {
       return Row(
@@ -1767,8 +2567,10 @@ class _MetricStrip extends StatelessWidget {
           ),
           const SizedBox(width: 8),
           Expanded(child: _MetricTile(label: 'Qty', value: '${order.quantity}')),
-          const SizedBox(width: 8),
-          Expanded(child: _MetricTile(label: 'Payout', value: payout, highlight: true)),
+          if (showPayout) ...[
+            const SizedBox(width: 8),
+            Expanded(child: _MetricTile(label: 'Payout', value: payout, highlight: true)),
+          ],
         ],
       );
     }
@@ -1800,10 +2602,12 @@ class _MetricStrip extends StatelessWidget {
             ),
             const SizedBox(width: 8),
             Expanded(child: _MetricTile(label: 'Qty', value: '${order.quantity}')),
-            const SizedBox(width: 8),
-            Expanded(
-              child: _MetricTile(label: 'Payout', value: payout, highlight: true),
-            ),
+            if (showPayout) ...[
+              const SizedBox(width: 8),
+              Expanded(
+                child: _MetricTile(label: 'Payout', value: payout, highlight: true),
+              ),
+            ],
           ],
         ),
       ],
@@ -1864,6 +2668,163 @@ class _MetricTile extends StatelessWidget {
       ),
     );
   }
+}
+
+class _OrderTimelineCard extends StatelessWidget {
+  final String status;
+  final String orderType;
+  final String listingTitle;
+
+  const _OrderTimelineCard({
+    required this.status,
+    required this.orderType,
+    required this.listingTitle,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+    final raw = status.toLowerCase().trim();
+    final compact = raw.replaceAll(RegExp(r'\s+'), '_');
+    final closedMessage = (compact == 'cancelled' || compact == 'canceled')
+        ? 'This product was cancelled.'
+        : (compact == 'dispatch_failed' || raw.contains('dispatch failed'))
+            ? 'No vendor accepted this product.'
+            : null;
+    if (closedMessage != null) {
+      return _SectionCard(
+        title: 'Order timeline',
+        subtitle: 'Tracking: $listingTitle',
+        compact: true,
+        child: Text(
+          closedMessage,
+          style: TextStyle(color: colors.textMuted, fontSize: 13, height: 1.35),
+        ),
+      );
+    }
+
+    final steps = _vendorTimelineSteps(orderType, status);
+    final progress = _vendorTimelineProgress(status, orderType);
+
+    return _SectionCard(
+      title: 'Order timeline',
+      subtitle: 'Tracking: $listingTitle',
+      compact: true,
+      child: Column(
+        children: List.generate(steps.length, (index) {
+          final step = steps[index];
+          final isDone = index <= progress.$1;
+          final isCurrent = progress.$2 == index;
+          final isUpcoming = !isDone && !isCurrent;
+          final isLast = index == steps.length - 1;
+          final isActiveNow = !isCurrent &&
+              step.$1 == 'active' &&
+              compact == 'active' &&
+              orderType.toLowerCase() != 'buy';
+          final isBoughtNow = !isCurrent && step.$1 == 'bought_out' && compact == 'bought_out';
+
+          return Padding(
+            padding: EdgeInsets.only(bottom: isLast ? 0 : 14),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Column(
+                  children: [
+                    Container(
+                      width: 22,
+                      height: 22,
+                      alignment: Alignment.center,
+                      decoration: BoxDecoration(
+                        shape: BoxShape.circle,
+                        color: isDone ? colors.textPrimary : (isCurrent ? colors.surface : colors.background),
+                        border: Border.all(
+                          color: isUpcoming ? colors.border : colors.textPrimary,
+                          width: 2,
+                        ),
+                      ),
+                      child: isDone
+                          ? Icon(Icons.check, size: 12, color: colors.background)
+                          : isCurrent
+                              ? Container(
+                                  width: 6,
+                                  height: 6,
+                                  decoration: BoxDecoration(color: colors.textPrimary, shape: BoxShape.circle),
+                                )
+                              : null,
+                    ),
+                  ],
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: Padding(
+                    padding: const EdgeInsets.only(top: 1),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          step.$2,
+                          style: TextStyle(
+                            color: isUpcoming ? colors.textMuted : colors.textPrimary,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 13,
+                          ),
+                        ),
+                        if (isCurrent)
+                          Text('In progress', style: TextStyle(color: colors.textMuted, fontSize: 11)),
+                        if (isActiveNow)
+                          Text('Current status', style: TextStyle(color: colors.success, fontSize: 11)),
+                        if (isBoughtNow)
+                          Text('Purchased by customer', style: TextStyle(color: colors.success, fontSize: 11)),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          );
+        }),
+      ),
+    );
+  }
+}
+
+/// Rental timelines omit Bought Out unless this order was already bought out.
+List<(String, String)> _vendorTimelineSteps(String orderType, String status) {
+  if (orderType.toLowerCase() == 'buy') {
+    return const [
+      ('placed', 'Order Placed'),
+      ('confirmed', 'Vendor Confirmed'),
+      ('out', 'Out for Delivery'),
+      ('active', 'Delivered & Purchased'),
+    ];
+  }
+  final steps = <(String, String)>[
+    ('placed', 'Order Placed'),
+    ('confirmed', 'Vendor Confirmed'),
+    ('out', 'Out for Delivery'),
+    ('delivered', 'Delivered'),
+    ('active', 'Rental Active'),
+    ('returned', 'Returned'),
+  ];
+  final compact = status.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '_');
+  if (compact == 'bought_out') {
+    steps.add(('bought_out', 'Bought Out'));
+  }
+  return steps;
+}
+
+/// completedThrough, currentIndex
+(int, int?) _vendorTimelineProgress(String status, String orderType) {
+  final raw = status.toLowerCase().trim();
+  final compact = raw.replaceAll(RegExp(r'\s+'), '_');
+  final isBuy = orderType.toLowerCase() == 'buy';
+  if (compact == 'pending') return (0, 1);
+  if (compact == 'confirmed') return (1, 2);
+  if (compact == 'in_transit' || raw.contains('transit')) return (2, 3);
+  if (compact == 'active' || compact == 'returned' || compact == 'bought_out') {
+    return isBuy ? (3, null) : (compact == 'active' ? (4, null) : compact == 'returned' ? (5, null) : (6, null));
+  }
+  return (0, 1);
 }
 
 class _SectionCard extends StatelessWidget {

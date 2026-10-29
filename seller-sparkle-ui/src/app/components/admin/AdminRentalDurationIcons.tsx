@@ -16,27 +16,25 @@ import {
 } from "@/app/components/ui/dialog";
 import { FormGrid } from "@/app/components/shared/FormGrid";
 import { FieldError } from "@/app/components/shared/FieldError";
-import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { PageContentGate } from "@/app/components/shared/PageLoader";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import {
   adminApi,
   type CreateRentalDurationIconRequest,
   type RentalDurationIconDto,
-  type RentalValueTier,
 } from "@/app/services/adminApi";
 import { ImagePlus, Loader2, Pencil, Plus, Search, Trash2, Upload } from "lucide-react";
 import { toast } from "sonner";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
 import { cn, retryOriginalOnImageError } from "@/app/helpers/utils";
 import {
-  RENTAL_VALUE_TIERS,
   rentalValueTierLabel,
-  resolveRentalIconUrl,
+  resolveRentalIconUrlFromPlan,
+  slugFromName,
 } from "@/app/helpers/rentalDurationIcons";
 
 type FormState = {
   name: string;
-  valueTier: RentalValueTier;
   /** Durable storage key (S3 / uploads path) — what we persist. */
   imageUrl: string;
   thumbnailUrl: string;
@@ -49,7 +47,6 @@ type FormState = {
 
 const emptyForm = (): FormState => ({
   name: "",
-  valueTier: "good",
   imageUrl: "",
   thumbnailUrl: "",
   previewUrl: "",
@@ -77,7 +74,7 @@ const tierBadgeClass = (tier?: string | null): string => {
     case "maximum_savings":
       return "border-amber-200 bg-amber-50 text-amber-900 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-300";
     default:
-      return "";
+      return "border-border bg-muted/40 text-foreground";
   }
 };
 
@@ -129,7 +126,8 @@ const AdminRentalDurationIcons = ({ embedded = false }: AdminRentalDurationIcons
         const matchesSearch =
           !q ||
           r.name.toLowerCase().includes(q) ||
-          rentalValueTierLabel(r.valueTier).toLowerCase().includes(q);
+          rentalValueTierLabel(r.valueTier).toLowerCase().includes(q) ||
+          r.valueTier.toLowerCase().includes(q);
         const matchesStatus =
           statusFilter === "all" || (statusFilter === "active" ? r.isActive : !r.isActive);
         return matchesSearch && matchesStatus;
@@ -159,7 +157,6 @@ const AdminRentalDurationIcons = ({ embedded = false }: AdminRentalDurationIcons
     const storedThumb = (row.thumbnailStorageKey?.trim() || row.thumbnailUrl || "").trim();
     setForm({
       name: row.name,
-      valueTier: (row.valueTier as RentalValueTier) || "good",
       imageUrl: stored,
       thumbnailUrl: storedThumb,
       previewUrl: row.imageUrl || stored,
@@ -213,7 +210,7 @@ const AdminRentalDurationIcons = ({ embedded = false }: AdminRentalDurationIcons
     try {
       const payload: CreateRentalDurationIconRequest = {
         name: form.name.trim(),
-        valueTier: form.valueTier,
+        valueTier: slugFromName(form.name),
         imageUrl: form.imageUrl.trim(),
         thumbnailUrl: form.thumbnailUrl.trim() || null,
         sortOrder: form.sortOrder,
@@ -243,7 +240,7 @@ const AdminRentalDurationIcons = ({ embedded = false }: AdminRentalDurationIcons
       await adminApi.updateRentalDurationIcon(row.id, {
         id: row.id,
         name: row.name,
-        valueTier: row.valueTier,
+        valueTier: slugFromName(row.name) || row.valueTier,
         imageUrl,
         thumbnailUrl,
         sortOrder: row.sortOrder,
@@ -252,7 +249,11 @@ const AdminRentalDurationIcons = ({ embedded = false }: AdminRentalDurationIcons
       setRows((prev) =>
         prev.map((r) => (r.id === row.id ? { ...r, isActive: !r.isActive } : r)),
       );
-      toast.success(!row.isActive ? "Icon activated" : "Icon deactivated");
+      toast.success(
+        !row.isActive
+          ? "Icon activated"
+          : "Icon deactivated and removed from product plans",
+      );
     } catch (e) {
       toast.error(getUserFriendlyMessage(e, "Failed to update status"));
     } finally {
@@ -280,8 +281,11 @@ const AdminRentalDurationIcons = ({ embedded = false }: AdminRentalDurationIcons
     size = "md",
   ) => {
     const box = size === "lg" ? "h-14 w-14" : "h-11 w-11";
-    // API already resolves to browser URL (presigned S3); resolveRentalIconUrl handles legacy local paths.
-    const src = resolveRentalIconUrl(row.thumbnailUrl || row.imageUrl);
+    // Same original PNG as Customer chips (JPEG thumbs flatten transparency).
+    const src = resolveRentalIconUrlFromPlan({
+      iconUrl: row.imageUrl,
+      iconThumbnailUrl: row.thumbnailUrl,
+    });
     return (
       <div
         className={cn(
@@ -303,7 +307,7 @@ const AdminRentalDurationIcons = ({ embedded = false }: AdminRentalDurationIcons
       {!embedded && (
         <PageHeader
           title="Rental Duration Icons"
-          description="Upload icons and map them to Good / Better / Best Value / Maximum Savings. Assign per product in the Duration price chart."
+          description="Upload any rental icon (Good, Premium, Maximum Savings, etc.). Assign it per product in the Duration price chart."
         />
       )}
 
@@ -353,9 +357,7 @@ const AdminRentalDurationIcons = ({ embedded = false }: AdminRentalDurationIcons
           </div>
         </div>
 
-        {loading ? (
-          <PageLoaderSlot />
-        ) : filtered.length === 0 ? (
+        <PageContentGate loading={loading}>{filtered.length === 0 ? (
           <div className="flex flex-col items-center justify-center gap-3 px-6 py-16 text-center">
             <div className="flex h-12 w-12 items-center justify-center rounded-full bg-violet-500/10 text-violet-700 dark:text-violet-300">
               <ImagePlus className="h-6 w-6" />
@@ -364,7 +366,7 @@ const AdminRentalDurationIcons = ({ embedded = false }: AdminRentalDurationIcons
               <p className="text-sm font-semibold text-foreground">No rental icons found</p>
               <p className="max-w-sm text-xs text-muted-foreground">
                 {rows.length === 0
-                  ? "Add tier icons (ribbon, star, crown, trophy) to use on product duration charts."
+                  ? "Add icons such as Good, Premium, or Maximum Savings to use on product duration charts."
                   : "Try a different search or status filter."}
               </p>
             </div>
@@ -384,7 +386,7 @@ const AdminRentalDurationIcons = ({ embedded = false }: AdminRentalDurationIcons
                   <tr>
                     <th className="px-5 py-3 font-semibold">Icon</th>
                     <th className="px-4 py-3 font-semibold">Name</th>
-                    <th className="px-4 py-3 font-semibold">Value tier</th>
+                    <th className="px-4 py-3 font-semibold">Customer label</th>
                     <th className="px-4 py-3 font-semibold text-right">Sort order</th>
                     <th className="px-4 py-3 font-semibold text-center">Status</th>
                     <th className="px-5 py-3 font-semibold text-right">Actions</th>
@@ -409,7 +411,7 @@ const AdminRentalDurationIcons = ({ embedded = false }: AdminRentalDurationIcons
                           variant="outline"
                           className={cn("font-medium", tierBadgeClass(row.valueTier))}
                         >
-                          {rentalValueTierLabel(row.valueTier)}
+                          {row.name}
                         </Badge>
                       </td>
                       <td className="px-4 py-3.5 text-right">
@@ -480,7 +482,7 @@ const AdminRentalDurationIcons = ({ embedded = false }: AdminRentalDurationIcons
                           variant="outline"
                           className={cn("font-medium", tierBadgeClass(row.valueTier))}
                         >
-                          {rentalValueTierLabel(row.valueTier)}
+                          {row.name}
                         </Badge>
                       </div>
                     </div>
@@ -518,7 +520,7 @@ const AdminRentalDurationIcons = ({ embedded = false }: AdminRentalDurationIcons
               ))}
             </div>
           </>
-        )}
+        )}</PageContentGate>
       </Card>
 
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
@@ -531,32 +533,14 @@ const AdminRentalDurationIcons = ({ embedded = false }: AdminRentalDurationIcons
           </DialogHeader>
           <div className="px-5 py-4 sm:px-6">
             <FormGrid>
-              <div className="space-y-1.5 sm:col-span-2">
+              <div className="space-y-1.5">
                 <Label required>Name</Label>
                 <Input
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  placeholder="e.g. Blue Star"
+                  placeholder="e.g. Premium"
                 />
                 <FieldError message={fieldErrors.name} />
-              </div>
-              <div className="space-y-1.5">
-                <Label required>Value tier</Label>
-                <Select
-                  value={form.valueTier}
-                  onValueChange={(v) => setForm({ ...form, valueTier: v as RentalValueTier })}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {RENTAL_VALUE_TIERS.map((t) => (
-                      <SelectItem key={t.value} value={t.value}>
-                        {t.label}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
               </div>
               <div className="space-y-1.5">
                 <Label>Sort order</Label>
@@ -573,9 +557,10 @@ const AdminRentalDurationIcons = ({ embedded = false }: AdminRentalDurationIcons
                   <div className="flex h-16 w-16 items-center justify-center overflow-hidden rounded-xl border border-border/70 bg-background">
                     {form.previewUrl || form.imageUrl ? (
                       <img
-                        src={resolveRentalIconUrl(
-                          form.previewThumbnailUrl || form.previewUrl || form.thumbnailUrl || form.imageUrl,
-                        )}
+                        src={resolveRentalIconUrlFromPlan({
+                          iconUrl: form.previewUrl || form.imageUrl,
+                          iconThumbnailUrl: form.previewThumbnailUrl || form.thumbnailUrl,
+                        })}
                         alt=""
                         className="h-full w-full object-contain p-1.5"
                         onError={retryOriginalOnImageError}
@@ -636,7 +621,8 @@ const AdminRentalDurationIcons = ({ embedded = false }: AdminRentalDurationIcons
           <DialogHeader>
             <DialogTitle>Delete icon?</DialogTitle>
             <DialogDescription>
-              Soft-delete {deleteTarget?.name ?? "this icon"}. Products already using it keep their saved snapshot.
+              Delete {deleteTarget?.name ?? "this icon"} and remove it from every product plan. Customers will no
+              longer see this tag.
             </DialogDescription>
           </DialogHeader>
           <DialogFooter>

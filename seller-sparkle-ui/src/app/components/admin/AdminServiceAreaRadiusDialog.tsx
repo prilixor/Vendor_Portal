@@ -109,8 +109,8 @@ export function AdminServiceAreaRadiusDialog({
                 longitude={area.centerLongitude}
                 radiusKm={radiusDraftKm}
                 showRadius
-                maxRadiusKm={100}
-                radiusPresetsKm={[15, 30, 50, 100]}
+                maxRadiusKm={500}
+                radiusPresetsKm={[15, 30, 50, 100, 250, 500]}
                 height="h-56 sm:h-72"
                 onRadiusChange={setRadiusDraftKm}
               />

@@ -108,12 +108,17 @@ const VENDOR_OPERATIONS_LABELS = new Set([
 
 export const getVendorNav = (
   unreadCount: number,
-  options?: { operationsBlocked?: boolean; blockedReason?: string },
+  options?: {
+    operationsBlocked?: boolean;
+    blockedReason?: string;
+    pendingOrderRequestsCount?: number;
+  },
 ): NavSection[] => {
   const operationsBlocked = options?.operationsBlocked ?? false;
   const blockedReason =
     options?.blockedReason ??
     "Complete document verification to unlock catalog and order management.";
+  const pendingOrderRequestsCount = options?.pendingOrderRequestsCount ?? 0;
 
   return vendorNav.map((section) => ({
     ...section,
@@ -124,6 +129,13 @@ export const getVendorNav = (
         nextItem = {
           ...nextItem,
           badge: unreadCount.toString(),
+        };
+      }
+
+      if (item.label === "Order Requests" && pendingOrderRequestsCount > 0) {
+        nextItem = {
+          ...nextItem,
+          badge: pendingOrderRequestsCount.toString(),
         };
       }
 

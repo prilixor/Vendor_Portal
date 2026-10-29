@@ -90,13 +90,13 @@ class _ResetPasswordScreenState extends State<ResetPasswordScreen> {
             Container(
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: Colors.green.withValues(alpha: 0.12),
+                color: colors.successSoft,
                 borderRadius: BorderRadius.circular(12),
-                border: Border.all(color: Colors.green.withValues(alpha: 0.4)),
+                border: Border.all(color: colors.successBorder),
               ),
-              child: const Text(
+              child: Text(
                 'Password updated. You can sign in with your new password.',
-                style: TextStyle(color: Colors.greenAccent, fontWeight: FontWeight.w600),
+                style: TextStyle(color: colors.success, fontWeight: FontWeight.w600),
               ),
             ),
             const SizedBox(height: 20),

@@ -8,7 +8,7 @@ public class CustomerOrderVendorOffer : AuditableEntity<Guid>, ISoftDelete
     public Guid VendorId { get; set; }
     public Guid VendorProductListingId { get; set; }
     public int OfferRank { get; set; }
-    public string Status { get; set; } = "pending"; // pending, accepted, rejected, expired
+    public string Status { get; set; } = "pending"; // pending, queued, accepted, rejected, expired
     public DateTimeOffset ExpiresAt { get; set; }
     public DateTimeOffset? RespondedAt { get; set; }
 

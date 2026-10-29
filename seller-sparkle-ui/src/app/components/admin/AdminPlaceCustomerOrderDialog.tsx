@@ -70,12 +70,6 @@ interface AdminCartLine {
   isBuyEnabled?: boolean;
 }
 
-type MedicalRef = {
-  hospitalId: string;
-  doctorId: string;
-  referenceNumber: string;
-};
-
 function cartKey(listingId: string, variantId?: string) {
   return `${listingId}::${variantId || ""}`;
 }
@@ -176,8 +170,8 @@ function ListingThumb({ src, isChemical }: { src?: string | null; isChemical?: b
       <div className={cn(
         "h-full w-full flex items-center justify-center",
         isChemical
-          ? "bg-violet-50 text-violet-400 dark:bg-violet-500/10 dark:text-violet-300"
-          : "bg-teal-50 text-teal-400 dark:bg-teal-500/10 dark:text-teal-300",
+          ? "bg-violet-50 text-violet-700 dark:bg-violet-500/10 dark:text-violet-300"
+          : "bg-teal-50 text-teal-700 dark:bg-teal-500/10 dark:text-teal-300",
       )}>
         {isChemical ? <FlaskConical className="h-5 w-5" /> : <Package className="h-5 w-5" />}
       </div>
@@ -388,9 +382,9 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
   const [saving, setSaving] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<string | undefined>(undefined);
   const [categoriesExpanded, setCategoriesExpanded] = useState(false);
-  const [medicalRefs, setMedicalRefs] = useState<Record<string, MedicalRef>>({});
   const [placeErrors, setPlaceErrors] = useState<string[]>([]);
   const [placedOrders, setPlacedOrders] = useState<{ id: string; orderNumber: string; listingTitle?: string }[]>([]);
+  const [paymentLinkUrl, setPaymentLinkUrl] = useState<string | null>(null);
   const [rentToBuyOpen, setRentToBuyOpen] = useState(false);
   const [rentToBuyInfo, setRentToBuyInfo] = useState<{
     title: string;
@@ -401,19 +395,6 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
     /** After confirm, apply buy — either on configure form or a cart line key */
     target: "configure" | { cartKey: string };
   } | null>(null);
-
-  const updateMedicalRef = (listingId: string, field: keyof MedicalRef, value: string) => {
-    setMedicalRefs((prev) => ({
-      ...prev,
-      [listingId]: {
-        hospitalId: "",
-        doctorId: "",
-        referenceNumber: "",
-        ...(prev[listingId] || {}),
-        [field]: value,
-      },
-    }));
-  };
 
   useEffect(() => {
     if (!open) return;
@@ -430,9 +411,9 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
     setSelectedPlanId("");
     setVariantId("");
     setDeliveryOption("standard");
-    setMedicalRefs({});
     setPlaceErrors([]);
     setPlacedOrders([]);
+    setPaymentLinkUrl(null);
     const def = customer.addresses.find((a) => a.isDefault) ?? customer.addresses[0];
     setAddressId(def?.id ?? "");
   }, [open, customer]);
@@ -786,32 +767,24 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
         return;
       }
     }
-    // Doctor reference is optional (Admin-curated Unique ID flow). Hospital is no longer used.
-
     setSaving(true);
     setPlaceErrors([]);
     try {
       const result = await adminApi.placeOrderForCustomer(customerId, {
         customerAddressId: addressId,
         deliveryOption,
-        lines: cart.map((line) => {
-          const ref = medicalRefs[line.listingId];
-          return {
-            listingId: line.listingId,
-            quantity: line.quantity,
-            rentalDays: line.orderType === "rent" ? line.rentalDays : 0,
-            rentalPeriodUnit: line.orderType === "rent" ? line.rentalPeriodUnit : "day",
-            orderType: line.orderType,
-            ...(line.rentalPricingPlanId ? { rentalPricingPlanId: line.rentalPricingPlanId } : {}),
-            productVariantId: line.productVariantId,
-            doctorId: line.prescriptionRequired ? ref?.doctorId : undefined,
-            hospitalId: line.prescriptionRequired ? ref?.hospitalId : undefined,
-            referenceNumber: line.prescriptionRequired ? ref?.referenceNumber || undefined : undefined,
-          };
-        }),
+        lines: cart.map((line) => ({
+          listingId: line.listingId,
+          quantity: line.quantity,
+          rentalDays: line.orderType === "rent" ? line.rentalDays : 0,
+          rentalPeriodUnit: line.orderType === "rent" ? line.rentalPeriodUnit : "day",
+          orderType: line.orderType,
+          ...(line.rentalPricingPlanId ? { rentalPricingPlanId: line.rentalPricingPlanId } : {}),
+          productVariantId: line.productVariantId,
+        })),
       });
 
-      const placed = result.placedOrders ?? [];
+      const placed = result.orders ?? result.placedOrders ?? [];
       const failed = result.failedLines ?? [];
       if (failed.length > 0 && placed.length === 0) {
         setPlaceErrors(failed.map((f) => f.message || "Order line failed"));
@@ -821,10 +794,14 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
 
       if (failed.length > 0) {
         setPlaceErrors(failed.map((f) => f.message || "Some lines failed"));
-        toast.warning(`Placed ${placed.length}; ${failed.length} line(s) failed`);
+        toast.warning(`Created ${placed.length}; ${failed.length} line(s) failed`);
       }
 
       setPlacedOrders(placed);
+      setPaymentLinkUrl(result.paymentLinkUrl ?? null);
+      if (result.paymentLinkUrl) {
+        toast.success("Payment link emailed to customer");
+      }
       setCart((prev) => {
         if (failed.length === 0) return [];
         const failedIds = new Set(failed.map((f) => f.listingId));
@@ -1049,8 +1026,8 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
               ) : visibleResults.length === 0 ? (
                 <div className="rounded-lg border border-dashed py-12 text-center space-y-2">
                   {browseMode === "chemicals"
-                    ? <FlaskConical className="h-8 w-8 mx-auto text-violet-300" />
-                    : <Package className="h-8 w-8 mx-auto text-teal-300" />}
+                    ? <FlaskConical className="h-8 w-8 mx-auto text-violet-600 dark:text-violet-300" />
+                    : <Package className="h-8 w-8 mx-auto text-teal-600 dark:text-teal-300" />}
                   <p className="text-sm font-medium">
                     No {browseMode === "chemicals" ? "chemicals" : "equipment"} found
                   </p>
@@ -1353,21 +1330,6 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
                           </div>
                         )}
 
-                        {prescriptionLines.length > 0 && (
-                          <div className="space-y-2 rounded-xl border border-amber-200 bg-amber-50/50 p-3.5 dark:border-amber-500/30 dark:bg-amber-500/10">
-                            <div className="flex items-start gap-2">
-                              <AlertCircle className="h-4 w-4 text-amber-700 shrink-0 mt-0.5" />
-                              <div>
-                                <p className="text-sm font-semibold text-amber-900 dark:text-amber-200">
-                                  Doctor reference (optional)
-                                </p>
-                                <p className="mt-0.5 text-xs text-amber-800/90 dark:text-amber-200/80">
-                                  Doctors are managed under Catalog → Doctor References. Customers will attach a doctor by Unique ID at checkout (optional). Hospital selection has been removed.
-                                </p>
-                              </div>
-                            </div>
-                          </div>
-                        )}
                       </>
                     );
                   })()}
@@ -1436,14 +1398,42 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
               </div>
               <div className="space-y-1">
                 <p className="text-lg font-semibold">
-                  {placedOrders.length > 0 ? "Order placed successfully" : "Order submitted"}
+                  {placedOrders.length > 0 ? "Draft order created — awaiting payment" : "Order submitted"}
                 </p>
                 <p className="text-sm text-muted-foreground">
                   {placedOrders.length > 0
-                    ? `${placedOrders.length} order${placedOrders.length === 1 ? "" : "s"} created for ${customer.fullName}.`
+                    ? `${placedOrders.length} order${placedOrders.length === 1 ? "" : "s"} created for ${customer.fullName}. Dispatch starts after the customer pays.`
                     : `Orders for ${customer.fullName} were processed.`}
                 </p>
               </div>
+              {paymentLinkUrl && (
+                <div className="rounded-xl border border-primary/20 bg-primary/5 px-3.5 py-3 text-left space-y-2 max-w-sm mx-auto">
+                  <p className="text-sm font-medium">Payment link (also emailed)</p>
+                  <a
+                    href={paymentLinkUrl}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="block text-xs text-primary break-all underline underline-offset-2"
+                  >
+                    {paymentLinkUrl}
+                  </a>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="sm"
+                    onClick={async () => {
+                      try {
+                        await navigator.clipboard.writeText(paymentLinkUrl);
+                        toast.success("Payment link copied");
+                      } catch {
+                        toast.error("Could not copy link");
+                      }
+                    }}
+                  >
+                    Copy link
+                  </Button>
+                </div>
+              )}
               {placedOrders.length > 0 && (
                 <div className="rounded-xl border bg-muted/20 text-left divide-y max-w-sm mx-auto">
                   {placedOrders.map((o) => (
@@ -1532,7 +1522,7 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
                   disabled={saving || cart.length === 0 || customer.addresses.length === 0}
                 >
                   {saving ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ShoppingCart className="h-4 w-4 mr-2" />}
-                  Place order{cart.length > 0 ? ` (${cart.length})` : ""}
+                  {`Create & send payment${cart.length > 0 ? ` (${cart.length})` : ""}`}
                 </Button>
               )}
             </>

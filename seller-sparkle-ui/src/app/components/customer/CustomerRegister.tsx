@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { Link } from "react-router-dom";
+import { useEffect, useState } from "react";
+import { Link, useNavigate, useSearchParams } from "react-router-dom";
 import { AuthLayout } from "@/app/components/layout/AuthLayout";
 import { Button } from "@/app/components/ui/button";
 import { Input } from "@/app/components/ui/input";
@@ -7,74 +7,195 @@ import { Label } from "@/app/components/ui/label";
 import { useAuth } from "@/app/guards/AuthContext";
 import { toast } from "sonner";
 import { Eye, EyeOff, Loader2 } from "lucide-react";
-import {
-  normalizeIndianMobileDigits,
-  optionalIndianMobileError,
-} from "@/app/helpers/indianMobilePhone";
-import {
-  PASSWORDS_MATCH_MESSAGE,
-  passwordsMeetConfirm,
-  patchLivePasswordPair,
-  submitConfirmPasswordError,
-  submitPasswordLengthError,
-} from "@/app/helpers/passwordValidation";
-import { cn } from "@/app/helpers/utils";
+import { maskIndianMobileInput, normalizeIndianMobileDigits, requiredIndianMobileError } from "@/app/helpers/indianMobilePhone";
 import { IndianMobileInput } from "@/app/components/shared/IndianMobileInput";
+import { PhoneOtpDialog } from "@/app/components/shared/PhoneOtpDialog";
+import { RegisterLegalAgree } from "@/app/components/legal/RegisterLegalAgree";
+import { cn } from "@/app/helpers/utils";
+import { clearImpersonationSession, clearPortalSession } from "@/app/helpers/authSession";
+
+type FieldKey = "fullName" | "email" | "phone" | "password" | "confirmPassword";
+type FieldErrors = Partial<Record<FieldKey, string>>;
+
+const isValidEmail = (value: string) => /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(value.trim());
 
 const CustomerRegister = () => {
-  const { registerCustomer, login } = useAuth();
+  const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
+  const { registerCustomer, login, setSessionUser } = useAuth();
   const [fullName, setFullName] = useState("");
   const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
+  const [phone, setPhone] = useState(() => maskIndianMobileInput(searchParams.get("phone") ?? ""));
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showPwd, setShowPwd] = useState(false);
   const [showConfirmPwd, setShowConfirmPwd] = useState(false);
   const [loading, setLoading] = useState(false);
-  const [errors, setErrors] = useState<Record<string, string>>({});
-  const passwordsMatch = passwordsMeetConfirm(password, confirmPassword);
+  const [agreed, setAgreed] = useState(false);
+  const [errors, setErrors] = useState<FieldErrors>({});
+  const [touched, setTouched] = useState<Partial<Record<FieldKey, boolean>>>({});
+  const [otpOpen, setOtpOpen] = useState(false);
+  const [pendingPhone, setPendingPhone] = useState("");
+  const [pendingLoginId, setPendingLoginId] = useState("");
 
-  const syncPasswordPair = (nextPassword: string, nextConfirm: string) => {
-    setErrors((prev) =>
-      patchLivePasswordPair(prev, nextPassword, nextConfirm, {
-        password: "password",
-        confirm: "confirmPassword",
-      }),
-    );
+  // Same as vendor register: leftover JWT poisons anonymous phone OTP.
+  useEffect(() => {
+    clearImpersonationSession();
+    clearPortalSession();
+    setSessionUser(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- once on mount
+  }, []);
+
+  const goToShop = () => {
+    window.location.href = "/customer/shop";
   };
 
-  const validate = () => {
-    const e: Record<string, string> = {};
-    if (fullName.trim().length < 2) e.fullName = "Enter your full name";
-    if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)) e.email = "Valid email required";
-    const phoneErr = optionalIndianMobileError(phone);
-    if (phoneErr) e.phone = phoneErr;
-    const passwordErr = submitPasswordLengthError(password);
-    if (passwordErr) e.password = passwordErr;
-    const confirmErr = submitConfirmPasswordError(password, confirmPassword);
-    if (confirmErr) e.confirmPassword = confirmErr;
-    setErrors(e);
-    return Object.keys(e).length === 0;
+  const finishAfterPhoneVerified = async () => {
+    try {
+      const loginId = pendingLoginId || pendingPhone;
+      await login(loginId, password, "customer");
+      toast.success("Phone verified. Welcome!");
+      goToShop();
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Please sign in to continue.";
+      toast.error(message);
+      navigate("/customer/login");
+    }
+  };
+
+  const passwordError = (value: string): string | undefined =>
+    value.length < 8 ? "At least 8 characters" : undefined;
+
+  const confirmPasswordError = (pwd: string, confirm: string): string | undefined => {
+    if (!confirm) return "Please confirm your password";
+    if (confirm !== pwd) return "Passwords don't match";
+    return undefined;
+  };
+
+  const fieldError = (
+    key: FieldKey,
+    values?: {
+      fullName?: string;
+      email?: string;
+      phone?: string;
+      password?: string;
+      confirmPassword?: string;
+    },
+  ): string | undefined => {
+    const name = values?.fullName ?? fullName;
+    const mail = (values?.email ?? email).trim();
+    const mobile = values?.phone ?? phone;
+    const pwd = values?.password ?? password;
+    const confirm = values?.confirmPassword ?? confirmPassword;
+
+    switch (key) {
+      case "fullName":
+        return name.trim().length < 2 ? "Enter your full name" : undefined;
+      case "email":
+        if (mail.length > 0 && !isValidEmail(mail)) return "Valid email required";
+        return undefined;
+      case "phone":
+        return requiredIndianMobileError(mobile) ?? undefined;
+      case "password":
+        return passwordError(pwd);
+      case "confirmPassword":
+        return confirmPasswordError(pwd, confirm);
+      default:
+        return undefined;
+    }
+  };
+
+  const validateAll = (): boolean => {
+    const next: FieldErrors = {};
+    (["fullName", "email", "phone", "password", "confirmPassword"] as FieldKey[]).forEach((key) => {
+      const err = fieldError(key);
+      if (err) next[key] = err;
+    });
+    setErrors(next);
+    setTouched({
+      fullName: true,
+      email: true,
+      phone: true,
+      password: true,
+      confirmPassword: true,
+    });
+    return Object.keys(next).length === 0;
+  };
+
+  const updateField = (key: FieldKey, value: string) => {
+    if (key === "fullName") setFullName(value);
+    if (key === "email") setEmail(value);
+    if (key === "phone") setPhone(value);
+    if (key === "password") setPassword(value);
+    if (key === "confirmPassword") setConfirmPassword(value);
+
+    setTouched((t) => ({ ...t, [key]: true }));
+
+    setErrors((prev) => {
+      const next = { ...prev };
+      const values =
+        key === "fullName"
+          ? { fullName: value }
+          : key === "email"
+            ? { email: value }
+            : key === "phone"
+              ? { phone: value }
+              : key === "password"
+                ? { password: value }
+                : { confirmPassword: value };
+
+      const err = fieldError(key, values);
+      if (err) next[key] = err;
+      else delete next[key];
+
+      if (key === "password" && (touched.confirmPassword || prev.confirmPassword || confirmPassword)) {
+        const confirmErr = confirmPasswordError(value, confirmPassword);
+        if (confirmErr) next.confirmPassword = confirmErr;
+        else delete next.confirmPassword;
+      }
+
+      return next;
+    });
   };
 
   const handleSubmit = async (ev: React.FormEvent) => {
     ev.preventDefault();
-    if (!validate()) return;
+    if (!agreed) return;
+    if (!validateAll()) {
+      toast.error("Please fill in the required fields correctly.");
+      return;
+    }
     setLoading(true);
     try {
-      const phoneNormalized = phone.trim()
-        ? normalizeIndianMobileDigits(phone)
-        : undefined;
-      await registerCustomer(email.trim(), password, fullName.trim(), phoneNormalized);
-      await login(email.trim(), password, "customer");
-      toast.success("Welcome! Your account is ready.");
-      window.location.href = "/customer/shop";
-    } catch (error) {
-      let message = error instanceof Error ? error.message : "Registration failed.";
-      if (message.toLowerCase().includes("already exists") || message.toLowerCase().includes("in use") || message.toLowerCase().includes("taken")) {
-        message = "Registration failed. If an account with this email or phone number exists, please try logging in.";
+      const phoneNormalized = normalizeIndianMobileDigits(phone);
+      const res = await registerCustomer(
+        email.trim() || null,
+        password,
+        fullName.trim(),
+        phoneNormalized,
+        true,
+      );
+
+      setPendingPhone(phoneNormalized);
+      setPendingLoginId(res.email?.trim() || phoneNormalized);
+
+      if (res.requiresPhoneOtp) {
+        setOtpOpen(true);
+        return;
       }
-      toast.error(message);
+
+      toast.success("Registration complete. Please sign in.");
+      navigate("/customer/login");
+    } catch (error: any) {
+      const raw =
+        error?.response?.data?.detail ||
+        error?.response?.data?.message ||
+        (error instanceof Error ? error.message : "");
+      toast.error(
+        raw && (raw.includes("phone number is already") || raw.includes("email is already"))
+          ? raw
+          : raw || "Registration failed.",
+      );
     } finally {
       setLoading(false);
     }
@@ -88,46 +209,54 @@ const CustomerRegister = () => {
       backTo="/customer/login"
       backLabel="Back to sign in"
     >
-      <form onSubmit={(e) => void handleSubmit(e)} className="space-y-3.5">
+      <form onSubmit={(e) => void handleSubmit(e)} className="space-y-3.5" noValidate>
         <p className="text-[13px] leading-relaxed text-muted-foreground -mt-1">
-          Fields marked <span className="text-destructive">*</span> are required.
+          Phone is required for sign in. Email is optional.{" "}
+          Fields marked <span className="text-destructive">*</span> are always required.
         </p>
         <div className="space-y-1.5">
           <Label htmlFor="fullName" required>Full name</Label>
           <Input
             id="fullName"
             value={fullName}
-            onChange={(e) => setFullName(e.target.value)}
+            onChange={(e) => updateField("fullName", e.target.value)}
             aria-invalid={!!errors.fullName}
             className={errors.fullName ? "border-destructive" : ""}
           />
           {errors.fullName && <p className="text-xs text-destructive">{errors.fullName}</p>}
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="email" required>Email</Label>
+          <Label htmlFor="email">Email</Label>
           <Input
             id="email"
             type="email"
             value={email}
-            onChange={(e) => setEmail(e.target.value)}
+            onChange={(e) => updateField("email", e.target.value)}
+            placeholder="you@email.com"
             aria-invalid={!!errors.email}
             className={errors.email ? "border-destructive" : ""}
           />
-          {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
+          {errors.email ? (
+            <p className="text-xs text-destructive">{errors.email}</p>
+          ) : (
+            <p className="text-[11px] text-muted-foreground">
+              Optional. Used for receipts and account recovery.
+            </p>
+          )}
         </div>
         <div className="space-y-1.5">
-          <Label htmlFor="phone">Phone (optional)</Label>
+          <Label htmlFor="phone" required>Phone</Label>
           <IndianMobileInput
             id="phone"
             value={phone}
-            onChange={setPhone}
+            onChange={(v) => updateField("phone", v)}
             invalid={!!errors.phone}
           />
           {errors.phone ? (
             <p className="text-xs text-destructive">{errors.phone}</p>
           ) : (
             <p className="text-[11px] text-muted-foreground">
-              10-digit Indian mobile starting with 6–9 (optional).
+              Required. You will sign in with this number and an OTP.
             </p>
           )}
         </div>
@@ -138,14 +267,10 @@ const CustomerRegister = () => {
               id="password"
               type={showPwd ? "text" : "password"}
               value={password}
-              onChange={(e) => {
-                const value = e.target.value;
-                setPassword(value);
-                syncPasswordPair(value, confirmPassword);
-              }}
+              onChange={(e) => updateField("password", e.target.value)}
               autoComplete="new-password"
               aria-invalid={!!errors.password}
-              className={errors.password ? "border-destructive pr-10" : "pr-10"}
+              className={cn("pr-10", errors.password && "border-destructive")}
             />
             <button
               type="button"
@@ -158,8 +283,8 @@ const CustomerRegister = () => {
           </div>
           {errors.password ? (
             <p className="text-xs text-destructive">{errors.password}</p>
-          ) : password.length === 0 ? (
-            <p className="text-[11px] text-muted-foreground">At least 8 characters.</p>
+          ) : password.length > 0 && password.length < 8 ? (
+            <p className="text-[11px] text-muted-foreground">{password.length}/8 characters</p>
           ) : null}
         </div>
         <div className="space-y-1.5">
@@ -169,17 +294,16 @@ const CustomerRegister = () => {
               id="confirmPassword"
               type={showConfirmPwd ? "text" : "password"}
               value={confirmPassword}
-              onChange={(e) => {
-                const value = e.target.value;
-                setConfirmPassword(value);
-                syncPasswordPair(password, value);
-              }}
+              onChange={(e) => updateField("confirmPassword", e.target.value)}
               autoComplete="new-password"
               aria-invalid={!!errors.confirmPassword}
               className={cn(
                 "pr-10",
                 errors.confirmPassword && "border-destructive",
-                passwordsMatch && "border-emerald-500/60",
+                !errors.confirmPassword &&
+                  confirmPassword.length > 0 &&
+                  confirmPassword === password &&
+                  "border-emerald-500/60",
               )}
             />
             <button
@@ -193,12 +317,14 @@ const CustomerRegister = () => {
           </div>
           {errors.confirmPassword ? (
             <p className="text-xs text-destructive">{errors.confirmPassword}</p>
-          ) : passwordsMatch ? (
-            <p className="text-xs text-emerald-600">{PASSWORDS_MATCH_MESSAGE}</p>
+          ) : confirmPassword.length > 0 && confirmPassword === password && password.length >= 8 ? (
+            <p className="text-xs text-emerald-600">Passwords match</p>
           ) : null}
         </div>
 
-        <Button type="submit" className="w-full bg-gradient-primary hover:opacity-95 shadow-glow h-11" disabled={loading}>
+        <RegisterLegalAgree surface="customer_web" agreed={agreed} onAgreedChange={setAgreed} />
+
+        <Button type="submit" className="w-full bg-gradient-primary hover:opacity-95 shadow-glow h-11 text-white font-semibold" disabled={loading || !agreed}>
           {loading ? (
             <>
               <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Creating…
@@ -215,6 +341,22 @@ const CustomerRegister = () => {
           Sign in
         </Link>
       </p>
+
+      <PhoneOtpDialog
+        open={otpOpen}
+        onOpenChange={setOtpOpen}
+        phone={pendingPhone}
+        role="customer"
+        required
+        title="Verify your phone"
+        description={
+          pendingPhone
+            ? `Enter the 6-digit code we sent to +91 ${pendingPhone}.`
+            : undefined
+        }
+        successMessage=""
+        onVerified={() => void finishAfterPhoneVerified()}
+      />
     </AuthLayout>
   );
 };

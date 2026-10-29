@@ -1,18 +1,20 @@
 import { useEffect, useMemo, useState } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
+import { keepPreviousData, useQuery } from "@tanstack/react-query";
 import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
-import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { PageContentGate } from "@/app/components/shared/PageLoader";
 import { TablePagination } from "@/app/components/shared/TablePagination";
 import { ListingThumb } from "@/app/components/shared/ListingThumb";
 import { useAuth } from "@/app/guards/AuthContext";
 import { vendorOnboardingApi, type VendorOrderApiDto } from "@/app/services/vendorOnboardingApi";
 import { toast } from "sonner";
 import { ChevronRight, RefreshCw, User } from "lucide-react";
-import { formatOrderStatusLabel, formatOrderStatusTitle, formatOrderTypeLabel, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
+import { formatOrderStatusLabel, formatOrderStatusTitle, formatOrderTypeLabel, orderShowsVendorPayout, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
 import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
+import { formatInr } from "@/app/helpers/orderReturn";
 import {
   ActiveFilterChips,
   FilterPanel,
@@ -106,14 +108,12 @@ const VendorOrders = () => {
   const { user } = useAuth();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const [loading, setLoading] = useState(false);
   const [page, setPage] = useState(1);
   const initialStatus = searchParams.get("status");
   const isKnownStatus = statusTabs.some((tab) => tab.id === initialStatus);
   const [activeStatus, setActiveStatus] = useState<(typeof statusTabs)[number]["id"]>(
     isKnownStatus ? (initialStatus as (typeof statusTabs)[number]["id"]) : "all",
   );
-  const [orders, setOrders] = useState<VendorOrderApiDto[]>([]);
   const [searchInput, setSearchInput] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
@@ -137,85 +137,33 @@ const VendorOrders = () => {
     }
   }, [searchParams]);
 
-  useEffect(() => {
-    setPage(1);
-  }, [activeStatus]);
-
-  const loadOrders = async () => {
-    if (!user) return;
-    try {
-      setLoading(true);
-      const rows = await vendorOnboardingApi.getVendorOrders(user.id);
-      setOrders(rows);
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to load orders.";
-      toast.error(message);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const { data, isLoading, isPlaceholderData, isError, error, refetch } = useQuery({
+    queryKey: ["vendor-order-summaries", user?.id, page, debouncedSearch, activeStatus],
+    queryFn: () =>
+      vendorOnboardingApi.getVendorOrderSummaries(user!.id, {
+        search: debouncedSearch,
+        status: activeStatus,
+        page,
+        pageSize: PAGE_SIZE,
+      }, { quiet: true }),
+    enabled: Boolean(user?.id),
+    placeholderData: keepPreviousData,
+    refetchInterval: 30_000,
+  });
+  const isPageChanging = isPlaceholderData && !isLoading;
 
   useEffect(() => {
-    void loadOrders();
-  }, [user?.id]);
-
-  const filteredOrders = useMemo(() => {
-    let list = orders;
-    const q = debouncedSearch.toLowerCase();
-    if (q) {
-      list = list.filter(
-        (o) =>
-          o.orderNumber.toLowerCase().includes(q) ||
-          o.listingTitle.toLowerCase().includes(q) ||
-          o.customerName.toLowerCase().includes(q) ||
-          (o.customerCity && o.customerCity.toLowerCase().includes(q)) ||
-          o.orderId.toLowerCase().includes(q),
-      );
+    if (isError) {
+      toast.error(error instanceof Error ? error.message : "Failed to load orders.");
     }
-    return list.filter((o) => matchesVendorStatus(o.status, activeStatus));
-  }, [orders, debouncedSearch, activeStatus]);
+  }, [isError, error]);
 
-  const sortedOrders = useMemo(
-    () =>
-      [...filteredOrders].sort((a, b) => {
-        const timeA = new Date(a.createdAtUtc).getTime();
-        const timeB = new Date(b.createdAtUtc).getTime();
-        if (timeA !== timeB) {
-          return timeB - timeA;
-        }
-        return b.orderNumber.localeCompare(a.orderNumber, undefined, { numeric: true });
-      }),
-    [filteredOrders],
-  );
-
-  const orderGroupCount = useMemo(() => countOrderGroups(sortedOrders), [sortedOrders]);
-  const itemCount = sortedOrders.length;
-
-  const totalPages = Math.max(1, Math.ceil(sortedOrders.length / PAGE_SIZE));
+  const pageSlice = data?.items ?? [];
+  const itemCount = data?.totalCount ?? 0;
+  const orderGroupCount = useMemo(() => countOrderGroups(pageSlice), [pageSlice]);
+  const statusCounts = data?.statusCounts ?? {};
+  const totalPages = Math.max(1, Math.ceil(itemCount / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
-  const pageSlice = useMemo(
-    () => sortedOrders.slice((safePage - 1) * PAGE_SIZE, safePage * PAGE_SIZE),
-    [sortedOrders, safePage],
-  );
-
-  const statusCounts = useMemo(() => {
-    let searchable = orders;
-    const q = debouncedSearch.toLowerCase();
-    if (q) {
-      searchable = searchable.filter(
-        (o) =>
-          o.orderNumber.toLowerCase().includes(q) ||
-          o.listingTitle.toLowerCase().includes(q) ||
-          o.customerName.toLowerCase().includes(q) ||
-          (o.customerCity && o.customerCity.toLowerCase().includes(q)) ||
-          o.orderId.toLowerCase().includes(q),
-      );
-    }
-    return statusTabs.reduce<Record<(typeof statusTabs)[number]["id"], number>>((acc, tab) => {
-      acc[tab.id] = tab.id === "all" ? searchable.length : searchable.filter((o) => matchesVendorStatus(o.status, tab.id)).length;
-      return acc;
-    }, {} as Record<(typeof statusTabs)[number]["id"], number>);
-  }, [orders, debouncedSearch]);
 
   const setStatusFilter = (nextStatus: (typeof statusTabs)[number]["id"]) => {
     setActiveStatus(nextStatus);
@@ -248,7 +196,7 @@ const VendorOrders = () => {
         title="Orders"
         description="Manage confirmed, in-transit, active and completed orders."
         actions={
-          <Button variant="outline" onClick={() => void loadOrders()} disabled={loading}>
+          <Button variant="outline" onClick={() => void refetch()} disabled={isLoading}>
             <RefreshCw className="mr-2 h-4 w-4" />
             Refresh
           </Button>
@@ -306,7 +254,7 @@ const VendorOrders = () => {
           <span className="font-medium">Dispatch failed</span> means reassignment could not find an eligible vendor.
         </p>
 
-        {!loading && itemCount > 0 ? (
+        {!isLoading && itemCount > 0 ? (
           <div className="mb-4 rounded-xl border border-border/60 bg-muted/30 px-4 py-3">
             <p className="text-sm font-semibold text-foreground">{formatOrderItemSummary(orderGroupCount, itemCount)}</p>
             <p className="mt-1 text-xs text-muted-foreground">
@@ -315,9 +263,9 @@ const VendorOrders = () => {
           </div>
         ) : null}
 
-        {loading ? (
-          <PageLoaderSlot />
-        ) : sortedOrders.length === 0 ? (
+        <PageContentGate loading={isLoading && !data}>
+        <div className={cn("transition-opacity duration-200", isPageChanging && "opacity-50")}>
+        {pageSlice.length === 0 ? (
           <p className="py-8 text-center text-sm text-muted-foreground">No orders found for this status.</p>
         ) : (
           <div className="space-y-3">
@@ -364,45 +312,69 @@ const VendorOrders = () => {
                     {group.items.map((order) => {
                       const imageUrl = resolveItemImageUrl(order);
                       return (
-                      <div key={order.orderId} className="flex min-w-0 flex-col gap-4 rounded-xl border border-border/50 bg-card p-3 shadow-sm transition-all duration-300 hover:border-border hover:bg-accent/10 sm:flex-row sm:items-center sm:justify-between sm:p-4">
+                      <div
+                        key={order.orderId}
+                        role="link"
+                        tabIndex={0}
+                        onClick={() => navigate(`/vendor/orders/${order.orderId}`)}
+                        onKeyDown={(event) => {
+                          if (event.key === "Enter" || event.key === " ") {
+                            event.preventDefault();
+                            navigate(`/vendor/orders/${order.orderId}`);
+                          }
+                        }}
+                        className="flex min-w-0 cursor-pointer flex-col gap-3 rounded-xl border border-border/50 bg-card p-3 shadow-sm transition-all duration-300 hover:border-border hover:bg-accent/10 sm:flex-row sm:items-center sm:justify-between sm:p-4"
+                      >
                         <div className="flex min-w-0 flex-1 items-center gap-3 sm:gap-4">
                           <ListingThumb src={imageUrl} size="lg" className="border border-border shadow-sm" />
                           <div className="min-w-0 flex-1">
-                            <p className="text-sm font-semibold text-foreground truncate">{order.listingTitle}</p>
-                            <div className="mt-1 flex flex-wrap items-center gap-x-4 gap-y-1 text-xs text-muted-foreground">
-                              <span className="flex items-center gap-1">
-                                <User className="h-3.5 w-3.5 opacity-60 shrink-0" /> {order.customerName}
+                            <p className="truncate text-sm font-semibold text-foreground">{order.listingTitle}</p>
+                            <p className="mt-1 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                              <span className="inline-flex min-w-0 items-center gap-1">
+                                <User className="h-3.5 w-3.5 shrink-0 opacity-60" />
+                                <span className="truncate">{order.customerName}</span>
                               </span>
-                              <span>Qty: <strong className="text-foreground font-medium">{order.quantity}</strong></span>
-                              <span>Payout: <strong className="text-foreground font-semibold">₹{(order.vendorSubtotalAmount && order.vendorSubtotalAmount > 0 ? order.vendorSubtotalAmount : order.totalAmount).toFixed(0)}</strong></span>
-                              <span>Location: {order.customerCity ?? "-"}, {order.customerState ?? "-"}</span>
-                            </div>
+                              <span>Qty {order.quantity}</span>
+                            </p>
+                            <p className="mt-0.5 flex min-w-0 flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-muted-foreground">
+                              <span className="truncate">{order.customerCity ?? "-"}, {order.customerState ?? "-"}</span>
+                              {orderShowsVendorPayout(order.status) ? (
+                                <span className="font-semibold tabular-nums text-foreground">
+                                  ₹{(order.vendorSubtotalAmount && order.vendorSubtotalAmount > 0 ? order.vendorSubtotalAmount : order.totalAmount).toFixed(0)}
+                                </span>
+                              ) : null}
+                            </p>
                           </div>
                         </div>
 
-                        <div className="flex w-full flex-wrap items-center justify-between gap-x-2 gap-y-2 border-t border-border/20 pt-3 sm:w-auto sm:flex-nowrap sm:justify-end sm:gap-3 sm:border-none sm:pt-0">
-                          <div className="flex items-center gap-1.5">
-                            <Badge className={cn("whitespace-nowrap text-[10px] font-semibold py-0.5 px-2", orderTypeBadgeClass(order.orderType))} variant="outline">
-                              {formatOrderTypeLabel(order.orderType)}
-                            </Badge>
+                        <div className="flex w-full min-w-0 items-center justify-between gap-2 border-t border-border/40 pt-2.5 sm:w-auto sm:justify-end sm:gap-3 sm:border-none sm:pt-0">
+                          <div className="flex min-w-0 flex-1 flex-wrap items-center gap-1.5">
                             <Badge
                               title={formatOrderStatusTitle(order.status)}
-                              className={cn(orderStatusBadgeSizeClass, orderStatusBadgeClass(order.status))}
+                              className={cn("shrink-0", orderStatusBadgeSizeClass, orderStatusBadgeClass(order.status))}
                               variant="outline"
                             >
                               {formatOrderStatusLabel(order.status)}
                             </Badge>
+                            <Badge className={cn("h-5 shrink-0 whitespace-nowrap px-2 py-0 text-[10px] font-semibold leading-none", orderTypeBadgeClass(order.orderType))} variant="outline">
+                              {formatOrderTypeLabel(order.orderType)}
+                            </Badge>
+                            {order.isExtended ? (
+                              <span className="shrink-0 whitespace-nowrap rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold leading-none text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                                EXTENDED
+                              </span>
+                            ) : null}
+                            {order.returnSettlement && order.returnSettlement.damageAmount > 0 ? (
+                              <span className="shrink-0 whitespace-nowrap rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold leading-none text-sky-900 dark:bg-sky-950/50 dark:text-sky-200">
+                                Damage ₹{formatInr(order.returnSettlement.damageAmount)}
+                              </span>
+                            ) : null}
                           </div>
-                          <Button
-                            size="sm"
-                            variant="ghost"
-                            className="h-7 shrink-0 px-1.5 text-xs font-semibold text-primary transition-colors hover:bg-accent sm:h-8 sm:px-2"
-                            onClick={() => navigate(`/vendor/orders/${order.orderId}`)}
-                          >
+                          <span className="inline-flex h-8 shrink-0 items-center px-1 text-xs font-semibold text-primary">
                             <span className="sm:hidden">Details</span>
                             <span className="hidden sm:inline">View details</span>
                             <ChevronRight className="h-3.5 w-3.5" />
-                          </Button>
+                          </span>
                         </div>
                       </div>
                     );
@@ -414,12 +386,14 @@ const VendorOrders = () => {
             <TablePagination
               page={safePage}
               pageSize={PAGE_SIZE}
-              total={sortedOrders.length}
+              total={itemCount}
               onPageChange={setPage}
               label="order items"
             />
           </div>
         )}
+        </div>
+        </PageContentGate>
       </Card>
     </div>
   );

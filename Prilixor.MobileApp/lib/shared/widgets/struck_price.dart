@@ -17,11 +17,23 @@ class StruckPrice extends StatelessWidget {
   Widget build(BuildContext context) {
     final base = (style ?? const TextStyle(fontSize: 13, fontWeight: FontWeight.w600)).copyWith(
       color: color,
-      decoration: TextDecoration.none,
+      decoration: TextDecoration.lineThrough,
+      decorationColor: color.withValues(alpha: 0.92),
+      decorationThickness: 1.4,
+      height: 1.2,
     );
-    return CustomPaint(
-      foregroundPainter: _DiagonalStrikePainter(color: color.withValues(alpha: 0.95)),
-      child: Text(text, style: base),
+
+    // Stack + CustomPaint keeps the web-style diagonal strike visible on mobile/web.
+    return Stack(
+      clipBehavior: Clip.none,
+      children: [
+        Text(text, style: base.copyWith(decoration: TextDecoration.none)),
+        Positioned.fill(
+          child: CustomPaint(
+            painter: _DiagonalStrikePainter(color: color.withValues(alpha: 0.95)),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -33,6 +45,8 @@ class _DiagonalStrikePainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
+    if (size.width <= 0 || size.height <= 0) return;
+
     final paint = Paint()
       ..color = color
       ..strokeWidth = 1.5

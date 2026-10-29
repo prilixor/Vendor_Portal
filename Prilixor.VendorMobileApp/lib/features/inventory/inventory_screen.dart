@@ -5,7 +5,9 @@ import '../../core/auth/auth_provider.dart';
 import '../../core/models/vendor_catalog_model.dart';
 import '../../core/providers/vendor_catalog_provider.dart';
 import '../../core/theme.dart';
+import '../../core/utils/debouncer.dart';
 import '../../shared/widgets/brand_page_loader.dart';
+import '../../shared/widgets/chemical_size_stock_table.dart';
 import '../../shared/widgets/inventory_kpi_strip.dart';
 import '../../shared/widgets/listing_thumb.dart';
 import 'inventory_detail_screen.dart';
@@ -44,18 +46,24 @@ class _InventoryScreenState extends State<InventoryScreen>
     with SingleTickerProviderStateMixin {
   late final TabController _tabController;
   final _searchController = TextEditingController();
+  final Debouncer _searchDebouncer = Debouncer(duration: catalogSearchDebounce);
   String _searchQuery = '';
 
   @override
   void initState() {
     super.initState();
     _tabController = TabController(length: 2, vsync: this);
+    _tabController.addListener(() {
+      if (_tabController.indexIsChanging) return;
+      _load();
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) => _load());
   }
 
   @override
   void dispose() {
     _tabController.dispose();
+    _searchDebouncer.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -65,30 +73,53 @@ class _InventoryScreenState extends State<InventoryScreen>
         Provider.of<AuthProvider>(context, listen: false).vendorId;
     if (vendorId == null || vendorId.isEmpty) return;
     await Provider.of<VendorCatalogProvider>(context, listen: false)
-        .fetchCatalog(vendorId, silent: silent);
+        .fetchListingSummaries(
+      vendorId,
+      silent: silent,
+      search: _searchQuery,
+      status: 'all',
+      isChemical: _tabController.index == 1,
+      reset: true,
+    );
   }
 
-  List<InventoryRecord> _filtered(List<InventoryRecord> rows, bool chemicals) {
-    final q = _searchQuery.trim().toLowerCase();
-    return rows
-        .where((row) => row.isChemical == chemicals)
-        .where((row) => q.isEmpty || row.productName.toLowerCase().contains(q))
-        .toList()
-      ..sort((a, b) => a.productName.compareTo(b.productName));
+  void _maybeLoadMore() {
+    final vendorId =
+        Provider.of<AuthProvider>(context, listen: false).vendorId;
+    if (vendorId == null || vendorId.isEmpty) return;
+    Provider.of<VendorCatalogProvider>(context, listen: false)
+        .fetchListingSummaries(
+      vendorId,
+      search: _searchQuery,
+      status: 'all',
+      isChemical: _tabController.index == 1,
+      reset: false,
+    );
   }
 
   @override
   Widget build(BuildContext context) {
     final provider = Provider.of<VendorCatalogProvider>(context);
-    final totals = provider.inventoryTotals;
-    final equipmentTotals = _sumRecords(
-      provider.inventoryRecords.where((r) => !r.isChemical),
-    );
-    final chemicalTotals = _sumRecords(
-      provider.inventoryRecords.where((r) => r.isChemical),
-    );
-    final isChemicalTab = _tabController.index == 1;
-    final filtered = _filtered(provider.inventoryRecords, isChemicalTab);
+    final equipmentTotals = provider.hasStockSplit
+        ? provider.equipmentStock
+        : _sumRecords(
+            provider.inventoryRecords.where((r) => !r.isChemical),
+          );
+    final chemicalTotals = provider.hasStockSplit
+        ? provider.chemicalStock
+        : _sumRecords(
+            provider.inventoryRecords.where((r) => r.isChemical),
+          );
+    final totals = provider.hasStockSplit
+        ? InventoryTotals(
+            total: equipmentTotals.total + chemicalTotals.total,
+            available: equipmentTotals.available + chemicalTotals.available,
+            reserved: equipmentTotals.reserved + chemicalTotals.reserved,
+            rented: equipmentTotals.rented + chemicalTotals.rented,
+            blocked: equipmentTotals.blocked + chemicalTotals.blocked,
+          )
+        : provider.inventoryTotals;
+    final filtered = provider.inventoryRecords;
 
     return Scaffold(
       appBar: AppBar(
@@ -110,12 +141,10 @@ class _InventoryScreenState extends State<InventoryScreen>
           indicatorColor: const Color(0xFF6C63FF),
           tabs: [
             Tab(
-              text:
-                  'Equipment (${provider.inventoryRecords.where((r) => !r.isChemical).length})',
+              text: 'Equipment (${provider.equipmentCount})',
             ),
             Tab(
-              text:
-                  'Chemicals (${provider.inventoryRecords.where((r) => r.isChemical).length})',
+              text: 'Chemicals (${provider.chemicalCount})',
             ),
           ],
         ),
@@ -149,7 +178,10 @@ class _InventoryScreenState extends State<InventoryScreen>
                     borderSide: BorderSide.none,
                   ),
                 ),
-                onChanged: (v) => setState(() => _searchQuery = v),
+                onChanged: (v) {
+                  setState(() => _searchQuery = v);
+                  _searchDebouncer.run(_load);
+                },
               ),
             ),
             const SizedBox(height: 8),
@@ -173,7 +205,15 @@ class _InventoryScreenState extends State<InventoryScreen>
                             ),
                           ],
                         )
-                      : ListView.separated(
+                      : NotificationListener<ScrollNotification>(
+                          onNotification: (notification) {
+                            if (notification.metrics.pixels >=
+                                notification.metrics.maxScrollExtent - 400) {
+                              _maybeLoadMore();
+                            }
+                            return false;
+                          },
+                          child: ListView.separated(
                           physics: const AlwaysScrollableScrollPhysics(),
                           padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
                           itemCount: filtered.length,
@@ -195,6 +235,7 @@ class _InventoryScreenState extends State<InventoryScreen>
                             );
                           },
                         ),
+                      ),
             ),
           ],
         ),
@@ -301,7 +342,7 @@ class _KpiStrip extends StatelessWidget {
         value: totals.available,
         equipment: equipment.available,
         chemical: chemical.available,
-        color: const Color(0xFF10B981),
+        color: context.appColors.success,
       ),
       (
         label: 'Reserved',
@@ -309,7 +350,7 @@ class _KpiStrip extends StatelessWidget {
         value: totals.reserved,
         equipment: equipment.reserved,
         chemical: chemical.reserved,
-        color: const Color(0xFFF59E0B),
+        color: context.appColors.warning,
       ),
       (
         label: 'Rented',
@@ -317,7 +358,7 @@ class _KpiStrip extends StatelessWidget {
         value: totals.rented,
         equipment: equipment.rented,
         chemical: chemical.rented,
-        color: const Color(0xFF3B82F6),
+        color: context.appColors.info,
       ),
       (
         label: 'Blocked',
@@ -325,7 +366,7 @@ class _KpiStrip extends StatelessWidget {
         value: totals.blocked,
         equipment: equipment.blocked,
         chemical: chemical.blocked,
-        color: const Color(0xFFEF4444),
+        color: context.appColors.danger,
       ),
     ];
 
@@ -413,26 +454,26 @@ class _InventoryCard extends StatelessWidget {
         label: 'Available',
         semantics: 'Available ${record.available}',
         value: record.available,
-        color: const Color(0xFF10B981),
+        color: context.appColors.success,
       ),
       if (!record.isChemical)
         (
           label: 'Rented',
           semantics: 'Rented ${record.rented}',
           value: record.rented,
-          color: const Color(0xFF3B82F6),
+          color: context.appColors.info,
         ),
       (
         label: 'Reserved',
         semantics: 'Reserved ${record.reserved} — held for pending orders',
         value: record.reserved,
-        color: const Color(0xFFF59E0B),
+        color: context.appColors.warning,
       ),
       (
         label: 'Blocked',
         semantics: 'Blocked ${record.blocked}',
         value: record.blocked,
-        color: const Color(0xFFEF4444),
+        color: context.appColors.danger,
       ),
     ];
 
@@ -468,17 +509,31 @@ class _InventoryCard extends StatelessWidget {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(
-                      record.productName,
-                      maxLines: 2,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        color: context.appColors.textPrimary,
-                        fontWeight: FontWeight.w800,
-                        fontSize: 14,
-                        height: 1.25,
-                        letterSpacing: -0.1,
-                      ),
+                    Row(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            record.productName,
+                            maxLines: 2,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(
+                              color: context.appColors.textPrimary,
+                              fontWeight: FontWeight.w800,
+                              fontSize: 14,
+                              height: 1.25,
+                              letterSpacing: -0.1,
+                            ),
+                          ),
+                        ),
+                        if (record.isChemical && record.chemicalSizes.isNotEmpty) ...[
+                          const SizedBox(width: 8),
+                          ChemicalSizeStockDisclosure(
+                            sizes: record.chemicalSizes,
+                            productName: record.productName,
+                          ),
+                        ],
+                      ],
                     ),
                     const SizedBox(height: 8),
                     _UtilizationMeter(percent: util, label: utilPct),

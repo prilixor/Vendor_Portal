@@ -19,8 +19,22 @@ class OrderGroup {
         .reduce((a, b) => a.isAfter(b) ? a : b);
   }
 
-  double get totalPayout =>
-      items.fold(0.0, (sum, order) => sum + order.payoutAmount);
+  double get totalPayout => items
+      .where((order) => vendorEarnsPayout(order.status))
+      .fold(0.0, (sum, order) => sum + order.payoutAmount);
+
+  bool get showsPayout => items.any((order) => vendorEarnsPayout(order.status));
+}
+
+/// Payout is shown only after a vendor has accepted the product.
+bool vendorEarnsPayout(String status) {
+  final compact = status.trim().toLowerCase().replaceAll(RegExp(r'\s+'), '_');
+  return compact == 'confirmed' ||
+      compact == 'in_transit' ||
+      compact == 'active' ||
+      compact == 'returned' ||
+      compact == 'bought_out' ||
+      compact == 'completed';
 }
 
 String getBaseOrderNumber(String orderNumber) {
@@ -88,9 +102,9 @@ String formatOrderStatusLabel(String status) {
 Color orderStatusColor(String status) {
   final s = status.toLowerCase().replaceAll('_', ' ');
   if (s.contains('awaiting') || s == 'pending') return Colors.amber;
-  if (s == 'confirmed') return const Color(0xFF60A5FA);
+  if (s == 'confirmed') return AppPalette.dark.info;
   if (s.contains('transit')) return Colors.purpleAccent;
-  if (s == 'active') return const Color(0xFF34D399);
+  if (s == 'active') return AppPalette.successDark;
   if (s == 'returned') return Colors.blueGrey;
   if (s.contains('cancel')) return Colors.grey;
   if (s.contains('dispatch failed')) return Colors.redAccent;
@@ -101,7 +115,7 @@ Color orderStatusColor(String status) {
 Color orderTypeColor(String type) {
   return type.toLowerCase() == 'buy'
       ? const Color(0xFF818CF8)
-      : const Color(0xFF34D399);
+      : AppPalette.successDark;
 }
 
 String orderTypeLabel(String type) {
@@ -133,25 +147,24 @@ String formatDetailDate(String? value) {
 
 List<(String, String)> orderDetailRows(VendorOrder order) {
   final isBuy = order.orderType.toLowerCase() == 'buy';
-  final payout = '₹${order.payoutAmount.toStringAsFixed(0)}';
-
-  if (isBuy) {
-    return [
-      ('Purchase date', formatDetailDate(order.startDate)),
-      ('Order type', orderTypeLabel(order.orderType)),
-      ('Quantity', '${order.quantity}'),
-      ('Vendor payout', payout),
-    ];
+  final payout = formatVendorMoney(order.payoutAmount);
+  final rows = isBuy
+      ? <(String, String)>[
+          ('Purchase date', formatDetailDate(order.startDate)),
+          ('Order type', orderTypeLabel(order.orderType)),
+          ('Quantity', '${order.quantity}'),
+        ]
+      : <(String, String)>[
+          ('Start date', formatDetailDate(order.startDate)),
+          ('End date', formatDetailDate(order.endDate)),
+          ('Rental days', '${order.rentalDays}'),
+          ('Order type', orderTypeLabel(order.orderType)),
+          ('Quantity', '${order.quantity}'),
+        ];
+  if (vendorEarnsPayout(order.status)) {
+    rows.add(('Vendor payout', payout));
   }
-
-  return [
-    ('Start date', formatDetailDate(order.startDate)),
-    ('End date', formatDetailDate(order.endDate)),
-    ('Rental days', '${order.rentalDays}'),
-    ('Order type', orderTypeLabel(order.orderType)),
-    ('Quantity', '${order.quantity}'),
-    ('Vendor payout', payout),
-  ];
+  return rows;
 }
 
 class OrderStatusChip extends StatelessWidget {
@@ -162,6 +175,7 @@ class OrderStatusChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = context.isDarkMode;
+    final colors = context.appColors;
     final s = status.toLowerCase().trim().replaceAll('_', ' ');
     final isStatusActive = s == 'active';
     final isStatusPending = s.contains('awaiting') || s.contains('pending');
@@ -178,25 +192,25 @@ class OrderStatusChip extends StatelessWidget {
 
     if (!isDark) {
       if (isStatusActive) {
-        color = const Color(0xFF047857);
-        bgColor = const Color(0xFFECFDF5);
-        borderColor = const Color(0xFFA7F3D0);
+        color = colors.success;
+        bgColor = colors.successSoft;
+        borderColor = colors.successBorder;
       } else if (isStatusPending) {
-        color = const Color(0xFF92400E);
-        bgColor = const Color(0xFFFEF3C7);
-        borderColor = const Color(0xFFFDE68A);
+        color = colors.warning;
+        bgColor = colors.warningSoft;
+        borderColor = colors.warningBorder;
       } else if (isStatusConfirmed) {
-        color = const Color(0xFF1D4ED8);
-        bgColor = const Color(0xFFEFF6FF);
-        borderColor = const Color(0xFFBFDBFE);
+        color = colors.info;
+        bgColor = colors.infoSoft;
+        borderColor = colors.infoBorder;
       } else if (isStatusTransit) {
         color = const Color(0xFF6D28D9);
         bgColor = const Color(0xFFF5F3FF);
         borderColor = const Color(0xFFDDD6FE);
       } else if (isStatusFailed) {
-        color = const Color(0xFFB91C1C);
-        bgColor = const Color(0xFFFEF2F2);
-        borderColor = const Color(0xFFFECACA);
+        color = colors.danger;
+        bgColor = colors.dangerSoft;
+        borderColor = colors.dangerBorder;
       } else if (isStatusBought) {
         color = const Color(0xFFBE185D);
         bgColor = const Color(0xFFFDF2F8);
@@ -251,6 +265,7 @@ class OrderTypeChip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = context.isDarkMode;
+    final colors = context.appColors;
     final isBuy = orderType.toLowerCase() == 'buy';
 
     Color color;
@@ -263,9 +278,9 @@ class OrderTypeChip extends StatelessWidget {
         bgColor = const Color(0xFFEEF2FF);
         borderColor = const Color(0xFFC7D2FE);
       } else {
-        color = const Color(0xFF047857);
-        bgColor = const Color(0xFFECFDF5);
-        borderColor = const Color(0xFFA7F3D0);
+        color = colors.success;
+        bgColor = colors.successSoft;
+        borderColor = colors.successBorder;
       }
     } else {
       final base = orderTypeColor(orderType);
@@ -355,7 +370,7 @@ class OrderMetaChip extends StatelessWidget {
   }
 }
 
-/// Vendor Web parity: customer/qty/payout on one row, location on its own row.
+/// Vendor web list: customer and quantity, then place and payout.
 class OrderItemMetaLine extends StatelessWidget {
   final VendorOrder order;
 
@@ -369,7 +384,7 @@ class OrderItemMetaLine extends StatelessWidget {
       fontSize: 11,
       height: 1.35,
     );
-    final value = TextStyle(
+    final strong = TextStyle(
       color: colors.textPrimary,
       fontSize: 11,
       fontWeight: FontWeight.w700,
@@ -380,8 +395,8 @@ class OrderItemMetaLine extends StatelessWidget {
       crossAxisAlignment: CrossAxisAlignment.start,
       children: [
         Wrap(
-          spacing: 10,
-          runSpacing: 4,
+          spacing: 8,
+          runSpacing: 2,
           crossAxisAlignment: WrapCrossAlignment.center,
           children: [
             Row(
@@ -394,7 +409,7 @@ class OrderItemMetaLine extends StatelessWidget {
                 ),
                 const SizedBox(width: 4),
                 ConstrainedBox(
-                  constraints: const BoxConstraints(maxWidth: 108),
+                  constraints: const BoxConstraints(maxWidth: 140),
                   child: Text(
                     order.customerName,
                     style: muted,
@@ -404,55 +419,23 @@ class OrderItemMetaLine extends StatelessWidget {
                 ),
               ],
             ),
-            Text.rich(
-              TextSpan(
-                children: [
-                  TextSpan(text: 'Qty: ', style: muted),
-                  TextSpan(text: '${order.quantity}', style: value),
-                ],
-              ),
-            ),
-            Text.rich(
-              TextSpan(
-                children: [
-                  TextSpan(text: 'Payout: ', style: muted),
-                  TextSpan(
-                    text: '₹${order.payoutAmount.toStringAsFixed(0)}',
-                    style: value,
-                  ),
-                ],
-              ),
-            ),
+            Text('Qty ${order.quantity}', style: muted),
           ],
         ),
-        const SizedBox(height: 5),
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        const SizedBox(height: 4),
+        Wrap(
+          spacing: 8,
+          runSpacing: 2,
+          crossAxisAlignment: WrapCrossAlignment.center,
           children: [
-            Padding(
-              padding: const EdgeInsets.only(top: 1),
-              child: Icon(
-                Icons.location_on_outlined,
-                size: 13,
-                color: colors.textMuted.withValues(alpha: 0.8),
-              ),
+            Text(
+              order.customerLocation,
+              style: muted,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
             ),
-            const SizedBox(width: 4),
-            Expanded(
-              child: Text.rich(
-                TextSpan(
-                  children: [
-                    TextSpan(text: 'Location: ', style: muted),
-                    TextSpan(
-                      text: order.customerLocation,
-                      style: value.copyWith(fontWeight: FontWeight.w600),
-                    ),
-                  ],
-                ),
-                maxLines: 2,
-                overflow: TextOverflow.ellipsis,
-              ),
-            ),
+            if (vendorEarnsPayout(order.status))
+              Text(formatVendorMoney(order.payoutAmount), style: strong),
           ],
         ),
       ],
@@ -492,16 +475,18 @@ class OrderGroupCardHeader extends StatelessWidget {
                   ),
                 ),
               ),
-              const SizedBox(width: 10),
-              Text(
-                '₹${group.totalPayout.toStringAsFixed(0)}',
-                style: const TextStyle(
-                  color: AppTheme.accent,
-                  fontWeight: FontWeight.w800,
-                  fontSize: 15,
-                  height: 1.25,
+              if (group.showsPayout) ...[
+                const SizedBox(width: 10),
+                Text(
+                  formatVendorMoney(group.totalPayout),
+                  style: const TextStyle(
+                    color: AppTheme.accent,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 15,
+                    height: 1.25,
+                  ),
                 ),
-              ),
+              ],
             ],
           ),
           const SizedBox(height: 6),
@@ -606,31 +591,41 @@ class OrderGroupListItem extends StatelessWidget {
               Divider(height: 1, color: colors.border.withValues(alpha: 0.4)),
               const SizedBox(height: 10),
               Row(
+                crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  OrderTypeChip(orderType: order.orderType),
-                  const SizedBox(width: 6),
-                  OrderStatusChip(status: order.status),
-                  const Spacer(),
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
-                    child: Row(
-                      mainAxisSize: MainAxisSize.min,
+                  Expanded(
+                    child: Wrap(
+                      spacing: 6,
+                      runSpacing: 4,
+                      crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
-                        Text(
-                          'Details',
-                          style: TextStyle(
-                            color: AppTheme.accent,
-                            fontSize: 12,
-                            fontWeight: FontWeight.w700,
-                          ),
-                        ),
-                        Icon(
-                          Icons.chevron_right_rounded,
-                          color: AppTheme.accent,
-                          size: 18,
-                        ),
+                        OrderStatusChip(status: order.status),
+                        OrderTypeChip(orderType: order.orderType),
+                        if (order.isExtended && order.orderType.toLowerCase() != 'buy')
+                          const OrderMetaChip(label: 'EXTENDED', highlight: true),
+                        if (order.returnSettlement?.listDamageLabel != null)
+                          OrderMetaChip(label: order.returnSettlement!.listDamageLabel!),
                       ],
                     ),
+                  ),
+                  const SizedBox(width: 8),
+                  Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Text(
+                        'Details',
+                        style: TextStyle(
+                          color: AppTheme.accent,
+                          fontSize: 12,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                      Icon(
+                        Icons.chevron_right_rounded,
+                        color: AppTheme.accent,
+                        size: 18,
+                      ),
+                    ],
                   ),
                 ],
               ),

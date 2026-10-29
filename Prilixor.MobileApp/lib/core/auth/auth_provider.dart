@@ -17,8 +17,14 @@ class AuthProvider extends ChangeNotifier {
   bool _isBootstrapping = true;
   bool get isBootstrapping => _isBootstrapping;
 
+  bool _isEmailNotVerified = false;
+  bool get isEmailNotVerified => _isEmailNotVerified;
+
   String? _errorMessage;
   String? get errorMessage => _errorMessage;
+
+  Map<String, dynamic>? _lastRegistrationResponse;
+  Map<String, dynamic>? get lastRegistrationResponse => _lastRegistrationResponse;
 
   AuthProvider() {
     // When API refresh fails, clear local session so AuthGate shows Welcome/Login.
@@ -30,9 +36,6 @@ class AuthProvider extends ChangeNotifier {
 
   /// Restore session from stored JWT (web-like stay logged in).
   /// If access token expired, tries refresh once.
-  ///
-  /// Bounded so a hung secure-storage / refresh call cannot leave AuthGate
-  /// on BrandSplash forever (especially painful on Flutter web).
   Future<bool> tryRestoreSession() async {
     _isBootstrapping = true;
     notifyListeners();
@@ -60,13 +63,11 @@ class AuthProvider extends ChangeNotifier {
       return false;
     }
 
-    // Token still valid — keep session.
     if (!JwtDecoder.isExpired(token)) {
       _isAuthenticated = true;
       return true;
     }
 
-    // Access token expired — try refresh before forcing login.
     final refresh = await _storage.read(key: 'refresh_token');
     if (refresh == null || refresh.trim().isEmpty) {
       await logout();
@@ -116,6 +117,7 @@ class AuthProvider extends ChangeNotifier {
   Future<bool> login(String email, String password) async {
     _isLoading = true;
     _errorMessage = null;
+    _isEmailNotVerified = false;
     notifyListeners();
 
     try {
@@ -144,15 +146,16 @@ class AuthProvider extends ChangeNotifier {
         return true;
       }
     } on DioException catch (e) {
-      if (e.response?.statusCode == 401) {
-        _errorMessage = 'Invalid email or password';
-      } else if (e.response?.statusCode == 400) {
-        final data = e.response?.data;
-        if (data is Map<String, dynamic>) {
-          _errorMessage = data['detail'] ?? data['message'] ?? 'Bad Request';
-        } else {
-          _errorMessage = 'Bad Request';
-        }
+      final data = e.response?.data;
+      final title = data is Map ? (data['title']?.toString() ?? '') : '';
+      final detail = data is Map ? (data['detail']?.toString() ?? data['message']?.toString() ?? '') : '';
+      if (title == 'EMAIL_NOT_VERIFIED' || detail.toLowerCase().contains('verify your email')) {
+        _isEmailNotVerified = true;
+        _errorMessage = 'Please verify your email before logging in.';
+      } else if (e.response?.statusCode == 401) {
+        _errorMessage = 'Invalid email/phone or password.';
+      } else if (e.response?.statusCode == 400 || e.response?.statusCode == 403) {
+        _errorMessage = detail.isNotEmpty ? detail : 'Login failed.';
       } else {
         _errorMessage = 'An error occurred: ${e.message}';
       }
@@ -168,35 +171,40 @@ class AuthProvider extends ChangeNotifier {
   Future<void> logout() async {
     await _storage.delete(key: 'jwt_token');
     await _storage.delete(key: 'refresh_token');
-    // Re-prompt location on next login if they still have no delivery address.
     await _storage.delete(key: 'locationPromptDismissed');
     _isAuthenticated = false;
     notifyListeners();
   }
 
-  Future<bool> registerCustomer(String email, String password, String fullName, String? phone) async {
+  Future<bool> registerCustomer(String? email, String password, String fullName, String? phone) async {
     _isLoading = true;
     _errorMessage = null;
+    _lastRegistrationResponse = null;
     notifyListeners();
 
     try {
       final response = await _apiClient.dio.post(
         '/customers/register',
         data: {
-          'email': email,
+          if (email != null && email.isNotEmpty) 'email': email,
           'password': password,
           'fullName': fullName,
           if (phone != null && phone.isNotEmpty) 'phone': phone,
+          'acceptedLegal': true,
+          'sourceSurface': 'customer_mobile',
         },
       );
       if (response.statusCode == 200 || response.statusCode == 201) {
+        if (response.data is Map) {
+          _lastRegistrationResponse = Map<String, dynamic>.from(response.data as Map);
+        }
         _isLoading = false;
         notifyListeners();
         return true;
       }
     } on DioException catch (e) {
       if (e.response?.statusCode == 400 || e.response?.statusCode == 409) {
-        _errorMessage = e.response?.data?['message'] ?? 'Registration failed. Email might already exist.';
+        _errorMessage = e.response?.data?['message'] ?? 'Registration failed. Account might already exist.';
       } else {
         _errorMessage = 'An error occurred: ${e.message}';
       }
@@ -204,6 +212,172 @@ class AuthProvider extends ChangeNotifier {
       _errorMessage = 'An unexpected error occurred.';
     }
 
+    _isLoading = false;
+    notifyListeners();
+    return false;
+  }
+
+  String _extractErrorMessage(DioException e, String fallback) {
+    if (e.response?.data is Map) {
+      final map = e.response!.data as Map;
+      final detail = map['detail']?.toString().trim();
+      if (detail != null && detail.isNotEmpty) return detail;
+      final message = map['message']?.toString().trim();
+      if (message != null && message.isNotEmpty) return message;
+      return fallback;
+    }
+    if (e.response?.data is String && (e.response!.data as String).isNotEmpty) {
+      final str = e.response!.data as String;
+      if (!str.startsWith('<')) return str;
+    }
+    return fallback;
+  }
+
+  Future<bool> sendPhoneOtp(String phone, String role) async {
+    _errorMessage = null;
+    try {
+      final response = await _apiClient.sendPhoneOtp(phone, role);
+      return response.statusCode == 200;
+    } on DioException catch (e) {
+      _errorMessage = _extractErrorMessage(e, 'Failed to send verification code.');
+      return false;
+    } catch (_) {
+      _errorMessage = 'Failed to send verification code.';
+      return false;
+    }
+  }
+
+  Future<bool> verifyPhoneOtp(String phone, String code, String role) async {
+    _errorMessage = null;
+    try {
+      final response = await _apiClient.verifyPhoneOtp(phone, code, role);
+      return response.statusCode == 200;
+    } on DioException catch (e) {
+      _errorMessage = _extractErrorMessage(e, 'Invalid verification code.');
+      return false;
+    } catch (_) {
+      _errorMessage = 'Invalid verification code.';
+      return false;
+    }
+  }
+
+  Future<bool> sendCustomerLoginOtp(String phone) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      final response = await _apiClient.sendCustomerLoginOtp(phone);
+      _isLoading = false;
+      notifyListeners();
+      return response.statusCode == 200;
+    } on DioException catch (e) {
+      _errorMessage = _extractErrorMessage(e, 'Failed to send OTP.');
+    } catch (_) {
+      _errorMessage = 'Failed to send OTP.';
+    }
+    _isLoading = false;
+    notifyListeners();
+    return false;
+  }
+
+  Future<bool> loginWithCustomerPhoneOtp(String phone, String code) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      final response = await _apiClient.verifyCustomerLoginOtp(phone, code);
+      if (response.statusCode == 200 && response.data is Map) {
+        final data = Map<String, dynamic>.from(response.data as Map);
+        final token = data['token']?.toString();
+        final refreshToken = data['refreshToken']?.toString();
+
+        if (token != null && token.isNotEmpty) {
+          await _storage.write(key: 'jwt_token', value: token);
+          if (refreshToken != null && refreshToken.isNotEmpty) {
+            await _storage.write(key: 'refresh_token', value: refreshToken);
+          }
+          _isAuthenticated = true;
+          _isLoading = false;
+          notifyListeners();
+          return true;
+        }
+      }
+    } on DioException catch (e) {
+      _errorMessage = _extractErrorMessage(e, 'Invalid or expired OTP.');
+    } catch (_) {
+      _errorMessage = 'Invalid or expired OTP.';
+    }
+    _isLoading = false;
+    notifyListeners();
+    return false;
+  }
+
+  Future<bool> sendForgotPasswordSmsOtp(String phone, String role) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      final response = await _apiClient.sendForgotPasswordSmsOtp(phone, role);
+      _isLoading = false;
+      notifyListeners();
+      return response.statusCode == 200;
+    } on DioException catch (e) {
+      _errorMessage = _extractErrorMessage(e, 'Failed to send SMS code.');
+    } catch (_) {
+      _errorMessage = 'Failed to send SMS code.';
+    }
+    _isLoading = false;
+    notifyListeners();
+    return false;
+  }
+
+  Future<String?> verifyForgotPasswordSmsOtp(String phone, String code, String role) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      final response = await _apiClient.verifyForgotPasswordSmsOtp(phone, code, role);
+      _isLoading = false;
+      notifyListeners();
+      if (response.statusCode == 200 && response.data is Map) {
+        return response.data['resetToken']?.toString();
+      }
+    } on DioException catch (e) {
+      _errorMessage = _extractErrorMessage(e, 'Invalid verification code.');
+    } catch (_) {
+      _errorMessage = 'Invalid verification code.';
+    }
+    _isLoading = false;
+    notifyListeners();
+    return null;
+  }
+
+  Future<bool> resetPasswordWithSmsOtp({
+    required String phone,
+    required String resetToken,
+    required String newPassword,
+    required String confirmPassword,
+    required String role,
+  }) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+    try {
+      final response = await _apiClient.resetPasswordWithSmsOtp(
+        phone: phone,
+        resetToken: resetToken,
+        newPassword: newPassword,
+        confirmPassword: confirmPassword,
+        role: role,
+      );
+      _isLoading = false;
+      notifyListeners();
+      return response.statusCode == 200;
+    } on DioException catch (e) {
+      _errorMessage = _extractErrorMessage(e, 'Failed to reset password.');
+    } catch (_) {
+      _errorMessage = 'Failed to reset password.';
+    }
     _isLoading = false;
     notifyListeners();
     return false;
@@ -346,6 +520,40 @@ class AuthProvider extends ChangeNotifier {
       _errorMessage = e.response?.data?['message'] ?? 'Failed to change password.';
     } catch (_) {
       _errorMessage = 'An unexpected error occurred.';
+    }
+
+    _isLoading = false;
+    notifyListeners();
+    return false;
+  }
+
+  Future<bool> deleteAccount(String password) async {
+    _isLoading = true;
+    _errorMessage = null;
+    notifyListeners();
+
+    try {
+      final response = await _apiClient.dio.post(
+        '/auth/delete-account',
+        data: {'password': password},
+      );
+      if (response.statusCode == 200) {
+        await logout();
+        _isLoading = false;
+        notifyListeners();
+        return true;
+      }
+    } on DioException catch (e) {
+      final data = e.response?.data;
+      if (data is Map) {
+        _errorMessage = data['detail']?.toString() ??
+            data['message']?.toString() ??
+            'Could not delete this account.';
+      } else {
+        _errorMessage = 'Could not delete this account.';
+      }
+    } catch (_) {
+      _errorMessage = 'Could not delete this account.';
     }
 
     _isLoading = false;

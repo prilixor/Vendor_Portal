@@ -13,13 +13,15 @@ import { toast } from "sonner";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/app/components/ui/dialog";
 import { useAuth } from "@/app/guards/AuthContext";
 import { vendorOnboardingApi } from "@/app/services/vendorOnboardingApi";
-import { missingAddressFieldLabels } from "@/app/helpers/reverseGeocode";
+import { missingAddressFieldLabels, reverseGeocode } from "@/app/helpers/reverseGeocode";
+import { StateCityFields } from "@/app/components/shared/StateCityFields";
 
 const DEFAULT_MAP_LAT = 19.07;
 const DEFAULT_MAP_LNG = 72.87;
 const blank: ServiceArea = {
   id: "",
   name: "",
+  state: "",
   city: "",
   latitude: DEFAULT_MAP_LAT,
   longitude: DEFAULT_MAP_LNG,
@@ -106,8 +108,11 @@ const ServiceAreas = () => {
     if (!editing.name?.trim()) {
       errors.name = "Please enter an area name.";
     }
+    if (!editing.state?.trim()) {
+      errors.state = "Please select a state.";
+    }
     if (!editing.city?.trim()) {
-      errors.city = "Please enter a city.";
+      errors.city = "Please select a city.";
     }
     const lat = Number(editing.latitude);
     const lng = Number(editing.longitude);
@@ -173,6 +178,21 @@ const ServiceAreas = () => {
       setBusy(false);
     }
   };
+
+  useEffect(() => {
+    if (!open || editing.state?.trim()) return;
+    if (!locationConfirmed) return;
+    let cancelled = false;
+    void reverseGeocode(editing.latitude, editing.longitude).then((address) => {
+      if (cancelled || !address?.state) return;
+      setEditing((prev) => (prev.state?.trim() ? prev : { ...prev, state: address.state! }));
+    });
+    return () => {
+      cancelled = true;
+    };
+    // Recover state for an existing area (API stores city only) so the city list can load.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, editing.id]);
 
   useEffect(() => {
     if (!open) {
@@ -284,34 +304,34 @@ const ServiceAreas = () => {
             Fields marked <span className="text-destructive">*</span> are required.
           </p>
           <div className="space-y-4">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              <div className="space-y-1.5">
-                <Label required>Area name</Label>
-                <Input
-                  value={editing.name}
-                  onChange={(e) => {
-                    setEditing({ ...editing, name: e.target.value });
-                    clearFieldError("name");
-                  }}
-                  placeholder="e.g. South Mumbai"
-                  className={fieldErrors.name ? "border-destructive" : ""}
-                />
-                <FieldError message={fieldErrors.name} />
-              </div>
-              <div className="space-y-1.5">
-                <Label required>City</Label>
-                <Input
-                  value={editing.city}
-                  onChange={(e) => {
-                    setEditing({ ...editing, city: e.target.value });
-                    clearFieldError("city");
-                  }}
-                  placeholder="Mumbai"
-                  className={fieldErrors.city ? "border-destructive" : ""}
-                />
-                <FieldError message={fieldErrors.city} />
-              </div>
+            <div className="space-y-1.5">
+              <Label required>Area name</Label>
+              <Input
+                value={editing.name}
+                onChange={(e) => {
+                  setEditing({ ...editing, name: e.target.value });
+                  clearFieldError("name");
+                }}
+                placeholder="e.g. South Mumbai"
+                className={fieldErrors.name ? "border-destructive" : ""}
+              />
+              <FieldError message={fieldErrors.name} />
             </div>
+            <StateCityFields
+              required
+              state={editing.state ?? ""}
+              city={editing.city}
+              stateError={fieldErrors.state}
+              cityError={fieldErrors.city}
+              onStateChange={(state) => {
+                setEditing((prev) => ({ ...prev, state }));
+                clearFieldError("state");
+              }}
+              onCityChange={(city) => {
+                setEditing((prev) => ({ ...prev, city }));
+                clearFieldError("city");
+              }}
+            />
             <div className="space-y-1.5">
               <Label required>Map location</Label>
               <p className="text-xs text-muted-foreground">
@@ -342,17 +362,16 @@ const ServiceAreas = () => {
                       clearFieldError("location");
                     }}
                     onAddressResolved={(address) => {
+                      const nextState = address?.state || editing.state || "";
                       const nextCity = address?.city || editing.city;
-                      if (address?.city) {
-                        setEditing((prev) => ({ ...prev, city: address.city! }));
-                        clearFieldError("city");
-                      }
+                      setEditing((prev) => ({ ...prev, state: nextState, city: nextCity }));
+                      if (address?.state) clearFieldError("state");
+                      if (address?.city) clearFieldError("city");
                       const missing = missingAddressFieldLabels({
+                        state: nextState,
                         city: nextCity,
                         requireLine1: false,
-                        requireState: false,
                         requirePostal: false,
-                        requireCity: true,
                       });
                       if (missing.length === 0) {
                         toast.success("Location applied from map.");

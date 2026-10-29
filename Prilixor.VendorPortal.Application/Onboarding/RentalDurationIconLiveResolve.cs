@@ -4,9 +4,8 @@ using Prilixor.VendorPortal.Domain.Vendors;
 namespace Prilixor.VendorPortal.Application.Onboarding;
 
 /// <summary>
-/// Resolves rental-plan icon display fields from the live admin catalog by
-/// <see cref="ProductRentalPricingPlan.RentalDurationIconId"/>, falling back to
-/// per-plan snapshot URLs when the master icon is missing/inactive/deleted.
+/// Resolves rental-plan icon display from the live admin catalog.
+/// Inactive or deleted icons are hidden (no snapshot fallback) so Admin remove/off is immediate.
 /// </summary>
 public static class RentalDurationIconLiveResolve
 {
@@ -37,6 +36,10 @@ public static class RentalDurationIconLiveResolve
                 string.IsNullOrWhiteSpace(icon.ValueTier) ? snapshotValueTier : icon.ValueTier,
                 string.IsNullOrWhiteSpace(icon.Name) ? snapshotIconName : icon.Name);
         }
+
+        // liveIcons provided: hide missing/inactive/deleted icons instead of showing a stale snapshot.
+        if (liveIcons is not null)
+            return new ResolvedIconDisplay(null, null, null, null);
 
         return new ResolvedIconDisplay(
             ResolveOptionalUrl(snapshotIconUrl, fileUrlResolver),

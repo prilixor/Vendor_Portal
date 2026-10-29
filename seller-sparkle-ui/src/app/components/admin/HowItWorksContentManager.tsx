@@ -38,7 +38,7 @@ import {
   EyeOff,
 } from "lucide-react";
 import { toast } from "sonner";
-import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { PageContentGate } from "@/app/components/shared/PageLoader";
 
 const PRESET_HIW_ICONS = [
   { value: "UserCheck", label: "User Check (Create Account)" },
@@ -275,11 +275,8 @@ export function HowItWorksContentManager() {
     );
   };
 
-  if (loading) {
-    return <PageLoaderSlot />;
-  }
-
   return (
+    <PageContentGate loading={loading}>
     <div className="space-y-6">
       {/* Header Settings */}
       <Card>
@@ -666,5 +663,6 @@ export function HowItWorksContentManager() {
         </DialogContent>
       </Dialog>
     </div>
+  </PageContentGate>
   );
 }

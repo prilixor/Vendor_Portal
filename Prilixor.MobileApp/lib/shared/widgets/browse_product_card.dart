@@ -228,7 +228,7 @@ class BrowseProductCard extends StatelessWidget {
                         fontSize: 11,
                         height: 1.2,
                         fontWeight: FontWeight.w600,
-                        color: context.isDarkMode ? const Color(0xFF34D399) : const Color(0xFF15803D),
+                        color: context.appColors.success,
                       ),
                     )
                   else

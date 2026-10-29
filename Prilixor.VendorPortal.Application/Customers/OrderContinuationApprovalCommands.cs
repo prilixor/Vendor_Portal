@@ -48,28 +48,21 @@ internal sealed class ApproveExtensionCommandHandler(
         if (request.OverrideGstAmount.HasValue) extension.GstAmount = request.OverrideGstAmount.Value;
         if (request.OverrideTotalAmount.HasValue) extension.TotalAmount = request.OverrideTotalAmount.Value;
 
-        extension.Status = "paid"; // In cash flow, approval implies settlement
+        extension.Status = RentalExtensionStatuses.AwaitingPayment;
 
         await customers.UpdateCustomerRentalOrderExtensionAsync(extension, cancellationToken);
-
-        // Update Order
-        order.EndDate = extension.NewEndDate;
-        order.RentalDays += extension.AdditionalDays;
-        order.SubtotalAmount += extension.ExtensionAmount;
-        order.ServiceFeeAmount += extension.ServiceFeeAmount;
-        order.GstAmount += extension.GstAmount;
-        order.TotalAmount += extension.TotalAmount;
-        order.IsExtended = true;
-
-        await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
         await customers.SaveChangesAsync(cancellationToken);
 
-        // Notify Customer
+        var productName = string.IsNullOrWhiteSpace(row.Listing?.ListingTitle)
+            ? "this product"
+            : row.Listing!.ListingTitle.Trim();
+        var newEndLabel = extension.NewEndDate.ToString("dd MMM yyyy", System.Globalization.CultureInfo.InvariantCulture);
+
         await mediator.Send(new CreateCustomerNotificationCommand(
             order.CustomerId,
             "customer_extension_approved",
             "Extension Approved",
-            $"Your request to extend order {order.OrderNumber} has been approved by the {request.ApproverType}.",
+            $"Your {extension.AdditionalDays}-day extension for {productName} (order {order.OrderNumber}) was approved. Pay ₹{extension.TotalAmount:0.00} on the order page to move the end date to {newEndLabel}.",
             order.Id
         ), cancellationToken);
 
@@ -111,8 +104,8 @@ internal sealed class CancelExtensionCommandHandler(
         await mediator.Send(new CreateCustomerNotificationCommand(
             order.CustomerId,
             "customer_extension_cancelled",
-            "Extension Cancelled",
-            $"Your request to extend order {order.OrderNumber} has been cancelled by the {request.ApproverType}.",
+            "Extension Rejected",
+            $"Your request to extend order {order.OrderNumber} was rejected.",
             order.Id
         ), cancellationToken);
 

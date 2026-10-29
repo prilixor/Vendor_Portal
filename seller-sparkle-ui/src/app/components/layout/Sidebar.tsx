@@ -13,6 +13,13 @@ import { customerApi } from "@/app/services/customerApi";
 import { useNotificationContext } from "@/app/contexts/NotificationContext";
 import { useSupportChat } from "@/app/contexts/SupportChatContext";
 import { BrandMark } from "@/app/components/shared/BrandMark";
+import { LegalPolicyLinks } from "@/app/components/legal/LegalPolicyLinks";
+import type { PublicLegalDocumentListItem } from "@/app/services/publicLegalApi";
+
+const ADMIN_FOOTER_POLICIES: PublicLegalDocumentListItem[] = [
+  { slug: "terms-of-use", documentType: "terms-of-use", title: "Terms of Use", publicPath: "/terms-and-conditions", sortOrder: 1, versionNumber: 1, effectiveFrom: "", lastUpdated: "", isRequiredToProceed: false },
+  { slug: "privacy-policy", documentType: "privacy-policy", title: "Privacy Policy", publicPath: "/privacy-policy", sortOrder: 2, versionNumber: 1, effectiveFrom: "", lastUpdated: "", isRequiredToProceed: false },
+];
 
 interface SidebarProps {
   variant?: "vendor" | "admin" | "customer";
@@ -36,15 +43,12 @@ export const Sidebar = ({ variant = "vendor", sections, brandLabel, brandHeading
   }, [lines]);
 
   // 2. Get Unread Customer Notifications (for Customer variant)
-  const { data: customerNotifications = [] } = useQuery({
-    queryKey: ["customer-notifications"],
-    queryFn: () => customerApi.getNotifications({ quiet: true }),
+  const { data: unreadCustomerCount = 0 } = useQuery({
+    queryKey: ["customer-notifications-unread-count"],
+    queryFn: () => customerApi.getUnreadNotificationCount({ quiet: true }),
     enabled: variant === "customer" && !!user,
-    refetchInterval: 30000, // refresh every 30 seconds
+    refetchInterval: 30000,
   });
-  const unreadCustomerCount = useMemo(() => {
-    return customerNotifications.filter((n) => !n.readAt).length;
-  }, [customerNotifications]);
 
   // 3. Get Unread Vendor Notifications (for Vendor variant)
   const { unreadCount: unreadVendorCount } = useNotificationContext();
@@ -105,12 +109,16 @@ export const Sidebar = ({ variant = "vendor", sections, brandLabel, brandHeading
         >
           <X className="h-4 w-4" />
         </button>
-        <div className="flex items-center gap-2.5 overflow-hidden">
-          <BrandMark />
-          {!collapsed && (
-            <div className="overflow-hidden">
-              <p className="truncate text-sm font-bold leading-tight">{brandHeading ?? "Vendor Portal"}</p>
-              <p className="truncate text-[11px] text-muted-foreground">{brandLabel}</p>
+        <div className="flex min-w-0 flex-1 items-center gap-2.5 overflow-hidden">
+          {collapsed ? (
+            <BrandMark variant="mark" size="sm" />
+          ) : (
+            <div className="min-w-0 overflow-hidden">
+              <BrandMark size="sm" />
+              <p className="mt-0.5 truncate text-[11px] text-muted-foreground">
+                {brandHeading ?? "Vendor Portal"}
+                {brandLabel ? ` · ${brandLabel}` : ""}
+              </p>
             </div>
           )}
         </div>
@@ -209,9 +217,9 @@ export const Sidebar = ({ variant = "vendor", sections, brandLabel, brandHeading
         ))}
       </nav>
 
-      {/* Footer hint */}
+      {/* Footer hint. Phone drawer uses full-width rows; the desktop rail keeps a compact menu. */}
       {!collapsed && (
-        <div className="m-3 hidden rounded-xl bg-gradient-soft p-3 text-xs lg:block">
+        <div className="m-3 shrink-0 rounded-xl bg-gradient-soft p-3 text-xs">
           <p className="font-semibold">Need help?</p>
           <p className="mt-0.5 text-muted-foreground">
             {variant === "vendor" ? (
@@ -230,23 +238,68 @@ export const Sidebar = ({ variant = "vendor", sections, brandLabel, brandHeading
               "Check the docs or chat with support."
             )}
           </p>
-          <div className="mt-2.5 flex items-center gap-1.5 text-[10px] text-muted-foreground/70">
-            <Link to="/terms-and-conditions" target="_blank" rel="noopener noreferrer" className="hover:text-primary hover:underline transition-colors">Terms</Link>
-            <span>•</span>
-            <Link to="/privacy-policy" target="_blank" rel="noopener noreferrer" className="hover:text-primary hover:underline transition-colors">Privacy</Link>
-            <span>•</span>
+          <div className="mt-3 space-y-2 border-t border-border/50 pt-3">
+            {variant === "vendor" || variant === "customer" ? (
+              <>
+                <div className="lg:hidden">
+                  <LegalPolicyLinks
+                    surface={variant === "vendor" ? "vendor_web" : "customer_web"}
+                    screen="footer"
+                    layout="quiet"
+                  />
+                </div>
+                <div className="hidden lg:block">
+                  <LegalPolicyLinks
+                    surface={variant === "vendor" ? "vendor_web" : "customer_web"}
+                    screen="footer"
+                    layout="menu"
+                    menuLabel="Legal"
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="lg:hidden">
+                  <LegalPolicyLinks
+                    surface="customer_web"
+                    screen="footer"
+                    layout="quiet"
+                    fallback={ADMIN_FOOTER_POLICIES}
+                  />
+                </div>
+                <div className="hidden lg:block">
+                  <LegalPolicyLinks
+                    surface="customer_web"
+                    screen="footer"
+                    layout="menu"
+                    menuLabel="Legal"
+                    fallback={ADMIN_FOOTER_POLICIES}
+                  />
+                </div>
+              </>
+            )}
             {variant === "vendor" ? (
               <button
                 type="button"
                 onClick={() => openSupportPanel()}
-                className="hover:text-primary hover:underline transition-colors cursor-pointer"
+                className="block w-full cursor-pointer truncate text-left text-[11px] font-medium leading-snug text-muted-foreground transition-colors hover:text-primary hover:no-underline"
               >
-                Contact
+                Contact support
               </button>
             ) : variant === "customer" ? (
-              <Link to="/customer/support" className="hover:text-primary hover:underline transition-colors">Contact</Link>
+              <Link
+                to="/customer/support"
+                className="block truncate text-[11px] font-medium leading-snug text-muted-foreground transition-colors hover:text-primary hover:no-underline"
+              >
+                Contact support
+              </Link>
             ) : (
-              <Link to="/admin/support" className="hover:text-primary hover:underline transition-colors">Contact</Link>
+              <Link
+                to="/admin/support"
+                className="block truncate text-[11px] font-medium leading-snug text-muted-foreground transition-colors hover:text-primary hover:no-underline"
+              >
+                Contact support
+              </Link>
             )}
           </div>
         </div>

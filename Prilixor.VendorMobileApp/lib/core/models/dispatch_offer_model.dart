@@ -9,6 +9,9 @@ class VendorDispatchOffer {
   final String orderType;
   final int quantity;
   final int rentalDays;
+  final String? rentalPeriodUnit;
+  final String? rentalDurationLabel;
+  final int? rentalDurationDays;
   final DateTime expiresAt;
   final String status;
   final double totalAmount;
@@ -32,6 +35,9 @@ class VendorDispatchOffer {
     required this.orderType,
     required this.quantity,
     required this.rentalDays,
+    this.rentalPeriodUnit,
+    this.rentalDurationLabel,
+    this.rentalDurationDays,
     required this.expiresAt,
     required this.status,
     required this.totalAmount,
@@ -64,6 +70,9 @@ class VendorDispatchOffer {
       orderType: json['orderType']?.toString() ?? 'rent',
       quantity: (json['quantity'] as num?)?.toInt() ?? 1,
       rentalDays: (json['rentalDays'] as num?)?.toInt() ?? 0,
+      rentalPeriodUnit: json['rentalPeriodUnit']?.toString(),
+      rentalDurationLabel: json['rentalDurationLabel']?.toString(),
+      rentalDurationDays: (json['rentalDurationDays'] as num?)?.toInt(),
       expiresAt: DateTime.tryParse(json['expiresAt']?.toString() ?? '') ??
           DateTime.now(),
       status: json['status']?.toString() ?? '',

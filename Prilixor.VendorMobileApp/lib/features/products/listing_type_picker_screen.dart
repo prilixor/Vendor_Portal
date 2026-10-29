@@ -59,7 +59,7 @@ class ListingTypePickerScreen extends StatelessWidget {
             subtitle: 'Rent medical devices & durable goods',
             detail: 'Daily / monthly rent \u00b7 deposit \u00b7 quantity stock',
             icon: Icons.medical_services_outlined,
-            accent: const Color(0xFF3B82F6),
+            accent: context.appColors.info,
             highlighted: suggestedChemical == false,
             onTap: () => _openForm(context, isChemical: false),
           ),
@@ -69,7 +69,7 @@ class ListingTypePickerScreen extends StatelessWidget {
             subtitle: 'Sell lab / industrial chemicals',
             detail: 'Per packaging size (1L, 5L...) \u00b7 buy price \u00b7 variant stock',
             icon: Icons.science_outlined,
-            accent: const Color(0xFF10B981),
+            accent: context.appColors.success,
             highlighted: suggestedChemical == true,
             onTap: () => _openForm(context, isChemical: true),
           ),
@@ -101,33 +101,24 @@ class _TypeCard extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = context.isDarkMode;
-    final cardBg = isDark ? context.appColors.surface : Colors.white;
-
+    final colors = context.appColors;
+    final cardBg = isDark ? colors.surface : Colors.white;
     final isEquipment = title == 'Equipment';
+    final toneSoft = isEquipment ? colors.infoSoft : colors.successSoft;
+    final toneBorder = isEquipment ? colors.infoBorder : colors.successBorder;
+    final tone = isEquipment ? colors.info : colors.success;
 
     final borderColor = highlighted
-        ? (isDark ? accent.withValues(alpha: 0.65) : (isEquipment ? const Color(0xFF60A5FA) : const Color(0xFF34D399)))
-        : context.appColors.border;
+        ? (isDark ? accent.withValues(alpha: 0.65) : tone)
+        : colors.border;
 
-    final iconBg = isDark
-        ? accent.withValues(alpha: 0.16)
-        : (isEquipment ? const Color(0xFFDBEAFE) : const Color(0xFFD1FAE5));
-
-    final iconColor = isDark
-        ? accent
-        : (isEquipment ? const Color(0xFF1D4ED8) : const Color(0xFF047857));
-
-    final suggestedBg = isDark
-        ? accent.withValues(alpha: 0.22)
-        : (isEquipment ? const Color(0xFFDBEAFE) : const Color(0xFFD1FAE5));
-
-    final suggestedBorder = isDark
-        ? accent.withValues(alpha: 0.35)
-        : (isEquipment ? const Color(0xFF93C5FD) : const Color(0xFFA7F3D0));
-
+    final iconBg = isDark ? accent.withValues(alpha: 0.16) : toneSoft;
+    final iconColor = isDark ? accent : tone;
+    final suggestedBg = isDark ? accent.withValues(alpha: 0.22) : toneSoft;
+    final suggestedBorder = isDark ? accent.withValues(alpha: 0.35) : toneBorder;
     final suggestedText = isDark
-        ? (isEquipment ? const Color(0xFF93C5FD) : const Color(0xFF6EE7B7))
-        : (isEquipment ? const Color(0xFF1D4ED8) : const Color(0xFF047857));
+        ? (isEquipment ? colors.infoBorder : colors.successBorder)
+        : tone;
 
     return Material(
       color: cardBg,
@@ -149,12 +140,8 @@ class _TypeCard extends StatelessWidget {
                     begin: Alignment.topLeft,
                     end: Alignment.bottomRight,
                     colors: [
-                      isDark
-                          ? accent.withValues(alpha: 0.14)
-                          : (isEquipment ? const Color(0xFFEFF6FF) : const Color(0xFFECFDF5)),
-                      isDark
-                          ? context.appColors.surface
-                          : const Color(0xFFF8FAFC),
+                      isDark ? accent.withValues(alpha: 0.14) : toneSoft,
+                      isDark ? colors.surface : colors.background,
                     ],
                   )
                 : null,

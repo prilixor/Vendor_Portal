@@ -11,6 +11,12 @@ const PHRASE_REPLACEMENTS: readonly [RegExp, string][] = [
     /\bOne vendor cancelled this item\.\s*We are notifying nearby vendors\.?/gi,
     "This item is being reassigned to keep your delivery on track.",
   ],
+  [/\bdispatch failed\b/gi, "cancelled"],
+  [/\bExtension Cancelled\b/g, "Extension Rejected"],
+  [
+    /\brequest to extend order (.+?) has been cancelled by the (vendor|admin)\b/gi,
+    "request to extend order $1 was rejected",
+  ],
 ];
 
 export function customerNotificationCopy(text: string | null | undefined): string {

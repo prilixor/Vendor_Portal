@@ -3,14 +3,14 @@ using Prilixor.Shared.Abstractions.DB;
 namespace Prilixor.VendorPortal.Domain.Vendors;
 
 /// <summary>
-/// Admin-managed icon for rental duration tiers.
-/// ValueTier: good | better | best_value | maximum_savings
+/// Admin-managed rental duration icon. Name is the customer label (Good, Premium, etc.).
+/// ValueTier is a slug derived from the name.
 /// </summary>
 public class RentalDurationIcon : AuditableEntity<Guid>, ISoftDelete
 {
     public string Name { get; set; } = string.Empty;
-    /// <summary>good | better | best_value | maximum_savings</summary>
-    public string ValueTier { get; set; } = "good";
+    /// <summary>Slug from the admin name (any value).</summary>
+    public string ValueTier { get; set; } = "icon";
     public string ImageUrl { get; set; } = string.Empty;
     public string? ThumbnailUrl { get; set; }
     public int SortOrder { get; set; }

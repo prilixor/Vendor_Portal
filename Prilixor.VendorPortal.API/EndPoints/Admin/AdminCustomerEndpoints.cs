@@ -5,6 +5,7 @@ using Prilixor.VendorPortal.API.EndPoints.Vendors;
 using Prilixor.VendorPortal.API.Extensions;
 using Prilixor.VendorPortal.Application.Customers;
 using Prilixor.VendorPortal.Application.Onboarding;
+using Prilixor.VendorPortal.Domain.Customers;
 
 namespace Prilixor.VendorPortal.API.EndPoints.Admin;
 
@@ -29,6 +30,33 @@ public sealed class GetAdminCustomersEndpoint(IMediator mediator)
         GetAdminCustomersRequest req, CancellationToken ct)
     {
         var result = await mediator.Send(new GetAdminCustomersQuery(req.Search, req.Page, req.PageSize), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
+public sealed class GetAdminCustomerSummariesRequest
+{
+    public string? Search { get; set; }
+    public int Page { get; set; } = 1;
+    public int PageSize { get; set; } = 8;
+}
+
+public sealed class GetAdminCustomerSummariesEndpoint(IMediator mediator)
+    : Endpoint<GetAdminCustomerSummariesRequest, Results<Ok<AdminCustomerListResult>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("customers/summaries");
+        Group<AdminApiGroup>();
+        Policies($"Perm:{AdminPermissions.CustomersView}");
+    }
+
+    public override async Task<Results<Ok<AdminCustomerListResult>, ProblemHttpResult>> ExecuteAsync(
+        GetAdminCustomerSummariesRequest req, CancellationToken ct)
+    {
+        var page = req.Page < 1 ? 1 : req.Page;
+        var pageSize = req.PageSize is < 1 or > 100 ? 8 : req.PageSize;
+        var result = await mediator.Send(new GetAdminCustomerListQuery(req.Search, page, pageSize), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }
@@ -112,7 +140,7 @@ public sealed class CartLineApiRequest
 }
 
 public sealed class AdminPlaceCustomerOrdersEndpoint(IMediator mediator)
-    : Endpoint<AdminPlaceCustomerOrdersRequest, Results<Ok<PlaceCustomerOrdersResultDto>, ProblemHttpResult>>
+    : Endpoint<AdminPlaceCustomerOrdersRequest, Results<Ok<CustomerCheckoutDto>, ProblemHttpResult>>
 {
     public override void Configure()
     {
@@ -121,7 +149,7 @@ public sealed class AdminPlaceCustomerOrdersEndpoint(IMediator mediator)
         Policies($"Perm:{AdminPermissions.CustomersPlaceOrder}");
     }
 
-    public override async Task<Results<Ok<PlaceCustomerOrdersResultDto>, ProblemHttpResult>> ExecuteAsync(
+    public override async Task<Results<Ok<CustomerCheckoutDto>, ProblemHttpResult>> ExecuteAsync(
         AdminPlaceCustomerOrdersRequest req, CancellationToken ct)
     {
         var adminIdStr = HttpContext.ResolveAdminUserId();
@@ -145,8 +173,13 @@ public sealed class AdminPlaceCustomerOrdersEndpoint(IMediator mediator)
             l.ProductVariantId, l.DoctorId, l.HospitalId, l.ContactNumber, l.ReferenceNumber,
             l.RentalPricingPlanId, l.RentalStartDate)).ToList();
 
-        var result = await mediator.Send(new PlaceCustomerOrdersCommand(
-            customerId, addressId, req.DeliveryOption, lines, adminId), ct);
+        var result = await mediator.Send(new CreateCustomerCheckoutCommand(
+            customerId,
+            addressId,
+            req.DeliveryOption,
+            lines,
+            CheckoutSessionSources.AdminPaymentLink,
+            adminId), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }

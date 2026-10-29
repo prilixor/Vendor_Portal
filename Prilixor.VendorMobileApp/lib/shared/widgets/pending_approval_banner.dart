@@ -82,9 +82,12 @@ class _PendingApprovalBannerState extends State<PendingApprovalBanner> {
     final approvedCount =
         docs.where((d) => d.verificationStatus.toLowerCase() == 'approved').length;
 
+    final colors = context.appColors;
     late String title;
     late String body;
     late Color accent;
+    late Color fill;
+    late Color border;
     late IconData icon;
     String? cta;
     bool dismissible = false;
@@ -93,20 +96,26 @@ class _PendingApprovalBannerState extends State<PendingApprovalBanner> {
       case _BannerVariant.accountRejected:
         title = 'Your vendor application was rejected';
         body = 'Review feedback in Onboarding and resubmit your details.';
-        accent = Colors.redAccent;
+        accent = colors.danger;
+        fill = colors.dangerSoft;
+        border = colors.dangerBorder;
         icon = Icons.block;
         cta = 'Open onboarding';
         break;
       case _BannerVariant.accountSuspended:
         title = 'Your account is temporarily restricted';
         body = 'Contact support if you believe this is a mistake.';
-        accent = Colors.orangeAccent;
+        accent = colors.warning;
+        fill = colors.warningSoft;
+        border = colors.warningBorder;
         icon = Icons.lock_outline;
         break;
       case _BannerVariant.rejected:
         title = 'Verification needs your attention';
         body = 'One or more documents or bank details were rejected. Fix and resubmit.';
-        accent = Colors.amber;
+        accent = colors.warning;
+        fill = colors.warningSoft;
+        border = colors.warningBorder;
         icon = Icons.warning_amber_rounded;
         cta = 'Fix in onboarding';
         break;
@@ -114,7 +123,9 @@ class _PendingApprovalBannerState extends State<PendingApprovalBanner> {
         title = 'Complete your document verification';
         body =
             'Upload required documents to unlock operations. Progress: $approvedCount / ${_requiredDocTypes.length}. Missing: ${missing.join(', ')}.';
-        accent = Colors.lightBlueAccent;
+        accent = colors.info;
+        fill = colors.infoSoft;
+        border = colors.infoBorder;
         icon = Icons.upload_file_outlined;
         cta = 'Upload documents';
         break;
@@ -122,7 +133,9 @@ class _PendingApprovalBannerState extends State<PendingApprovalBanner> {
         title = 'Your account is pending approval';
         body =
             'Some features are limited while under review. Estimated review: 1–2 business days.';
-        accent = Colors.amber;
+        accent = colors.warning;
+        fill = colors.warningSoft;
+        border = colors.warningBorder;
         icon = Icons.schedule;
         dismissible = true;
         break;
@@ -133,22 +146,25 @@ class _PendingApprovalBannerState extends State<PendingApprovalBanner> {
       margin: const EdgeInsets.fromLTRB(12, 0, 12, 8),
       padding: const EdgeInsets.fromLTRB(14, 12, 8, 12),
       decoration: BoxDecoration(
-        color: accent.withValues(alpha: 0.12),
+        color: fill,
         borderRadius: BorderRadius.circular(12),
-        border: Border.all(color: accent.withValues(alpha: 0.35)),
+        border: Border.all(color: border),
       ),
       child: Row(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: 32,
-            height: 32,
-            decoration: BoxDecoration(
-              color: accent.withValues(alpha: 0.2),
-              shape: BoxShape.circle,
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: Color.alphaBlend(
+                  accent.withValues(alpha: context.isDarkMode ? 0.2 : 0.16),
+                  fill,
+                ),
+                shape: BoxShape.circle,
+              ),
+              child: Icon(icon, color: accent, size: 18),
             ),
-            child: Icon(icon, color: accent, size: 18),
-          ),
           const SizedBox(width: 10),
           Expanded(
             child: Column(

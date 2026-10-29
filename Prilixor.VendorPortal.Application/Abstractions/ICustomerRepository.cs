@@ -1,15 +1,27 @@
 using Prilixor.VendorPortal.Domain.Customers;
 using Prilixor.VendorPortal.Domain.Vendors;
 using Prilixor.VendorPortal.Application.Customers;
+using Prilixor.VendorPortal.Application.Onboarding;
 
 namespace Prilixor.VendorPortal.Application.Abstractions;
+
+public enum ExtensionPaymentApplyResult
+{
+    Applied,
+    AlreadyPaid,
+    NotPayable,
+}
 
 public interface ICustomerRepository
 {
     Task<Customer?> GetCustomerByIdAsync(Guid customerId, CancellationToken cancellationToken);
     Task<Customer?> GetCustomerByEmailAsync(string email, CancellationToken cancellationToken);
+    Task<Customer?> GetCustomerByPhoneAsync(string phone, CancellationToken cancellationToken);
+    Task<Customer?> GetCustomerByEmailVerificationTokenAsync(string token, CancellationToken cancellationToken);
     Task AddCustomerAsync(Customer customer, CancellationToken cancellationToken);
     Task UpdateCustomerAsync(Customer customer, CancellationToken cancellationToken);
+    Task<int> CountOpenOrdersForCustomerAsync(Guid customerId, CancellationToken cancellationToken);
+    Task<int> CountOpenOrdersForVendorAsync(Guid vendorId, CancellationToken cancellationToken);
 
     Task<List<CustomerAddress>> GetCustomerAddressesAsync(Guid customerId, CancellationToken cancellationToken);
     Task<CustomerAddress?> GetCustomerAddressByIdAsync(Guid customerId, Guid addressId, CancellationToken cancellationToken);
@@ -17,38 +29,96 @@ public interface ICustomerRepository
     Task UpdateCustomerAddressAsync(CustomerAddress address, CancellationToken cancellationToken);
 
     Task<List<CustomerCatalogListingDto>> GetPublicCatalogListingsAsync(string? categoryFilter, string? search, Guid? customerId, CancellationToken cancellationToken);
+    Task<CustomerCatalogListingSummariesResult> SearchPublicCatalogListingSummariesAsync(
+        CustomerCatalogListingSummaryQuerySpec spec,
+        CancellationToken cancellationToken);
     Task<List<CustomerCatalogListingDto>> GetRelatedCatalogListingsAsync(Guid listingId, int limit, Guid? customerId, CancellationToken cancellationToken);
     Task<VendorProductListingAggregate?> GetListingForCustomerAsync(Guid listingId, CancellationToken cancellationToken);
     Task<List<VendorProductListingAggregate>> GetCandidateListingsByProductIdAsync(Guid productId, CancellationToken cancellationToken);
 
     Task AddCustomerRentalOrderAsync(CustomerRentalOrder order, CancellationToken cancellationToken);
     Task<List<CustomerRentalOrderWithListing>> GetCustomerOrdersAsync(Guid customerId, CancellationToken cancellationToken);
+    Task<CustomerOrderListResult> SearchCustomerOrderSummariesAsync(CustomerOrderListQuerySpec spec, CancellationToken cancellationToken);
+    Task<List<CustomerOrderDto>> GetCustomerOrderGroupAsync(Guid customerId, Guid orderId, CancellationToken cancellationToken);
+    Task<CustomerNotificationListResult> SearchCustomerNotificationSummariesAsync(Guid customerId, int page, int pageSize, CancellationToken cancellationToken);
+    Task<int> CountUnreadCustomerNotificationsAsync(Guid customerId, CancellationToken cancellationToken);
+    Task<HashSet<Guid>> GetExistingExpiringNotificationOrderIdsAsync(Guid customerId, IReadOnlyCollection<Guid> orderIds, CancellationToken cancellationToken);
+    Task<CustomerDashboardSummaryDto> GetCustomerDashboardSummaryAsync(Guid customerId, CancellationToken cancellationToken);
+    Task<CustomerExpirationListResult> SearchCustomerExpirationSummariesAsync(Guid customerId, int withinDays, int page, int pageSize, CancellationToken cancellationToken);
     Task<CustomerRentalOrderWithListing?> GetCustomerOrderAsync(Guid customerId, Guid orderId, CancellationToken cancellationToken);
     Task<CustomerRentalOrderWithListing?> GetCustomerOrderByNumberAsync(Guid customerId, string orderNumber, CancellationToken cancellationToken);
     Task<List<CustomerRentalOrderWithListing>> GetVendorOrdersAsync(Guid vendorId, string? status, CancellationToken cancellationToken);
+    Task<VendorOrderListResult> SearchVendorOrderSummariesAsync(VendorOrderListQuerySpec spec, CancellationToken cancellationToken);
+    Task<List<VendorOrderDto>> GetVendorOrderGroupAsync(Guid vendorId, Guid orderId, CancellationToken cancellationToken);
+    Task<VendorExpirationListResult> SearchVendorExpirationSummariesAsync(Guid vendorId, int withinDays, string? search, int page, int pageSize, CancellationToken cancellationToken);
+    Task<VendorDispatchOfferListResult> SearchVendorDispatchOfferSummariesAsync(Guid vendorId, string? search, string? orderType, int page, int pageSize, CancellationToken cancellationToken);
+    Task<int> CountPendingVendorDispatchOffersAsync(Guid vendorId, CancellationToken cancellationToken);
+    Task<VendorDashboardOrderStats> GetVendorDashboardOrderStatsAsync(Guid vendorId, CancellationToken cancellationToken);
     Task<CustomerRentalOrderWithListing?> GetVendorOrderAsync(Guid vendorId, Guid orderId, CancellationToken cancellationToken);
     Task<CustomerRentalOrderWithListing?> GetCustomerOrderByIdAsync(Guid orderId, CancellationToken cancellationToken);
     Task<CustomerRentalOrder?> GetCustomerOrderEntityByIdAsync(Guid orderId, CancellationToken cancellationToken);
     Task<List<CustomerRentalOrderWithListing>> GetAllCustomerOrdersForAdminAsync(CancellationToken cancellationToken);
+    Task<List<CustomerRentalOrderWithListing>?> GetCustomerOrderGroupForAdminAsync(Guid orderId, CancellationToken cancellationToken);
+    Task<AdminOrderListResult> SearchAdminOrderSummariesAsync(AdminOrderListQuerySpec spec, CancellationToken cancellationToken);
+    Task<int> CountCriticalAdminOrdersAsync(CancellationToken cancellationToken);
     Task<bool> OrderNumberExistsAsync(string orderNumber, CancellationToken cancellationToken);
     
     Task AddCustomerRentalOrderExtensionAsync(CustomerRentalOrderExtension extension, CancellationToken cancellationToken);
     Task<CustomerRentalOrderExtension?> GetCustomerRentalOrderExtensionByIdAsync(Guid extensionId, CancellationToken cancellationToken);
     Task UpdateCustomerRentalOrderExtensionAsync(CustomerRentalOrderExtension extension, CancellationToken cancellationToken);
     Task<List<CustomerRentalOrderExtension>> GetPendingCustomerRentalOrderExtensionsAsync(Guid orderId, CancellationToken cancellationToken);
+    Task<List<CustomerRentalOrderExtension>> GetOpenCustomerRentalOrderExtensionsAsync(Guid orderId, CancellationToken cancellationToken);
+    Task<List<CustomerRentalOrderExtension>> GetCustomerExtensionHistoryAsync(Guid orderId, CancellationToken cancellationToken);
+    Task<ExtensionPaymentApplyResult> ApplyPaidRentalExtensionAsync(Guid extensionId, Guid checkoutSessionId, string? razorpayPaymentId, decimal vendorCredit, CancellationToken cancellationToken);
+    Task<List<Guid>> GetOrderIdsWithDuplicatePendingExtensionsAsync(CancellationToken cancellationToken);
 
     Task AddCustomerRentalOrderBuyoutAsync(CustomerRentalOrderBuyout buyout, CancellationToken cancellationToken);
     Task<CustomerRentalOrderBuyout?> GetCustomerRentalOrderBuyoutByIdAsync(Guid buyoutId, CancellationToken cancellationToken);
     Task UpdateCustomerRentalOrderBuyoutAsync(CustomerRentalOrderBuyout buyout, CancellationToken cancellationToken);
     Task<List<CustomerRentalOrderBuyout>> GetPendingCustomerRentalOrderBuyoutsAsync(Guid orderId, CancellationToken cancellationToken);
+
+    Task AddOrderReturnAsync(CustomerOrderReturn row, CancellationToken cancellationToken);
+    Task<CustomerOrderReturn?> GetOrderReturnByOrderIdAsync(Guid orderId, CancellationToken cancellationToken);
+    Task UpdateOrderReturnAsync(CustomerOrderReturn row, CancellationToken cancellationToken);
+    void DetachOrderReturn(CustomerOrderReturn row);
+    Task<bool> TryClaimDepositRefundAsync(Guid returnId, CancellationToken cancellationToken);
+    Task<Dictionary<Guid, OrderReturnDto>> GetOrderReturnDtosByOrderIdsAsync(IReadOnlyCollection<Guid> orderIds, CancellationToken cancellationToken);
+    Task<decimal> SumRefundedAmountForCheckoutSessionAsync(
+        Guid checkoutSessionId,
+        CancellationToken cancellationToken,
+        Guid? excludeCancellationRefundId = null);
+    Task<int> CountPendingDepositRefundsAsync(CancellationToken cancellationToken);
+    Task<List<PendingDepositRefundRow>> ListPendingDepositRefundsAsync(int take, CancellationToken cancellationToken);
+
+    Task AddOrderCancellationRefundAsync(CustomerOrderCancellationRefund row, CancellationToken cancellationToken);
+    Task<CustomerOrderCancellationRefund?> GetOrderCancellationRefundByOrderIdAsync(Guid orderId, CancellationToken cancellationToken);
+    Task UpdateOrderCancellationRefundAsync(CustomerOrderCancellationRefund row, CancellationToken cancellationToken);
+    void DetachOrderCancellationRefund(CustomerOrderCancellationRefund row);
+    Task<bool> TryClaimCancellationRefundAsync(Guid refundId, decimal chargeAmount, string? chargeReason, decimal refundAmount, CancellationToken cancellationToken);
+    Task<bool> TrySettleCancellationRefundAsync(Guid refundId, decimal chargeAmount, string? chargeReason, CancellationToken cancellationToken);
+    Task<Dictionary<Guid, OrderCancellationRefundDto>> GetOrderCancellationRefundDtosByOrderIdsAsync(IReadOnlyCollection<Guid> orderIds, CancellationToken cancellationToken);
+    Task<int> CountPendingCancellationRefundsAsync(CancellationToken cancellationToken);
+    Task<List<PendingCancellationRefundRow>> ListPendingCancellationRefundsAsync(int take, CancellationToken cancellationToken);
+    Task<List<CustomerRentalOrder>> ListPaidClosedOrdersMissingCancellationRefundAsync(int take, CancellationToken cancellationToken);
+    Task<List<CustomerCheckoutSession>> GetPaidExtensionSessionsAsync(Guid orderId, CancellationToken cancellationToken);
     
     Task<List<PendingContinuationAggregate>> GetAllPendingContinuationsForAdminAsync(CancellationToken cancellationToken);
+    Task<(List<PendingContinuationAggregate> Items, int TotalCount)> SearchPendingContinuationsForAdminPagedAsync(
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken);
     
     Task AddCustomerRentalOrderAssetAsync(CustomerRentalOrderAsset asset, CancellationToken cancellationToken);
     Task<List<CustomerRentalOrderAsset>> GetCustomerRentalOrderAssetsAsync(Guid customerOrderId, CancellationToken cancellationToken);
     Task<IReadOnlyDictionary<Guid, List<string>>> GetCustomerOrderAssetTagsByOrderIdsAsync(IEnumerable<Guid> orderIds, CancellationToken cancellationToken);
     Task RemoveCustomerRentalOrderAssetAsync(CustomerRentalOrderAsset asset, CancellationToken cancellationToken);
     Task<CustomerRentalOrderWithListing?> GetActiveCustomerOrderForAssetAsync(Guid assetId, CancellationToken cancellationToken);
+
+    Task AddCustomerOrderPrescriptionFileAsync(CustomerOrderPrescriptionFile file, CancellationToken cancellationToken);
+    Task<List<CustomerOrderPrescriptionFile>> GetCustomerOrderPrescriptionFilesAsync(Guid customerOrderId, CancellationToken cancellationToken);
+    Task<CustomerOrderPrescriptionFile?> GetCustomerOrderPrescriptionFileByIdAsync(Guid customerOrderId, Guid fileId, CancellationToken cancellationToken);
+    Task UpdateCustomerOrderPrescriptionFileAsync(CustomerOrderPrescriptionFile file, CancellationToken cancellationToken);
+    Task<int> CountCustomerOrderPrescriptionFilesAsync(Guid customerOrderId, CancellationToken cancellationToken);
 
     Task AddCustomerOrderImageAsync(CustomerOrderImage image, CancellationToken cancellationToken);
     Task<List<CustomerOrderImage>> GetCustomerOrderImagesAsync(Guid customerOrderId, CancellationToken cancellationToken);
@@ -62,6 +132,11 @@ public interface ICustomerRepository
     Task UpdateCustomerOrderImageRequestAsync(CustomerOrderImageRequest request, CancellationToken cancellationToken);
     Task<List<CustomerOrderImage>> GetCustomerOrderImagesByRequestIdAsync(Guid requestId, CancellationToken cancellationToken);
     Task<int> CountCustomerOrderImagesByRequestIdAsync(Guid requestId, CancellationToken cancellationToken);
+    Task AddCustomerOrderImageRequestOptionAsync(CustomerOrderImageRequestOption option, CancellationToken cancellationToken);
+    Task<List<CustomerOrderImageRequestOption>> GetCustomerOrderImageRequestOptionsAsync(Guid requestId, CancellationToken cancellationToken);
+    Task<CustomerOrderImageRequestOption?> GetCustomerOrderImageRequestOptionByIdAsync(Guid requestId, Guid optionId, CancellationToken cancellationToken);
+    Task UpdateCustomerOrderImageRequestOptionAsync(CustomerOrderImageRequestOption option, CancellationToken cancellationToken);
+    Task<int> CountCustomerOrderImagesByOptionIdAsync(Guid optionId, CancellationToken cancellationToken);
 
     Task UpdateCustomerRentalOrderAsync(CustomerRentalOrder order, CancellationToken cancellationToken);
     Task AddCustomerOrderVendorOfferAsync(CustomerOrderVendorOffer offer, CancellationToken cancellationToken);
@@ -69,9 +144,14 @@ public interface ICustomerRepository
     Task<CustomerOrderVendorOffer?> GetCustomerOrderVendorOfferAsync(Guid customerOrderId, Guid vendorId, CancellationToken cancellationToken);
     Task<List<CustomerOrderVendorOffer>> GetPendingVendorOffersAsync(Guid vendorId, CancellationToken cancellationToken);
     Task UpdateCustomerOrderVendorOfferAsync(CustomerOrderVendorOffer offer, CancellationToken cancellationToken);
+    Task<List<Guid>> GetAwaitingOrderIdsWithExpiredPendingOffersAsync(DateTimeOffset now, CancellationToken cancellationToken);
+    Task<List<ClosedVendorOfferNotice>> ExpireOpenOffersOnClosedOrdersAsync(DateTimeOffset now, CancellationToken cancellationToken);
+    Task<List<CustomerRentalOrder>> GetSiblingCheckoutOrdersAsync(Guid customerId, string orderNumber, Guid exceptOrderId, CancellationToken cancellationToken);
     Task<List<ExpiringOrderAggregate>> GetExpiringOrdersForCustomerAsync(Guid customerId, DateOnly fromDate, DateOnly toDate, CancellationToken cancellationToken);
     Task<List<ExpiringOrderAggregate>> GetExpiringOrdersForVendorAsync(Guid vendorId, DateOnly fromDate, DateOnly toDate, CancellationToken cancellationToken);
     Task<List<ExpiringOrderAggregate>> GetExpiringOrdersForAdminAsync(DateOnly fromDate, DateOnly toDate, CancellationToken cancellationToken);
+    Task<AdminExpirationListResult> SearchAdminExpirationSummariesAsync(AdminExpirationListQuerySpec spec, CancellationToken cancellationToken);
+    Task<int> CountAdminExpirationGroupsAsync(int withinDays, CancellationToken cancellationToken);
 
     Task<List<CustomerNotification>> GetCustomerNotificationsAsync(Guid customerId, CancellationToken cancellationToken);
     Task<CustomerNotification?> GetCustomerNotificationByIdAsync(Guid customerId, Guid notificationId, CancellationToken cancellationToken);
@@ -85,6 +165,12 @@ public interface ICustomerRepository
     Task<List<ChatSession>> GetCustomerChatSessionsAsync(Guid customerId, CancellationToken cancellationToken);
     Task<List<ChatSession>> GetVendorChatSessionsAsync(Guid vendorId, CancellationToken cancellationToken);
     Task<List<ChatSession>> GetAdminChatSessionsAsync(CancellationToken cancellationToken);
+    Task<(List<ChatSession> Items, int TotalCount)> SearchAdminChatSessionsPagedAsync(
+        string? searchTerm,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken,
+        bool unreadOnly = false);
     Task<ChatSession?> GetChatSessionAsync(Guid customerId, Guid vendorId, Guid? orderId, CancellationToken cancellationToken);
     Task<ChatSession?> GetAdminChatSessionForOrderAsync(Guid customerId, Guid orderId, CancellationToken cancellationToken);
     Task<ChatSession?> GetChatSessionByIdAsync(Guid sessionId, CancellationToken cancellationToken);
@@ -113,8 +199,10 @@ public interface ICustomerRepository
     Task<List<Guid>> GetCustomersByFavoriteListingAsync(Guid vendorProductListingId, CancellationToken cancellationToken);
     Task<Dictionary<Guid, int>> GetFavoriteCountsByListingsAsync(List<Guid> listingIds, CancellationToken cancellationToken);
     Task<Dictionary<Guid, int>> GetFavoriteCountsByProductsAsync(CancellationToken cancellationToken);
+    Task<Dictionary<Guid, int>> GetFavoriteCountsForProductIdsAsync(IReadOnlyCollection<Guid> productIds, CancellationToken cancellationToken);
 
     Task<List<AdminCustomerListItemDto>> SearchCustomersForAdminAsync(string? search, int page, int pageSize, CancellationToken cancellationToken);
+    Task<int> CountCustomersForAdminAsync(string? search, CancellationToken cancellationToken);
     Task<AdminCustomerDetailDto?> GetCustomerDetailForAdminAsync(Guid customerId, int ordersPage, int ordersPageSize, CancellationToken cancellationToken);
     Task<List<AdminOrderableListingDto>> SearchOrderableListingsForAdminAsync(
         string? search, int take, bool? isChemical, CancellationToken cancellationToken);
@@ -125,6 +213,16 @@ public interface ICustomerRepository
     Task<Prilixor.VendorPortal.Domain.Common.Doctor?> FindDoctorByEmailAsync(string email, Guid? excludeDoctorId, CancellationToken cancellationToken);
     Task<List<Prilixor.VendorPortal.Domain.Common.Doctor>> SearchDoctorsAsync(string searchTerm, CancellationToken cancellationToken);
     Task<List<Prilixor.VendorPortal.Domain.Common.Doctor>> ListDoctorsForAdminAsync(string? searchTerm, bool? isActive, CancellationToken cancellationToken);
+    Task<List<(Guid Id, string FullName, string UniqueCode, string? Specialization, string Email)>> ListDoctorOptionsForAdminAsync(
+        string? searchTerm,
+        bool? isActive,
+        CancellationToken cancellationToken);
+    Task<(List<Prilixor.VendorPortal.Domain.Common.Doctor> Items, int TotalCount)> SearchDoctorsForAdminPagedAsync(
+        string? searchTerm,
+        bool? isActive,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken);
     Task AddDoctorAsync(Prilixor.VendorPortal.Domain.Common.Doctor doctor, CancellationToken cancellationToken);
     Task UpdateDoctorAsync(Prilixor.VendorPortal.Domain.Common.Doctor doctor, CancellationToken cancellationToken);
     Task SoftDeleteDoctorAsync(Guid doctorId, Guid? deletedBy, CancellationToken cancellationToken);
@@ -134,6 +232,16 @@ public interface ICustomerRepository
 
     Task<Prilixor.VendorPortal.Domain.Common.Hospital?> GetHospitalByIdAsync(Guid hospitalId, CancellationToken cancellationToken);
     Task<List<Prilixor.VendorPortal.Domain.Common.Hospital>> ListHospitalsForAdminAsync(string? searchTerm, bool? isActive, CancellationToken cancellationToken);
+    Task<List<(Guid Id, string Name, string? City, string? State, string? AddressLine1)>> ListHospitalOptionsForAdminAsync(
+        string? searchTerm,
+        bool? isActive,
+        CancellationToken cancellationToken);
+    Task<(List<Prilixor.VendorPortal.Domain.Common.Hospital> Items, int TotalCount)> SearchHospitalsForAdminPagedAsync(
+        string? searchTerm,
+        bool? isActive,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken);
     Task AddHospitalAsync(Prilixor.VendorPortal.Domain.Common.Hospital hospital, CancellationToken cancellationToken);
     Task UpdateHospitalAsync(Prilixor.VendorPortal.Domain.Common.Hospital hospital, CancellationToken cancellationToken);
     Task SoftDeleteHospitalAsync(Guid hospitalId, Guid? deletedBy, CancellationToken cancellationToken);
@@ -141,6 +249,15 @@ public interface ICustomerRepository
     Task<List<Prilixor.VendorPortal.Domain.Common.Doctor>> GetDoctorsForHospitalAsync(Guid hospitalId, CancellationToken cancellationToken);
 
     Task SaveCommonChangesAsync(CancellationToken cancellationToken);
+
+    Task AddCheckoutSessionAsync(CustomerCheckoutSession session, CancellationToken cancellationToken);
+    Task UpdateCheckoutSessionAsync(CustomerCheckoutSession session, CancellationToken cancellationToken);
+    Task AddCheckoutSessionOrderAsync(CustomerCheckoutSessionOrder link, CancellationToken cancellationToken);
+    Task<CustomerCheckoutSession?> GetCheckoutSessionByIdAsync(Guid sessionId, CancellationToken cancellationToken);
+    Task<CustomerCheckoutSession?> GetCheckoutSessionByRazorpayOrderIdAsync(string razorpayOrderId, CancellationToken cancellationToken);
+    Task<CustomerCheckoutSession?> GetCheckoutSessionByPaymentLinkIdAsync(string paymentLinkId, CancellationToken cancellationToken);
+    Task<CustomerCheckoutSession?> GetOpenCheckoutSessionByReceiptAsync(string receipt, CancellationToken cancellationToken);
+    Task<List<CustomerRentalOrder>> GetOrdersByCheckoutSessionIdAsync(Guid sessionId, CancellationToken cancellationToken);
 
     Task<int> SaveChangesAsync(CancellationToken cancellationToken);
 }
@@ -151,7 +268,8 @@ public sealed record CustomerRentalOrderWithListing(
     VendorProductListing? Listing,
     string? ListingPrimaryImageUrl,
     Prilixor.VendorPortal.Domain.Common.Doctor? Doctor = null,
-    string? VariantDescription = null);
+    string? VariantDescription = null,
+    decimal? GstPercent = null);
 
 /// <summary>Listing row for customer browse (mapped from vendor listings).</summary>
 public sealed record CustomerCatalogListingDto(
@@ -217,6 +335,8 @@ public sealed class VendorProductListingAggregate
     public string CategoryName { get; init; } = string.Empty;
     public string Description { get; init; } = string.Empty;
     public List<string> ImageUrls { get; init; } = [];
+    /// <summary>Same order as <see cref="ImageUrls"/>; empty string when that slot has no generated thumb.</summary>
+    public List<string> ImageThumbnailUrls { get; init; } = [];
     public List<Prilixor.VendorPortal.Application.Onboarding.ProductVariantDto> Variants { get; init; } = [];
     public List<Prilixor.VendorPortal.Application.Onboarding.ProductRentalPricingPlanDto> RentalPricingPlans { get; init; } = [];
     public Guid? InventoryId { get; init; }

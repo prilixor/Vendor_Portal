@@ -10,7 +10,8 @@ class ServiceAreaMapPicker extends StatefulWidget {
   final double latitude;
   final double longitude;
   final double radiusKm;
-  final ValueChanged<LatLng>? onLocationChanged;
+  /// Second argument is the search hit (label + address). Map taps pass null.
+  final void Function(LatLng point, PlaceSearchResult? fromSearch)? onLocationChanged;
   final bool showRadius;
   final bool interactive;
   final double height;
@@ -112,7 +113,7 @@ class _ServiceAreaMapPickerState extends State<ServiceAreaMapPicker> {
   }
 
   void _selectResult(PlaceSearchResult result) {
-    widget.onLocationChanged?.call(LatLng(result.lat, result.lng));
+    widget.onLocationChanged?.call(LatLng(result.lat, result.lng), result);
     _searchController.text = result.label;
     setState(() {
       _results = [];
@@ -233,7 +234,7 @@ class _ServiceAreaMapPickerState extends State<ServiceAreaMapPicker> {
                     ),
                     onTap: widget.interactive && widget.onLocationChanged != null
                         ? (_, point) {
-                            widget.onLocationChanged!(point);
+                            widget.onLocationChanged!(point, null);
                           }
                         : null,
                   ),

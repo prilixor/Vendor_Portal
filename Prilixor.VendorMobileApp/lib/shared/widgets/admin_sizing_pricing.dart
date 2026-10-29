@@ -6,8 +6,13 @@ import '../../core/theme.dart';
 /// Read-only Admin pack-size prices — same data as Vendor Web "Admin sizing & pricing".
 class AdminSizingPricingBody extends StatelessWidget {
   final CatalogProduct? product;
+  final Map<String, double> vendorPayoutByVariantId;
 
-  const AdminSizingPricingBody({super.key, required this.product});
+  const AdminSizingPricingBody({
+    super.key,
+    required this.product,
+    this.vendorPayoutByVariantId = const {},
+  });
 
   static String money(num value) => '₹${value.round()}';
 
@@ -37,7 +42,10 @@ class AdminSizingPricingBody extends StatelessWidget {
       children: [
         for (var i = 0; i < variants.length; i++) ...[
           if (i > 0) Divider(height: 1, color: colors.border.withValues(alpha: 0.85)),
-          _VariantPriceRow(variant: variants[i]),
+          _VariantPriceRow(
+            variant: variants[i],
+            vendorPayout: vendorPayoutByVariantId[variants[i].id],
+          ),
         ],
       ],
     );
@@ -46,14 +54,14 @@ class AdminSizingPricingBody extends StatelessWidget {
 
 class _VariantPriceRow extends StatelessWidget {
   final ProductVariant variant;
+  final double? vendorPayout;
 
-  const _VariantPriceRow({required this.variant});
+  const _VariantPriceRow({required this.variant, this.vendorPayout});
 
   @override
   Widget build(BuildContext context) {
     final colors = context.appColors;
-    final payoutColor =
-        context.isDarkMode ? const Color(0xFF34D399) : const Color(0xFF047857);
+    final payoutColor = colors.success;
 
     return Opacity(
       opacity: variant.isActive ? 1 : 0.5,
@@ -114,7 +122,7 @@ class _VariantPriceRow extends StatelessWidget {
                     style: TextStyle(color: colors.textMuted, fontSize: 12),
                     children: [
                       TextSpan(
-                        text: AdminSizingPricingBody.money(variant.vendorPrice),
+                        text: AdminSizingPricingBody.money(vendorPayout ?? variant.vendorPrice),
                         style: TextStyle(
                           color: payoutColor,
                           fontWeight: FontWeight.w800,

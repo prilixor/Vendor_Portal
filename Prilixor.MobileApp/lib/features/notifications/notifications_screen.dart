@@ -179,9 +179,15 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               
               await productProvider.fetchProducts(search: productName);
               if (productProvider.products.isNotEmpty && context.mounted) {
+                final product = productProvider.products.first;
                 Navigator.push(
                   context,
-                  MaterialPageRoute(builder: (_) => ProductDetailScreen(listingId: productProvider.products.first.id)),
+                  MaterialPageRoute(
+                    builder: (_) => ProductDetailScreen(
+                      listingId: product.id,
+                      previewImageUrl: product.primaryImageUrl,
+                    ),
+                  ),
                 );
               }
             }
@@ -192,12 +198,12 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         padding: const EdgeInsets.all(14),
         decoration: BoxDecoration(
           color: isUnread
-              ? _getColorForNotification(notification.notificationType, notification.title, context.isDarkMode).withValues(alpha: context.isDarkMode ? 0.09 : 0.04)
+              ? _getColorForNotification(notification.notificationType, notification.title, context).withValues(alpha: context.isDarkMode ? 0.09 : 0.04)
               : colors.surface,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
             color: isUnread
-                ? _getColorForNotification(notification.notificationType, notification.title, context.isDarkMode).withValues(alpha: context.isDarkMode ? 0.4 : 0.28)
+                ? _getColorForNotification(notification.notificationType, notification.title, context).withValues(alpha: context.isDarkMode ? 0.4 : 0.28)
                 : colors.border.withValues(alpha: context.isDarkMode ? 0.6 : 0.8),
             width: isUnread ? 1.2 : 1.0,
           ),
@@ -216,18 +222,18 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
               width: 40,
               height: 40,
               decoration: BoxDecoration(
-                color: _getColorForNotification(notification.notificationType, notification.title, context.isDarkMode)
+                color: _getColorForNotification(notification.notificationType, notification.title, context)
                     .withValues(alpha: context.isDarkMode ? 0.18 : 0.12),
                 borderRadius: BorderRadius.circular(12),
                 border: Border.all(
-                  color: _getColorForNotification(notification.notificationType, notification.title, context.isDarkMode)
+                  color: _getColorForNotification(notification.notificationType, notification.title, context)
                       .withValues(alpha: context.isDarkMode ? 0.35 : 0.22),
                   width: 0.8,
                 ),
               ),
               child: Icon(
                 _getIconForNotification(notification.notificationType, notification.title),
-                color: _getColorForNotification(notification.notificationType, notification.title, context.isDarkMode),
+                color: _getColorForNotification(notification.notificationType, notification.title, context),
                 size: 20,
               ),
             ),
@@ -241,7 +247,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     children: [
                       Expanded(
                         child: Text(
-                          notification.title,
+                          _extensionCopy(notification.title),
                           style: TextStyle(
                             color: colors.textPrimary,
                             fontSize: 14.5,
@@ -257,7 +263,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                           height: 8,
                           margin: const EdgeInsets.only(top: 4),
                           decoration: BoxDecoration(
-                            color: _getColorForNotification(notification.notificationType, notification.title, context.isDarkMode),
+                            color: _getColorForNotification(notification.notificationType, notification.title, context),
                             shape: BoxShape.circle,
                           ),
                         ),
@@ -269,14 +275,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                     Container(
                       padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
                       decoration: BoxDecoration(
-                        color: _getColorForNotification(notification.notificationType, notification.title, context.isDarkMode)
+                        color: _getColorForNotification(notification.notificationType, notification.title, context)
                             .withValues(alpha: context.isDarkMode ? 0.18 : 0.1),
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: Text(
                         _getBadgeLabel(notification.notificationType)!,
                         style: TextStyle(
-                          color: _getColorForNotification(notification.notificationType, notification.title, context.isDarkMode),
+                          color: _getColorForNotification(notification.notificationType, notification.title, context),
                           fontSize: 10.5,
                           fontWeight: FontWeight.w700,
                         ),
@@ -286,7 +292,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
                   if (notification.body.isNotEmpty) ...[
                     const SizedBox(height: 6),
                     Text(
-                      notification.body,
+                      _extensionCopy(notification.body),
                       style: TextStyle(
                         color: context.isDarkMode ? const Color(0xFFCBD5E1) : colors.textSecondary,
                         fontSize: 13,
@@ -369,15 +375,16 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     return Icons.notifications_active_outlined;
   }
 
-  Color _getColorForNotification(String type, String title, bool isDark) {
+  Color _getColorForNotification(String type, String title, BuildContext context) {
+    final colors = context.appColors;
     final t = type.trim().toLowerCase();
     final h = title.trim().toLowerCase();
 
     if (t.contains('welcome') || h.contains('welcome')) {
-      return isDark ? const Color(0xFF38BDF8) : const Color(0xFF0284C7); // Sky
+      return colors.info;
     }
     if (t.contains('photo') || h.contains('photo')) {
-      return isDark ? const Color(0xFF22D3EE) : const Color(0xFF0891B2); // Cyan
+      return colors.info;
     }
     if (t.contains('dispatch') ||
         t.contains('transit') ||
@@ -386,14 +393,14 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         h.contains('dispatch') ||
         h.contains('delivery') ||
         h.contains('transit')) {
-      return isDark ? const Color(0xFF60A5FA) : const Color(0xFF2563EB); // Blue
+      return colors.info;
     }
     if (t.contains('pay') ||
         t.contains('refund') ||
         t.contains('invoice') ||
         h.contains('payment') ||
         h.contains('refund')) {
-      return isDark ? const Color(0xFF34D399) : const Color(0xFF059669); // Emerald
+      return colors.success;
     }
     if (t.contains('expire') ||
         t.contains('expir') ||
@@ -401,29 +408,41 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
         t.contains('continuation') ||
         h.contains('expir') ||
         h.contains('return')) {
-      return isDark ? const Color(0xFFFBBF24) : const Color(0xFFD97706); // Amber
+      return colors.warning;
     }
     if (t.contains('cancel') ||
         t.contains('fail') ||
         t.contains('reject') ||
         h.contains('cancel') ||
         h.contains('failed')) {
-      return isDark ? const Color(0xFFF87171) : const Color(0xFFDC2626); // Rose
+      return colors.danger;
     }
     if (t.contains('support') ||
         t.contains('chat') ||
         t.contains('message') ||
         h.contains('support') ||
         h.contains('ticket')) {
-      return isDark ? const Color(0xFFA78BFA) : const Color(0xFF7C3AED); // Purple
+      return colors.accent;
     }
     if (t.contains('stock') || h.contains('stock') || h.contains('favorite')) {
-      return isDark ? const Color(0xFF2DD4BF) : const Color(0xFF0D9488); // Teal
+      return colors.success;
     }
     if (t.contains('order') || h.contains('order') || h.contains('rental')) {
-      return isDark ? const Color(0xFF818CF8) : const Color(0xFF4F46E5); // Indigo
+      return colors.accent;
     }
-    return isDark ? const Color(0xFFA5B4FC) : const Color(0xFF6C63FF);
+    return colors.accent;
+  }
+
+  String _extensionCopy(String text) {
+    return text
+        .replaceAll('Extension Cancelled', 'Extension Rejected')
+        .replaceAllMapped(
+          RegExp(
+            r'request to extend order (.+?) has been cancelled by the (vendor|admin)',
+            caseSensitive: false,
+          ),
+          (match) => 'request to extend order ${match.group(1)} was rejected',
+        );
   }
 
   String? _getBadgeLabel(String type) {
@@ -436,7 +455,10 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     if (t == 'order_dispatched' || t.contains('dispatch')) return 'Dispatched';
     if (t == 'order_in_transit' || t.contains('transit')) return 'In transit';
     if (t == 'order_delivered' || t.contains('deliver')) return 'Delivered';
+    if (t == 'customer_extension_paid') return 'Paid';
     if (t.contains('payment') || t.contains('pay')) return 'Payment';
+    if (t == 'customer_extension_cancelled') return 'Rejected';
+    if (t == 'customer_extension_approved') return 'Approved';
     if (t == 'order_cancelled' || t.contains('cancel')) return 'Cancelled';
     if (t == 'order_dispatch_failed' || t.contains('fail')) return 'Action needed';
     if (t == 'order_expiring_soon' || t.contains('expir')) return 'Expiring';

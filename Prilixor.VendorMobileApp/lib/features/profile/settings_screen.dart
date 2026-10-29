@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 
 import '../../core/auth/auth_provider.dart';
+import '../../core/auth/phone_otp_setting.dart';
 import '../../core/providers/vendor_profile_provider.dart';
 import '../../core/theme.dart';
 import '../../core/utils/indian_mobile_phone.dart';
@@ -9,7 +10,10 @@ import '../../core/utils/password_validation.dart';
 import '../../shared/widgets/brand_page_loader.dart';
 import '../../shared/widgets/custom_text_field.dart';
 import '../../shared/widgets/indian_mobile_field.dart';
+import '../../shared/widgets/phone_otp_dialog.dart';
 import '../../shared/widgets/required_field_ux.dart';
+import '../../shared/widgets/legal_policy_links.dart';
+import 'delete_account_screen.dart';
 
 class SettingsScreen extends StatefulWidget {
   const SettingsScreen({super.key});
@@ -23,10 +27,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
   final _phoneController = TextEditingController();
   String? _nameError;
   String? _phoneError;
+  bool _phoneVerified = false;
+  bool _phoneOtpEnabled = true;
 
   @override
   void initState() {
     super.initState();
+    PhoneOtpSetting.isEnabled().then((enabled) {
+      if (mounted) setState(() => _phoneOtpEnabled = enabled);
+    });
     WidgetsBinding.instance.addPostFrameCallback((_) async {
       final vendorId =
           Provider.of<AuthProvider>(context, listen: false).vendorId;
@@ -43,6 +52,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
               : (auth.displayName ?? '');
       _phoneController.text =
           IndianMobilePhone.normalizeDigits(profile?.supportPhone ?? '');
+      _phoneVerified = profile?.isPhoneVerified ?? false;
       setState(() {});
     });
   }
@@ -52,6 +62,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
     _nameController.dispose();
     _phoneController.dispose();
     super.dispose();
+  }
+
+  Future<void> _verifyPhoneSms() async {
+    final normalized = IndianMobilePhone.normalizeDigits(_phoneController.text);
+    if (!IndianMobilePhone.isValid(normalized)) return;
+
+    final verified = await PhoneOtpDialog.show(
+      context,
+      phone: normalized,
+      role: 'vendor',
+      title: 'Verify support phone',
+    );
+
+    if (verified == true && mounted) {
+      setState(() => _phoneVerified = true);
+      final vendorId =
+          Provider.of<AuthProvider>(context, listen: false).vendorId;
+      if (vendorId != null) {
+        await Provider.of<VendorProfileProvider>(context, listen: false)
+            .fetchProfile(vendorId);
+      }
+    }
   }
 
   Future<void> _save() async {
@@ -84,10 +116,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
       supportPhone: IndianMobilePhone.normalizeDigits(_phoneController.text),
     );
     if (!mounted) return;
+    final isVerified = _phoneVerified;
+    final hasPhone = _phoneController.text.trim().isNotEmpty;
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(
-          ok ? 'Profile saved.' : (provider.error ?? 'Failed to save'),
+          ok
+              ? (hasPhone && !isVerified
+                  ? 'Profile saved. Verify your phone to receive SMS order alerts.'
+                  : 'Profile saved.')
+              : (provider.error ?? 'Failed to save'),
         ),
         backgroundColor: ok ? null : Colors.redAccent,
       ),
@@ -99,6 +137,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final provider = Provider.of<VendorProfileProvider>(context);
     final auth = Provider.of<AuthProvider>(context);
     final colors = context.appColors;
+    final normalizedPhone =
+        IndianMobilePhone.normalizeDigits(_phoneController.text);
+    final isValidPhone = IndianMobilePhone.isValid(normalizedPhone);
 
     return Scaffold(
       appBar: AppBar(title: const Text('Settings')),
@@ -152,21 +193,83 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     },
                   ),
                   const SizedBox(height: 12),
-                  IndianMobileField(
-                    controller: _phoneController,
-                    label: 'Support phone',
-                    required: true,
-                    errorText: _phoneError,
-                    onChanged: (_) {
-                      if (_phoneError != null) {
-                        setState(() => _phoneError = null);
-                      }
-                    },
+                  Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Row(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Expanded(
+                            child: IndianMobileField(
+                              controller: _phoneController,
+                              label: 'Support phone',
+                              required: true,
+                              errorText: _phoneError,
+                              onChanged: (_) {
+                                setState(() {
+                                  _phoneVerified = false;
+                                  if (_phoneError != null) {
+                                    _phoneError = null;
+                                  }
+                                });
+                              },
+                            ),
+                          ),
+                          if (_phoneOtpEnabled) ...[
+                          const SizedBox(width: 8),
+                          Padding(
+                            padding: const EdgeInsets.only(top: 28),
+                            child: SizedBox(
+                              height: 52,
+                              child: OutlinedButton(
+                                onPressed: (!isValidPhone || _phoneVerified)
+                                    ? null
+                                    : _verifyPhoneSms,
+                                style: OutlinedButton.styleFrom(
+                                  foregroundColor: _phoneVerified
+                                      ? const Color(0xFF10B981)
+                                      : colors.accent,
+                                  side: BorderSide(
+                                    color: _phoneVerified
+                                        ? const Color(0xFF10B981)
+                                        : colors.accent,
+                                  ),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(12),
+                                  ),
+                                ),
+                                child: Text(
+                                  _phoneVerified ? 'Verified' : 'Verify SMS',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w600,
+                                    fontSize: 13,
+                                  ),
+                                ),
+                              ),
+                            ),
+                          ),
+                          ],
+                        ],
+                      ),
+                      if (_phoneError == null)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 4, left: 4),
+                          child: Text(
+                            _phoneVerified
+                                ? 'Verified - SMS order alerts can be delivered.'
+                                : '10-digit Indian mobile starting with 6-9. Verify to enable SMS alerts.',
+                            style: TextStyle(
+                              color: colors.textMuted,
+                              fontSize: 11,
+                            ),
+                          ),
+                        ),
+                    ],
                   ),
                   if (provider.profile!.businessName.isNotEmpty) ...[
                     const SizedBox(height: 16),
                     Text(
-                      'Business: ${provider.profile!.businessName}',
+                      'Business: ',
                       style: TextStyle(color: colors.textMuted, fontSize: 12),
                     ),
                   ],
@@ -208,6 +311,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     );
                   },
                 ),
+                const SizedBox(height: 8),
+                ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: const Icon(Icons.delete_outline, color: Colors.redAccent),
+                  title: const Text(
+                    'Delete account',
+                    style: TextStyle(color: Colors.redAccent),
+                  ),
+                  trailing: Icon(Icons.chevron_right, color: colors.textMuted),
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const DeleteAccountScreen()),
+                    );
+                  },
+                ),
+                const SizedBox(height: 20),
+                Text(
+                  'Policies',
+                  style: TextStyle(
+                    color: colors.textSecondary,
+                    fontWeight: FontWeight.w700,
+                    fontSize: 16,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                const VendorSettingsPolicyLinks(),
               ],
             ),
     );

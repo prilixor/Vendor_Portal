@@ -126,24 +126,22 @@ export const ContactSection = ({ data }: ContactSectionProps) => {
             <div className="contact-card-main">
               <h4>Email Us</h4>
               <div className="contact-lines">
-                <div className="contact-line">
-                  <span>Business</span>
-                  <a
-                    href={`mailto:${businessEmail}`}
-                    onClick={(e) => handleEmailClick(businessEmail, e)}
-                  >
-                    {businessEmail}
-                  </a>
-                </div>
-                <div className="contact-line">
-                  <span>Support</span>
-                  <a
-                    href={`mailto:${supportEmail}`}
-                    onClick={(e) => handleEmailClick(supportEmail, e)}
-                  >
-                    {supportEmail}
-                  </a>
-                </div>
+                <a
+                  className="contact-line"
+                  href={`mailto:${businessEmail}`}
+                  onClick={(e) => handleEmailClick(businessEmail, e)}
+                >
+                  <span>Business:</span>
+                  <strong>{businessEmail}</strong>
+                </a>
+                <a
+                  className="contact-line"
+                  href={`mailto:${supportEmail}`}
+                  onClick={(e) => handleEmailClick(supportEmail, e)}
+                >
+                  <span>Support:</span>
+                  <strong>{supportEmail}</strong>
+                </a>
               </div>
             </div>
           </article>

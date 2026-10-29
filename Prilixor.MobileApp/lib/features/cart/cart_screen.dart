@@ -117,7 +117,7 @@ class _CartScreenState extends State<CartScreen> {
                         const SizedBox(width: 10),
                         Expanded(
                           child: Text(
-                            'Optional doctor Unique ID available at checkout.',
+                            'A prescription can be uploaded at checkout.',
                             style: TextStyle(
                               color: context.isDarkMode
                                   ? const Color(0xFF93C5FD)

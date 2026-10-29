@@ -88,9 +88,8 @@ const TermsAndConditions = () => {
         <div className="container mx-auto flex h-14 items-center justify-between px-4 lg:px-8">
           <div className="flex items-center gap-4">
             <BackLink onClick={handleBack} label="Back" />
-            <Link to="/" className="flex items-center gap-2.5 hover:opacity-80 transition-opacity">
-              <BrandMark size="sm" rounded="lg" className="h-8 w-8" />
-              <span className="text-sm font-bold tracking-tight">BlinksMed</span>
+            <Link to="/" className="flex items-center hover:opacity-80 transition-opacity" aria-label="BlinksMed home">
+              <BrandMark size="sm" />
             </Link>
           </div>
           <div className="flex items-center gap-4">
@@ -100,7 +99,7 @@ const TermsAndConditions = () => {
       </header>
 
       <main className="container mx-auto px-4 lg:px-8 py-8 lg:py-12">
-        <div className="flex flex-col gap-10 lg:flex-row lg:items-start">
+        <div className="flex flex-col gap-8 lg:flex-row lg:items-start">
           
           {/* Sidebar TOC - Optimized Sticky Aside */}
           <aside className="hidden lg:block w-64 shrink-0 sticky top-[80px] h-fit self-start">
@@ -155,7 +154,7 @@ const TermsAndConditions = () => {
 
           {/* Content - Increased Width, Improved Spacing */}
           <div className="flex-1 max-w-4xl lg:pl-4">
-            <div className="mb-14 relative">
+            <div className="mb-8 relative">
               <h1 className="text-3xl font-extrabold tracking-tight lg:text-4xl text-foreground mb-4">
                 Terms & Conditions
               </h1>
@@ -165,13 +164,13 @@ const TermsAndConditions = () => {
                 <p className="text-lg leading-relaxed max-w-2xl">
                   Please review these terms carefully to understand your rights and responsibilities as a vendor on our platform.
                 </p>
-                <div className="flex items-center gap-2 text-[11px] font-bold uppercase tracking-wider bg-emerald-500/10 text-emerald-600 px-3 py-1.5 rounded-lg border border-emerald-500/20 w-fit shrink-0">
+                <div className="flex w-fit shrink-0 items-center gap-2 rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-1.5 text-[11px] font-bold uppercase tracking-wider text-emerald-700 dark:border-emerald-500/40 dark:bg-emerald-500/15 dark:text-emerald-300">
                   Updated: May 13, 2026
                 </div>
               </div>
             </div>
 
-            <div className="space-y-16">
+            <div className="space-y-10">
               <section id="introduction" className="scroll-mt-24 group">
                 <h2 className="text-xl font-bold mb-5 flex items-center gap-4 text-foreground group-hover:text-primary transition-colors">
                   <span className="text-primary/40 font-mono text-sm">01.</span>
@@ -369,10 +368,10 @@ const TermsAndConditions = () => {
               </section>
             </div>
             
-            <footer className="mt-24 pt-8 border-t flex flex-col sm:flex-row items-center justify-between gap-4 pb-12">
+            <footer className="mt-12 pt-8 border-t flex flex-col sm:flex-row items-center justify-between gap-4 pb-8">
               <p className="text-[12px] text-muted-foreground/60">© 2026 BlinksMed Inc. All rights reserved.</p>
               <div className="flex items-center gap-8">
-                <Link to="/privacy-policy" className="text-[12px] font-medium text-muted-foreground/60 hover:text-primary transition-colors">Privacy Policy</Link>
+                <Link to="/privacy-policy" className="text-[12px] font-medium !text-primary underline-offset-2 hover:underline">Privacy Policy</Link>
               </div>
             </footer>
           </div>

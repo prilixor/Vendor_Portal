@@ -7,7 +7,7 @@ internal static class VendorStoragePaths
     internal static string SanitizeVendorSegment(string vendorId) =>
         string.IsNullOrWhiteSpace(vendorId) ? "common" : vendorId.Trim();
 
-    private static string GetFolderName(VendorFileFolderType folderType) => folderType switch
+    internal static string GetFolderName(VendorFileFolderType folderType) => folderType switch
     {
         VendorFileFolderType.Documents => "documents",
         VendorFileFolderType.ProductImages => "product-images",
@@ -15,6 +15,8 @@ internal static class VendorStoragePaths
         VendorFileFolderType.Support => "support",
         VendorFileFolderType.RentalIcons => "rental-icons",
         VendorFileFolderType.OrderImages => "order-images",
+        VendorFileFolderType.WebsiteHero => "website-hero",
+        VendorFileFolderType.Prescriptions => "prescriptions",
         _ => "documents"
     };
 

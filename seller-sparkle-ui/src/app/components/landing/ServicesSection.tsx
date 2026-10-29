@@ -85,13 +85,10 @@ export const ServicesSection = ({ data }: ServicesSectionProps) => {
           <p className="sub">{subtitle}</p>
         </div>
 
-        <div className="service-grid services-3col" style={{ gap: "18px", marginTop: "40px" }}>
+        <div className="service-grid services-3col">
           {services.map((srv, idx) => (
-            <article key={srv.id ?? idx} className="service-card" style={{ textAlign: "center" }}>
-              <div
-                className="service-icon"
-                style={{ width: "64px", height: "64px", borderRadius: "16px", margin: "0 auto 18px" }}
-              >
+            <article key={srv.id ?? idx} className="service-card service-card--center">
+              <div className="service-icon service-icon--lg">
                 {renderServiceIcon(srv.iconName, srv.customIconUrl)}
               </div>
               <h4>{srv.title}</h4>

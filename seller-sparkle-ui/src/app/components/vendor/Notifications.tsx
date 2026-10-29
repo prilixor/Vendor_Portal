@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { keepPreviousData, useQuery, useQueryClient } from "@tanstack/react-query";
 import { PageHeader } from "@/app/components/shared/PageHeader";
 import { Card } from "@/app/components/ui/card";
 import { Button } from "@/app/components/ui/button";
 import { Switch } from "@/app/components/ui/switch";
-import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
+import { PageContentGate } from "@/app/components/shared/PageLoader";
 import { TablePagination } from "@/app/components/shared/TablePagination";
 import { Tabs, TabsList, TabsTrigger } from "@/app/components/ui/tabs";
 import { Notification } from "@/app/models";
@@ -138,25 +139,14 @@ function getVendorNotificationVisual(notificationType?: string, title: string = 
 const Notifications = () => {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const queryClient = useQueryClient();
   const { refreshUnreadCount } = useNotificationContext();
   const { openSupportPanel } = useSupportChat();
-  const [items, setItems] = useState<Notification[]>([]);
   const [filter, setFilter] = useState<"all" | "unread">("all");
   const [prefs, setPrefs] = useState({ email: true, push: false, orders: true });
   const [busy, setBusy] = useState(false);
-  const [loadError, setLoadError] = useState<string | null>(null);
-  const [hasLoaded, setHasLoaded] = useState(false);
-
   const [page, setPage] = useState(1);
   const PAGE_SIZE = 15;
-
-  const filtered = useMemo(
-    () => {
-      const result = filter === "unread" ? items.filter((i) => !i.read) : [...items];
-      return result.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
-    },
-    [filter, items]
-  );
 
   const mapType = (type: string): Notification["type"] => {
     const t = type.trim().toLowerCase();
@@ -167,65 +157,44 @@ const Notifications = () => {
     return "info";
   };
 
-  const mapNotifications = (rows: Awaited<ReturnType<typeof vendorOnboardingApi.getVendorNotifications>>): Notification[] =>
-    rows.map((n) => ({
-      id: n.id,
-      title: n.title,
-      message: n.message,
-      type: mapType(n.notificationType),
-      read: n.status.trim().toLowerCase() === "read" || !!n.readAt,
-      timestamp: n.sentAt ?? n.readAt ?? new Date().toISOString(),
-      notificationType: n.notificationType,
-    }));
+  const { data, isLoading, isPlaceholderData, isError, error } = useQuery({
+    queryKey: ["vendor-notification-summaries", user?.id, page, filter],
+    queryFn: () =>
+      vendorOnboardingApi.getVendorNotificationSummaries(user!.id, {
+        unreadOnly: filter === "unread",
+        page,
+        pageSize: PAGE_SIZE,
+      }, { quiet: true }),
+    enabled: Boolean(user?.id),
+    placeholderData: keepPreviousData,
+  });
+  const isPageChanging = isPlaceholderData && !isLoading;
 
-  const loadNotificationData = async () => {
+  const items: Notification[] = (data?.items ?? []).map((n) => ({
+    id: n.id,
+    title: n.title,
+    message: n.message,
+    type: mapType(n.notificationType),
+    read: n.status.trim().toLowerCase() === "read" || !!n.readAt,
+    timestamp: n.sentAt ?? n.readAt ?? new Date().toISOString(),
+    notificationType: n.notificationType,
+  }));
+  const totalCount = data?.totalCount ?? 0;
+
+  useEffect(() => {
     if (!user) return;
-    setBusy(true);
-    setLoadError(null);
-    try {
-      const [prefRes, notifRes] = await Promise.allSettled([
-        vendorOnboardingApi.getVendorNotificationPreference(user.id),
-        vendorOnboardingApi.getVendorNotifications(user.id),
-      ]);
+    void vendorOnboardingApi.getVendorNotificationPreference(user.id).then((pref) => {
+      setPrefs({
+        email: pref.emailNotificationsEnabled,
+        push: pref.pushNotificationsEnabled,
+        orders: pref.newOrderNotifications,
+      });
+    }).catch(() => undefined);
+  }, [user?.id]);
 
-      if (prefRes.status === "fulfilled") {
-        setPrefs({
-          email: prefRes.value.emailNotificationsEnabled,
-          push: prefRes.value.pushNotificationsEnabled,
-          orders: prefRes.value.newOrderNotifications,
-        });
-      }
-
-      if (notifRes.status === "fulfilled") {
-        setItems(mapNotifications(notifRes.value));
-      } else {
-        const message = notifRes.reason instanceof Error ? notifRes.reason.message : "Failed to load notifications.";
-        setLoadError(message);
-        toast.error(message);
-      }
-    } catch (error) {
-      const message = error instanceof Error ? error.message : "Failed to load notifications.";
-      setLoadError(message);
-      toast.error(message);
-    } finally {
-      setBusy(false);
-      setHasLoaded(true);
-    }
+  const refreshList = async () => {
+    await queryClient.invalidateQueries({ queryKey: ["vendor-notification-summaries"] });
   };
-
-  useEffect(() => {
-    void loadNotificationData();
-  }, [user]);
-
-  // Refresh notifications when window gains focus (user returns to the tab)
-  useEffect(() => {
-    const handleFocus = () => {
-      void loadNotificationData();
-    };
-
-    window.addEventListener('focus', handleFocus);
-    return () => window.removeEventListener('focus', handleFocus);
-  }, [user]);
 
   const { isSubscribed, subscribe, unsubscribe } = usePushNotifications();
 
@@ -251,7 +220,7 @@ const Notifications = () => {
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to save preferences.";
       toast.error(message);
-      await loadNotificationData();
+      await refreshList();
     }
   };
 
@@ -261,8 +230,8 @@ const Notifications = () => {
     try {
       const res = await vendorOnboardingApi.markAllVendorNotificationsAsRead(user.id);
       if (res.updatedCount > 0) {
-        setItems((arr) => arr.map((n) => ({ ...n, read: true })));
         toast.success(`Marked ${res.updatedCount} notification(s) as read.`);
+        await refreshList();
         await refreshUnreadCount();
       }
     } catch (error) {
@@ -281,11 +250,10 @@ const Notifications = () => {
     try {
       if (target.read) {
         await vendorOnboardingApi.markVendorNotificationAsUnread(user.id, id);
-        setItems((arr) => arr.map((n) => (n.id === id ? { ...n, read: false } : n)));
       } else {
         await vendorOnboardingApi.markVendorNotificationAsRead(user.id, id);
-        setItems((arr) => arr.map((n) => (n.id === id ? { ...n, read: true } : n)));
       }
+      await refreshList();
       await refreshUnreadCount();
     } catch (error) {
       const message = error instanceof Error ? error.message : "Failed to toggle notification status.";
@@ -329,14 +297,15 @@ const Notifications = () => {
         }
       />
 
-      {!hasLoaded && busy && <PageLoaderSlot />}
-      {loadError && (
-        <Card className="mb-4 border-destructive/30 bg-destructive-soft p-4 text-sm text-destructive">{loadError}</Card>
+      {isError && (
+        <Card className="mb-4 border-destructive/30 bg-destructive-soft p-4 text-sm text-destructive">
+          {error instanceof Error ? error.message : "Failed to load notifications."}
+        </Card>
       )}
 
-      {hasLoaded && (
+      <PageContentGate loading={isLoading && !data}>
         <>
-          <div className="grid grid-cols-1 gap-6 lg:grid-cols-3">
+          <div className={cn("grid grid-cols-1 gap-6 lg:grid-cols-3 transition-opacity duration-200", isPageChanging && "opacity-50")}>
         <Card className="lg:col-span-2 border-border/60 p-4 sm:p-6 lg:p-8">
           <div className="flex items-center justify-between border-b border-border pb-4">
             <div className="flex items-center gap-2">
@@ -353,7 +322,7 @@ const Notifications = () => {
             </Tabs>
           </div>
           <ul className="divide-y divide-border">
-            {filtered.slice((page - 1) * PAGE_SIZE, page * PAGE_SIZE).map((n) => {
+            {items.map((n) => {
               const { icon: Icon, cls } = getVendorNotificationVisual(
                 n.notificationType,
                 n.title,
@@ -405,9 +374,12 @@ const Notifications = () => {
                             comment={adminComment}
                           />
                         )}
-                        <p className="mt-1 text-xs text-muted-foreground">
+                        <time
+                          dateTime={n.timestamp}
+                          className="mt-1.5 block text-xs font-medium tabular-nums text-foreground/75 dark:text-foreground/70"
+                        >
                           {formatDistanceToNow(new Date(n.timestamp), { addSuffix: true })}
-                        </p>
+                        </time>
                       </div>
                     </div>
                     <Button
@@ -426,7 +398,7 @@ const Notifications = () => {
                 </li>
               );
             })}
-            {filtered.length === 0 && (
+            {items.length === 0 && (
               <li className="flex flex-col items-center justify-center px-6 py-12 text-center">
                 <Bell className="mb-3 h-10 w-10 text-muted-foreground" />
                 <p className="text-sm font-semibold">You're all caught up</p>
@@ -440,7 +412,7 @@ const Notifications = () => {
           <TablePagination
             page={page}
             pageSize={PAGE_SIZE}
-            total={filtered.length}
+            total={totalCount}
             onPageChange={setPage}
             label="items"
           />
@@ -470,7 +442,7 @@ const Notifications = () => {
         </Card>
       </div>
         </>
-      )}
+      </PageContentGate>
     </div>
   );
 };
