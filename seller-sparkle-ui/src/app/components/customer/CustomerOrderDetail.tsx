@@ -993,12 +993,12 @@ const CustomerOrderDetail = () => {
                         </span>
                       ) : null}
                       {customerRefundChip(item.returnSettlement) ? (
-                        <span className="inline-flex items-center rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-bold text-sky-900 dark:bg-sky-950/50 dark:text-sky-200">
+                        <span className="inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-full bg-sky-100 px-2 text-[10px] font-bold leading-none text-sky-900 dark:bg-sky-950/50 dark:text-sky-200">
                           {customerRefundChip(item.returnSettlement)}
                         </span>
                       ) : null}
                       {customerCancellationChip(item.cancellationRefund) ? (
-                        <span className="inline-flex items-center rounded-full bg-sky-100 px-2 py-0.5 text-[10px] font-bold text-sky-900 dark:bg-sky-950/50 dark:text-sky-200">
+                        <span className="inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-full bg-sky-100 px-2 text-[10px] font-bold leading-none text-sky-900 dark:bg-sky-950/50 dark:text-sky-200">
                           {customerCancellationChip(item.cancellationRefund)}
                         </span>
                       ) : null}

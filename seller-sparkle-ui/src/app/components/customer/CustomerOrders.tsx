@@ -53,6 +53,10 @@ function compactDurationLabel(label?: string | null): string {
     .trim();
 }
 
+/** Single-line meta pills. Same height as status badges so a long label never stacks inside the chip. */
+const orderMetaChipClass =
+  "inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-full px-2 text-[10px] font-bold leading-none";
+
 function formatDateRange(start?: string | null, end?: string | null): string {
   const a = formatOrderDate(start);
   const b = formatOrderDate(end);
@@ -344,35 +348,35 @@ const CustomerOrders = () => {
                             </div>
                           </div>
 
-                          <div className="flex w-full min-w-0 flex-nowrap items-center justify-between gap-1 border-t border-border/20 pt-3 sm:w-auto sm:justify-end sm:gap-3 sm:border-none sm:pt-0">
-                            <div className="flex min-w-0 flex-nowrap items-center gap-1">
-                              <Badge className={cn("h-5 shrink-0 whitespace-nowrap px-1.5 py-0 text-[10px] font-semibold leading-none sm:px-2", orderTypeBadgeClass(o.orderType))} variant="outline">
+                          <div className="flex w-full min-w-0 flex-wrap items-center justify-between gap-x-2 gap-y-1.5 border-t border-border/20 pt-3 sm:w-auto sm:justify-end sm:gap-3 sm:border-none sm:pt-0">
+                            <div className="flex max-w-full flex-wrap items-center gap-1.5">
+                              <Badge className={cn("h-5 shrink-0 whitespace-nowrap px-2 py-0 text-[10px] font-semibold leading-none", orderTypeBadgeClass(o.orderType))} variant="outline">
                                 {formatOrderTypeLabel(o.orderType)}
                               </Badge>
                               {o.isExtended && o.orderType?.toLowerCase() !== "buy" ? (
-                                <span className="rounded bg-amber-100 px-1.5 py-0.5 text-[10px] font-bold leading-none text-amber-800 dark:bg-amber-900/40 dark:text-amber-300">
+                                <span className={cn(orderMetaChipClass, "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300")}>
                                   EXTENDED
                                 </span>
                               ) : null}
                               {customerRefundChip(o.returnSettlement) ? (
-                                <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold leading-none text-sky-900 dark:bg-sky-950/50 dark:text-sky-200">
+                                <span className={cn(orderMetaChipClass, "bg-sky-100 text-sky-900 dark:bg-sky-950/50 dark:text-sky-200")}>
                                   {customerRefundChip(o.returnSettlement)}
                                 </span>
                               ) : null}
                               {customerCancellationChip(o.cancellationRefund) ? (
-                                <span className="rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold leading-none text-sky-900 dark:bg-sky-950/50 dark:text-sky-200">
+                                <span className={cn(orderMetaChipClass, "bg-sky-100 text-sky-900 dark:bg-sky-950/50 dark:text-sky-200")}>
                                   {customerCancellationChip(o.cancellationRefund)}
                                 </span>
                               ) : null}
                               <Badge
                                 title={formatCustomerOrderStatusTitle(o.status)}
-                                className={cn("shrink-0", orderStatusBadgeSizeClass, "px-1.5 sm:px-2", orderStatusBadgeClass(o.status))}
+                                className={cn("shrink-0", orderStatusBadgeSizeClass, orderStatusBadgeClass(o.status))}
                                 variant="outline"
                               >
                                 {formatCustomerOrderStatusLabel(o.status)}
                               </Badge>
                             </div>
-                            <div className="flex shrink-0 flex-nowrap items-center gap-1 sm:gap-3">
+                            <div className="ml-auto flex shrink-0 flex-nowrap items-center gap-1 sm:ml-0 sm:gap-3">
                               <span className="text-xs font-semibold tabular-nums text-foreground sm:text-sm">₹{o.totalAmount.toFixed(0)}</span>
                               {isCustomerOrderCancellable(o.status) ? (
                                 <Button
