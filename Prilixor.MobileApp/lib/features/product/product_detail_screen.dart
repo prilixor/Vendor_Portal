@@ -780,8 +780,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                         )
                                       : Column(
                                           children: [
-                                            // Web compact strip: deposit + buy only (plans pick the rent price).
-                                            if (detail.canRent)
+                                            // Deposit applies to a rental return only.
+                                            if (detail.canRent && actualOrderType == 'rent')
                                               _priceRow(
                                                 'Security deposit',
                                                 formatPlanInr(detail.securityDeposit),

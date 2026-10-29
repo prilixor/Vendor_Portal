@@ -492,7 +492,7 @@ const CustomerListingDetail = () => {
               </div>
             ) : (
               <div className="space-y-2 text-sm">
-                {canRent && (
+                {canRent && actualOrderType === "rent" && (
                   <div className="flex items-baseline justify-between rounded-lg bg-muted/40 px-3 py-2">
                     <span className="text-sm text-muted-foreground">Security deposit</span>
                     <span className="font-bold tabular-nums">₹{data.securityDeposit.toFixed(0)}</span>
