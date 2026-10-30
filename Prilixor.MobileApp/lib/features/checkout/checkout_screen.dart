@@ -36,6 +36,7 @@ class CheckoutScreen extends StatefulWidget {
 }
 
 class _CheckoutScreenState extends State<CheckoutScreen> {
+  final _addressSectionKey = GlobalKey();
   String? _selectedAddressId;
   String _deliveryOption = 'standard';
   final Map<String, List<PendingPrescriptionFile>> _prescriptionFiles = {};
@@ -377,7 +378,10 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   }),
 
                   const SizedBox(height: 24),
-                  RequiredLabel('Delivery Address', required: true, style: TextStyle(color: colors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
+                  KeyedSubtree(
+                    key: _addressSectionKey,
+                    child: RequiredLabel('Delivery Address', required: true, style: TextStyle(color: colors.textPrimary, fontSize: 18, fontWeight: FontWeight.bold)),
+                  ),
                   const SizedBox(height: 8),
                   const RequiredFieldsNote(padding: EdgeInsets.only(bottom: 12)),
                   if (addressProvider.isLoading)
@@ -711,7 +715,19 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       ),
                     )
                   else if (provider.errorMessage != null)
-                    Text(provider.errorMessage!, style: const TextStyle(color: Colors.redAccent))
+                    _CheckoutNotice(
+                      message: provider.errorMessage!,
+                      onChangeAddress: () {
+                        final target = _addressSectionKey.currentContext;
+                        if (target == null) return;
+                        Scrollable.ensureVisible(
+                          target,
+                          duration: const Duration(milliseconds: 350),
+                          curve: Curves.easeOutCubic,
+                          alignment: 0.05,
+                        );
+                      },
+                    )
                   else if (quote != null)
                     Container(
                       padding: const EdgeInsets.all(16),
@@ -1015,6 +1031,95 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
         children: [
           Text(label, style: TextStyle(color: colors.textMuted, fontSize: 12)),
           Text('₹${amount.toStringAsFixed(0)}', style: TextStyle(color: colors.textMuted, fontSize: 12)),
+        ],
+      ),
+    );
+  }
+}
+
+class _CheckoutNotice extends StatelessWidget {
+  final String message;
+  final VoidCallback onChangeAddress;
+
+  const _CheckoutNotice({
+    required this.message,
+    required this.onChangeAddress,
+  });
+
+  bool get _isServiceArea => message.toLowerCase().contains('service area');
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+    final title = _isServiceArea ? 'Outside the delivery area' : 'We need a quick change';
+    final body = _isServiceArea
+        ? 'This address is not covered by the vendor. Choose another saved address, or remove items that cannot be delivered there.'
+        : message;
+
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.fromLTRB(14, 14, 14, 10),
+      decoration: BoxDecoration(
+        color: colors.warningSoft,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: colors.warningBorder),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Icon(
+                _isServiceArea ? Icons.location_off_outlined : Icons.info_outline,
+                color: colors.warning,
+                size: 22,
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: TextStyle(
+                        color: colors.textPrimary,
+                        fontSize: 14,
+                        fontWeight: FontWeight.w700,
+                        height: 1.3,
+                      ),
+                    ),
+                    const SizedBox(height: 4),
+                    Text(
+                      body,
+                      style: TextStyle(
+                        color: colors.textSecondary,
+                        fontSize: 13,
+                        height: 1.4,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
+          if (_isServiceArea)
+            Padding(
+              padding: const EdgeInsets.only(left: 32, top: 8),
+              child: TextButton(
+                onPressed: onChangeAddress,
+                style: TextButton.styleFrom(
+                  foregroundColor: colors.warning,
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  minimumSize: Size.zero,
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                ),
+                child: const Text(
+                  'Change address',
+                  style: TextStyle(fontWeight: FontWeight.w700, fontSize: 13),
+                ),
+              ),
+            ),
         ],
       ),
     );
