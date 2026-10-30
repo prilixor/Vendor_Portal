@@ -499,9 +499,13 @@ const CustomerOrderDetail = () => {
   });
 
   const [acceptedRxLegal, setAcceptedRxLegal] = useState(false);
+  const [rxConsentHeld, setRxConsentHeld] = useState(false);
+  const rxFilesWerePresent = useRef(false);
 
   useEffect(() => {
     setAcceptedRxLegal(false);
+    setRxConsentHeld(false);
+    rxFilesWerePresent.current = false;
   }, [currentItemId]);
 
   const uploadRxMut = useMutation({
@@ -511,7 +515,8 @@ const CustomerOrderDetail = () => {
         uploadSource: "order_detail",
       }),
     onSuccess: () => {
-      setAcceptedRxLegal(false);
+      setRxConsentHeld(true);
+      setAcceptedRxLegal(true);
       toast.success("Prescription uploaded.");
       queryClient.invalidateQueries({ queryKey: ["customer-order-prescriptions", currentItemId] });
       queryClient.invalidateQueries({ queryKey: ["customer-order", currentItemId] });
@@ -528,6 +533,23 @@ const CustomerOrderDetail = () => {
     },
     onError: (err: Error) => toast.error(err.message || "Unable to remove prescription."),
   });
+
+  const shownPrescriptionFiles =
+    data?.prescriptionFiles && data.prescriptionFiles.length > 0
+      ? data.prescriptionFiles
+      : prescriptionFiles;
+
+  useEffect(() => {
+    if (uploadRxMut.isPending) return;
+    if (shownPrescriptionFiles.length > 0) {
+      rxFilesWerePresent.current = true;
+      return;
+    }
+    if (!rxFilesWerePresent.current) return;
+    rxFilesWerePresent.current = false;
+    setRxConsentHeld(false);
+    setAcceptedRxLegal(false);
+  }, [shownPrescriptionFiles.length, uploadRxMut.isPending]);
 
   const cancelMut = useMutation({
     mutationFn: (id: string) => customerApi.cancelOrder(id),
@@ -903,11 +925,11 @@ const CustomerOrderDetail = () => {
   const pendingExtension = activeExtensions.find((ext) => ext.status === "pending_approval") ?? null;
   const paidExtensionTotal = paidExtensions.reduce((sum, ext) => sum + (ext.totalAmount ?? 0), 0);
   const originalRentalAmount = Math.max(0, (activeItem.totalAmount ?? 0) - paidExtensionTotal);
-  const shownPrescriptionFiles = activeItem.prescriptionFiles?.length
-    ? activeItem.prescriptionFiles
-    : prescriptionFiles;
   const canAddPrescription =
     canUploadPrescription(activeItem.status) && shownPrescriptionFiles.length < 3;
+  const prescriptionConsentLocked =
+    uploadRxMut.isPending || rxConsentHeld || shownPrescriptionFiles.length > 0;
+  const prescriptionConsentAgreed = prescriptionConsentLocked || acceptedRxLegal;
 
   return (
     <div className="mx-auto max-w-3xl space-y-2.5 sm:space-y-4">
@@ -1223,9 +1245,9 @@ const CustomerOrderDetail = () => {
           files={shownPrescriptionFiles}
           canEdit={canUploadPrescription(activeItem.status)}
           uploading={uploadRxMut.isPending}
-          uploadDisabled={canAddPrescription && !acceptedRxLegal}
+          uploadDisabled={canAddPrescription && !prescriptionConsentAgreed}
           onUpload={(file) => {
-            if (!acceptedRxLegal) {
+            if (!prescriptionConsentAgreed) {
               toast.error("Please agree to the Privacy Policy before uploading a prescription.");
               return;
             }
@@ -1233,17 +1255,19 @@ const CustomerOrderDetail = () => {
           }}
           onDelete={(fileId) => deleteRxMut.mutate(fileId)}
           footer={
-            canAddPrescription ? (
+            canUploadPrescription(activeItem.status) &&
+            (canAddPrescription || prescriptionConsentLocked) ? (
               <div className="space-y-2">
                 <LegalAgreeCheckbox
                   surface="customer_web"
                   screen="prescription"
-                  agreed={acceptedRxLegal}
+                  agreed={prescriptionConsentAgreed}
                   onAgreedChange={setAcceptedRxLegal}
+                  disabled={prescriptionConsentLocked}
                   prefix="I consent to the"
                   id="order-detail-prescription-terms"
                 />
-                {!acceptedRxLegal ? (
+                {canAddPrescription && !prescriptionConsentAgreed ? (
                   <p className="text-xs text-muted-foreground">
                     Agree to the Privacy Policy before this prescription can be uploaded.
                   </p>

@@ -49,6 +49,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
   int _selectedOrderIndex = 0;
   final Set<String> _photoRequestSelection = {};
   bool _acceptedRxLegal = false;
+  bool _rxConsentHeld = false;
+  bool _rxUploading = false;
   PendingPrescriptionFile? _pendingRxFile;
   late List<OrderModel> _ordersInGroup;
   Timer? _pollTimer;
@@ -699,6 +701,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
     final order = resolved;
     final rxReady = provider.prescriptionsReadyFor(order.id);
     final rxFiles = rxReady ? provider.prescriptionFiles : const <PrescriptionFileModel>[];
+    final rxConsentLocked = _rxUploading || _rxConsentHeld || rxFiles.isNotEmpty;
+    final rxConsentAgreed = rxConsentLocked || _acceptedRxLegal;
     final groupTotal = _ordersInGroup.fold<double>(0, (sum, o) => sum + o.totalAmount);
     final groupDeposit = _ordersInGroup.fold<double>(0, (sum, o) => sum + o.depositAmount);
     var refundReceived = 0.0;
@@ -786,6 +790,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                     _selectedOrderIndex = index;
                                     _pendingRxFile = null;
                                     _acceptedRxLegal = false;
+                                    _rxConsentHeld = false;
+                                    _rxUploading = false;
                                   });
                                   _fetchCurrentSubOrder();
                                 },
@@ -1141,18 +1147,32 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                           canEdit: _canUploadPrescription(order.status),
                           loading: !rxReady || provider.prescriptionLoading,
                           pendingFileName: _pendingRxFile?.name,
-                          needsConsent: _canUploadPrescription(order.status) && rxFiles.length < 3,
-                          acceptedLegal: _acceptedRxLegal,
-                          onAcceptedLegal: (value) => setState(() => _acceptedRxLegal = value),
+                          needsConsent: rxReady &&
+                              _canUploadPrescription(order.status) &&
+                              (rxFiles.length < 3 || rxConsentLocked),
+                          acceptedLegal: rxConsentAgreed,
+                          consentLocked: rxConsentLocked,
+                          onAcceptedLegal: (value) {
+                            if (rxConsentLocked) return;
+                            setState(() => _acceptedRxLegal = value);
+                          },
                           onRemovePending: () => setState(() {
                             _pendingRxFile = null;
                             _acceptedRxLegal = false;
                           }),
                           onUpload: () => _uploadPrescription(provider),
-                          onDelete: (fileId) => provider.deletePrescription(
-                            order.id,
-                            fileId,
-                          ),
+                          onDelete: (fileId) async {
+                            final removingLast = rxFiles.length <= 1;
+                            final ok = await provider.deletePrescription(order.id, fileId);
+                            if (!mounted) return ok;
+                            if (ok && removingLast) {
+                              setState(() {
+                                _rxConsentHeld = false;
+                                _acceptedRxLegal = false;
+                              });
+                            }
+                            return ok;
+                          },
                         ),
                       ],
 
@@ -1768,8 +1788,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
 
   Future<void> _uploadPrescription(OrderDetailProvider provider) async {
     final order = _orderForDetails(provider);
-    if (order == null) return;
-    if (!_acceptedRxLegal) {
+    if (order == null || _rxUploading) return;
+    final ready = provider.prescriptionsReadyFor(order.id);
+    final locked = _rxConsentHeld || (ready && provider.prescriptionFiles.isNotEmpty);
+    if (!locked && !_acceptedRxLegal) {
       if (!mounted) return;
       ScaffoldMessenger.of(context).showSnackBar(
         const SnackBar(content: Text('Please agree to the Privacy Policy before uploading a prescription.')),
@@ -1799,14 +1821,29 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
       );
       return;
     }
-    await _sendPrescription(
-      provider,
-      orderId: order.id,
-      fileName: file.name,
-      path: path,
-      bytes: bytes,
-      acceptedPrescriptionLegal: true,
-    );
+    final stillReady = provider.prescriptionsReadyFor(order.id);
+    final stillLocked = _rxConsentHeld ||
+        (stillReady && provider.prescriptionFiles.isNotEmpty);
+    if (!stillLocked && !_acceptedRxLegal) {
+      if (!mounted) return;
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Please agree to the Privacy Policy before uploading a prescription.')),
+      );
+      return;
+    }
+    setState(() => _rxUploading = true);
+    try {
+      await _sendPrescription(
+        provider,
+        orderId: order.id,
+        fileName: file.name,
+        path: path,
+        bytes: bytes,
+        acceptedPrescriptionLegal: true,
+      );
+    } finally {
+      if (mounted) setState(() => _rxUploading = false);
+    }
   }
 
   Future<void> _sendPrescription(
@@ -1828,10 +1865,9 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
     if (ok) {
       setState(() {
         _pendingRxFile = null;
-        _acceptedRxLegal = false;
+        _rxConsentHeld = true;
+        _acceptedRxLegal = true;
       });
-    } else {
-      setState(() => _acceptedRxLegal = false);
     }
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(content: Text(ok ? 'Prescription uploaded.' : 'Unable to upload prescription.')),
@@ -2858,6 +2894,7 @@ class _OrderPrescriptionCard extends StatelessWidget {
   final String? pendingFileName;
   final bool needsConsent;
   final bool acceptedLegal;
+  final bool consentLocked;
   final ValueChanged<bool> onAcceptedLegal;
   final VoidCallback? onRemovePending;
   final VoidCallback onUpload;
@@ -2870,6 +2907,7 @@ class _OrderPrescriptionCard extends StatelessWidget {
     this.pendingFileName,
     required this.needsConsent,
     required this.acceptedLegal,
+    this.consentLocked = false,
     required this.onAcceptedLegal,
     this.onRemovePending,
     required this.onUpload,
@@ -3008,8 +3046,9 @@ class _OrderPrescriptionCard extends StatelessWidget {
               onChanged: onAcceptedLegal,
               prefix: 'I consent to the',
               activeColor: _orderActionColor(context),
+              enabled: !consentLocked,
             ),
-            if (!acceptedLegal) ...[
+            if (!acceptedLegal && !consentLocked) ...[
               const SizedBox(height: 6),
               Text(
                 'Agree to the Privacy Policy before this prescription can be uploaded.',
@@ -3017,17 +3056,28 @@ class _OrderPrescriptionCard extends StatelessWidget {
               ),
             ],
           ],
-          if (canEdit && files.length < 3 && pendingFileName == null)
+          if (canEdit && !loading && files.length < 3 && pendingFileName == null)
             TextButton(
-              onPressed: onUpload,
+              onPressed: consentLocked || acceptedLegal ? onUpload : null,
               child: Row(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.add, size: 18, color: _orderActionColor(context)),
+                  Icon(
+                    Icons.add,
+                    size: 18,
+                    color: consentLocked || acceptedLegal
+                        ? _orderActionColor(context)
+                        : colors.textMuted,
+                  ),
                   const SizedBox(width: 6),
                   Text(
                     'Upload image or PDF',
-                    style: TextStyle(color: _orderActionColor(context), fontWeight: FontWeight.w800),
+                    style: TextStyle(
+                      color: consentLocked || acceptedLegal
+                          ? _orderActionColor(context)
+                          : colors.textMuted,
+                      fontWeight: FontWeight.w800,
+                    ),
                   ),
                 ],
               ),

@@ -76,6 +76,7 @@ export function LegalAgreeCheckbox({
   onAgreedChange,
   prefix,
   id = "legal-agree",
+  disabled = false,
 }: {
   surface: LegalWebSurface;
   screen: string;
@@ -83,6 +84,7 @@ export function LegalAgreeCheckbox({
   onAgreedChange: (value: boolean) => void;
   prefix: string;
   id?: string;
+  disabled?: boolean;
 }) {
   const [docs, setDocs] = useState<PublicLegalDocumentListItem[]>(fallbacks(surface, screen));
 
@@ -122,10 +124,17 @@ export function LegalAgreeCheckbox({
       <Checkbox
         id={id}
         checked={agreed}
-        onCheckedChange={(checked) => onAgreedChange(checked === true)}
+        disabled={disabled}
+        onCheckedChange={(checked) => {
+          if (disabled) return;
+          onAgreedChange(checked === true);
+        }}
         className="mt-0.5"
       />
-      <Label htmlFor={id} className="min-w-0 flex-1 cursor-pointer break-words text-xs font-normal leading-relaxed text-muted-foreground">
+      <Label
+        htmlFor={id}
+        className={`min-w-0 flex-1 break-words text-xs font-normal leading-relaxed text-muted-foreground ${disabled ? "cursor-default" : "cursor-pointer"}`}
+      >
         {prefix} {joinTitles(docs)}.
       </Label>
     </div>

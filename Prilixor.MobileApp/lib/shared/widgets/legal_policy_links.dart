@@ -141,6 +141,7 @@ class LegalAgreeCheckbox extends StatefulWidget {
   final ValueChanged<bool> onChanged;
   final String prefix;
   final Color? activeColor;
+  final bool enabled;
 
   const LegalAgreeCheckbox({
     super.key,
@@ -149,6 +150,7 @@ class LegalAgreeCheckbox extends StatefulWidget {
     required this.onChanged,
     required this.prefix,
     this.activeColor,
+    this.enabled = true,
   });
 
   @override
@@ -188,7 +190,7 @@ class _LegalAgreeCheckboxState extends State<LegalAgreeCheckbox> {
           height: 24,
           child: Checkbox(
             value: widget.value,
-            onChanged: (next) => widget.onChanged(next == true),
+            onChanged: widget.enabled ? (next) => widget.onChanged(next == true) : null,
             activeColor: widget.activeColor ?? colors.accent,
             materialTapTargetSize: MaterialTapTargetSize.shrinkWrap,
           ),
