@@ -7,25 +7,39 @@ import { Button } from "@/app/components/ui/button";
 import { cn, resolveItemImageUrl, imageSrcCandidates } from "@/app/helpers/utils";
 import { useQueries } from "@tanstack/react-query";
 import { customerApi } from "@/app/services/customerApi";
-import type { CustomerListingDetailApi } from "@/app/services/customerApi";
+import type { CustomerListingDetailApi, RentalPricingPlanDto } from "@/app/services/customerApi";
 import { useAuth } from "@/app/guards/AuthContext";
 import { toast } from "sonner";
 import { RentExceedsBuyDialog } from "@/app/components/shared/RentExceedsBuyDialog";
 import { BackLink } from "@/app/components/shared/BackLink";
 import { lastShopHref } from "@/app/helpers/customerShopBrowse";
-import { StruckPrice } from "@/app/components/shared/RentalPeriodPlanDropdown";
+import { sortActiveRentalPlans, StruckPrice } from "@/app/components/shared/RentalPeriodPlanDropdown";
 import { dayPlanTitle } from "@/app/helpers/rentalDurationIcons";
-import {
-  RENTAL_UNIT_LABELS,
-  RENTAL_UNITS_VISIBLE_IN_UI,
-  evaluateRentVsBuy,
-  formatRentalDuration,
-  rateForUnit,
-  type RentalPeriodUnit,
-} from "@/app/helpers/rentalPeriod";
+import { evaluateRentVsBuy } from "@/app/helpers/rentalPeriod";
 
 function formatCartInr(value: number): string {
   return `₹${Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
+}
+
+/** Same default as the product page: Most Popular, otherwise the longest active plan. */
+function defaultCartRentalPlan(plans: RentalPricingPlanDto[] | null | undefined) {
+  const active = sortActiveRentalPlans(plans);
+  return active.find((plan) => plan.isRecommended) ?? active[0] ?? null;
+}
+
+function rentPlanPatch(plan: RentalPricingPlanDto) {
+  return {
+    orderType: "rent" as const,
+    rentalPricingPlanId: plan.id,
+    rentalDurationLabel: dayPlanTitle(plan.durationDays, plan.durationLabel),
+    rentalDurationDays: plan.durationDays,
+    rentalNormalPrice: plan.normalPrice,
+    rentalDiscountType: plan.discountType,
+    rentalDiscountValue: plan.discountValue,
+    rentalFinalPrice: plan.finalRentalPrice,
+    rentalDays: plan.durationDays,
+    rentalPeriodUnit: "day" as const,
+  };
 }
 
 function CartThumb({ url, title }: { url?: string | null; title: string }) {
@@ -289,10 +303,11 @@ function CartLineCard({
   imageUrl,
   canRent,
   canBuy,
+  plansKnown,
+  pricingPlans,
   onUpdateQty,
-  onUpdateDays,
-  onUpdatePeriodUnit,
   onUpdateOrderType,
+  onApplyRentPlan,
   onRemove,
 }: {
   line: CartLine;
@@ -300,10 +315,12 @@ function CartLineCard({
   imageUrl?: string | null;
   canRent: boolean;
   canBuy: boolean;
+  /** Listing detail has loaded, so an empty plan list means rent is not configured. */
+  plansKnown: boolean;
+  pricingPlans?: RentalPricingPlanDto[] | null;
   onUpdateQty: (listingId: string, qty: number) => void;
-  onUpdateDays: (listingId: string, days: number) => void;
-  onUpdatePeriodUnit: (listingId: string, unit: RentalPeriodUnit) => void;
   onUpdateOrderType: (listingId: string, orderType: "rent" | "buy") => void;
+  onApplyRentPlan: (listingId: string, plan: RentalPricingPlanDto) => void;
   onRemove: (listingId: string) => void;
 }) {
   // Match listing detail: chemicals / flags decide rent vs buy — never invent both when only one applies.
@@ -314,7 +331,6 @@ function CartLineCard({
   const isOverStock = availableQuantity !== undefined && line.quantity > availableQuantity;
   const linePrice = line.buyPrice ?? line.dailyRent * 30;
   const lineRent = estimateCartLineRent({ ...line, orderType: actualOrderType });
-  const unitRate = rateForUnit(line.rentalPeriodUnit, line);
   const planSavings =
     isPlanBased && line.rentalNormalPrice != null
       ? Math.max(0, Number(line.rentalNormalPrice) - Number(line.rentalFinalPrice ?? 0))
@@ -337,25 +353,31 @@ function CartLineCard({
     monthlyRent: line.monthlyRent,
   };
 
-  const promptIfNeeded = (next: {
-    periods?: number;
-    unit?: RentalPeriodUnit;
-    qty?: number;
-  }): boolean => {
+  const savedRent =
+    line.rentalPricingPlanId && line.rentalFinalPrice != null && (line.rentalDurationDays ?? 0) > 0
+      ? {
+          periods: line.rentalDurationDays ?? line.rentalDays,
+          planFinalPrice: Number(line.rentalFinalPrice),
+          planDurationLabel:
+            line.rentalDurationLabel ||
+            dayPlanTitle(Number(line.rentalDurationDays ?? line.rentalDays ?? 0)),
+        }
+      : null;
+
+  const promptPlan = (
+    plan: { periods: number; planFinalPrice: number; planDurationLabel: string },
+    qty?: number,
+  ): boolean => {
     if (!canBuy || (line.buyPrice ?? 0) <= 0) return false;
     const check = evaluateRentVsBuy({
       buyPrice: line.buyPrice,
       isBuyEnabled: canBuy,
-      quantity: next.qty ?? line.quantity,
-      periods: isPlanBased
-        ? (line.rentalDurationDays ?? line.rentalDays)
-        : (next.periods ?? line.rentalDays),
-      unit: isPlanBased ? "day" : (next.unit ?? line.rentalPeriodUnit),
+      quantity: qty ?? line.quantity,
+      periods: plan.periods,
+      unit: "day",
       rates,
-      planFinalPrice: isPlanBased ? line.rentalFinalPrice : null,
-      planDurationLabel: isPlanBased
-        ? line.rentalDurationLabel || `${line.rentalDurationDays ?? line.rentalDays} days`
-        : null,
+      planFinalPrice: plan.planFinalPrice,
+      planDurationLabel: plan.planDurationLabel,
     });
     if (!check.shouldForceBuy) return false;
     setRentToBuyInfo({
@@ -365,6 +387,33 @@ function CartLineCard({
     });
     setRentToBuyOpen(true);
     return true;
+  };
+
+  const chooseRent = () => {
+    if (savedRent) {
+      if (promptPlan(savedRent)) return;
+      onUpdateOrderType(line.listingId, "rent");
+      return;
+    }
+    if (!plansKnown) {
+      toast.error("Still loading this product. Please try again.");
+      return;
+    }
+    const plan = defaultCartRentalPlan(pricingPlans);
+    if (!plan) {
+      toast.error("Rental plans are not configured for this product.");
+      return;
+    }
+    if (
+      promptPlan({
+        periods: plan.durationDays,
+        planFinalPrice: Number(plan.finalRentalPrice),
+        planDurationLabel: dayPlanTitle(plan.durationDays, plan.durationLabel),
+      })
+    ) {
+      return;
+    }
+    onApplyRentPlan(line.listingId, plan);
   };
 
   return (
@@ -417,13 +466,8 @@ function CartLineCard({
                   </p>
                 </>
               ) : (
-                <p className="text-[13px] font-medium tabular-nums text-muted-foreground">
-                  {formatCartInr(unitRate)}
-                  {RENTAL_UNIT_LABELS[line.rentalPeriodUnit].per}
-                  <span className="mx-1.5 text-border">·</span>
-                  {formatRentalDuration(line.rentalDays, line.rentalPeriodUnit)}
-                  <span className="mx-1.5 text-border">·</span>
-                  Deposit {formatCartInr(line.securityDeposit)}
+                <p className="text-[13px] font-medium text-muted-foreground">
+                  {plansKnown ? "Rental plans are not configured for this product." : "Loading rental plan…"}
                 </p>
               )}
             </div>
@@ -456,7 +500,10 @@ function CartLineCard({
                         variant={selected ? "primary" : "soft"}
                         selected={selected}
                         onClick={() => {
-                          if (type === "rent" && promptIfNeeded({})) return;
+                          if (type === "rent") {
+                            chooseRent();
+                            return;
+                          }
                           onUpdateOrderType(line.listingId, type);
                         }}
                       >
@@ -472,41 +519,6 @@ function CartLineCard({
               </div>
             ) : null}
 
-            {actualOrderType === "rent" && !isPlanBased ? (
-              <div className="shrink-0">
-                <SegmentTrack tone="muted">
-                  {RENTAL_UNITS_VISIBLE_IN_UI.map((u) => (
-                    <SegmentButton
-                      key={u}
-                      variant={line.rentalPeriodUnit === u ? "primary" : "soft"}
-                      selected={line.rentalPeriodUnit === u}
-                      onClick={() => {
-                        if (promptIfNeeded({ unit: u })) return;
-                        onUpdatePeriodUnit(line.listingId, u);
-                      }}
-                    >
-                      {RENTAL_UNIT_LABELS[u].plural}
-                    </SegmentButton>
-                  ))}
-                </SegmentTrack>
-              </div>
-            ) : null}
-
-            {actualOrderType === "rent" && !isPlanBased ? (
-              <div className="min-w-[11.5rem] shrink-0">
-                <StepperField
-                  label={RENTAL_UNIT_LABELS[line.rentalPeriodUnit].plural}
-                  value={line.rentalDays}
-                  min={1}
-                  max={366}
-                  onChange={(days) => {
-                    if (promptIfNeeded({ periods: days })) return;
-                    onUpdateDays(line.listingId, days);
-                  }}
-                />
-              </div>
-            ) : null}
-
             <div className="min-w-[11.5rem] shrink-0">
               <StepperField
                 label="Quantity"
@@ -514,7 +526,7 @@ function CartLineCard({
                 min={1}
                 max={availableQuantity ?? 999}
                 onChange={(qty) => {
-                  if (actualOrderType === "rent" && promptIfNeeded({ qty })) return;
+                  if (actualOrderType === "rent" && savedRent && promptPlan(savedRent, qty)) return;
                   onUpdateQty(line.listingId, qty);
                 }}
               />
@@ -674,6 +686,18 @@ const CustomerCart = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [detailQueries.map((q) => q.dataUpdatedAt).join(","), distinctListingIds]);
 
+  useEffect(() => {
+    for (const line of lines) {
+      if (line.orderType !== "rent") continue;
+      if (line.rentalPricingPlanId && line.rentalFinalPrice != null) continue;
+      const detail = detailMap.get(line.listingId);
+      if (!detail) continue;
+      const plan = defaultCartRentalPlan(detail.rentalPricingPlans);
+      if (!plan) continue;
+      updateLine(line.listingId, rentPlanPatch(plan));
+    }
+  }, [lines, detailMap, updateLine]);
+
   const lineAvailability = (line: CartLine): number | undefined => {
     const detail = detailMap.get(line.listingId);
     if (!detail) return undefined;
@@ -733,6 +757,7 @@ const CustomerCart = () => {
       );
     }
 
+    const detail = detailMap.get(line.listingId);
     return (
       <CartLineCard
         key={key}
@@ -741,12 +766,11 @@ const CustomerCart = () => {
         imageUrl={imageUrl}
         canRent={flags.canRent}
         canBuy={flags.canBuy}
+        plansKnown={!!detail}
+        pricingPlans={detail?.rentalPricingPlans}
         onUpdateQty={(listingId, qty) => updateLine(listingId, { quantity: qty })}
-        onUpdateDays={(listingId, rentalDays) => updateLine(listingId, { rentalDays })}
-        onUpdatePeriodUnit={(listingId, rentalPeriodUnit) =>
-          updateLine(listingId, { rentalPeriodUnit })
-        }
         onUpdateOrderType={(listingId, orderType) => updateLine(listingId, { orderType })}
+        onApplyRentPlan={(listingId, plan) => updateLine(listingId, rentPlanPatch(plan))}
         onRemove={removeLine}
       />
     );

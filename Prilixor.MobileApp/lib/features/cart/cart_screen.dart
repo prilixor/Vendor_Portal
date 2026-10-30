@@ -535,22 +535,27 @@ class _CartLineCard extends StatelessWidget {
     int? nextPeriods,
     String? nextUnit,
     int? nextQty,
+    double? planFinalPrice,
+    String? planDurationLabel,
+    bool switchingToRent = false,
   }) async {
     final buyPrice = line.buyPrice ?? 0;
-    if (!line.canBuy || buyPrice <= 0 || line.orderType != 'rent') return false;
+    if (!line.canBuy || buyPrice <= 0) return false;
+    if (!switchingToRent && line.orderType != 'rent') return false;
+    final usingPlan = planFinalPrice != null || line.usesPricingPlan;
     final check = evaluateRentVsBuy(
       buyPrice: buyPrice,
       isBuyEnabled: line.canBuy,
       quantity: nextQty ?? line.quantity,
-      periods: line.usesPricingPlan
-          ? (line.rentalDurationDays ?? line.rentalDays)
+      periods: usingPlan
+          ? (nextPeriods ?? line.rentalDurationDays ?? line.rentalDays)
           : (nextPeriods ?? line.rentalDays),
-      unit: line.usesPricingPlan ? rentalUnitDay : (nextUnit ?? line.rentalPeriodUnit),
+      unit: usingPlan ? rentalUnitDay : (nextUnit ?? line.rentalPeriodUnit),
       dailyRent: line.dailyRent,
       weeklyRent: line.weeklyRent,
       monthlyRent: line.monthlyRent,
-      planFinalPrice: line.usesPricingPlan ? line.rentalFinalPrice : null,
-      planDurationLabel: line.usesPricingPlan ? line.rentalDurationLabel : null,
+      planFinalPrice: planFinalPrice ?? (line.usesPricingPlan ? line.rentalFinalPrice : null),
+      planDurationLabel: planDurationLabel ?? (line.usesPricingPlan ? line.rentalDurationLabel : null),
     );
     if (!check.shouldForceBuy) return false;
 
@@ -771,7 +776,31 @@ class _CartLineCard extends StatelessWidget {
                             selected: line.orderType,
                             onChanged: (v) async {
                               if (v == 'rent') {
-                                final blocked = await _promptRentToBuy(context);
+                                final hasSnapshot = line.rentalPricingPlanId != null &&
+                                    line.rentalPricingPlanId!.isNotEmpty &&
+                                    line.rentalFinalPrice != null &&
+                                    (line.rentalDurationDays ?? 0) > 0;
+                                final detail = cart.listingDetail(line.listingId);
+                                final plan = hasSnapshot ? null : detail?.defaultRentalPlan;
+                                if (!hasSnapshot && detail != null && plan == null) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(
+                                      content: Text('Rental plans are not configured for this product.'),
+                                    ),
+                                  );
+                                  return;
+                                }
+                                final blocked = await _promptRentToBuy(
+                                  context,
+                                  switchingToRent: true,
+                                  nextPeriods: hasSnapshot ? line.rentalDurationDays : plan?.durationDays,
+                                  planFinalPrice: hasSnapshot ? line.rentalFinalPrice : plan?.finalRentalPrice,
+                                  planDurationLabel: hasSnapshot
+                                      ? line.rentalDurationLabel
+                                      : (plan == null
+                                          ? null
+                                          : dayPlanTitle(plan.durationDays, plan.durationLabel)),
+                                );
                                 if (blocked || !context.mounted) return;
                               }
                               cart.updateOrderType(

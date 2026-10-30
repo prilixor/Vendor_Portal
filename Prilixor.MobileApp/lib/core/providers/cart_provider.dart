@@ -17,6 +17,8 @@ class CartProvider extends ChangeNotifier {
   bool _isRefreshingStock = false;
   bool get isRefreshingStock => _isRefreshingStock;
 
+  ProductDetailModel? listingDetail(String listingId) => _listingDetails[listingId];
+
   CartProvider() {
     _loadCart();
   }
@@ -290,12 +292,26 @@ class CartProvider extends ChangeNotifier {
         line.rentalDays = 0;
       } else if (line.rentalPricingPlanId != null &&
           line.rentalPricingPlanId!.isNotEmpty &&
-          (line.rentalDurationDays ?? 0) > 0) {
+          (line.rentalDurationDays ?? 0) > 0 &&
+          line.rentalFinalPrice != null) {
         line.rentalDays = line.rentalDurationDays!;
         line.rentalPeriodUnit = 'day';
-      } else if (line.rentalDays <= 0) {
-        line.rentalDays = 1;
-        line.rentalPeriodUnit = 'day';
+      } else {
+        final chosen = _listingDetails[line.listingId]?.defaultRentalPlan;
+        if (chosen != null) {
+          line.applyPricingPlan(
+            planId: chosen.id,
+            durationLabel: chosen.durationLabel,
+            durationDays: chosen.durationDays,
+            normalPrice: chosen.normalPrice,
+            discountType: chosen.discountType,
+            discountValue: chosen.discountValue,
+            finalPrice: chosen.finalRentalPrice,
+          );
+        } else if (line.rentalDays <= 0) {
+          line.rentalDays = 1;
+          line.rentalPeriodUnit = 'day';
+        }
       }
       _saveCart();
       notifyListeners();
