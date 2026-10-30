@@ -276,6 +276,7 @@ internal sealed class GetProductQueryHandler(
             x.ChemicalProperty?.CoaDocumentUrl,
             favoriteCount,
             ProductRentalPricingPlanSync.ToProjectedDtos(x, durationMasters, pricingOptions, fileUrlResolver, liveIcons),
-            ProductCatalogDocuments.ToDtos(x, fileUrlResolver));
+            ProductCatalogDocuments.ToDtos(x, fileUrlResolver),
+            x.MinimumRentalDays);
     }
 }
