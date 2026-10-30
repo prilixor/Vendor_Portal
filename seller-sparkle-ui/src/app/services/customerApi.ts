@@ -194,6 +194,11 @@ export interface CustomerOrderQuoteApi {
   /** One row per GST slab. A mixed cart lists 12% and 18% separately. */
   gstLines?: CustomerGstLineApi[];
   totalAmount: number;
+  discountAmount?: number;
+  discountCode?: string | null;
+  discountMessage?: string | null;
+  publicDiscountCode?: string | null;
+  publicDiscountLabel?: string | null;
   buySuggestions: Array<{
     listingId: string;
     listingTitle: string;
@@ -244,6 +249,8 @@ export interface CustomerOrderApi {
   rentalDiscountType?: RentalDiscountType | string | null;
   rentalDiscountValue?: number | null;
   rentalFinalPrice?: number | null;
+  discountCode?: string | null;
+  discountAmount?: number;
   prescriptionFiles?: CustomerPrescriptionFileApi[] | null;
   /** True only after a paid rental extension on this product line. */
   isExtended?: boolean;
@@ -659,6 +666,7 @@ export const customerApi = {
     acceptedLegal?: boolean;
     acceptedPrescriptionLegal?: boolean;
     sourceSurface?: string;
+    discountCode?: string;
   }): Promise<CustomerCheckoutApi> {
     return apiClient.post<CustomerCheckoutApi>("/customers/me/payments/checkout", {
       customerAddressId: payload.customerAddressId ?? undefined,
@@ -666,6 +674,7 @@ export const customerApi = {
       acceptedLegal: payload.acceptedLegal ?? false,
       acceptedPrescriptionLegal: payload.acceptedPrescriptionLegal ?? false,
       sourceSurface: payload.sourceSurface ?? "customer_web",
+      discountCode: payload.discountCode || undefined,
       lines: payload.lines.map((l) => ({
         listingId: l.listingId,
         quantity: l.quantity,
@@ -694,10 +703,12 @@ export const customerApi = {
     customerAddressId?: string | null;
     deliveryOption: string;
     lines: CartLinePayload[];
+    discountCode?: string;
   }): Promise<CustomerOrderQuoteApi> {
     return apiClient.post<CustomerOrderQuoteApi>("/customers/me/orders/quote", {
       customerAddressId: payload.customerAddressId ?? undefined,
       deliveryOption: payload.deliveryOption,
+      discountCode: payload.discountCode || undefined,
       lines: payload.lines.map((l) => ({
         listingId: l.listingId,
         quantity: l.quantity,

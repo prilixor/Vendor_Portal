@@ -41,6 +41,10 @@ public class CustomerRentalOrder : AuditableEntity<Guid>, ISoftDelete
     public Guid? PlacedByAdminId { get; set; }
     /// <summary>Checkout session that must be paid before dispatch starts.</summary>
     public Guid? CheckoutSessionId { get; set; }
+    /// <summary>Checkout discount code applied to the item price. Vendor payout is unchanged.</summary>
+    public Guid? DiscountCodeId { get; set; }
+    public string? DiscountCode { get; set; }
+    public decimal DiscountAmount { get; set; }
 
     public bool IsDeleted { get; set; }
     public DateTimeOffset? DeletedAt { get; set; }

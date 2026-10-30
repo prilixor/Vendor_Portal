@@ -52,6 +52,7 @@ import ChemicalManagement from "@/app/components/admin/ChemicalManagement";
 import AdminDoctors from "@/app/components/admin/AdminDoctors";
 import AdminHospitals from "@/app/components/admin/AdminHospitals";
 import AdminRentalSetup from "@/app/components/admin/AdminRentalSetup";
+import AdminDiscountCodes from "@/app/components/admin/AdminDiscountCodes";
 import Admins from "@/app/components/admin/Admins";
 import AdminRoles from "@/app/components/admin/AdminRoles";
 import AdminCustomers, { AdminCustomerDetail } from "@/app/components/admin/AdminCustomers";
@@ -160,6 +161,7 @@ const App = () => (
               <Route path="vendors/:vendorId/listings/:listingId" element={<VendorListingPricing />} />
               <Route path="products" element={<ProductManagement />} />
               <Route path="rental-setup" element={<AdminRentalSetup />} />
+              <Route path="discount-codes" element={<AdminDiscountCodes />} />
               <Route path="rental-durations" element={<Navigate to="/admin/rental-setup" replace />} />
               <Route
                 path="rental-duration-icons"

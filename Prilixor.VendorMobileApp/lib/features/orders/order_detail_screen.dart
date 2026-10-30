@@ -825,6 +825,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                           const SizedBox(height: 10),
                           _ItemDetailsPanel(
                             order: activeItem ?? order,
+                            paidExtensions: continuations.paidExtensions,
                             onAddSerials: () => _openAssignSerials(activeItem ?? order),
                           ),
                           const SizedBox(height: 10),
@@ -2123,9 +2124,14 @@ class _PrescriptionFileTile extends StatelessWidget {
 
 class _ItemDetailsPanel extends StatelessWidget {
   final VendorOrder order;
+  final List<PendingExtension> paidExtensions;
   final VoidCallback? onAddSerials;
 
-  const _ItemDetailsPanel({required this.order, this.onAddSerials});
+  const _ItemDetailsPanel({
+    required this.order,
+    this.paidExtensions = const [],
+    this.onAddSerials,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -2175,6 +2181,10 @@ class _ItemDetailsPanel extends StatelessWidget {
           ),
           const SizedBox(height: 10),
           _MetricStrip(order: order),
+          if (paidExtensions.isNotEmpty) ...[
+            const SizedBox(height: 8),
+            _VendorExtensionBreakdown(order: order, paidExtensions: paidExtensions),
+          ],
           if (!isBuy) ...[
             const SizedBox(height: 8),
             _SubsectionLabel('Rental period'),
@@ -2186,14 +2196,6 @@ class _ItemDetailsPanel extends StatelessWidget {
                   : '${order.rentalDays} day${order.rentalDays == 1 ? '' : 's'}',
               style: TextStyle(color: context.appColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w600),
             ),
-            if (order.isExtended)
-              Padding(
-                padding: const EdgeInsets.only(top: 4),
-                child: Text(
-                  'This product includes a paid extension',
-                  style: TextStyle(color: context.appColors.textMuted, fontSize: 11),
-                ),
-              ),
             if (order.returnSettlement != null) ...[
               const SizedBox(height: 10),
               _ReturnClaimCard(settlement: order.returnSettlement!),
@@ -2545,6 +2547,44 @@ class _AssignedSerialNumbersBlock extends StatelessWidget {
   }
 }
 
+class _VendorExtensionBreakdown extends StatelessWidget {
+  final VendorOrder order;
+  final List<PendingExtension> paidExtensions;
+
+  const _VendorExtensionBreakdown({required this.order, required this.paidExtensions});
+
+  @override
+  Widget build(BuildContext context) {
+    final extensionTotal = paidExtensions.fold<double>(0, (sum, ext) => sum + ext.vendorPayout);
+    final original = (order.payoutAmount - extensionTotal).clamp(0, double.infinity);
+    final muted = TextStyle(color: context.appColors.textMuted, fontSize: 12);
+    Widget row(String label, String value) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 4),
+        child: Row(
+          children: [
+            Expanded(child: Text(label, style: muted)),
+            Text(value, style: muted),
+          ],
+        ),
+      );
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        row('Original rental', formatVendorMoney(original)),
+        ...paidExtensions.map(
+          (ext) => row(
+            'Extension · ${ext.additionalDays} day${ext.additionalDays == 1 ? '' : 's'}',
+            formatVendorMoney(ext.vendorPayout),
+          ),
+        ),
+      ],
+    );
+  }
+}
+
 class _MetricStrip extends StatelessWidget {
   final VendorOrder order;
 
@@ -2557,20 +2597,25 @@ class _MetricStrip extends StatelessWidget {
     final showPayout = vendorEarnsPayout(order.status);
 
     if (isBuy) {
-      return Row(
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Expanded(
-            child: _MetricTile(
-              label: 'Purchase',
-              value: formatDetailDate(order.startDate),
-            ),
+          Row(
+            children: [
+              Expanded(
+                child: _MetricTile(
+                  label: 'Purchase',
+                  value: formatDetailDate(order.startDate),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Expanded(child: _MetricTile(label: 'Qty', value: '${order.quantity}')),
+              if (showPayout) ...[
+                const SizedBox(width: 8),
+                Expanded(child: _MetricTile(label: 'Payout', value: payout, highlight: true)),
+              ],
+            ],
           ),
-          const SizedBox(width: 8),
-          Expanded(child: _MetricTile(label: 'Qty', value: '${order.quantity}')),
-          if (showPayout) ...[
-            const SizedBox(width: 8),
-            Expanded(child: _MetricTile(label: 'Payout', value: payout, highlight: true)),
-          ],
         ],
       );
     }

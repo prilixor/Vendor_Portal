@@ -9,6 +9,7 @@ import { openRazorpayCheckout } from "@/app/helpers/razorpayCheckout";
 import { Button } from "@/app/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
 import { Label } from "@/app/components/ui/label";
+import { Input } from "@/app/components/ui/input";
 import { RadioGroup, RadioGroupItem } from "@/app/components/ui/radio-group";
 import {
   Select,
@@ -64,6 +65,8 @@ const CustomerCheckout = () => {
   const [prescriptionFiles, setPrescriptionFiles] = useState<Record<string, File[]>>({});
   const [acceptedLegal, setAcceptedLegal] = useState(false);
   const [acceptedPrescriptionLegal, setAcceptedPrescriptionLegal] = useState(false);
+  const [discountDraft, setDiscountDraft] = useState("");
+  const [appliedDiscountCode, setAppliedDiscountCode] = useState("");
   const [rentToBuyOpen, setRentToBuyOpen] = useState(false);
   const [rentToBuySuggestion, setRentToBuySuggestion] = useState<{
     listingId: string;
@@ -125,6 +128,7 @@ const CustomerCheckout = () => {
     () => ({
       deliveryOption: selectedDelivery,
       customerAddressId: addressId || undefined,
+      discountCode: appliedDiscountCode || undefined,
       lines: lines.map((l) => ({
         listingId: l.listingId,
         quantity: l.quantity,
@@ -146,7 +150,7 @@ const CustomerCheckout = () => {
   );
 
   const { data: quote, isFetching: quoteLoading, error: quoteError } = useQuery({
-    queryKey: ["customer-order-quote", addressId, selectedDelivery, lines],
+    queryKey: ["customer-order-quote", addressId, selectedDelivery, lines, appliedDiscountCode],
     queryFn: () => customerApi.quoteOrders(quotePayload),
     enabled: user?.role === "customer" && lines.length > 0,
     retry: false,
@@ -167,6 +171,7 @@ const CustomerCheckout = () => {
         acceptedLegal,
         acceptedPrescriptionLegal: sharingHealthData ? acceptedPrescriptionLegal : false,
         sourceSurface: "customer_web",
+        discountCode: appliedDiscountCode || undefined,
         lines: lines.map((l) => ({
           listingId: l.listingId,
           quantity: l.quantity,
@@ -621,11 +626,66 @@ const CustomerCheckout = () => {
               })}
             </div>
 
+              <div className="space-y-2 border-t pt-4">
+                <Label htmlFor="checkout-discount-code">Discount code</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="checkout-discount-code"
+                    value={discountDraft}
+                    onChange={(event) => setDiscountDraft(event.target.value.toUpperCase())}
+                    placeholder="Enter code"
+                    autoComplete="off"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={() => setAppliedDiscountCode(discountDraft.trim())}
+                    disabled={!discountDraft.trim() || quoteLoading}
+                  >
+                    Apply
+                  </Button>
+                </div>
+                {appliedDiscountCode && quote?.discountMessage ? (
+                  <p className="text-xs text-destructive">{quote.discountMessage}</p>
+                ) : null}
+                {!appliedDiscountCode && quote?.publicDiscountLabel ? (
+                  <button
+                    type="button"
+                    className="text-left text-xs font-medium text-primary"
+                    onClick={() => {
+                      const code = quote.publicDiscountCode ?? "";
+                      setDiscountDraft(code);
+                      setAppliedDiscountCode(code);
+                    }}
+                  >
+                    {quote.publicDiscountLabel}
+                  </button>
+                ) : null}
+                {appliedDiscountCode ? (
+                  <button
+                    type="button"
+                    className="text-xs text-muted-foreground underline"
+                    onClick={() => {
+                      setAppliedDiscountCode("");
+                      setDiscountDraft("");
+                    }}
+                  >
+                    Remove {appliedDiscountCode}
+                  </button>
+                ) : null}
+              </div>
+
               <div className="space-y-2.5 border-t pt-4 text-sm">
               <div className="flex justify-between gap-4 text-muted-foreground">
                 <span>Subtotal</span>
                   <span className="tabular-nums text-foreground">{formatCheckoutInr(quote?.subtotalAmount ?? totalEstimatedRent)}</span>
               </div>
+              {(quote?.discountAmount ?? 0) > 0 ? (
+                <div className="flex justify-between gap-4 text-emerald-700 dark:text-emerald-400">
+                  <span>Discount{quote?.discountCode ? ` (${quote.discountCode})` : ""}</span>
+                  <span className="tabular-nums">−{formatCheckoutInr(quote?.discountAmount ?? 0)}</span>
+                </div>
+              ) : null}
               <div className="flex justify-between gap-4 text-muted-foreground">
                 <span>Deposit</span>
                   <span className="tabular-nums text-foreground">{formatCheckoutInr(quote?.depositAmount ?? totalDeposit)}</span>
@@ -720,6 +780,7 @@ const CustomerCheckout = () => {
                 placeMutation.isPending
                 || !!quoteError
                 || quoteLoading
+                || (!!appliedDiscountCode && !!quote?.discountMessage)
                 || !acceptedLegal
                 || (sharingHealthData && !acceptedPrescriptionLegal)
               }

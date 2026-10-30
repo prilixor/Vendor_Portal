@@ -286,7 +286,8 @@ internal sealed class RequestBuyoutCommandHandler(
 }
 public sealed record OrderContinuationsDto(
     List<PendingExtensionDto> PendingExtensions,
-    List<PendingBuyoutDto> PendingBuyouts);
+    List<PendingBuyoutDto> PendingBuyouts,
+    List<PendingExtensionDto> PaidExtensions);
 
 public sealed record PendingExtensionDto(
     Guid ExtensionId,
@@ -326,6 +327,9 @@ internal sealed class GetOrderContinuationsQueryHandler(
         await PendingExtensionMerger.MergeDuplicatesForOrderAsync(customers, pricingOptions.Value, request.OrderId, cancellationToken);
         await PendingExtensionFeeSync.ApplyAsync(customers, pricingOptions.Value, request.OrderId, cancellationToken);
         var extensions = await customers.GetOpenCustomerRentalOrderExtensionsAsync(request.OrderId, cancellationToken);
+        var paidExtensions = (await customers.GetCustomerExtensionHistoryAsync(request.OrderId, cancellationToken))
+            .Where(x => string.Equals(x.Status, "paid", StringComparison.OrdinalIgnoreCase))
+            .ToList();
         var buyouts = await customers.GetPendingCustomerRentalOrderBuyoutsAsync(request.OrderId, cancellationToken);
         var gstPercent = pricingOptions.Value.GstPercent;
         var orderRow = await customers.GetCustomerOrderByIdAsync(request.OrderId, cancellationToken);
@@ -333,7 +337,7 @@ internal sealed class GetOrderContinuationsQueryHandler(
             ? null
             : await customers.GetListingForCustomerAsync(orderRow.Order.VendorProductListingId, cancellationToken);
 
-        var extensionsDto = extensions.Select(e => new PendingExtensionDto(
+        PendingExtensionDto MapExtension(CustomerRentalOrderExtension e) => new(
             e.Id,
             e.CustomerRentalOrderId,
             e.AdditionalDays,
@@ -346,12 +350,15 @@ internal sealed class GetOrderContinuationsQueryHandler(
             e.CreatedOnUtc,
             gstPercent,
             e.Status,
-            RentalExtensionPayout.For(orderRow?.Order, listing, e.AdditionalDays, e.ExtensionAmount))).ToList();
+            RentalExtensionPayout.For(orderRow?.Order, listing, e.AdditionalDays, e.ExtensionAmount));
+
+        var extensionsDto = extensions.Select(MapExtension).ToList();
+        var paidDto = paidExtensions.Select(MapExtension).ToList();
 
         var buyoutsDto = buyouts.Select(b => new PendingBuyoutDto(
             b.Id, b.CustomerRentalOrderId, b.BaseBuyoutAmount, b.RentDeductionAmount, b.ServiceFeeAmount, b.GstAmount, b.TotalAmount, b.CreatedOnUtc, gstPercent)).ToList();
 
-        return Result.Success(new OrderContinuationsDto(extensionsDto, buyoutsDto));
+        return Result.Success(new OrderContinuationsDto(extensionsDto, buyoutsDto, paidDto));
     }
 }
 

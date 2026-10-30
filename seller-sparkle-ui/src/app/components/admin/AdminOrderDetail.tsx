@@ -35,7 +35,74 @@ import {
   AlertDialogTrigger,
 } from "@/app/components/ui/alert-dialog";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/app/components/ui/tooltip";
-import { extensionVendorPayout, type OrderContinuationsDto } from "@/app/services/vendorOnboardingApi";
+import { extensionVendorPayout, type OrderContinuationsDto, type PendingExtensionDto } from "@/app/services/vendorOnboardingApi";
+
+function adminInr(value: number) {
+  return `₹${value.toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+}
+
+function AdminAmountSplit({
+  customerTotal,
+  vendorTotal,
+  paidExtensions,
+  showVendor,
+  discountCode,
+  discountAmount,
+}: {
+  customerTotal: number;
+  vendorTotal: number;
+  paidExtensions: PendingExtensionDto[];
+  showVendor: boolean;
+  discountCode?: string | null;
+  discountAmount?: number;
+}) {
+  const customerExtension = paidExtensions.reduce((sum, ext) => sum + ext.totalAmount, 0);
+  const vendorExtension = paidExtensions.reduce((sum, ext) => sum + extensionVendorPayout(ext), 0);
+  const customerOriginal = Math.max(0, customerTotal - customerExtension);
+  const vendorOriginal = Math.max(0, vendorTotal - vendorExtension);
+  const rows: { key: string; label: string; customer: number; vendor: number }[] = paidExtensions.length > 0
+    ? [
+        { key: "original", label: "Original rental", customer: customerOriginal, vendor: vendorOriginal },
+        ...paidExtensions.map((ext) => ({
+          key: ext.extensionId,
+          label: `Extension · ${ext.additionalDays} day${ext.additionalDays === 1 ? "" : "s"}`,
+          customer: ext.totalAmount,
+          vendor: extensionVendorPayout(ext),
+        })),
+      ]
+    : [];
+
+  return (
+    <div className="border-t border-border/70 px-4 py-4 sm:px-6">
+      <div className="grid grid-cols-[minmax(0,1fr)_auto_auto] items-center gap-x-4 gap-y-1.5 text-sm">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground"> </p>
+        <p className="text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Customer</p>
+        <p className="text-right text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+          {showVendor ? "Vendor" : ""}
+        </p>
+        {rows.map((row) => (
+          <div key={row.key} className="contents">
+            <p className="text-muted-foreground">{row.label}</p>
+            <p className="text-right tabular-nums">{adminInr(row.customer)}</p>
+            <p className="text-right tabular-nums text-emerald-700 dark:text-emerald-400">
+              {showVendor ? adminInr(row.vendor) : ""}
+            </p>
+          </div>
+        ))}
+        <p className="pt-1.5 text-xs font-semibold uppercase tracking-wide text-muted-foreground">Total</p>
+        <p className="pt-1.5 text-right text-base font-semibold tabular-nums">{adminInr(customerTotal)}</p>
+        <p className="pt-1.5 text-right text-base font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
+          {showVendor ? adminInr(vendorTotal) : ""}
+        </p>
+      </div>
+      {Number(discountAmount) > 0 ? (
+        <p className="mt-2 text-xs text-emerald-700 dark:text-emerald-400">
+          Customer discount{discountCode ? ` (${discountCode})` : ""} −{adminInr(Number(discountAmount))}. Vendor total stays the vendor rate.
+        </p>
+      ) : null}
+    </div>
+  );
+}
 
 const statusOptions = [
   { id: "pending", label: "Pending" },
@@ -1037,14 +1104,10 @@ const AdminOrderDetail = () => {
                   </>
                 )}
               </div>
-              <div className="grid grid-cols-2 gap-3 border-t border-border/70 px-4 py-4 sm:grid-cols-4 sm:px-6">
+              <div className="grid grid-cols-3 gap-3 border-t border-border/70 px-4 py-4 sm:px-6">
                 <div className="space-y-1">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Quantity</p>
                   <p className="font-medium tabular-nums">{selectedOrder.quantity}</p>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Amount</p>
-                  <p className="font-semibold tabular-nums">₹{selectedOrder.totalAmount.toFixed(0)}</p>
                 </div>
                 <div className="space-y-1">
                   <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Deposit</p>
@@ -1055,14 +1118,14 @@ const AdminOrderDetail = () => {
                   <p className="font-medium tabular-nums">₹{(selectedOrder.gstAmount ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}</p>
                 </div>
               </div>
-              {orderShowsVendorPayout(selectedOrder.status) ? (
-                <div className="mt-auto flex items-center justify-between gap-3 border-t border-border/70 bg-muted/40 px-6 py-3">
-                  <p className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">Vendor payout</p>
-                  <p className="text-lg font-semibold tabular-nums text-emerald-700 dark:text-emerald-400">
-                    ₹{(selectedOrder.vendorSubtotalAmount ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}
-                  </p>
-                </div>
-              ) : null}
+              <AdminAmountSplit
+                customerTotal={selectedOrder.totalAmount}
+                vendorTotal={selectedOrder.vendorSubtotalAmount ?? 0}
+                paidExtensions={continuations?.paidExtensions ?? []}
+                showVendor={orderShowsVendorPayout(selectedOrder.status)}
+                discountCode={selectedOrder.discountCode}
+                discountAmount={selectedOrder.discountAmount}
+              />
               {selectedOrder.vendorPriceSetByAdmin === false ? (
                 <div className="px-6 pb-4">
                   <span className="inline-flex w-fit rounded-full bg-orange-100 px-2 py-0.5 text-[11px] font-semibold text-orange-800 dark:bg-orange-950/50 dark:text-orange-300">

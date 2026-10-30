@@ -654,6 +654,7 @@ public sealed class PlaceCustomerOrdersRequest
     public bool AcceptedLegal { get; set; }
     public bool AcceptedPrescriptionLegal { get; set; }
     public string? SourceSurface { get; set; }
+    public string? DiscountCode { get; set; }
 }
 
 public sealed class CustomerOrderExpirationsRequest
@@ -723,7 +724,8 @@ public sealed class QuoteCustomerOrdersEndpoint(IMediator mediator)
             customerId,
             req.CustomerAddressId,
             req.DeliveryOption,
-            lines), ct);
+            lines,
+            req.DiscountCode), ct);
 
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
@@ -761,7 +763,8 @@ public sealed class PlaceCustomerOrdersEndpoint(IMediator mediator)
             req.AcceptedPrescriptionLegal,
             req.SourceSurface ?? "customer_web",
             HttpContext.Connection.RemoteIpAddress?.ToString(),
-            HttpContext.Request.Headers.UserAgent.ToString()), ct);
+            HttpContext.Request.Headers.UserAgent.ToString(),
+            DiscountCode: req.DiscountCode), ct);
 
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
@@ -1512,7 +1515,8 @@ public sealed class CreateCustomerCheckoutEndpoint(IMediator mediator)
             req.AcceptedLegal,
             req.AcceptedPrescriptionLegal,
             HttpContext.Connection.RemoteIpAddress?.ToString(),
-            HttpContext.Request.Headers.UserAgent.ToString()), ct);
+            HttpContext.Request.Headers.UserAgent.ToString(),
+            req.DiscountCode), ct);
 
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }

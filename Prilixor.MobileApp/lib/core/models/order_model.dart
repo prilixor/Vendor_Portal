@@ -69,6 +69,8 @@ class OrderModel {
   final double? rentalDiscountValue;
   final double? rentalFinalPrice;
   final bool isExtended;
+  final String? discountCode;
+  final double discountAmount;
   final OrderReturnInfo? returnSettlement;
   final OrderCancellationInfo? cancellationRefund;
 
@@ -108,6 +110,8 @@ class OrderModel {
     this.rentalDiscountValue,
     this.rentalFinalPrice,
     this.isExtended = false,
+    this.discountCode,
+    this.discountAmount = 0,
     this.returnSettlement,
     this.cancellationRefund,
   });
@@ -157,6 +161,8 @@ class OrderModel {
       rentalDiscountValue: (json['rentalDiscountValue'] as num?)?.toDouble(),
       rentalFinalPrice: (json['rentalFinalPrice'] as num?)?.toDouble(),
       isExtended: json['isExtended'] == true,
+      discountCode: json['discountCode']?.toString(),
+      discountAmount: (json['discountAmount'] ?? 0).toDouble(),
       returnSettlement: OrderReturnInfo.fromJson(json['returnSettlement']),
       cancellationRefund: OrderCancellationInfo.fromJson(json['cancellationRefund']),
     );

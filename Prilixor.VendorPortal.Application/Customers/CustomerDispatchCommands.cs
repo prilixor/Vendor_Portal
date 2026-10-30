@@ -80,7 +80,9 @@ public sealed record VendorOrderDto(
     IReadOnlyList<CustomerPrescriptionFileDto>? PrescriptionFiles = null,
     decimal DepositAmount = 0,
     decimal GstAmount = 0,
-    OrderReturnDto? ReturnSettlement = null);
+    OrderReturnDto? ReturnSettlement = null,
+    string? DiscountCode = null,
+    decimal DiscountAmount = 0);
 
 public sealed record GetVendorOrdersQuery(string VendorId, string? Status) : IQuery<List<VendorOrderDto>>;
 
@@ -750,7 +752,9 @@ public static class VendorOrderMapper
             RentalDiscountValue: o.RentalDiscountValue,
             RentalFinalPrice: o.RentalFinalPrice,
             DepositAmount: o.DepositAmount,
-            GstAmount: o.GstAmount);
+            GstAmount: o.GstAmount,
+            DiscountCode: o.DiscountCode,
+            DiscountAmount: o.DiscountAmount);
     }
 }
 
@@ -1076,7 +1080,9 @@ internal sealed class VendorRespondDispatchOfferCommandHandler(
             RentalDiscountType: o.RentalDiscountType,
             RentalDiscountValue: o.RentalDiscountValue,
             RentalFinalPrice: o.RentalFinalPrice,
-            IsExtended: o.IsExtended);
+            IsExtended: o.IsExtended,
+            DiscountCode: o.DiscountCode,
+            DiscountAmount: o.DiscountAmount);
         var withReturn = await OrderReturnMapper.AttachAsync(customers, dto, cancellationToken);
         return Result.Success(await OrderCancellationMapper.AttachAsync(customers, withReturn, cancellationToken));
     }

@@ -543,6 +543,8 @@ export interface VendorOrderApiDto {
   rentalPeriodUnit?: "day" | "week" | "month";
   totalAmount: number;
   vendorSubtotalAmount: number;
+  discountCode?: string | null;
+  discountAmount?: number;
   depositAmount?: number;
   gstAmount?: number;
   startDate?: string;
@@ -1276,6 +1278,7 @@ export interface PendingBuyoutDto {
 export interface OrderContinuationsDto {
   pendingExtensions: PendingExtensionDto[];
   pendingBuyouts: PendingBuyoutDto[];
+  paidExtensions?: PendingExtensionDto[];
 }
 
 export function extensionVendorPayout(ext: Pick<PendingExtensionDto, "vendorPayoutAmount" | "extensionAmount">): number {

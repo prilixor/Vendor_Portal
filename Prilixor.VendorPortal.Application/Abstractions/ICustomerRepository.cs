@@ -307,6 +307,7 @@ public sealed class VendorProductListingAggregate
 {
     public Guid ListingId { get; init; }
     public Guid ProductId { get; init; }
+    public Guid CategoryId { get; init; }
     public Guid VendorId { get; init; }
     public string VendorAccountStatus { get; init; } = string.Empty;
     public string? VendorBusinessName { get; init; }

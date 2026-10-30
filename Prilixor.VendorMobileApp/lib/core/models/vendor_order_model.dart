@@ -43,6 +43,8 @@ class VendorOrder {
   final String? rentalDiscountType;
   final double? rentalDiscountValue;
   final double? rentalFinalPrice;
+  final String? discountCode;
+  final double discountAmount;
   final OrderReturnInfo? returnSettlement;
 
   const VendorOrder({
@@ -81,6 +83,8 @@ class VendorOrder {
     this.rentalDiscountType,
     this.rentalDiscountValue,
     this.rentalFinalPrice,
+    this.discountCode,
+    this.discountAmount = 0,
     this.returnSettlement,
   });
 
@@ -149,6 +153,8 @@ class VendorOrder {
       rentalDiscountType: json['rentalDiscountType']?.toString(),
       rentalDiscountValue: (json['rentalDiscountValue'] as num?)?.toDouble(),
       rentalFinalPrice: (json['rentalFinalPrice'] as num?)?.toDouble(),
+      discountCode: json['discountCode']?.toString(),
+      discountAmount: (json['discountAmount'] as num?)?.toDouble() ?? 0,
       returnSettlement: OrderReturnInfo.fromJson(json['returnSettlement']),
     );
   }

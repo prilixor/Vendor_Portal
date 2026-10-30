@@ -675,7 +675,12 @@ public sealed record CustomerOrderQuoteDto(
     decimal TotalAmount,
     List<CustomerBuySuggestionDto> BuySuggestions,
     bool RazorpayTestMode = false,
-    List<CustomerGstLineDto>? GstLines = null);
+    List<CustomerGstLineDto>? GstLines = null,
+    decimal DiscountAmount = 0,
+    string? DiscountCode = null,
+    string? DiscountMessage = null,
+    string? PublicDiscountCode = null,
+    string? PublicDiscountLabel = null);
 
 public sealed record CustomerBuySuggestionDto(
     Guid ListingId,
@@ -688,7 +693,8 @@ public sealed record QuoteCustomerOrdersCommand(
     Guid CustomerId,
     Guid? CustomerAddressId,
     string DeliveryOption,
-    IReadOnlyList<CartLineRequest> Lines) : IQuery<CustomerOrderQuoteDto>;
+    IReadOnlyList<CartLineRequest> Lines,
+    string? DiscountCode = null) : IQuery<CustomerOrderQuoteDto>;
 
 public sealed record PlaceCustomerOrdersCommand(
     Guid CustomerId,
@@ -702,7 +708,8 @@ public sealed record PlaceCustomerOrdersCommand(
     string? IpAddress = null,
     string? UserAgent = null,
     /// <summary>When true, create draft orders (awaiting_payment) without vendor dispatch offers.</summary>
-    bool AwaitPayment = false) : ICommand<PlaceCustomerOrdersResultDto>;
+    bool AwaitPayment = false,
+    string? DiscountCode = null) : ICommand<PlaceCustomerOrdersResultDto>;
 
 public sealed class PlaceCustomerOrdersCommandValidator : AbstractValidator<PlaceCustomerOrdersCommand>
 {
@@ -787,7 +794,9 @@ public sealed record CustomerOrderDto(
     IReadOnlyList<CustomerPrescriptionFileDto>? PrescriptionFiles = null,
     bool IsExtended = false,
     OrderReturnDto? ReturnSettlement = null,
-    OrderCancellationRefundDto? CancellationRefund = null);
+    OrderCancellationRefundDto? CancellationRefund = null,
+    string? DiscountCode = null,
+    decimal DiscountAmount = 0);
 
 internal static class CustomerOrderPricingRules
 {
@@ -1067,6 +1076,7 @@ internal sealed record DeliveryDistanceResult(bool IsSuccess, decimal DistanceKm
 internal sealed class QuoteCustomerOrdersCommandHandler(
     ICustomerRepository customers,
     IVendorOnboardingRepository vendors,
+    IDiscountCodeRepository discountCodes,
     IOptions<CustomerPricingOptions> pricingOptions,
     IOptions<RazorpayOptions> razorpayOptions)
     : IQueryHandler<QuoteCustomerOrdersCommand, CustomerOrderQuoteDto>
@@ -1100,13 +1110,7 @@ internal sealed class QuoteCustomerOrdersCommandHandler(
         }
 
         var options = pricingOptions.Value;
-        decimal subtotalAmount = 0m;
-        decimal depositAmount = 0m;
-        decimal serviceFeeAmount = 0m;
-        decimal distanceFeeAmount = 0m;
-        decimal expressFeeAmount = 0m;
-        decimal gstAmount = 0m;
-        var gstByRate = new Dictionary<decimal, decimal>();
+        var pricedLines = new List<CheckoutPriceLine>();
         var buySuggestions = new List<CustomerBuySuggestionDto>();
         var vendorAreasByVendorId = new Dictionary<Guid, List<VendorServiceArea>>();
 
@@ -1230,18 +1234,47 @@ internal sealed class QuoteCustomerOrdersCommandHandler(
                 lineDistanceFee = CustomerOrderPricingRules.CalculateDistanceFee(distanceResult.DistanceKm, options);
             }
             var lineServiceFee = options.BaseServiceFeePerLine + lineExpressFee + lineDistanceFee;
-            var lineGst = CustomerOrderPricingRules.CalculateGst(lineSubtotal + lineServiceFee, agg.GstPercent, options);
+            pricedLines.Add(new CheckoutPriceLine(
+                lineSubtotal,
+                lineDeposit,
+                lineServiceFee,
+                lineDistanceFee,
+                lineExpressFee,
+                agg.GstPercent,
+                orderType,
+                agg.ProductId,
+                agg.CategoryId));
+        }
 
-            subtotalAmount += lineSubtotal;
-            depositAmount += lineDeposit;
-            serviceFeeAmount += lineServiceFee;
-            distanceFeeAmount += lineDistanceFee;
-            expressFeeAmount += lineExpressFee;
+        var decision = await CheckoutDiscountResolver.ResolveAsync(
+            discountCodes,
+            request.CustomerId,
+            request.DiscountCode,
+            pricedLines.Select(line => new DiscountLineInput(line.ItemSubtotal, line.OrderType, line.ProductId, line.CategoryId)).ToList(),
+            cancellationToken);
+
+        decimal subtotalAmount = 0m;
+        decimal depositAmount = 0m;
+        decimal serviceFeeAmount = 0m;
+        decimal distanceFeeAmount = 0m;
+        decimal expressFeeAmount = 0m;
+        decimal gstAmount = 0m;
+        var gstByRate = new Dictionary<decimal, decimal>();
+        for (var i = 0; i < pricedLines.Count; i++)
+        {
+            var line = pricedLines[i];
+            var share = i < decision.LineDiscounts.Count ? decision.LineDiscounts[i] : 0m;
+            var lineGst = CustomerOrderPricingRules.CalculateGst(line.ItemSubtotal - share + line.ServiceFee, line.GstPercent, options);
+            subtotalAmount += line.ItemSubtotal;
+            depositAmount += line.Deposit;
+            serviceFeeAmount += line.ServiceFee;
+            distanceFeeAmount += line.DistanceFee;
+            expressFeeAmount += line.ExpressFee;
             gstAmount += lineGst;
             if (lineGst > 0m)
             {
-                gstByRate.TryGetValue(agg.GstPercent, out var bucket);
-                gstByRate[agg.GstPercent] = bucket + lineGst;
+                gstByRate.TryGetValue(line.GstPercent, out var bucket);
+                gstByRate[line.GstPercent] = bucket + lineGst;
             }
         }
 
@@ -1249,6 +1282,7 @@ internal sealed class QuoteCustomerOrdersCommandHandler(
             .OrderBy(x => x.Key)
             .Select(x => new CustomerGstLineDto(x.Key, decimal.Round(x.Value, 2, MidpointRounding.AwayFromZero)))
             .ToList();
+        var discountAmount = decision.Applied ? decision.TotalDiscount : 0m;
 
         return Result.Success(new CustomerOrderQuoteDto(
             decimal.Round(subtotalAmount, 2, MidpointRounding.AwayFromZero),
@@ -1257,16 +1291,43 @@ internal sealed class QuoteCustomerOrdersCommandHandler(
             decimal.Round(distanceFeeAmount, 2, MidpointRounding.AwayFromZero),
             decimal.Round(expressFeeAmount, 2, MidpointRounding.AwayFromZero),
             decimal.Round(gstAmount, 2, MidpointRounding.AwayFromZero),
-            decimal.Round(subtotalAmount + depositAmount + serviceFeeAmount + gstAmount, 2, MidpointRounding.AwayFromZero),
+            decimal.Round(subtotalAmount - discountAmount + depositAmount + serviceFeeAmount + gstAmount, 2, MidpointRounding.AwayFromZero),
             buySuggestions,
             razorpayOptions.Value.KeyId.Trim().StartsWith("rzp_test_", StringComparison.OrdinalIgnoreCase),
-            gstLines));
+            gstLines,
+            discountAmount,
+            decision.Applied ? decision.Code : null,
+            decision.Message,
+            decision.PublicCode,
+            decision.PublicLabel));
     }
 }
+
+file sealed record PendingCheckoutPlacement(
+    CustomerRentalOrder Order,
+    VendorProductListingAggregate Aggregate,
+    string ListingTitle,
+    string PlacementTitle,
+    string OrderType,
+    CartLineRequest SourceLine,
+    decimal ItemSubtotal,
+    decimal Fees);
+
+file sealed record CheckoutPriceLine(
+    decimal ItemSubtotal,
+    decimal Deposit,
+    decimal ServiceFee,
+    decimal DistanceFee,
+    decimal ExpressFee,
+    decimal GstPercent,
+    string OrderType,
+    Guid ProductId,
+    Guid CategoryId);
 
 internal sealed class PlaceCustomerOrdersCommandHandler(
     ICustomerRepository customers,
     IVendorOnboardingRepository vendors,
+    IDiscountCodeRepository discountCodes,
     IOptions<CustomerPricingOptions> pricingOptions,
     CustomerSmsNotifier customerSms,
     ILegalAcceptanceRecorder legalAcceptances,
@@ -1357,6 +1418,7 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
         var options = pricingOptions.Value;
         var placed = new List<CustomerOrderDto>();
         var failed = new List<FailedCustomerOrderLineDto>();
+        var pendingPlacements = new List<PendingCheckoutPlacement>();
         var vendorAreasByVendorId = new Dictionary<Guid, List<VendorServiceArea>>();
         var baseOrderNumber = await GenerateUniqueOrderNumber(customers, cancellationToken);
         var lineIndex = 0;
@@ -1637,9 +1699,6 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
                 };
             }
 
-            await customers.AddCustomerRentalOrderAsync(order, cancellationToken);
-            await customers.SaveChangesAsync(cancellationToken);
-
             var placementTitle = trackedListing.ListingTitle;
             if (order.ProductVariantId.HasValue && agg.Variants != null)
             {
@@ -1650,6 +1709,67 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
                 }
             }
 
+            pendingPlacements.Add(new PendingCheckoutPlacement(
+                order,
+                agg,
+                trackedListing.ListingTitle,
+                placementTitle,
+                orderType,
+                line,
+                subtotal,
+                fees));
+        }
+
+        if (pendingPlacements.Count > 0 && !string.IsNullOrWhiteSpace(request.DiscountCode))
+        {
+            var decision = await CheckoutDiscountResolver.ResolveAsync(
+                discountCodes,
+                request.CustomerId,
+                request.DiscountCode,
+                pendingPlacements.Select(row => new DiscountLineInput(
+                    row.ItemSubtotal,
+                    row.Order.OrderType,
+                    row.Aggregate.ProductId,
+                    row.Aggregate.CategoryId)).ToList(),
+                cancellationToken);
+            if (!decision.Applied)
+            {
+                return Result.Failure<PlaceCustomerOrdersResultDto>(new Error(
+                    "customers.discount_invalid",
+                    decision.Message ?? DiscountCodeEngine.InvalidMessage,
+                    ErrorCategory.Validation));
+            }
+
+            for (var i = 0; i < pendingPlacements.Count; i++)
+            {
+                var row = pendingPlacements[i];
+                var share = i < decision.LineDiscounts.Count ? decision.LineDiscounts[i] : 0m;
+                row.Order.DiscountAmount = share;
+                if (share > 0m)
+                {
+                    row.Order.DiscountCode = decision.Code;
+                    row.Order.DiscountCodeId = decision.CodeId;
+                }
+
+                row.Order.GstAmount = CustomerOrderPricingRules.CalculateGst(
+                    row.ItemSubtotal - share + row.Fees,
+                    row.Aggregate.GstPercent,
+                    options);
+                row.Order.TotalAmount = row.ItemSubtotal - share + row.Order.DepositAmount + row.Fees + row.Order.GstAmount;
+            }
+        }
+
+        foreach (var pending in pendingPlacements)
+        {
+            var order = pending.Order;
+            var agg = pending.Aggregate;
+            var orderType = pending.OrderType;
+            var line = pending.SourceLine;
+            var placementTitle = pending.PlacementTitle;
+
+            await customers.AddCustomerRentalOrderAsync(order, cancellationToken);
+            await customers.SaveChangesAsync(cancellationToken);
+
             if (request.AwaitPayment)
             {
                 await customers.AddCustomerNotificationAsync(
@@ -1658,7 +1778,7 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
                         Id = Guid.NewGuid(),
                         CustomerId = request.CustomerId,
                         Title = $"Order {order.OrderNumber} awaiting payment",
-                        Body = $"Complete payment to submit your {orderType} request for \"{trackedListing.ListingTitle}\".",
+                        Body = $"Complete payment to submit your {orderType} request for \"{pending.ListingTitle}\".",
                         NotificationType = "order_awaiting_payment",
                         RelatedOrderId = order.Id,
                     },
@@ -1704,7 +1824,7 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
                         Id = Guid.NewGuid(),
                         CustomerId = request.CustomerId,
                         Title = $"Order {order.OrderNumber} submitted",
-                        Body = $"Your {orderType} request for \"{trackedListing.ListingTitle}\" is awaiting vendor acceptance.",
+                        Body = $"Your {orderType} request for \"{pending.ListingTitle}\" is awaiting vendor acceptance.",
                         NotificationType = "order_pending",
                         RelatedOrderId = order.Id,
                     },
@@ -1750,7 +1870,9 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
                 RentalDiscountType: order.RentalDiscountType,
                 RentalDiscountValue: order.RentalDiscountValue,
                 RentalFinalPrice: order.RentalFinalPrice,
-                IsExtended: order.IsExtended));
+                IsExtended: order.IsExtended,
+                DiscountCode: order.DiscountCode,
+                DiscountAmount: order.DiscountAmount));
         }
 
         if (request.PlacedByAdminId is Guid adminId && placed.Count > 0)
@@ -1898,7 +2020,9 @@ internal sealed class GetCustomerOrdersQueryHandler(
                 RentalDiscountType: o.RentalDiscountType,
                 RentalDiscountValue: o.RentalDiscountValue,
                 RentalFinalPrice: o.RentalFinalPrice,
-                IsExtended: o.IsExtended));
+                IsExtended: o.IsExtended,
+                DiscountCode: o.DiscountCode,
+                DiscountAmount: o.DiscountAmount));
         }
 
         var withReturns = await OrderReturnMapper.AttachAsync(customers, list, cancellationToken);
@@ -1978,7 +2102,9 @@ internal sealed class GetCustomerOrderDetailQueryHandler(
             RentalDiscountValue: o.RentalDiscountValue,
             RentalFinalPrice: o.RentalFinalPrice,
             PrescriptionFiles: files.Select(f => CustomerPrescriptionRules.ToDto(f, fileUrlResolver)).ToList(),
-            IsExtended: o.IsExtended);
+            IsExtended: o.IsExtended,
+            DiscountCode: o.DiscountCode,
+            DiscountAmount: o.DiscountAmount);
         var withReturn = await OrderReturnMapper.AttachAsync(customers, dto, cancellationToken);
         return Result.Success(await OrderCancellationMapper.AttachAsync(customers, withReturn, cancellationToken));
     }

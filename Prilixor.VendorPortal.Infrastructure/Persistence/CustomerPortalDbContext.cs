@@ -31,6 +31,10 @@ public sealed class CustomerPortalDbContext(DbContextOptions<CustomerPortalDbCon
     public DbSet<CustomerCheckoutSessionOrder> CustomerCheckoutSessionOrders => Set<CustomerCheckoutSessionOrder>();
     public DbSet<CustomerOrderImageRequestOption> CustomerOrderImageRequestOptions => Set<CustomerOrderImageRequestOption>();
     public DbSet<CustomerOrderPrescriptionFile> CustomerOrderPrescriptionFiles => Set<CustomerOrderPrescriptionFile>();
+    public DbSet<DiscountCode> DiscountCodes => Set<DiscountCode>();
+    public DbSet<DiscountCodeProduct> DiscountCodeProducts => Set<DiscountCodeProduct>();
+    public DbSet<DiscountCodeCategory> DiscountCodeCategories => Set<DiscountCodeCategory>();
+    public DbSet<DiscountCodeRedemption> DiscountCodeRedemptions => Set<DiscountCodeRedemption>();
 
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -142,6 +146,9 @@ public sealed class CustomerPortalDbContext(DbContextOptions<CustomerPortalDbCon
             entity.Property(x => x.RentalFinalPrice).HasColumnName("rental_final_price");
             entity.Property(x => x.PlacedByAdminId).HasColumnName("placed_by_admin_id");
             entity.Property(x => x.CheckoutSessionId).HasColumnName("checkout_session_id");
+            entity.Property(x => x.DiscountCodeId).HasColumnName("discount_code_id");
+            entity.Property(x => x.DiscountCode).HasColumnName("discount_code").HasMaxLength(20);
+            entity.Property(x => x.DiscountAmount).HasColumnName("discount_amount");
             entity.HasOne(x => x.CustomerAddress)
                 .WithMany()
                 .HasForeignKey(x => x.CustomerAddressId)
@@ -168,6 +175,9 @@ public sealed class CustomerPortalDbContext(DbContextOptions<CustomerPortalDbCon
             entity.Property(x => x.Receipt).HasColumnName("receipt");
             entity.Property(x => x.PaidAt).HasColumnName("paid_at");
             entity.Property(x => x.PlacedByAdminId).HasColumnName("placed_by_admin_id");
+            entity.Property(x => x.DiscountCodeId).HasColumnName("discount_code_id");
+            entity.Property(x => x.DiscountCode).HasColumnName("discount_code").HasMaxLength(20);
+            entity.Property(x => x.DiscountAmount).HasColumnName("discount_amount");
             entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
             entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
             entity.Property(x => x.CreatedBy).HasColumnName("created_by");
@@ -590,6 +600,73 @@ public sealed class CustomerPortalDbContext(DbContextOptions<CustomerPortalDbCon
             entity.HasOne(x => x.ChatSession)
                 .WithMany(x => x.Messages)
                 .HasForeignKey(x => x.ChatSessionId);
+        });
+
+        modelBuilder.Entity<DiscountCode>(entity =>
+        {
+            entity.ToTable("discount_codes");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.Code).HasColumnName("code").HasMaxLength(20);
+            entity.Property(x => x.DiscountType).HasColumnName("discount_type").HasMaxLength(20);
+            entity.Property(x => x.DiscountValue).HasColumnName("discount_value");
+            entity.Property(x => x.MaxDiscountAmount).HasColumnName("max_discount_amount");
+            entity.Property(x => x.MinimumItemTotal).HasColumnName("minimum_item_total");
+            entity.Property(x => x.StartsAt).HasColumnName("starts_at");
+            entity.Property(x => x.EndsAt).HasColumnName("ends_at");
+            entity.Property(x => x.IsActive).HasColumnName("is_active");
+            entity.Property(x => x.MaxTotalUses).HasColumnName("max_total_uses");
+            entity.Property(x => x.MaxUsesPerCustomer).HasColumnName("max_uses_per_customer");
+            entity.Property(x => x.AppliesTo).HasColumnName("applies_to").HasMaxLength(10);
+            entity.Property(x => x.ShowToCustomers).HasColumnName("show_to_customers");
+            entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
+            entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
+            entity.Property(x => x.CreatedBy).HasColumnName("created_by");
+            entity.Property(x => x.ModifiedBy).HasColumnName("updated_by");
+            entity.Property(x => x.IsDeleted).HasColumnName("is_deleted");
+            entity.Property(x => x.DeletedAt).HasColumnName("deleted_at");
+            entity.Property(x => x.DeletedBy).HasColumnName("deleted_by");
+            entity.HasMany(x => x.Products).WithOne(x => x.DiscountCode).HasForeignKey(x => x.DiscountCodeId);
+            entity.HasMany(x => x.Categories).WithOne(x => x.DiscountCode).HasForeignKey(x => x.DiscountCodeId);
+            entity.HasMany(x => x.Redemptions).WithOne(x => x.DiscountCode).HasForeignKey(x => x.DiscountCodeId);
+        });
+
+        modelBuilder.Entity<DiscountCodeProduct>(entity =>
+        {
+            entity.ToTable("discount_code_products");
+            entity.HasKey(x => new { x.DiscountCodeId, x.ProductId });
+            entity.Property(x => x.DiscountCodeId).HasColumnName("discount_code_id");
+            entity.Property(x => x.ProductId).HasColumnName("product_id");
+        });
+
+        modelBuilder.Entity<DiscountCodeCategory>(entity =>
+        {
+            entity.ToTable("discount_code_categories");
+            entity.HasKey(x => new { x.DiscountCodeId, x.CategoryId });
+            entity.Property(x => x.DiscountCodeId).HasColumnName("discount_code_id");
+            entity.Property(x => x.CategoryId).HasColumnName("category_id");
+        });
+
+        modelBuilder.Entity<DiscountCodeRedemption>(entity =>
+        {
+            entity.ToTable("discount_code_redemptions");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.DiscountCodeId).HasColumnName("discount_code_id");
+            entity.Property(x => x.CustomerId).HasColumnName("customer_id");
+            entity.Property(x => x.CheckoutSessionId).HasColumnName("checkout_session_id");
+            entity.Property(x => x.Status).HasColumnName("status").HasMaxLength(20);
+            entity.Property(x => x.DiscountAmount).HasColumnName("discount_amount");
+            entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
+            entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
+            entity.Property(x => x.CreatedBy).HasColumnName("created_by");
+            entity.Property(x => x.ModifiedBy).HasColumnName("updated_by");
+            entity.Property(x => x.IsDeleted).HasColumnName("is_deleted");
+            entity.Property(x => x.DeletedAt).HasColumnName("deleted_at");
+            entity.Property(x => x.DeletedBy).HasColumnName("deleted_by");
+            entity.HasOne(x => x.CheckoutSession)
+                .WithMany()
+                .HasForeignKey(x => x.CheckoutSessionId);
         });
     }
 

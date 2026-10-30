@@ -1,10 +1,12 @@
 class OrderContinuations {
   final List<PendingExtension> pendingExtensions;
   final List<PendingBuyout> pendingBuyouts;
+  final List<PendingExtension> paidExtensions;
 
   const OrderContinuations({
     this.pendingExtensions = const [],
     this.pendingBuyouts = const [],
+    this.paidExtensions = const [],
   });
 
   bool get hasPending =>
@@ -21,9 +23,16 @@ class OrderContinuations {
             .map((e) => PendingBuyout.fromJson(Map<String, dynamic>.from(e)))
             .toList() ??
         const <PendingBuyout>[];
+    final paid = (json['paidExtensions'] as List?)
+            ?.whereType<Map>()
+            .map((e) => PendingExtension.fromJson(Map<String, dynamic>.from(e)))
+            .where((ext) => ext.status == 'paid')
+            .toList() ??
+        const <PendingExtension>[];
     return OrderContinuations(
       pendingExtensions: extensions,
       pendingBuyouts: buyouts,
+      paidExtensions: paid,
     );
   }
 

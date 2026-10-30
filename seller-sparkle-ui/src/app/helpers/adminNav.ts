@@ -15,6 +15,7 @@ import {
   Settings,
   Stethoscope,
   CalendarRange,
+  Ticket,
   Globe,
   FileText,
   Layers,
@@ -78,6 +79,7 @@ const adminNavBase: { title: string; items: AdminNavItem[] }[] = [
       { label: "Products Management", to: "/admin/products", icon: Package, permission: ADMIN_PERMISSIONS.catalogManage },
       { label: "Chemicals Management", to: "/admin/chemicals", icon: FlaskConical, permission: ADMIN_PERMISSIONS.catalogManage },
       { label: "Rental Setup", to: "/admin/rental-setup", icon: CalendarRange, permission: ADMIN_PERMISSIONS.catalogManage },
+      { label: "Discount codes", to: "/admin/discount-codes", icon: Ticket, permission: ADMIN_PERMISSIONS.catalogManage },
     ],
   },
   {

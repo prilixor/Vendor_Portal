@@ -179,6 +179,7 @@ class CheckoutProvider extends ChangeNotifier {
     String? addressId,
     String deliveryOption = 'standard',
     Map<String, MedicalRefModel>? medicalRefs,
+    String? discountCode,
   }) async {
     _isLoading = true;
     _errorMessage = null;
@@ -188,6 +189,7 @@ class CheckoutProvider extends ChangeNotifier {
       final data = {
         if (addressId != null && addressId.isNotEmpty) 'customerAddressId': addressId,
         'deliveryOption': deliveryOption,
+        if (discountCode != null && discountCode.trim().isNotEmpty) 'discountCode': discountCode.trim(),
         'lines': cartLines
             .map((line) => _buildLinePayload(
                   line,
@@ -224,6 +226,7 @@ class CheckoutProvider extends ChangeNotifier {
     Map<String, List<PendingPrescriptionFile>>? prescriptionFiles,
     bool acceptedLegal = false,
     bool acceptedPrescriptionLegal = false,
+    String? discountCode,
   }) async {
     _isPlacingOrder = true;
     _errorMessage = null;
@@ -237,6 +240,7 @@ class CheckoutProvider extends ChangeNotifier {
         'acceptedLegal': acceptedLegal,
         'acceptedPrescriptionLegal': acceptedPrescriptionLegal,
         'sourceSurface': 'customer_mobile',
+        if (discountCode != null && discountCode.trim().isNotEmpty) 'discountCode': discountCode.trim(),
         'lines': cartLines.map((line) {
           final payload = _buildLinePayload(
             line,
@@ -370,6 +374,7 @@ class CheckoutProvider extends ChangeNotifier {
     Map<String, List<PendingPrescriptionFile>>? prescriptionFiles,
     bool acceptedLegal = false,
     bool acceptedPrescriptionLegal = false,
+    String? discountCode,
   }) async {
     _isPlacingOrder = true;
     _errorMessage = null;
@@ -383,6 +388,7 @@ class CheckoutProvider extends ChangeNotifier {
         'acceptedLegal': acceptedLegal,
         'acceptedPrescriptionLegal': acceptedPrescriptionLegal,
         'sourceSurface': 'customer_mobile',
+        if (discountCode != null && discountCode.trim().isNotEmpty) 'discountCode': discountCode.trim(),
         'lines': cartLines.map((line) {
           final payload = _buildLinePayload(
             line,

@@ -942,6 +942,43 @@ export interface AdminOrderDetailResult {
   items: AdminOrderDto[];
 }
 
+export interface DiscountCodeDto {
+  id: string;
+  code: string;
+  discountType: "percentage" | "fixed" | string;
+  discountValue: number;
+  maxDiscountAmount?: number | null;
+  minimumItemTotal?: number | null;
+  startsAt?: string | null;
+  endsAt?: string | null;
+  isActive: boolean;
+  maxTotalUses?: number | null;
+  maxUsesPerCustomer?: number | null;
+  appliesTo: "rent" | "buy" | "both" | string;
+  showToCustomers: boolean;
+  usedCount: number;
+  productIds: string[];
+  categoryIds: string[];
+}
+
+export interface SaveDiscountCodeRequest {
+  id?: string | null;
+  code: string;
+  discountType: "percentage" | "fixed";
+  discountValue: number;
+  maxDiscountAmount?: number | null;
+  minimumItemTotal?: number | null;
+  startsAt?: string | null;
+  endsAt?: string | null;
+  isActive: boolean;
+  maxTotalUses?: number | null;
+  maxUsesPerCustomer?: number | null;
+  appliesTo: "rent" | "buy" | "both";
+  showToCustomers: boolean;
+  productIds: string[];
+  categoryIds: string[];
+}
+
 export interface AdminOrderDto {
   orderId: string;
   orderNumber: string;
@@ -957,6 +994,8 @@ export interface AdminOrderDto {
   totalAmount: number;
   depositAmount: number;
   vendorSubtotalAmount: number;
+  discountCode?: string | null;
+  discountAmount?: number;
   gstAmount?: number;
   gstPercent?: number | null;
   vendorPriceSetByAdmin?: boolean;
@@ -1704,6 +1743,7 @@ export const adminApi = {
   async placeOrderForCustomer(customerId: string, data: {
     customerAddressId?: string;
     deliveryOption: string;
+    discountCode?: string;
     lines: {
       listingId: string;
       quantity: number;
@@ -1877,6 +1917,14 @@ export const adminApi = {
     data: Omit<PlatformSmsSettingsDto, "smsConfigured">,
   ): Promise<PlatformSmsSettingsDto> {
     return apiClient.put<PlatformSmsSettingsDto>("/admin/sms-settings", data);
+  },
+
+  async getDiscountCodes(): Promise<DiscountCodeDto[]> {
+    return apiClient.get<DiscountCodeDto[]>("/admin/catalog/discount-codes");
+  },
+
+  async saveDiscountCode(data: SaveDiscountCodeRequest): Promise<DiscountCodeDto> {
+    return apiClient.post<DiscountCodeDto>("/admin/catalog/discount-codes", data);
   },
 };
 

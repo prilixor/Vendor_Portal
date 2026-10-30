@@ -33,7 +33,8 @@ public sealed record CreateCustomerCheckoutCommand(
     bool AcceptedLegal = false,
     bool AcceptedPrescriptionLegal = false,
     string? IpAddress = null,
-    string? UserAgent = null) : ICommand<CustomerCheckoutDto>;
+    string? UserAgent = null,
+    string? DiscountCode = null) : ICommand<CustomerCheckoutDto>;
 
 public sealed class CreateCustomerCheckoutCommandValidator : AbstractValidator<CreateCustomerCheckoutCommand>
 {
@@ -48,6 +49,7 @@ public sealed class CreateCustomerCheckoutCommandValidator : AbstractValidator<C
 internal sealed class CreateCustomerCheckoutCommandHandler(
     IMediator mediator,
     ICustomerRepository customers,
+    IDiscountCodeRepository discountCodes,
     IRazorpayPaymentService razorpay,
     IEmailService email,
     IConfiguration configuration,
@@ -63,6 +65,8 @@ internal sealed class CreateCustomerCheckoutCommandHandler(
                 ErrorCategory.Validation));
         }
 
+        await discountCodes.ReleaseOpenReservationsAsync(request.CustomerId, cancellationToken);
+
         var placeResult = await mediator.Send(new PlaceCustomerOrdersCommand(
             request.CustomerId,
             request.CustomerAddressId,
@@ -74,7 +78,8 @@ internal sealed class CreateCustomerCheckoutCommandHandler(
             request.Source,
             request.IpAddress,
             request.UserAgent,
-            AwaitPayment: true), cancellationToken);
+            AwaitPayment: true,
+            DiscountCode: request.DiscountCode), cancellationToken);
 
         if (!placeResult.IsSuccess)
             return Result.Failure<CustomerCheckoutDto>(placeResult.Errors);
@@ -121,7 +126,14 @@ internal sealed class CreateCustomerCheckoutCommandHandler(
             Currency = "INR",
             Receipt = receipt,
             PlacedByAdminId = request.PlacedByAdminId,
+            DiscountCode = placed.Select(o => o.DiscountCode).FirstOrDefault(code => !string.IsNullOrWhiteSpace(code)),
+            DiscountAmount = placed.Sum(o => o.DiscountAmount),
         };
+        if (session.DiscountCode is not null)
+        {
+            var code = await discountCodes.GetByCodeAsync(session.DiscountCode, cancellationToken);
+            session.DiscountCodeId = code?.Id;
+        }
 
         await customers.AddCheckoutSessionAsync(session, cancellationToken);
         await customers.SaveChangesAsync(cancellationToken);
@@ -142,6 +154,32 @@ internal sealed class CreateCustomerCheckoutCommandHandler(
         }
 
         await customers.SaveChangesAsync(cancellationToken);
+
+        if (session.DiscountCodeId is Guid discountCodeId && session.DiscountAmount > 0m)
+        {
+            var reserved = await discountCodes.ReserveAsync(
+                sessionId,
+                request.CustomerId,
+                discountCodeId,
+                session.DiscountAmount,
+                cancellationToken);
+            if (!reserved.IsSuccess)
+            {
+                session.Status = CheckoutSessionStatuses.Failed;
+                await customers.UpdateCheckoutSessionAsync(session, cancellationToken);
+                foreach (var orderDto in placed)
+                {
+                    var order = await customers.GetCustomerOrderEntityByIdAsync(orderDto.Id, cancellationToken);
+                    if (order is null)
+                        continue;
+                    order.Status = "cancelled";
+                    await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
+                }
+
+                await customers.SaveChangesAsync(cancellationToken);
+                return Result.Failure<CustomerCheckoutDto>(reserved.Errors);
+            }
+        }
 
         var notes = new Dictionary<string, string>
         {
@@ -218,6 +256,7 @@ internal sealed class CreateCustomerCheckoutCommandHandler(
         {
             logger.LogError(ex, "Failed to create Razorpay checkout for session {SessionId}", sessionId);
             session.Status = CheckoutSessionStatuses.Failed;
+            await discountCodes.ReleaseBySessionAsync(sessionId, cancellationToken);
             await customers.UpdateCheckoutSessionAsync(session, cancellationToken);
             foreach (var orderDto in placed)
             {
@@ -245,6 +284,7 @@ public sealed record VerifyCustomerCheckoutCommand(
 
 internal sealed class VerifyCustomerCheckoutCommandHandler(
     ICustomerRepository customers,
+    IDiscountCodeRepository discountCodes,
     IRazorpayPaymentService razorpay,
     ISequentialDispatchService dispatch,
     IEmailService email,
@@ -270,6 +310,7 @@ internal sealed class VerifyCustomerCheckoutCommandHandler(
 
         await CheckoutPaymentActivator.MarkPaidAndDispatchAsync(
             customers,
+            discountCodes,
             dispatch,
             email,
             customerSms,
@@ -342,7 +383,9 @@ internal sealed class VerifyCustomerCheckoutCommandHandler(
             RentalDiscountType: o.RentalDiscountType,
             RentalDiscountValue: o.RentalDiscountValue,
             RentalFinalPrice: o.RentalFinalPrice,
-            IsExtended: o.IsExtended);
+            IsExtended: o.IsExtended,
+            DiscountCode: o.DiscountCode,
+            DiscountAmount: o.DiscountAmount);
     }
 }
 
@@ -350,6 +393,7 @@ public sealed record ProcessRazorpayWebhookCommand(string RawBody, string Signat
 
 internal sealed class ProcessRazorpayWebhookCommandHandler(
     ICustomerRepository customers,
+    IDiscountCodeRepository discountCodes,
     ISequentialDispatchService dispatch,
     IRazorpayPaymentService razorpay,
     IOptions<RazorpayOptions> razorpayOptions,
@@ -438,7 +482,7 @@ internal sealed class ProcessRazorpayWebhookCommandHandler(
         }
 
         await CheckoutPaymentActivator.MarkPaidAndDispatchAsync(
-            customers, dispatch, email, customerSms, logger, session, paymentId, cancellationToken);
+            customers, discountCodes, dispatch, email, customerSms, logger, session, paymentId, cancellationToken);
         return true;
     }
 
@@ -470,7 +514,7 @@ internal sealed class ProcessRazorpayWebhookCommandHandler(
             session.RazorpayOrderId = orderId;
 
         await CheckoutPaymentActivator.MarkPaidAndDispatchAsync(
-            customers, dispatch, email, customerSms, logger, session, paymentId, cancellationToken);
+            customers, discountCodes, dispatch, email, customerSms, logger, session, paymentId, cancellationToken);
     }
 }
 
@@ -478,6 +522,7 @@ internal static class CheckoutPaymentActivator
 {
     public static async Task MarkPaidAndDispatchAsync(
         ICustomerRepository customers,
+        IDiscountCodeRepository discountCodes,
         ISequentialDispatchService dispatch,
         IEmailService email,
         CustomerSmsNotifier customerSms,
@@ -487,7 +532,10 @@ internal static class CheckoutPaymentActivator
         CancellationToken cancellationToken)
     {
         if (string.Equals(session.Status, CheckoutSessionStatuses.Paid, StringComparison.OrdinalIgnoreCase))
+        {
+            await discountCodes.MarkPaidBySessionAsync(session.Id, cancellationToken);
             return;
+        }
 
         session.Status = CheckoutSessionStatuses.Paid;
         session.PaidAt = DateTimeOffset.UtcNow;
@@ -496,6 +544,7 @@ internal static class CheckoutPaymentActivator
         session.ModifiedOnUtc = DateTime.UtcNow;
         await customers.UpdateCheckoutSessionAsync(session, cancellationToken);
         await customers.SaveChangesAsync(cancellationToken);
+        await discountCodes.MarkPaidBySessionAsync(session.Id, cancellationToken);
 
         await PaymentInvoiceMailer.SendOrderPaymentAsync(customers, email, logger, session, cancellationToken);
 

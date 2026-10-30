@@ -937,14 +937,28 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                         ),
                                       ),
                                       const SizedBox(width: 8),
-                                      Text(
-                                        '₹${order.totalAmount.toStringAsFixed(0)}',
-                                        style: TextStyle(
-                                          color: colors.textPrimary,
-                                          fontSize: 14,
-                                          fontWeight: FontWeight.w700,
-                                          fontFeatures: const [FontFeature.tabularFigures()],
-                                        ),
+                                      Column(
+                                        crossAxisAlignment: CrossAxisAlignment.end,
+                                        children: [
+                                          Text(
+                                            '₹${order.totalAmount.toStringAsFixed(0)}',
+                                            style: TextStyle(
+                                              color: colors.textPrimary,
+                                              fontSize: 14,
+                                              fontWeight: FontWeight.w700,
+                                              fontFeatures: const [FontFeature.tabularFigures()],
+                                            ),
+                                          ),
+                                          if (order.discountAmount > 0)
+                                            Text(
+                                              '−₹${order.discountAmount.toStringAsFixed(0)}${order.discountCode == null || order.discountCode!.isEmpty ? '' : ' ${order.discountCode}'}',
+                                              style: const TextStyle(
+                                                color: Color(0xFF047857),
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                        ],
                                       ),
                                     ],
                                   ),
@@ -1615,6 +1629,13 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
               'Extension · ${ext.additionalDays} day${ext.additionalDays == 1 ? '' : 's'}',
               '₹${ext.totalAmount.toStringAsFixed(2)}',
             )),
+        if (order.discountAmount > 0)
+          row(
+            order.discountCode == null || order.discountCode!.isEmpty
+                ? 'Discount'
+                : 'Discount (${order.discountCode})',
+            '−₹${order.discountAmount.toStringAsFixed(2)}',
+          ),
         const SizedBox(height: 2),
         row('Product total', '₹${order.totalAmount.toStringAsFixed(2)}', bold: true),
       ],

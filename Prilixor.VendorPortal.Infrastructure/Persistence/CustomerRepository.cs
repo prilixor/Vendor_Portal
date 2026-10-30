@@ -1411,7 +1411,9 @@ public sealed class CustomerRepository(
                 RentalDiscountType: o.RentalDiscountType,
                 RentalDiscountValue: o.RentalDiscountValue,
                 RentalFinalPrice: o.RentalFinalPrice,
-                IsExtended: o.IsExtended));
+                IsExtended: o.IsExtended,
+                DiscountCode: o.DiscountCode,
+                DiscountAmount: o.DiscountAmount));
         }
 
         var withReturns = await OrderReturnMapper.AttachAsync(this, items, cancellationToken);
@@ -4042,6 +4044,7 @@ public sealed class CustomerRepository(
         {
             ListingId = listing.Id,
             ProductId = listing.ProductId,
+            CategoryId = product.CategoryId,
             VendorId = listing.VendorId,
             VendorAccountStatus = listing.Vendor.AccountStatus,
             VendorBusinessName = string.IsNullOrWhiteSpace(listing.Vendor.Profile?.BusinessName)

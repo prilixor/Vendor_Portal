@@ -46,6 +46,11 @@ class OrderQuoteModel {
   final double expressFeeAmount;
   final double gstAmount;
   final double totalAmount;
+  final double discountAmount;
+  final String? discountCode;
+  final String? discountMessage;
+  final String? publicDiscountCode;
+  final String? publicDiscountLabel;
   final List<GstLineModel> gstLines;
   final List<BuySuggestionModel> buySuggestions;
   final bool razorpayTestMode;
@@ -58,6 +63,11 @@ class OrderQuoteModel {
     required this.expressFeeAmount,
     required this.gstAmount,
     required this.totalAmount,
+    this.discountAmount = 0,
+    this.discountCode,
+    this.discountMessage,
+    this.publicDiscountCode,
+    this.publicDiscountLabel,
     this.gstLines = const [],
     this.buySuggestions = const [],
     this.razorpayTestMode = false,
@@ -81,6 +91,11 @@ class OrderQuoteModel {
       expressFeeAmount: (json['expressFeeAmount'] ?? 0).toDouble(),
       gstAmount: (json['gstAmount'] ?? 0).toDouble(),
       totalAmount: (json['totalAmount'] ?? 0).toDouble(),
+      discountAmount: (json['discountAmount'] ?? 0).toDouble(),
+      discountCode: json['discountCode']?.toString(),
+      discountMessage: json['discountMessage']?.toString(),
+      publicDiscountCode: json['publicDiscountCode']?.toString(),
+      publicDiscountLabel: json['publicDiscountLabel']?.toString(),
       gstLines: gstLines,
       buySuggestions: suggestions,
       razorpayTestMode: json['razorpayTestMode'] == true,

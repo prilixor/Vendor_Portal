@@ -418,7 +418,9 @@ internal static class PaymentInvoiceMailer
         decimal ExpressFeeAmount,
         decimal GstAmount,
         decimal Total,
-        string? ExtensionNote)
+        string? ExtensionNote,
+        decimal DiscountAmount = 0,
+        string? DiscountCode = null)
     {
         public static InvoiceLine FromOrder(CustomerRentalOrder order, string? title, string? vendor)
         {
@@ -440,7 +442,9 @@ internal static class PaymentInvoiceMailer
                 order.ExpressFeeAmount,
                 order.GstAmount,
                 order.TotalAmount,
-                null);
+                null,
+                order.DiscountAmount,
+                order.DiscountCode);
         }
 
         public static InvoiceLine FromExtension(
@@ -594,6 +598,8 @@ internal static class PaymentInvoiceMailer
                 if (line.ExtensionNote is not null)
                     sb.AppendLine(line.ExtensionNote);
                 AppendPlainMoney(sb, "Product amount", line.ProductAmount);
+                if (line.DiscountAmount > 0m)
+                    AppendPlainMoney(sb, string.IsNullOrWhiteSpace(line.DiscountCode) ? "Discount" : $"Discount ({line.DiscountCode})", line.DiscountAmount, deduct: true);
                 AppendPlainMoney(sb, "Security deposit", line.DepositAmount);
                 AppendPlainMoney(sb, "Service fee", line.ServiceFeeAmount);
                 AppendPlainMoney(sb, "Distance charge", line.DistanceFeeAmount);
@@ -719,6 +725,8 @@ internal static class PaymentInvoiceMailer
 
             sb.Append("<table role=\"presentation\" width=\"100%\" cellpadding=\"0\" cellspacing=\"0\" style=\"margin-top:10px;\">");
             AppendHtmlMoney(sb, line.Kind == "Buy" ? "Purchase price" : line.Kind == "Extension" ? "Extension rent" : "Rental amount", line.ProductAmount);
+            if (line.DiscountAmount > 0m)
+                AppendHtmlMoney(sb, string.IsNullOrWhiteSpace(line.DiscountCode) ? "Discount" : $"Discount ({line.DiscountCode})", line.DiscountAmount, deduct: true);
             AppendHtmlMoney(sb, "Security deposit", line.DepositAmount);
             AppendHtmlMoney(sb, "Service fee", line.ServiceFeeAmount);
             AppendHtmlMoney(sb, "Distance charge", line.DistanceFeeAmount);
@@ -760,22 +768,22 @@ internal static class PaymentInvoiceMailer
             return sb.ToString();
         }
 
-        private static void AppendHtmlMoney(StringBuilder sb, string label, decimal amount)
+        private static void AppendHtmlMoney(StringBuilder sb, string label, decimal amount, bool deduct = false)
         {
             if (amount <= 0)
                 return;
             sb.Append("<tr><td style=\"padding-top:4px;font-size:13px;color:#3d4a5c;\">");
             sb.Append(E(label));
             sb.Append("</td><td align=\"right\" style=\"padding-top:4px;font-size:13px;color:#1c2430;\">");
-            sb.Append(E(Money(amount)));
+            sb.Append(E((deduct ? "−" : "") + Money(amount)));
             sb.Append("</td></tr>");
         }
 
-        private static void AppendPlainMoney(StringBuilder sb, string label, decimal amount)
+        private static void AppendPlainMoney(StringBuilder sb, string label, decimal amount, bool deduct = false)
         {
             if (amount <= 0)
                 return;
-            sb.AppendLine($"{label}: {Money(amount)}");
+            sb.AppendLine($"{label}: {(deduct ? "−" : "")}{Money(amount)}");
         }
 
         private static string? FormatAddress(CustomerAddress? address)

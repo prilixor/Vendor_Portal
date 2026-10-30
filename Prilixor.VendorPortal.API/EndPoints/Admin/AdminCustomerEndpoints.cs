@@ -121,6 +121,7 @@ public sealed class AdminPlaceCustomerOrdersRequest
     public string? CustomerAddressId { get; set; }
     public string DeliveryOption { get; set; } = "standard";
     public List<CartLineApiRequest> Lines { get; set; } = [];
+    public string? DiscountCode { get; set; }
 }
 
 public sealed class CartLineApiRequest
@@ -179,7 +180,8 @@ public sealed class AdminPlaceCustomerOrdersEndpoint(IMediator mediator)
             req.DeliveryOption,
             lines,
             CheckoutSessionSources.AdminPaymentLink,
-            adminId), ct);
+            adminId,
+            DiscountCode: req.DiscountCode), ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }

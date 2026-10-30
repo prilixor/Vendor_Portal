@@ -1220,6 +1220,16 @@ const CustomerOrderDetail = () => {
             </>
           )}
         </CardContent>
+        {Number(activeItem.discountAmount) > 0 ? (
+          <div className="flex items-center justify-between gap-3 border-t border-border/60 px-3 py-3 text-sm sm:px-4">
+            <span className="text-muted-foreground">
+              Discount{activeItem.discountCode ? ` (${activeItem.discountCode})` : ""}
+            </span>
+            <span className="tabular-nums text-emerald-700 dark:text-emerald-400">
+              −₹{Number(activeItem.discountAmount).toLocaleString("en-IN", { maximumFractionDigits: 2 })}
+            </span>
+          </div>
+        ) : null}
         {activeItem.orderType?.toLowerCase() === "rent" && paidExtensions.length > 0 && (
           <div className="space-y-1.5 border-t border-border/60 px-3 py-3 text-sm sm:px-4">
             <div className="flex items-center justify-between gap-3 text-muted-foreground">

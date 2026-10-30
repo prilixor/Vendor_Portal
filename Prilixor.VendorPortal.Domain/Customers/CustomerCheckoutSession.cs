@@ -21,6 +21,9 @@ public class CustomerCheckoutSession : AuditableEntity<Guid>, ISoftDelete
     public string? Receipt { get; set; }
     public DateTimeOffset? PaidAt { get; set; }
     public Guid? PlacedByAdminId { get; set; }
+    public Guid? DiscountCodeId { get; set; }
+    public string? DiscountCode { get; set; }
+    public decimal DiscountAmount { get; set; }
 
     public bool IsDeleted { get; set; }
     public DateTimeOffset? DeletedAt { get; set; }

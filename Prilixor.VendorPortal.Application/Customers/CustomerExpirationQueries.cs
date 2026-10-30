@@ -192,7 +192,9 @@ public sealed record AdminOrderDto(
     bool VendorPriceSetByAdmin = false,
     decimal? GstPercent = null,
     OrderReturnDto? ReturnSettlement = null,
-    OrderCancellationRefundDto? CancellationRefund = null);
+    OrderCancellationRefundDto? CancellationRefund = null,
+    string? DiscountCode = null,
+    decimal DiscountAmount = 0);
 
 public sealed record GetAdminAllOrdersQuery() : IQuery<List<AdminOrderDto>>;
 

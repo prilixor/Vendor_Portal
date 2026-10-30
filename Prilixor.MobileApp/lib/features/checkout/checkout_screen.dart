@@ -43,6 +43,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   bool _authChecked = false;
   bool _acceptedLegal = false;
   bool _acceptedPrescriptionLegal = false;
+  final _discountController = TextEditingController();
+  String _appliedDiscountCode = '';
 
   late Razorpay _razorpay;
   bool _isProcessingCheckout = false;
@@ -85,6 +87,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
 
   @override
   void dispose() {
+    _discountController.dispose();
     if (!kIsWeb) {
       _razorpay.clear();
     }
@@ -162,6 +165,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
       cart.lines,
       addressId: _selectedAddressId,
       deliveryOption: kShowDeliverySpeedOptions ? _deliveryOption : 'standard',
+      discountCode: _appliedDiscountCode,
     );
     if (!mounted) return;
     await _handleBuySuggestions();
@@ -738,7 +742,83 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                       ),
                       child: Column(
                         children: [
+                          TextField(
+                            controller: _discountController,
+                            textCapitalization: TextCapitalization.characters,
+                            decoration: InputDecoration(
+                              labelText: 'Discount code',
+                              hintText: 'Enter code',
+                              isDense: true,
+                              suffixIcon: TextButton(
+                                onPressed: provider.isLoading || _discountController.text.trim().isEmpty
+                                    ? null
+                                    : () {
+                                        final code = _discountController.text.trim().toUpperCase();
+                                        _discountController.value = TextEditingValue(
+                                          text: code,
+                                          selection: TextSelection.collapsed(offset: code.length),
+                                        );
+                                        setState(() => _appliedDiscountCode = code);
+                                        _fetchQuote();
+                                      },
+                                child: const Text('Apply'),
+                              ),
+                            ),
+                            onChanged: (_) => setState(() {}),
+                          ),
+                          if (_appliedDiscountCode.isNotEmpty &&
+                              (quote.discountMessage?.isNotEmpty ?? false))
+                            Padding(
+                              padding: const EdgeInsets.only(top: 6),
+                              child: Align(
+                                alignment: Alignment.centerLeft,
+                                child: Text(
+                                  quote.discountMessage!,
+                                  style: const TextStyle(color: Colors.redAccent, fontSize: 12),
+                                ),
+                              ),
+                            ),
+                          if (_appliedDiscountCode.isEmpty &&
+                              (quote.publicDiscountLabel?.isNotEmpty ?? false))
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: TextButton(
+                                onPressed: () {
+                                  final code = (quote.publicDiscountCode ?? '').toUpperCase();
+                                  _discountController.value = TextEditingValue(
+                                    text: code,
+                                    selection: TextSelection.collapsed(offset: code.length),
+                                  );
+                                  setState(() => _appliedDiscountCode = code);
+                                  _fetchQuote();
+                                },
+                                child: Text(quote.publicDiscountLabel!),
+                              ),
+                            ),
+                          if (_appliedDiscountCode.isNotEmpty)
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: TextButton(
+                                onPressed: () {
+                                  _discountController.clear();
+                                  setState(() => _appliedDiscountCode = '');
+                                  _fetchQuote();
+                                },
+                                child: Text('Remove $_appliedDiscountCode'),
+                              ),
+                            ),
+                          const SizedBox(height: 12),
                           _buildQuoteRow('Subtotal', quote.subtotalAmount),
+                          if (quote.discountAmount > 0) ...[
+                            const SizedBox(height: 8),
+                            _buildQuoteRow(
+                              quote.discountCode == null || quote.discountCode!.isEmpty
+                                  ? 'Discount'
+                                  : 'Discount (${quote.discountCode})',
+                              quote.discountAmount,
+                              deduct: true,
+                            ),
+                          ],
                           if (quote.depositAmount > 0) ...[
                             const SizedBox(height: 8),
                             _buildQuoteRow('Security Deposit', quote.depositAmount),
@@ -853,6 +933,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                   onPressed: provider.isPlacingOrder ||
                           _isProcessingCheckout ||
                           provider.errorMessage != null ||
+                          (_appliedDiscountCode.isNotEmpty &&
+                              (quote.discountMessage?.isNotEmpty ?? false)) ||
                           !_acceptedLegal ||
                           (cart.lines.any((l) => l.prescriptionRequired && _lineHasHealth(l)) &&
                               !_acceptedPrescriptionLegal)
@@ -877,6 +959,7 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                             acceptedPrescriptionLegal: cart.lines.any((l) =>
                                     l.prescriptionRequired && _lineHasHealth(l)) &&
                                 _acceptedPrescriptionLegal,
+                            discountCode: _appliedDiscountCode,
                           );
 
                           if (!mounted) return;
@@ -1011,13 +1094,17 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
     ];
   }
 
-  Widget _buildQuoteRow(String label, double amount) {
+  Widget _buildQuoteRow(String label, double amount, {bool deduct = false}) {
     final colors = context.appColors;
+    final amountColor = deduct ? const Color(0xFF047857) : colors.textPrimary;
     return Row(
       mainAxisAlignment: MainAxisAlignment.spaceBetween,
       children: [
-        Text(label, style: TextStyle(color: colors.textSecondary, fontSize: 15)),
-        Text('₹${amount.toStringAsFixed(0)}', style: TextStyle(color: colors.textPrimary, fontSize: 15, fontWeight: FontWeight.w500)),
+        Text(label, style: TextStyle(color: deduct ? amountColor : colors.textSecondary, fontSize: 15)),
+        Text(
+          '${deduct ? '−' : ''}₹${amount.toStringAsFixed(0)}',
+          style: TextStyle(color: amountColor, fontSize: 15, fontWeight: FontWeight.w500),
+        ),
       ],
     );
   }

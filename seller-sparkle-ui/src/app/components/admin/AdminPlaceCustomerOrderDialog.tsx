@@ -379,12 +379,14 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
   const [variantId, setVariantId] = useState("");
   const [addressId, setAddressId] = useState("");
   const [deliveryOption, setDeliveryOption] = useState("standard");
+  const [discountCode, setDiscountCode] = useState("");
   const [saving, setSaving] = useState(false);
   const [categoryFilter, setCategoryFilter] = useState<string | undefined>(undefined);
   const [categoriesExpanded, setCategoriesExpanded] = useState(false);
   const [placeErrors, setPlaceErrors] = useState<string[]>([]);
   const [placedOrders, setPlacedOrders] = useState<{ id: string; orderNumber: string; listingTitle?: string }[]>([]);
   const [paymentLinkUrl, setPaymentLinkUrl] = useState<string | null>(null);
+  const [paymentAmount, setPaymentAmount] = useState<number | null>(null);
   const [rentToBuyOpen, setRentToBuyOpen] = useState(false);
   const [rentToBuyInfo, setRentToBuyInfo] = useState<{
     title: string;
@@ -773,6 +775,7 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
       const result = await adminApi.placeOrderForCustomer(customerId, {
         customerAddressId: addressId,
         deliveryOption,
+        discountCode: discountCode.trim() || undefined,
         lines: cart.map((line) => ({
           listingId: line.listingId,
           quantity: line.quantity,
@@ -799,6 +802,7 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
 
       setPlacedOrders(placed);
       setPaymentLinkUrl(result.paymentLinkUrl ?? null);
+      setPaymentAmount(result.amount);
       if (result.paymentLinkUrl) {
         toast.success("Payment link emailed to customer");
       }
@@ -1377,6 +1381,19 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
                     </div>
                   </div>
 
+                  <div className="space-y-1.5">
+                    <Label>Discount code</Label>
+                    <Input
+                      value={discountCode}
+                      onChange={(event) => setDiscountCode(event.target.value.toUpperCase())}
+                      placeholder="Optional"
+                      autoComplete="off"
+                    />
+                    <p className="text-[11px] text-muted-foreground">
+                      Applied to the item price when the payment link is created. Deposit and delivery fees stay the same.
+                    </p>
+                  </div>
+
                   <div className="rounded-xl border bg-gradient-to-br from-muted/40 to-muted/10 px-4 py-3.5 flex items-center justify-between gap-3">
                     <div>
                       <p className="text-xs text-muted-foreground">
@@ -1405,6 +1422,11 @@ export function AdminPlaceCustomerOrderDialog({ open, onOpenChange, customerId, 
                     ? `${placedOrders.length} order${placedOrders.length === 1 ? "" : "s"} created for ${customer.fullName}. Dispatch starts after the customer pays.`
                     : `Orders for ${customer.fullName} were processed.`}
                 </p>
+                {paymentAmount != null ? (
+                  <p className="text-sm font-medium tabular-nums">
+                    Amount to pay: ₹{paymentAmount.toLocaleString("en-IN", { maximumFractionDigits: 0 })}
+                  </p>
+                ) : null}
               </div>
               {paymentLinkUrl && (
                 <div className="rounded-xl border border-primary/20 bg-primary/5 px-3.5 py-3 text-left space-y-2 max-w-sm mx-auto">

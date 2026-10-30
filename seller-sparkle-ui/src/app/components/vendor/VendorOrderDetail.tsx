@@ -32,6 +32,7 @@ import {
   type VendorOrderImageRequestApiDto,
   type VendorProductAssetApiDto,
   type OrderContinuationsDto,
+  type PendingExtensionDto,
   extensionVendorPayout,
 } from "@/app/services/vendorOnboardingApi";
 import { formatInr, vendorClaimLabel } from "@/app/helpers/orderReturn";
@@ -362,6 +363,42 @@ function formatRupee(value: number): string {
     minimumFractionDigits: hasPaise ? 2 : 0,
     maximumFractionDigits: hasPaise ? 2 : 0,
   });
+}
+
+function VendorPayoutBreakdown({
+  order,
+  paidExtensions,
+}: {
+  order: VendorOrderApiDto;
+  paidExtensions: PendingExtensionDto[];
+}) {
+  const total = itemPayout(order);
+  const extensionTotal = paidExtensions.reduce((sum, ext) => sum + extensionVendorPayout(ext), 0);
+  const original = Math.max(0, Math.round((total - extensionTotal) * 100) / 100);
+  return (
+    <div className="mt-auto space-y-1.5 rounded-b-lg border-t border-border/70 bg-muted/40 px-4 py-3 text-sm sm:px-6">
+      {paidExtensions.length > 0 ? (
+        <>
+          <div className="flex items-center justify-between gap-3 text-muted-foreground">
+            <span>Original rental</span>
+            <span className="tabular-nums">₹{formatRupee(original)}</span>
+          </div>
+          {paidExtensions.map((ext) => (
+            <div key={ext.extensionId} className="flex items-center justify-between gap-3 text-muted-foreground">
+              <span>Extension · {ext.additionalDays} day{ext.additionalDays === 1 ? "" : "s"}</span>
+              <span className="tabular-nums">₹{formatRupee(extensionVendorPayout(ext))}</span>
+            </div>
+          ))}
+        </>
+      ) : null}
+      <div className="flex items-center justify-between gap-3">
+        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">Your payout</p>
+        <p className="text-base font-semibold tabular-nums text-emerald-700 dark:text-emerald-400 sm:text-lg">
+          ₹{formatRupee(total)}
+        </p>
+      </div>
+    </div>
+  );
 }
 
 function reuseImageUrls(
@@ -1643,27 +1680,12 @@ const VendorOrderDetail = () => {
                     </>
                   )}
                   </div>
-                  <div className="grid grid-cols-2 gap-3 border-t border-border/70 px-4 py-4 sm:grid-cols-3 sm:px-6">
-                    <div className="space-y-1">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">Quantity</p>
-                      <p className="text-sm font-medium tabular-nums">{order.quantity}</p>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">Amount</p>
-                      <p className="text-sm font-semibold tabular-nums">₹{formatRupee(order.totalAmount)}</p>
-                    </div>
-                    <div className="space-y-1">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">Deposit</p>
-                      <p className="text-sm font-medium tabular-nums">₹{formatInr(order.depositAmount ?? 0)}</p>
-                    </div>
+                  <div className="border-t border-border/70 px-4 py-4 sm:px-6">
+                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">Quantity</p>
+                    <p className="text-sm font-medium tabular-nums">{order.quantity}</p>
                   </div>
                   {orderShowsVendorPayout(order.status) ? (
-                    <div className="mt-auto flex items-center justify-between gap-3 rounded-b-lg border-t border-border/70 bg-muted/40 px-4 py-3 sm:px-6">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">Your payout</p>
-                      <p className="text-base font-semibold tabular-nums text-emerald-700 dark:text-emerald-400 sm:text-lg">
-                        ₹{formatRupee(itemPayout(order))}
-                      </p>
-                    </div>
+                    <VendorPayoutBreakdown order={order} paidExtensions={continuations?.paidExtensions ?? []} />
                   ) : null}
                 </CardContent>
               </Card>
