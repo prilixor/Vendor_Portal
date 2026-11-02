@@ -146,7 +146,7 @@ const CustomerCheckout = () => {
           : {}),
       })),
     }),
-    [addressId, selectedDelivery, lines, prescriptionFiles],
+    [addressId, selectedDelivery, lines, prescriptionFiles, appliedDiscountCode],
   );
 
   const { data: quote, isFetching: quoteLoading, error: quoteError } = useQuery({

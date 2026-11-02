@@ -82,6 +82,50 @@ function describeCode(row: DiscountCodeDto) {
   return `${Number(row.discountValue)}% off the item price${cap}`;
 }
 
+type CodeStatus = "off" | "scheduled" | "expired" | "used-up" | "active";
+
+function codeStatus(row: Pick<DiscountCodeDto, "isActive" | "startsAt" | "endsAt" | "maxTotalUses" | "usedCount">, now = Date.now()): CodeStatus {
+  if (!row.isActive) return "off";
+  const ends = row.endsAt ? new Date(row.endsAt).getTime() : Number.NaN;
+  if (!Number.isNaN(ends) && now > ends) return "expired";
+  const starts = row.startsAt ? new Date(row.startsAt).getTime() : Number.NaN;
+  if (!Number.isNaN(starts) && now < starts) return "scheduled";
+  if (row.maxTotalUses != null && row.usedCount >= row.maxTotalUses) return "used-up";
+  return "active";
+}
+
+function formatWhen(iso?: string | null) {
+  if (!iso) return "";
+  const date = new Date(iso);
+  if (Number.isNaN(date.getTime())) return "";
+  return date.toLocaleString("en-IN", { day: "numeric", month: "short", year: "numeric", hour: "numeric", minute: "2-digit" });
+}
+
+function windowNote(startsAt: string, endsAt: string) {
+  const now = Date.now();
+  const ends = endsAt ? new Date(endsAt).getTime() : Number.NaN;
+  if (!Number.isNaN(ends) && now > ends) {
+    return "The end time has passed, so customers cannot use this code. Set a later end time, or turn Active off.";
+  }
+  const starts = startsAt ? new Date(startsAt).getTime() : Number.NaN;
+  if (!Number.isNaN(starts) && now < starts) {
+    return "This code is scheduled. Customers cannot use it until the start time.";
+  }
+  return null;
+}
+
+function StatusBadge({ status }: { status: CodeStatus }) {
+  if (status === "active") return <Badge>Active</Badge>;
+  if (status === "off") return <Badge variant="secondary">Off</Badge>;
+  if (status === "scheduled") {
+    return <Badge variant="outline" className="border-sky-200 bg-sky-50 text-sky-800">Scheduled</Badge>;
+  }
+  if (status === "used-up") {
+    return <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800">Used up</Badge>;
+  }
+  return <Badge variant="outline" className="border-amber-300 bg-amber-50 text-amber-800">Expired</Badge>;
+}
+
 function catalogKind(isChemical?: boolean) {
   return isChemical ? "Chemical" : "Equipment";
 }
@@ -213,6 +257,8 @@ const AdminDiscountCodes = () => {
     setOpen(true);
   };
 
+  const scheduleNote = windowNote(form.startsAt, form.endsAt);
+
   const save = () => {
     const value = optionalNumber(form.discountValue);
     if (!form.code.trim() || value == null || value <= 0) {
@@ -277,17 +323,29 @@ const AdminDiscountCodes = () => {
               No discount codes yet.
             </div>
           ) : (
-            (codesQuery.data ?? []).map((row) => (
+            (codesQuery.data ?? []).map((row) => {
+              const status = codeStatus(row);
+              const timing = status === "expired"
+                ? ` · ended ${formatWhen(row.endsAt)}`
+                : status === "scheduled"
+                  ? ` · starts ${formatWhen(row.startsAt)}`
+                  : "";
+              return (
               <div key={row.id} className="flex flex-wrap items-center justify-between gap-3 px-4 py-3">
                 <div className="min-w-0">
                   <div className="flex flex-wrap items-center gap-2">
                     <p className="font-semibold tracking-wide">{row.code}</p>
-                    <Badge variant={row.isActive ? "default" : "secondary"}>{row.isActive ? "Active" : "Off"}</Badge>
-                    {row.showToCustomers ? <Badge variant="outline">Shown at checkout</Badge> : <Badge variant="outline">Private</Badge>}
+                    <StatusBadge status={status} />
+                    {status === "active" ? (
+                      row.showToCustomers
+                        ? <Badge variant="outline">Shown at checkout</Badge>
+                        : <Badge variant="outline">Private</Badge>
+                    ) : null}
                   </div>
                   <p className="mt-1 text-sm text-muted-foreground">
                     {describeCode(row)} · {row.appliesTo} · used {row.usedCount}
                     {row.maxTotalUses ? ` of ${row.maxTotalUses}` : ""}
+                    {timing}
                   </p>
                 </div>
                 <Button variant="outline" size="sm" onClick={() => openEdit(row)}>
@@ -295,7 +353,8 @@ const AdminDiscountCodes = () => {
                   Edit
                 </Button>
               </div>
-            ))
+              );
+            })
           )}
         </Card>
       </PageContentGate>
@@ -361,6 +420,9 @@ const AdminDiscountCodes = () => {
               <Label>Uses per customer (optional)</Label>
               <Input type="number" min={1} value={form.maxUsesPerCustomer} onChange={(event) => setForm({ ...form, maxUsesPerCustomer: event.target.value })} />
             </div>
+            {scheduleNote ? (
+              <p className="sm:col-span-2 text-xs text-amber-800">{scheduleNote}</p>
+            ) : null}
             <label className="flex items-center justify-between gap-3 rounded-lg border px-3 py-2 text-sm">
               Active
               <Switch checked={form.isActive} onCheckedChange={(checked) => setForm({ ...form, isActive: checked })} />
