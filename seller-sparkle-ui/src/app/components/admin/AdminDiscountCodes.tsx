@@ -10,6 +10,7 @@ import { Switch } from "@/app/components/ui/switch";
 import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "@/app/components/ui/dialog";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import { PageContentGate } from "@/app/components/shared/PageLoader";
+import { cn } from "@/app/helpers/utils";
 import {
   adminApi,
   DiscountCodeDto,
@@ -17,7 +18,7 @@ import {
   ProductDto,
   SaveDiscountCodeRequest,
 } from "@/app/services/adminApi";
-import { Pencil, Plus, Ticket } from "lucide-react";
+import { FlaskConical, Package, Pencil, Plus, Ticket } from "lucide-react";
 import { toast } from "sonner";
 
 type FormState = {
@@ -137,35 +138,62 @@ function CatalogKindBadge({ isChemical }: { isChemical?: boolean }) {
   return <Badge variant="outline" className="border-teal-200 bg-teal-50 text-[10px] text-teal-800">Equipment</Badge>;
 }
 
-function CategoryGroup({
+function CategoryPanel({
   title,
+  tone,
   categories,
   selectedIds,
   onToggle,
 }: {
   title: string;
+  tone: "equipment" | "chemical";
   categories: ProductCategoryDto[];
   selectedIds: string[];
   onToggle: (category: ProductCategoryDto) => void;
 }) {
+  const [filter, setFilter] = useState("");
+  const selected = categories.filter((category) => selectedIds.includes(category.id)).length;
+  const query = filter.trim().toLowerCase();
+  const visible = query
+    ? categories.filter((category) => category.categoryName.toLowerCase().includes(query))
+    : categories;
+  const chemical = tone === "chemical";
+
   return (
-    <div className="space-y-1">
-      <p className="px-1 text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">{title}</p>
-      {categories.length === 0 ? (
-        <p className="px-1 text-xs text-muted-foreground">None</p>
-      ) : categories.map((category) => (
-        <label key={category.id} className="flex items-center justify-between gap-2 rounded px-1 py-0.5 text-sm">
-          <span className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              checked={selectedIds.includes(category.id)}
-              onChange={() => onToggle(category)}
-            />
-            {category.categoryName}
-          </span>
-          <CatalogKindBadge isChemical={category.isChemical} />
-        </label>
-      ))}
+    <div className={cn("rounded-lg border", chemical ? "border-violet-200" : "border-teal-200")}>
+      <div className={cn("flex items-center justify-between gap-2 border-b px-3 py-2", chemical ? "border-violet-200 bg-violet-50" : "border-teal-200 bg-teal-50")}>
+        <span className={cn("flex items-center gap-1.5 text-sm font-semibold", chemical ? "text-violet-900" : "text-teal-900")}>
+          {chemical ? <FlaskConical className="h-3.5 w-3.5" /> : <Package className="h-3.5 w-3.5" />}
+          {title}
+        </span>
+        <span className="text-[11px] text-muted-foreground">{selected === 0 ? "None selected" : `${selected} selected`}</span>
+      </div>
+      {categories.length > 6 ? (
+        <div className="border-b px-2 py-2">
+          <Input
+            value={filter}
+            onChange={(event) => setFilter(event.target.value)}
+            placeholder={`Find ${title.toLowerCase()}`}
+            className="h-8"
+          />
+        </div>
+      ) : null}
+      <div className="max-h-44 overflow-y-auto p-1">
+        {visible.length === 0 ? (
+          <p className="px-2 py-3 text-xs text-muted-foreground">{categories.length === 0 ? "None" : "No match"}</p>
+        ) : visible.map((category) => {
+          const checked = selectedIds.includes(category.id);
+          return (
+            <label
+              key={category.id}
+              className={cn("flex cursor-pointer items-center gap-2 rounded px-2 py-1.5 text-sm hover:bg-muted", checked && "bg-muted")}
+            >
+              <input type="checkbox" checked={checked} onChange={() => onToggle(category)} />
+              <span className="min-w-0">{category.categoryName}</span>
+            </label>
+          );
+        })}
+      </div>
     </div>
   );
 }
@@ -433,10 +461,10 @@ const AdminDiscountCodes = () => {
             </label>
             <div className="space-y-2 sm:col-span-2">
               <Label>Categories</Label>
-              <p className="text-xs text-muted-foreground">Leave categories and products empty to allow every eligible item. A checked category covers every product in it.</p>
-              <div className="max-h-44 space-y-3 overflow-y-auto rounded-lg border p-2">
-                <CategoryGroup title="Equipment" categories={equipmentCategories} selectedIds={form.categoryIds} onToggle={toggleCategory} />
-                <CategoryGroup title="Chemical" categories={chemicalCategories} selectedIds={form.categoryIds} onToggle={toggleCategory} />
+              <p className="text-xs text-muted-foreground">Check categories in either catalog. A checked category covers every product in it. Leave both empty to allow every eligible item.</p>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <CategoryPanel title="Equipment" tone="equipment" categories={equipmentCategories} selectedIds={form.categoryIds} onToggle={toggleCategory} />
+                <CategoryPanel title="Chemicals" tone="chemical" categories={chemicalCategories} selectedIds={form.categoryIds} onToggle={toggleCategory} />
               </div>
             </div>
             <div className="space-y-2 sm:col-span-2">
