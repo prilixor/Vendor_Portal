@@ -103,7 +103,7 @@ const adminNavBase: { title: string; items: AdminNavItem[] }[] = [
       { label: "Admin Users", to: "/admin/admins", icon: Users, permission: ADMIN_PERMISSIONS.adminsManage },
       { label: "Roles & Permissions", to: "/admin/roles", icon: Shield, permission: ADMIN_PERMISSIONS.rolesManage },
       { label: "Audit Logs", to: "/admin/audit-logs", icon: ScrollText, permission: ADMIN_PERMISSIONS.auditView },
-      { label: "Support", to: "/admin/support", icon: MessageSquare, permission: ADMIN_PERMISSIONS.supportManage },
+      { label: "Vendor Support", to: "/admin/support", icon: MessageSquare, permission: ADMIN_PERMISSIONS.supportManage },
       { label: "Customer Chats", to: "/admin/customer-chats", icon: MessageSquare, permission: ADMIN_PERMISSIONS.supportManage },
       { label: "SMS", to: "/admin/sms-settings", icon: MessageSquareText, permission: ADMIN_PERMISSIONS.adminsManage },
       // Available to every signed-in admin (no extra permission)
@@ -140,7 +140,7 @@ export const getAdminNav = (
           if (item.label === "Notifications" && unreadCount > 0) {
             return { label: item.label, to: item.to, icon: item.icon, badge: unreadCount.toString() };
           }
-          if (item.label === "Support" && vendorSupportUnread > 0) {
+          if (item.label === "Vendor Support" && vendorSupportUnread > 0) {
             return {
               label: item.label,
               to: item.to,

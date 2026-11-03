@@ -263,7 +263,7 @@ export default function SupportManagement() {
         <div className="min-w-0">
           <h1 className="flex items-center gap-2 text-xl font-extrabold tracking-tight text-foreground sm:gap-3 sm:text-3xl">
             <MessageSquare className="h-6 w-6 shrink-0 text-primary sm:h-8 sm:w-8" />
-            Support Center
+            Vendor Support
           </h1>
           <p className="mt-1 hidden font-medium text-muted-foreground sm:block">
             Manage vendor support tickets and communications.
