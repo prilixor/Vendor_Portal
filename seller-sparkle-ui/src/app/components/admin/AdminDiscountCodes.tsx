@@ -144,20 +144,25 @@ function CategoryPanel({
   categories,
   selectedIds,
   onToggle,
+  onSetAll,
 }: {
   title: string;
   tone: "equipment" | "chemical";
   categories: ProductCategoryDto[];
   selectedIds: string[];
   onToggle: (category: ProductCategoryDto) => void;
+  onSetAll: (ids: string[], selected: boolean) => void;
 }) {
   const [filter, setFilter] = useState("");
   const selected = categories.filter((category) => selectedIds.includes(category.id)).length;
+  const allChecked = categories.length > 0 && selected === categories.length;
+  const someChecked = selected > 0 && !allChecked;
   const query = filter.trim().toLowerCase();
   const visible = query
     ? categories.filter((category) => category.categoryName.toLowerCase().includes(query))
     : categories;
   const chemical = tone === "chemical";
+  const selectionLabel = allChecked ? "All selected" : selected === 0 ? "None selected" : `${selected} selected`;
 
   return (
     <div className={cn("rounded-lg border", chemical ? "border-violet-200" : "border-teal-200")}>
@@ -166,7 +171,7 @@ function CategoryPanel({
           {chemical ? <FlaskConical className="h-3.5 w-3.5" /> : <Package className="h-3.5 w-3.5" />}
           {title}
         </span>
-        <span className="text-[11px] text-muted-foreground">{selected === 0 ? "None selected" : `${selected} selected`}</span>
+        <span className="text-[11px] text-muted-foreground">{selectionLabel}</span>
       </div>
       {categories.length > 6 ? (
         <div className="border-b px-2 py-2">
@@ -177,6 +182,19 @@ function CategoryPanel({
             className="h-8"
           />
         </div>
+      ) : null}
+      {categories.length > 0 ? (
+        <label className={cn("flex cursor-pointer items-center gap-2 border-b px-3 py-1.5 text-sm font-medium hover:bg-muted", allChecked && "bg-muted")}>
+          <input
+            type="checkbox"
+            checked={allChecked}
+            ref={(node) => {
+              if (node) node.indeterminate = someChecked;
+            }}
+            onChange={() => onSetAll(categories.map((category) => category.id), !allChecked)}
+          />
+          <span>All</span>
+        </label>
       ) : null}
       <div className="max-h-44 overflow-y-auto p-1">
         {visible.length === 0 ? (
@@ -331,6 +349,16 @@ const AdminDiscountCodes = () => {
     }));
   };
 
+  const setCategoryGroup = (ids: string[], selected: boolean) => {
+    const group = new Set(ids);
+    setForm((current) => ({
+      ...current,
+      categoryIds: selected
+        ? [...new Set([...current.categoryIds, ...ids])]
+        : current.categoryIds.filter((id) => !group.has(id)),
+    }));
+  };
+
   return (
     <div className="space-y-4">
       <PageHeader
@@ -463,8 +491,8 @@ const AdminDiscountCodes = () => {
               <Label>Categories</Label>
               <p className="text-xs text-muted-foreground">Check categories in either catalog. A checked category covers every product in it. Leave both empty to allow every eligible item.</p>
               <div className="grid gap-3 sm:grid-cols-2">
-                <CategoryPanel title="Equipment" tone="equipment" categories={equipmentCategories} selectedIds={form.categoryIds} onToggle={toggleCategory} />
-                <CategoryPanel title="Chemicals" tone="chemical" categories={chemicalCategories} selectedIds={form.categoryIds} onToggle={toggleCategory} />
+                <CategoryPanel title="Equipment" tone="equipment" categories={equipmentCategories} selectedIds={form.categoryIds} onToggle={toggleCategory} onSetAll={setCategoryGroup} />
+                <CategoryPanel title="Chemicals" tone="chemical" categories={chemicalCategories} selectedIds={form.categoryIds} onToggle={toggleCategory} onSetAll={setCategoryGroup} />
               </div>
             </div>
             <div className="space-y-2 sm:col-span-2">
