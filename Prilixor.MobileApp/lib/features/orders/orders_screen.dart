@@ -12,6 +12,7 @@ import '../../shared/widgets/catalog_image.dart';
 import '../../shared/widgets/guest_sign_in_prompt.dart';
 import '../../shared/widgets/legal_policy_links.dart';
 import 'order_detail_screen.dart';
+import 'placed_order_range.dart';
 
 class OrdersScreen extends StatefulWidget {
   const OrdersScreen({super.key});
@@ -26,6 +27,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
   final _searchController = TextEditingController();
   String _searchQuery = '';
   String _statusFilter = 'All';
+  PlacedOrderRange _placed = const PlacedOrderRange();
 
   static const _statusFilters = [
     'All',
@@ -158,8 +160,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
     final colors = context.appColors;
     final auth = Provider.of<AuthProvider>(context);
     final provider = Provider.of<OrderProvider>(context);
-    final filtered = _filteredOrders(provider.orders);
-    final counts = _statusCounts(provider.orders);
+    final placedOrders = provider.orders.where((order) => orderMatchesPlacedRange(order.createdAtUtc, _placed)).toList();
+    final filtered = _filteredOrders(placedOrders);
+    final counts = _statusCounts(placedOrders);
     final groups = _groupOrders(filtered);
     final groupKeys = groups.keys.toList();
 
@@ -289,7 +292,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                                       ),
                                       const SizedBox(width: 8),
                                       Material(
-                                        color: _statusFilter != 'All'
+                                        color: _statusFilter != 'All' || _placed.isActive
                                             ? const Color(0xFF6C63FF)
                                             : context.appColors.surface,
                                         borderRadius: BorderRadius.circular(14),
@@ -302,7 +305,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                                             decoration: BoxDecoration(
                                               borderRadius: BorderRadius.circular(14),
                                               border: Border.all(
-                                                color: _statusFilter != 'All'
+                                                color: _statusFilter != 'All' || _placed.isActive
                                                     ? const Color(0xFF6C63FF)
                                                     : context.appColors.border,
                                               ),
@@ -313,9 +316,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
                                                 Icon(
                                                   Icons.tune_rounded,
                                                   size: 20,
-                                                  color: _statusFilter != 'All' ? Colors.white : context.appColors.textSecondary,
+                                                  color: _statusFilter != 'All' || _placed.isActive ? Colors.white : context.appColors.textSecondary,
                                                 ),
-                                                if (_statusFilter != 'All')
+                                                if (_statusFilter != 'All' || _placed.isActive)
                                                   Positioned(
                                                     top: 8,
                                                     right: 8,
@@ -337,13 +340,25 @@ class _OrdersScreenState extends State<OrdersScreen> {
                                   );
                                 },
                               ),
-                              if (_statusFilter != 'All') ...[
+                              if (_statusFilter != 'All' || _placed.isActive) ...[
                                 const SizedBox(height: 12),
                                 Align(
                                   alignment: Alignment.centerLeft,
-                                  child: _OrdersActiveFilterChip(
-                                    label: '$_statusFilter (${counts[_statusFilter] ?? 0})',
-                                    onClear: () => setState(() => _statusFilter = 'All'),
+                                  child: Wrap(
+                                    spacing: 8,
+                                    runSpacing: 8,
+                                    children: [
+                                      if (_placed.isActive)
+                                        _OrdersActiveFilterChip(
+                                          label: _placed.chipLabel,
+                                          onClear: () => setState(() => _placed = const PlacedOrderRange()),
+                                        ),
+                                      if (_statusFilter != 'All')
+                                        _OrdersActiveFilterChip(
+                                          label: '$_statusFilter (${counts[_statusFilter] ?? 0})',
+                                          onClear: () => setState(() => _statusFilter = 'All'),
+                                        ),
+                                    ],
                                   ),
                                 ),
                               ],
@@ -369,7 +384,12 @@ class _OrdersScreenState extends State<OrdersScreen> {
                         SliverFillRemaining(
                           hasScrollBody: false,
                           child: Center(
-                            child: Text('No orders found.', style: TextStyle(color: context.appColors.textMuted, fontSize: 16)),
+                            child: Text(
+                              _searchQuery.trim().isNotEmpty || _statusFilter != 'All' || _placed.isActive
+                                  ? 'No orders match your search or filter.'
+                                  : 'No orders found.',
+                              style: TextStyle(color: context.appColors.textMuted, fontSize: 16),
+                            ),
                           ),
                         )
                       else
@@ -392,6 +412,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
   Future<void> _openStatusFilterSheet(Map<String, int> counts) async {
     var draft = _statusFilter;
+    var draftRange = _placed;
     final options = _statusFilters
         .where((f) => f != 'Bought Out' || (counts[f] ?? 0) > 0)
         .toList();
@@ -445,7 +466,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
                               ),
                             ),
                             TextButton(
-                              onPressed: () => setSheetState(() => draft = 'All'),
+                              onPressed: () => setSheetState(() {
+                                draft = 'All';
+                                draftRange = const PlacedOrderRange();
+                              }),
                               child: Text(
                                 'Clear',
                                 style: TextStyle(color: context.appColors.textMuted, fontWeight: FontWeight.w600),
@@ -462,7 +486,14 @@ class _OrdersScreenState extends State<OrdersScreen> {
                       Expanded(
                         child: SingleChildScrollView(
                           padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                          child: Container(
+                          child: Column(
+                            children: [
+                              PlacedOrderRangeSection(
+                                value: draftRange,
+                                onChanged: (next) => setSheetState(() => draftRange = next),
+                              ),
+                              const SizedBox(height: 12),
+                              Container(
                             decoration: BoxDecoration(
                               color: context.appColors.surface,
                               borderRadius: BorderRadius.circular(16),
@@ -494,6 +525,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
                                 ],
                               ],
                             ),
+                          ),
+                            ],
                           ),
                         ),
                       ),
@@ -530,9 +563,11 @@ class _OrdersScreenState extends State<OrdersScreen> {
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
                                 ),
                                 child: Text(
-                                  draft == 'All'
-                                      ? 'Show all orders'
-                                      : 'Show ${draft.toLowerCase()}',
+                                  draftRange.isActive
+                                      ? 'Show matching orders'
+                                      : draft == 'All'
+                                          ? 'Show all orders'
+                                          : 'Show ${draft.toLowerCase()}',
                                   style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
                                 ),
                               ),
@@ -551,7 +586,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
     );
 
     if (applied == true && mounted) {
-      setState(() => _statusFilter = draft);
+      setState(() {
+        _statusFilter = draft;
+        _placed = draftRange;
+      });
     }
   }
 

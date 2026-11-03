@@ -37,6 +37,8 @@ public sealed class GetVendorOrderSummariesRequest : VendorIdRequest
     public string? Status { get; set; }
     public int Page { get; set; } = 1;
     public int PageSize { get; set; } = 8;
+    public DateTimeOffset? From { get; set; }
+    public DateTimeOffset? To { get; set; }
 }
 
 public sealed class GetVendorExpirationSummariesRequest : VendorIdRequest
@@ -71,7 +73,7 @@ public sealed class GetVendorOrderSummariesEndpoint(IMediator mediator)
         var page = req.Page < 1 ? 1 : req.Page;
         var pageSize = req.PageSize is < 1 or > 50 ? 8 : req.PageSize;
         var result = await mediator.Send(
-            new GetVendorOrderListQuery(req.VendorId, req.Search, req.Status, page, pageSize),
+            new GetVendorOrderListQuery(req.VendorId, req.Search, req.Status, page, pageSize, req.From, req.To),
             ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }

@@ -9,7 +9,9 @@ public sealed record GetAdminOrderListQuery(
     string? Search,
     string? Status,
     int Page = 1,
-    int PageSize = 8) : IQuery<AdminOrderListResult>;
+    int PageSize = 8,
+    DateTimeOffset? From = null,
+    DateTimeOffset? To = null) : IQuery<AdminOrderListResult>;
 
 public sealed class GetAdminOrderListQueryValidator : AbstractValidator<GetAdminOrderListQuery>
 {
@@ -27,6 +29,11 @@ internal sealed class GetAdminOrderListQueryHandler(ICustomerRepository customer
         GetAdminOrderListQuery request,
         CancellationToken cancellationToken)
     {
+        var fromUtc = ToUtc(request.From);
+        var toUtc = ToUtc(request.To);
+        if (fromUtc.HasValue && toUtc.HasValue && fromUtc > toUtc)
+            (fromUtc, toUtc) = (toUtc, fromUtc);
+
         var result = await customers.SearchAdminOrderSummariesAsync(
             new AdminOrderListQuerySpec
             {
@@ -34,9 +41,14 @@ internal sealed class GetAdminOrderListQueryHandler(ICustomerRepository customer
                 Status = request.Status,
                 Page = request.Page,
                 PageSize = request.PageSize,
+                FromUtc = fromUtc,
+                ToUtc = toUtc,
             },
             cancellationToken);
 
         return Result.Success(result);
     }
+
+    private static DateTime? ToUtc(DateTimeOffset? value) =>
+        value is null ? null : DateTime.SpecifyKind(value.Value.UtcDateTime, DateTimeKind.Utc);
 }

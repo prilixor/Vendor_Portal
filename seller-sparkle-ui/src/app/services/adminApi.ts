@@ -1573,6 +1573,10 @@ export const adminApi = {
   async getAdminOrderSummaries(params: {
     search?: string;
     status?: string;
+    /** Inclusive UTC instant. The orders page sends the start of the selected minute. */
+    from?: string;
+    /** Inclusive UTC instant. The API includes the whole selected minute. */
+    to?: string;
     page?: number;
     pageSize?: number;
   } = {}, options?: ApiClientOptions): Promise<AdminOrderListResult> {
@@ -1580,6 +1584,8 @@ export const adminApi = {
     const search = params.search?.trim();
     if (search) qs.set("search", search);
     if (params.status && params.status !== "all") qs.set("status", params.status);
+    if (params.from) qs.set("from", params.from);
+    if (params.to) qs.set("to", params.to);
     qs.set("page", String(params.page && params.page > 0 ? params.page : 1));
     qs.set("pageSize", String(params.pageSize && params.pageSize > 0 ? params.pageSize : 8));
     return apiClient.get<AdminOrderListResult>(`/admin/orders/summaries?${qs.toString()}`, options);

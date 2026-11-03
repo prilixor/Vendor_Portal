@@ -58,6 +58,8 @@ public sealed class GetAdminOrderSummariesRequest
     public string? Status { get; set; }
     public int Page { get; set; } = 1;
     public int PageSize { get; set; } = 8;
+    public DateTimeOffset? From { get; set; }
+    public DateTimeOffset? To { get; set; }
 }
 
 public sealed class VerifyVendorBankAccountRequest : AdminUserIdRequest
@@ -883,7 +885,9 @@ public sealed class GetAdminOrderSummariesEndpoint(IMediator mediator)
     {
         var page = req.Page < 1 ? 1 : req.Page;
         var pageSize = req.PageSize is < 1 or > 100 ? 8 : req.PageSize;
-        var result = await mediator.Send(new GetAdminOrderListQuery(req.Search, req.Status, page, pageSize), ct);
+        var result = await mediator.Send(
+            new GetAdminOrderListQuery(req.Search, req.Status, page, pageSize, req.From, req.To),
+            ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }

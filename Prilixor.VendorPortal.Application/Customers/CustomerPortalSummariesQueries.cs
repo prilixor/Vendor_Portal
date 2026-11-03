@@ -13,6 +13,8 @@ public sealed class CustomerOrderListQuerySpec
     public string? Status { get; init; }
     public int Page { get; init; } = 1;
     public int PageSize { get; init; } = 8;
+    public DateTime? FromUtc { get; init; }
+    public DateTime? ToUtc { get; init; }
 }
 
 public sealed class CustomerOrderListResult
@@ -29,7 +31,9 @@ public sealed record GetCustomerOrderListQuery(
     string? Search,
     string? Status,
     int Page = 1,
-    int PageSize = 8) : IQuery<CustomerOrderListResult>;
+    int PageSize = 8,
+    DateTimeOffset? From = null,
+    DateTimeOffset? To = null) : IQuery<CustomerOrderListResult>;
 
 public sealed class GetCustomerOrderListQueryValidator : AbstractValidator<GetCustomerOrderListQuery>
 {
@@ -49,6 +53,10 @@ internal sealed class GetCustomerOrderListQueryHandler(ICustomerRepository custo
     {
         var page = Math.Max(1, request.Page);
         var pageSize = Math.Clamp(request.PageSize, 1, 50);
+        var fromUtc = ToUtc(request.From);
+        var toUtc = ToUtc(request.To);
+        if (fromUtc.HasValue && toUtc.HasValue && fromUtc > toUtc)
+            (fromUtc, toUtc) = (toUtc, fromUtc);
         var result = await customers.SearchCustomerOrderSummariesAsync(
             new CustomerOrderListQuerySpec
             {
@@ -57,10 +65,15 @@ internal sealed class GetCustomerOrderListQueryHandler(ICustomerRepository custo
                 Status = request.Status,
                 Page = page,
                 PageSize = pageSize,
+                FromUtc = fromUtc,
+                ToUtc = toUtc,
             },
             cancellationToken);
         return Result.Success(result);
     }
+
+    private static DateTime? ToUtc(DateTimeOffset? value) =>
+        value is null ? null : DateTime.SpecifyKind(value.Value.UtcDateTime, DateTimeKind.Utc);
 }
 
 public sealed record GetCustomerOrderGroupQuery(Guid CustomerId, Guid OrderId) : IQuery<List<CustomerOrderDto>>;

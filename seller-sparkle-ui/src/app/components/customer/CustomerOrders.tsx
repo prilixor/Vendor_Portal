@@ -22,6 +22,14 @@ import {
   FilterSelectRow,
   type ActiveFilterChip,
 } from "@/app/components/shared/ProfessionalFilters";
+import {
+  inferPreset,
+  isPlacedRangeOrdered,
+  placedFilterLabel,
+  placedLocalToUtcIso,
+  PlacedRangeEditor,
+  type PlacedPresetId,
+} from "@/app/components/shared/PlacedRangeFilter";
 
 const PAGE_SIZE = 8;
 
@@ -122,6 +130,11 @@ const CustomerOrders = () => {
   const [cancelOrderId, setCancelOrderId] = useState<string | null>(null);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [draftFilter, setDraftFilter] = useState<StatusFilter>("All");
+  const [placedFrom, setPlacedFrom] = useState("");
+  const [placedTo, setPlacedTo] = useState("");
+  const [draftPreset, setDraftPreset] = useState<PlacedPresetId>("any");
+  const [draftFrom, setDraftFrom] = useState("");
+  const [draftTo, setDraftTo] = useState("");
 
   useEffect(() => {
     const s = searchParams.get("status") as StatusFilter;
@@ -144,6 +157,9 @@ const CustomerOrders = () => {
 
   const openFilters = () => {
     setDraftFilter(appliedFilter);
+    setDraftFrom(placedFrom);
+    setDraftTo(placedTo);
+    setDraftPreset(inferPreset(placedFrom, placedTo));
     setFiltersOpen(true);
   };
 
@@ -154,14 +170,16 @@ const CustomerOrders = () => {
 
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch, appliedFilter]);
+  }, [debouncedSearch, appliedFilter, placedFrom, placedTo]);
 
   const { data, isLoading, isPlaceholderData, error } = useQuery({
-    queryKey: ["customer-order-summaries", page, debouncedSearch, appliedFilter],
+    queryKey: ["customer-order-summaries", page, debouncedSearch, appliedFilter, placedFrom, placedTo],
     queryFn: () =>
       customerApi.getOrderSummaries({
         search: debouncedSearch,
         status: appliedFilter,
+        from: placedLocalToUtcIso(placedFrom),
+        to: placedLocalToUtcIso(placedTo),
         page,
         pageSize: PAGE_SIZE,
       }, { quiet: true }),
@@ -188,16 +206,24 @@ const CustomerOrders = () => {
     (label) => label !== "Bought Out" || (statusCounts["Bought Out"] ?? 0) > 0,
   );
 
-  const activeChips: ActiveFilterChip[] =
-    appliedFilter === "All"
-      ? []
-      : [
-          {
-            key: "status",
-            label: `${appliedFilter} (${statusCounts[appliedFilter] ?? 0})`,
-            onClear: () => handleFilterChange("All"),
-          },
-        ];
+  const activeChips: ActiveFilterChip[] = [];
+  if (placedFrom || placedTo) {
+    activeChips.push({
+      key: "placed",
+      label: placedFilterLabel(placedFrom, placedTo),
+      onClear: () => {
+        setPlacedFrom("");
+        setPlacedTo("");
+      },
+    });
+  }
+  if (appliedFilter !== "All") {
+    activeChips.push({
+      key: "status",
+      label: `${appliedFilter} (${statusCounts[appliedFilter] ?? 0})`,
+      onClear: () => handleFilterChange("All"),
+    });
+  }
 
   const totalPages = Math.max(1, Math.ceil(totalCount / PAGE_SIZE));
   const safePage = Math.min(page, totalPages);
@@ -223,35 +249,79 @@ const CustomerOrders = () => {
           onChange={setSearchInput}
           placeholder="Search by order ID, item, or supplier"
           mobilePlaceholder="Search orders"
-          activeCount={appliedFilter === "All" ? 0 : 1}
+          activeCount={activeChips.length}
           onOpenFilters={openFilters}
           aria-label="Search orders"
         />
-        <ActiveFilterChips chips={activeChips} />
+        <ActiveFilterChips
+          chips={activeChips}
+          onClearAll={
+            activeChips.length > 1
+              ? () => {
+                  handleFilterChange("All");
+                  setPlacedFrom("");
+                  setPlacedTo("");
+                }
+              : undefined
+          }
+        />
       </div>
 
       <FilterPanel
         open={filtersOpen}
         onOpenChange={setFiltersOpen}
         title="Filter orders"
-        description="Show orders by current status."
-        onReset={() => setDraftFilter("All")}
+        description="Pick when the order was placed, then a status."
+        onReset={() => {
+          setDraftFilter("All");
+          setDraftPreset("any");
+          setDraftFrom("");
+          setDraftTo("");
+        }}
         resetLabel="Clear"
-        onApply={() => handleFilterChange(draftFilter)}
-        applyLabel={draftFilter === "All" ? "Show all orders" : `Show ${draftFilter.toLowerCase()}`}
+        onApply={() => {
+          if (!isPlacedRangeOrdered(draftFrom, draftTo)) return;
+          setPlacedFrom(draftFrom);
+          setPlacedTo(draftTo);
+          handleFilterChange(draftFilter);
+        }}
+        applyDisabled={!isPlacedRangeOrdered(draftFrom, draftTo)}
+        applyLabel={
+          !isPlacedRangeOrdered(draftFrom, draftTo)
+            ? "End time is too early"
+            : draftFrom || draftTo
+              ? "Show matching orders"
+              : draftFilter === "All"
+                ? "Show all orders"
+                : `Show ${draftFilter.toLowerCase()}`
+        }
       >
-        <FilterSection title="Status">
-          {statusOptions.map((label, index) => (
-            <FilterSelectRow
-              key={label}
-              label={label}
-              count={statusCounts[label] ?? 0}
-              selected={draftFilter === label}
-              onClick={() => setDraftFilter(label)}
-              showDivider={index > 0}
+        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain">
+          <FilterSection title="Order placed" className="shrink-0">
+            <PlacedRangeEditor
+              preset={draftPreset}
+              from={draftFrom}
+              to={draftTo}
+              onChange={(next) => {
+                setDraftPreset(next.preset);
+                setDraftFrom(next.from);
+                setDraftTo(next.to);
+              }}
             />
-          ))}
-        </FilterSection>
+          </FilterSection>
+          <FilterSection title="Status" className="shrink-0">
+            {statusOptions.map((label, index) => (
+              <FilterSelectRow
+                key={label}
+                label={label}
+                count={statusCounts[label] ?? 0}
+                selected={draftFilter === label}
+                onClick={() => setDraftFilter(label)}
+                showDivider={index > 0}
+              />
+            ))}
+          </FilterSection>
+        </div>
       </FilterPanel>
 
       <p className="text-xs text-muted-foreground">

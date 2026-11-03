@@ -1101,7 +1101,8 @@ public sealed class CustomerRepository(
             orders.Select(o => o.VendorProductListingId),
             cancellationToken);
 
-        IEnumerable<CustomerRentalOrder> filtered = orders;
+        var (fromUtc, toUtc) = NormalizePlacedWindow(spec.FromUtc, spec.ToUtc);
+        IEnumerable<CustomerRentalOrder> filtered = orders.Where(o => MatchesPlacedInstant(o.CreatedOnUtc, fromUtc, toUtc));
         if (!string.IsNullOrEmpty(search))
         {
             filtered = filtered.Where(o =>
@@ -1552,8 +1553,10 @@ public sealed class CustomerRepository(
         var search = spec.Search?.Trim() ?? string.Empty;
         var status = string.IsNullOrWhiteSpace(spec.Status) ? "all" : spec.Status.Trim();
         var visible = await LoadVendorVisibleOrdersAsync(spec.VendorId, cancellationToken);
+        var (fromUtc, toUtc) = NormalizePlacedWindow(spec.FromUtc, spec.ToUtc);
 
-        IEnumerable<CustomerRentalOrderWithListing> filtered = visible;
+        IEnumerable<CustomerRentalOrderWithListing> filtered = visible.Where(row =>
+            MatchesPlacedInstant(row.Order.CreatedOnUtc, fromUtc, toUtc));
         if (!string.IsNullOrEmpty(search))
         {
             filtered = filtered.Where(row =>
@@ -2072,6 +2075,11 @@ public sealed class CustomerRepository(
         if (string.IsNullOrWhiteSpace(status)) status = "all";
 
         var live = customerDb.CustomerRentalOrders.AsNoTracking().Where(o => !o.IsDeleted);
+        var fromUtc = NormalizeAdminOrderInstant(spec.FromUtc);
+        var toUtc = NormalizeAdminOrderInstant(spec.ToUtc);
+        if (fromUtc.HasValue && toUtc.HasValue && fromUtc > toUtc)
+            (fromUtc, toUtc) = (toUtc, fromUtc);
+        var placed = ApplyAdminOrderPlacedFilter(live, fromUtc, toUtc);
 
         var stats = new AdminOrderListStats(
             await live.CountAsync(cancellationToken),
@@ -2085,9 +2093,10 @@ public sealed class CustomerRepository(
 
         if (string.IsNullOrEmpty(search))
         {
-            statusCounts = await BuildStatusCountsFromQueryAsync(live, cancellationToken);
-            var filtered = ApplyAdminOrderStatusFilter(live, status);
-            var totalCount = status == "all"
+            statusCounts = await BuildStatusCountsFromQueryAsync(placed, cancellationToken);
+            var filtered = ApplyAdminOrderStatusFilter(placed, status);
+            var hasPlacedFilter = fromUtc.HasValue || toUtc.HasValue;
+            var totalCount = status == "all" && !hasPlacedFilter
                 ? stats.TotalCount
                 : await filtered.CountAsync(cancellationToken);
             pageOrders = await filtered
@@ -2109,7 +2118,7 @@ public sealed class CustomerRepository(
             };
         }
 
-        var candidates = await live
+        var candidates = await placed
             .Include(o => o.Customer)
             .OrderByDescending(o => o.CreatedOnUtc)
             .ToListAsync(cancellationToken);
@@ -3588,6 +3597,55 @@ public sealed class CustomerRepository(
     [
         "all", "pending", "confirmed", "in_transit", "active", "returned", "bought_out", "cancelled", "dispatch_failed"
     ];
+
+    private static (DateTime? FromUtc, DateTime? ToUtc) NormalizePlacedWindow(DateTime? fromUtc, DateTime? toUtc)
+    {
+        if (fromUtc.HasValue && toUtc.HasValue && fromUtc > toUtc)
+            return (toUtc, fromUtc);
+        return (fromUtc, toUtc);
+    }
+
+    private static bool MatchesPlacedInstant(DateTime createdOnUtc, DateTime? fromUtc, DateTime? toUtc)
+    {
+        if (fromUtc.HasValue && createdOnUtc < fromUtc.Value)
+            return false;
+        if (toUtc.HasValue && createdOnUtc >= toUtc.Value.AddMinutes(1))
+            return false;
+        return true;
+    }
+
+    private static DateTime? NormalizeAdminOrderInstant(DateTime? value)
+    {
+        if (value is null) return null;
+        var instant = value.Value;
+        return instant.Kind switch
+        {
+            DateTimeKind.Utc => instant,
+            DateTimeKind.Local => instant.ToUniversalTime(),
+            _ => DateTime.SpecifyKind(instant, DateTimeKind.Utc),
+        };
+    }
+
+    private static IQueryable<CustomerRentalOrder> ApplyAdminOrderPlacedFilter(
+        IQueryable<CustomerRentalOrder> query,
+        DateTime? fromUtc,
+        DateTime? toUtc)
+    {
+        if (fromUtc.HasValue)
+        {
+            var from = fromUtc.Value;
+            query = query.Where(o => o.CreatedOnUtc >= from);
+        }
+
+        if (toUtc.HasValue)
+        {
+            // The picker is minute precision. Include every order placed in that minute.
+            var endExclusive = toUtc.Value.AddMinutes(1);
+            query = query.Where(o => o.CreatedOnUtc < endExclusive);
+        }
+
+        return query;
+    }
 
     private static IQueryable<CustomerRentalOrder> ApplyAdminOrderStatusFilter(
         IQueryable<CustomerRentalOrder> query,

@@ -8,6 +8,7 @@ import '../../core/utils/debouncer.dart';
 import 'expirations_screen.dart';
 import 'order_detail_screen.dart';
 import 'order_group_utils.dart';
+import 'placed_order_range.dart';
 
 /// Orders list — grouped by base order ID (Vendor Web parity).
 class OrdersScreen extends StatefulWidget {
@@ -24,6 +25,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
   final Debouncer _searchDebouncer = Debouncer(duration: catalogSearchDebounce);
   String _searchQuery = '';
   late String _statusFilter;
+  PlacedOrderRange _placed = const PlacedOrderRange();
 
   static const _statusFilters = <(String id, String label)>[
     ('all', 'All'),
@@ -69,6 +71,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
       silent: silent,
       search: _searchQuery,
       status: _statusFilter,
+      placedFrom: _placed.fromUtcIso,
+      placedTo: _placed.toUtcIso,
+      applyPlacedRange: true,
       reset: true,
     );
   }
@@ -83,6 +88,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
       vendorId,
       search: _searchQuery,
       status: _statusFilter,
+      placedFrom: _placed.fromUtcIso,
+      placedTo: _placed.toUtcIso,
+      applyPlacedRange: true,
       reset: false,
     );
   }
@@ -92,6 +100,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
   Future<void> _openStatusFilterSheet(Map<String, int> counts) async {
     var draft = _statusFilter;
+    var draftRange = _placed;
     final options = _statusFilters
         .where((f) => f.$1 != 'bought_out' || (counts[f.$1] ?? 0) > 0)
         .toList();
@@ -145,7 +154,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
                               ),
                             ),
                             TextButton(
-                              onPressed: () => setSheetState(() => draft = 'all'),
+                              onPressed: () => setSheetState(() {
+                                draft = 'all';
+                                draftRange = const PlacedOrderRange();
+                              }),
                               child: Text(
                                 'Clear',
                                 style: TextStyle(
@@ -165,7 +177,14 @@ class _OrdersScreenState extends State<OrdersScreen> {
                       Expanded(
                         child: SingleChildScrollView(
                           padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-                          child: Container(
+                          child: Column(
+                            children: [
+                              PlacedOrderRangeSection(
+                                value: draftRange,
+                                onChanged: (next) => setSheetState(() => draftRange = next),
+                              ),
+                              const SizedBox(height: 12),
+                              Container(
                             decoration: BoxDecoration(
                               color: sheetColors.surface,
                               borderRadius: BorderRadius.circular(16),
@@ -191,6 +210,8 @@ class _OrdersScreenState extends State<OrdersScreen> {
                               ],
                             ),
                           ),
+                            ],
+                          ),
                         ),
                       ),
                       Padding(
@@ -209,9 +230,11 @@ class _OrdersScreenState extends State<OrdersScreen> {
                               child: ElevatedButton(
                                 onPressed: () => Navigator.pop(ctx, true),
                                 child: Text(
-                                  draft == 'all'
-                                      ? 'Show all orders'
-                                      : 'Show ${_labelFor(draft)}',
+                                  draftRange.isActive
+                                      ? 'Show matching orders'
+                                      : draft == 'all'
+                                          ? 'Show all orders'
+                                          : 'Show ${_labelFor(draft)}',
                                 ),
                               ),
                             ),
@@ -229,7 +252,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
     );
 
     if (applied == true && mounted) {
-      setState(() => _statusFilter = draft);
+      setState(() {
+        _statusFilter = draft;
+        _placed = draftRange;
+      });
       _load();
     }
   }
@@ -263,84 +289,92 @@ class _OrdersScreenState extends State<OrdersScreen> {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.stretch,
             children: [
-              TextField(
-                controller: _searchController,
-                style: TextStyle(color: colors.textPrimary, fontSize: 14),
-                onChanged: (v) {
-                  setState(() => _searchQuery = v);
-                  _searchDebouncer.run(_load);
-                },
-                decoration: InputDecoration(
-                  hintText: 'Search orders',
-                  hintStyle: TextStyle(
-                    color: colors.textMuted,
-                    fontSize: 13,
-                  ),
-                  prefixIcon: const Icon(Icons.search_rounded, color: AppTheme.accent, size: 20),
-                  prefixIconConstraints: const BoxConstraints(minWidth: 44, maxWidth: 44),
-                  isDense: true,
-                  filled: true,
-                  fillColor: AppTheme.card(context),
-                  contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 13),
-                  border: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide.none,
-                  ),
-                  enabledBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: BorderSide(color: colors.border.withValues(alpha: 0.7)),
-                  ),
-                  focusedBorder: OutlineInputBorder(
-                    borderRadius: BorderRadius.circular(14),
-                    borderSide: const BorderSide(color: AppTheme.accent, width: 1.2),
-                  ),
-                ),
-              ),
-              const SizedBox(height: 8),
               Row(
                 children: [
                   Expanded(
-                    child: _OrdersToolbarButton(
-                      icon: Icons.tune_rounded,
-                      label: _statusFilter == 'all'
-                          ? 'Filter status'
-                          : _labelFor(_statusFilter),
-                      active: _statusFilter != 'all',
-                      onTap: () => _openStatusFilterSheet(counts),
+                    child: TextField(
+                      controller: _searchController,
+                      style: TextStyle(color: colors.textPrimary, fontSize: 14),
+                      onChanged: (v) {
+                        setState(() => _searchQuery = v);
+                        _searchDebouncer.run(_load);
+                      },
+                      decoration: InputDecoration(
+                        hintText: 'Search orders',
+                        hintStyle: TextStyle(
+                          color: colors.textMuted,
+                          fontSize: 13,
+                        ),
+                        prefixIcon: const Icon(Icons.search_rounded, color: AppTheme.accent, size: 20),
+                        prefixIconConstraints: const BoxConstraints(minWidth: 44, maxWidth: 44),
+                        isDense: true,
+                        filled: true,
+                        fillColor: AppTheme.card(context),
+                        contentPadding: const EdgeInsets.symmetric(horizontal: 8, vertical: 13),
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide.none,
+                        ),
+                        enabledBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: BorderSide(color: colors.border.withValues(alpha: 0.7)),
+                        ),
+                        focusedBorder: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(14),
+                          borderSide: const BorderSide(color: AppTheme.accent, width: 1.2),
+                        ),
+                      ),
                     ),
                   ),
                   const SizedBox(width: 8),
-                  Expanded(
-                    child: _OrdersToolbarButton(
-                      icon: Icons.timer_outlined,
-                      label: 'Expirations',
-                      onTap: () {
-                        Navigator.of(context).push(
-                          MaterialPageRoute(builder: (_) => const ExpirationsScreen()),
-                        );
-                      },
-                    ),
+                  _OrdersFilterButton(
+                    active: _statusFilter != 'all' || _placed.isActive,
+                    onTap: () => _openStatusFilterSheet(counts),
                   ),
                 ],
+              ),
+              const SizedBox(height: 8),
+              Align(
+                alignment: Alignment.centerLeft,
+                child: _OrdersToolbarButton(
+                  icon: Icons.timer_outlined,
+                  label: 'Expirations',
+                  onTap: () {
+                    Navigator.of(context).push(
+                      MaterialPageRoute(builder: (_) => const ExpirationsScreen()),
+                    );
+                  },
+                ),
               ),
             ],
           ),
         ),
-        if (_statusFilter != 'all')
+        if (_statusFilter != 'all' || _placed.isActive)
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 10, 16, 0),
             child: Align(
               alignment: Alignment.centerLeft,
-              child: InputChip(
-                label: Text('${_labelFor(_statusFilter)} (${counts[_statusFilter] ?? 0})'),
-                onDeleted: () {
-                  setState(() => _statusFilter = 'all');
-                  _load();
-                },
-                deleteIconColor: colors.textSecondary,
-                backgroundColor: AppTheme.accent.withValues(alpha: 0.25),
-                labelStyle: TextStyle(color: colors.textPrimary),
-                side: BorderSide.none,
+              child: Wrap(
+                spacing: 8,
+                runSpacing: 8,
+                children: [
+                  if (_placed.isActive)
+                    _OrdersActiveFilterChip(
+                      label: _placed.chipLabel,
+                      onClear: () {
+                        setState(() => _placed = const PlacedOrderRange());
+                        _load();
+                      },
+                    ),
+                  if (_statusFilter != 'all')
+                    _OrdersActiveFilterChip(
+                      label: '${_labelFor(_statusFilter)} (${counts[_statusFilter] ?? 0})',
+                      onClear: () {
+                        setState(() => _statusFilter = 'all');
+                        _load();
+                      },
+                    ),
+                ],
               ),
             ),
           ),
@@ -609,55 +643,128 @@ class _OrdersToolbarButton extends StatelessWidget {
   final IconData icon;
   final String label;
   final VoidCallback onTap;
-  final bool active;
 
   const _OrdersToolbarButton({
     required this.icon,
     required this.label,
     required this.onTap,
-    this.active = false,
   });
 
   @override
   Widget build(BuildContext context) {
     final colors = context.appColors;
-    final bg = active ? AppTheme.accent.withValues(alpha: 0.14) : AppTheme.card(context);
-    final border = active ? AppTheme.accent.withValues(alpha: 0.45) : colors.border.withValues(alpha: 0.7);
-    final fg = active ? AppTheme.accent : colors.textSecondary;
 
     return Material(
-      color: bg,
+      color: AppTheme.card(context),
       borderRadius: BorderRadius.circular(12),
       child: InkWell(
         onTap: onTap,
         borderRadius: BorderRadius.circular(12),
         child: Container(
           height: 42,
-          padding: const EdgeInsets.symmetric(horizontal: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 12),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(12),
-            border: Border.all(color: border),
+            border: Border.all(color: colors.border.withValues(alpha: 0.7)),
           ),
           child: Row(
+            mainAxisSize: MainAxisSize.min,
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(icon, size: 17, color: fg),
+              Icon(icon, size: 17, color: colors.textSecondary),
               const SizedBox(width: 6),
-              Flexible(
-                child: Text(
-                  label,
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                  style: TextStyle(
-                    color: active ? AppTheme.accent : colors.textPrimary,
-                    fontSize: 12,
-                    fontWeight: FontWeight.w700,
-                  ),
+              Text(
+                label,
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+                style: TextStyle(
+                  color: colors.textPrimary,
+                  fontSize: 12,
+                  fontWeight: FontWeight.w700,
                 ),
               ),
             ],
           ),
         ),
+      ),
+    );
+  }
+}
+
+class _OrdersFilterButton extends StatelessWidget {
+  final bool active;
+  final VoidCallback onTap;
+
+  const _OrdersFilterButton({required this.active, required this.onTap});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+    return Material(
+      color: active ? AppTheme.accent : AppTheme.card(context),
+      borderRadius: BorderRadius.circular(14),
+      child: InkWell(
+        onTap: onTap,
+        borderRadius: BorderRadius.circular(14),
+        child: Container(
+          width: 48,
+          height: 48,
+          decoration: BoxDecoration(
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: active ? AppTheme.accent : colors.border.withValues(alpha: 0.7)),
+          ),
+          child: Stack(
+            alignment: Alignment.center,
+            children: [
+              Icon(Icons.tune_rounded, size: 20, color: active ? Colors.white : colors.textSecondary),
+              if (active)
+                Positioned(
+                  top: 8,
+                  right: 8,
+                  child: Container(
+                    width: 7,
+                    height: 7,
+                    decoration: BoxDecoration(color: colors.textPrimary, shape: BoxShape.circle),
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+class _OrdersActiveFilterChip extends StatelessWidget {
+  final String label;
+  final VoidCallback onClear;
+
+  const _OrdersActiveFilterChip({required this.label, required this.onClear});
+
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.only(left: 12, right: 4),
+      decoration: BoxDecoration(
+        color: const Color(0xFF6C63FF).withValues(alpha: 0.18),
+        borderRadius: BorderRadius.circular(999),
+        border: Border.all(color: const Color(0xFF6C63FF).withValues(alpha: 0.45)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Text(
+            label,
+            style: TextStyle(color: context.appColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w600),
+          ),
+          IconButton(
+            onPressed: onClear,
+            icon: Icon(Icons.close, size: 16, color: context.appColors.textSecondary),
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
+            visualDensity: VisualDensity.compact,
+          ),
+        ],
       ),
     );
   }

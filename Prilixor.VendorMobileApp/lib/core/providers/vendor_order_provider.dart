@@ -103,6 +103,8 @@ class VendorOrderProvider extends ChangeNotifier {
   bool get hasMoreOrders => _orders.length < _orderTotalCount;
   String? _lastOrderSearch;
   String? _lastOrderStatus;
+  String? _lastPlacedFrom;
+  String? _lastPlacedTo;
 
   int _offerPage = 1;
   int _offerTotalCount = 0;
@@ -245,10 +247,17 @@ class VendorOrderProvider extends ChangeNotifier {
     String vendorId, {
     String? status,
     String? search,
+    String? placedFrom,
+    String? placedTo,
+    bool applyPlacedRange = false,
     bool silent = false,
     bool reset = true,
   }) async {
     if (vendorId.isEmpty) return;
+    if (reset && applyPlacedRange) {
+      _lastPlacedFrom = placedFrom;
+      _lastPlacedTo = placedTo;
+    }
     if (!reset) {
       if (_ordersLoading || _ordersLoadingMore || !hasMoreOrders) return;
       _ordersLoadingMore = true;
@@ -263,7 +272,7 @@ class VendorOrderProvider extends ChangeNotifier {
       );
       return;
     }
-    final key = '$vendorId|${status ?? 'all'}|${search ?? ''}';
+    final key = '$vendorId|${status ?? 'all'}|${search ?? ''}|${_lastPlacedFrom ?? ''}|${_lastPlacedTo ?? ''}';
     if (_ordersInflight != null && _ordersInflightKey == key) {
       return _ordersInflight!;
     }
@@ -309,6 +318,8 @@ class VendorOrderProvider extends ChangeNotifier {
       if (q != null && q.isNotEmpty) query['search'] = q;
       final st = reset ? (status ?? _lastOrderStatus) : _lastOrderStatus;
       if (st != null && st.isNotEmpty && st != 'all') query['status'] = st;
+      if (_lastPlacedFrom != null && _lastPlacedFrom!.isNotEmpty) query['from'] = _lastPlacedFrom;
+      if (_lastPlacedTo != null && _lastPlacedTo!.isNotEmpty) query['to'] = _lastPlacedTo;
 
       final response = await _api.dio.get(
         '/vendors/$vendorId/orders/summaries',

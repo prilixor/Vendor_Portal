@@ -6,6 +6,13 @@ public sealed class AdminOrderListQuerySpec
     public string? Status { get; init; }
     public int Page { get; init; } = 1;
     public int PageSize { get; init; } = 8;
+    /// <summary>Inclusive lower bound on <c>CreatedOnUtc</c>. Null leaves the start open.</summary>
+    public DateTime? FromUtc { get; init; }
+    /// <summary>
+    /// Inclusive upper bound on the placed minute. The orders screen sends minute precision;
+    /// the query includes every order in that minute.
+    /// </summary>
+    public DateTime? ToUtc { get; init; }
 }
 
 public sealed record AdminOrderListStats(

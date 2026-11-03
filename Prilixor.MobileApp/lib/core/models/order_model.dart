@@ -1,5 +1,11 @@
 import '../utils/media_url.dart';
 
+DateTime? _parseCreatedAt(Object? raw) {
+  final parsed = DateTime.tryParse(raw?.toString() ?? '');
+  if (parsed == null || parsed.year < 2000) return null;
+  return parsed.toUtc();
+}
+
 class PrescriptionFileModel {
   final String id;
   final String orderId;
@@ -71,6 +77,7 @@ class OrderModel {
   final bool isExtended;
   final String? discountCode;
   final double discountAmount;
+  final DateTime? createdAtUtc;
   final OrderReturnInfo? returnSettlement;
   final OrderCancellationInfo? cancellationRefund;
 
@@ -112,6 +119,7 @@ class OrderModel {
     this.isExtended = false,
     this.discountCode,
     this.discountAmount = 0,
+    this.createdAtUtc,
     this.returnSettlement,
     this.cancellationRefund,
   });
@@ -163,6 +171,7 @@ class OrderModel {
       isExtended: json['isExtended'] == true,
       discountCode: json['discountCode']?.toString(),
       discountAmount: (json['discountAmount'] ?? 0).toDouble(),
+      createdAtUtc: _parseCreatedAt(json['createdOnUtc'] ?? json['createdAtUtc']),
       returnSettlement: OrderReturnInfo.fromJson(json['returnSettlement']),
       cancellationRefund: OrderCancellationInfo.fromJson(json['cancellationRefund']),
     );

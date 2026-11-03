@@ -14,6 +14,8 @@ public sealed class VendorOrderListQuerySpec
     public string? Status { get; init; }
     public int Page { get; init; } = 1;
     public int PageSize { get; init; } = 8;
+    public DateTime? FromUtc { get; init; }
+    public DateTime? ToUtc { get; init; }
 }
 
 public sealed class VendorOrderListResult
@@ -30,7 +32,9 @@ public sealed record GetVendorOrderListQuery(
     string? Search,
     string? Status,
     int Page = 1,
-    int PageSize = 8) : IQuery<VendorOrderListResult>;
+    int PageSize = 8,
+    DateTimeOffset? From = null,
+    DateTimeOffset? To = null) : IQuery<VendorOrderListResult>;
 
 public sealed class GetVendorOrderListQueryValidator : AbstractValidator<GetVendorOrderListQuery>
 {
@@ -52,6 +56,10 @@ internal sealed class GetVendorOrderListQueryHandler(ICustomerRepository custome
         if (!Guid.TryParse(request.VendorId, out var vendorId))
             return Result.Failure<VendorOrderListResult>(new Error("vendors.invalid_id", "Vendor id must be a valid UUID.", ErrorCategory.Validation));
 
+        var fromUtc = ToUtc(request.From);
+        var toUtc = ToUtc(request.To);
+        if (fromUtc.HasValue && toUtc.HasValue && fromUtc > toUtc)
+            (fromUtc, toUtc) = (toUtc, fromUtc);
         var result = await customers.SearchVendorOrderSummariesAsync(
             new VendorOrderListQuerySpec
             {
@@ -60,10 +68,15 @@ internal sealed class GetVendorOrderListQueryHandler(ICustomerRepository custome
                 Status = request.Status,
                 Page = Math.Max(1, request.Page),
                 PageSize = Math.Clamp(request.PageSize, 1, 50),
+                FromUtc = fromUtc,
+                ToUtc = toUtc,
             },
             cancellationToken);
         return Result.Success(result);
     }
+
+    private static DateTime? ToUtc(DateTimeOffset? value) =>
+        value is null ? null : DateTime.SpecifyKind(value.Value.UtcDateTime, DateTimeKind.Utc);
 }
 
 public sealed record GetVendorOrderGroupQuery(string VendorId, Guid OrderId) : IQuery<List<VendorOrderDto>>;

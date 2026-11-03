@@ -23,6 +23,14 @@ import {
   FilterSelectRow,
   type ActiveFilterChip,
 } from "@/app/components/shared/ProfessionalFilters";
+import {
+  inferPreset,
+  isPlacedRangeOrdered,
+  placedFilterLabel,
+  placedLocalToUtcIso,
+  PlacedRangeEditor,
+  type PlacedPresetId,
+} from "@/app/components/shared/PlacedRangeFilter";
 
 const PAGE_SIZE = 8;
 
@@ -118,6 +126,11 @@ const VendorOrders = () => {
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [draftStatus, setDraftStatus] = useState<(typeof statusTabs)[number]["id"]>("all");
+  const [placedFrom, setPlacedFrom] = useState("");
+  const [placedTo, setPlacedTo] = useState("");
+  const [draftPreset, setDraftPreset] = useState<PlacedPresetId>("any");
+  const [draftFrom, setDraftFrom] = useState("");
+  const [draftTo, setDraftTo] = useState("");
 
   useEffect(() => {
     const t = window.setTimeout(() => setDebouncedSearch(searchInput.trim()), 350);
@@ -126,7 +139,7 @@ const VendorOrders = () => {
 
   useEffect(() => {
     setPage(1);
-  }, [debouncedSearch, activeStatus]);
+  }, [debouncedSearch, activeStatus, placedFrom, placedTo]);
 
   useEffect(() => {
     const urlStatus = searchParams.get("status");
@@ -138,11 +151,13 @@ const VendorOrders = () => {
   }, [searchParams]);
 
   const { data, isLoading, isPlaceholderData, isError, error, refetch } = useQuery({
-    queryKey: ["vendor-order-summaries", user?.id, page, debouncedSearch, activeStatus],
+    queryKey: ["vendor-order-summaries", user?.id, page, debouncedSearch, activeStatus, placedFrom, placedTo],
     queryFn: () =>
       vendorOnboardingApi.getVendorOrderSummaries(user!.id, {
         search: debouncedSearch,
         status: activeStatus,
+        from: placedLocalToUtcIso(placedFrom),
+        to: placedLocalToUtcIso(placedTo),
         page,
         pageSize: PAGE_SIZE,
       }, { quiet: true }),
@@ -179,16 +194,24 @@ const VendorOrders = () => {
   );
 
   const activeTabLabel = statusTabs.find((t) => t.id === activeStatus)?.label ?? "All";
-  const activeChips: ActiveFilterChip[] =
-    activeStatus === "all"
-      ? []
-      : [
-          {
-            key: "status",
-            label: `${activeTabLabel} (${statusCounts[activeStatus] ?? 0})`,
-            onClear: () => setStatusFilter("all"),
-          },
-        ];
+  const activeChips: ActiveFilterChip[] = [];
+  if (placedFrom || placedTo) {
+    activeChips.push({
+      key: "placed",
+      label: placedFilterLabel(placedFrom, placedTo),
+      onClear: () => {
+        setPlacedFrom("");
+        setPlacedTo("");
+      },
+    });
+  }
+  if (activeStatus !== "all") {
+    activeChips.push({
+      key: "status",
+      label: `${activeTabLabel} (${statusCounts[activeStatus] ?? 0})`,
+      onClear: () => setStatusFilter("all"),
+    });
+  }
 
   return (
     <div>
@@ -210,42 +233,85 @@ const VendorOrders = () => {
             onChange={setSearchInput}
             placeholder="Search by order ID, item, or customer"
             mobilePlaceholder="Search orders"
-            activeCount={activeStatus === "all" ? 0 : 1}
+            activeCount={activeChips.length}
             onOpenFilters={() => {
               setDraftStatus(activeStatus);
+              setDraftFrom(placedFrom);
+              setDraftTo(placedTo);
+              setDraftPreset(inferPreset(placedFrom, placedTo));
               setFiltersOpen(true);
             }}
             aria-label="Search orders"
           />
-          <ActiveFilterChips chips={activeChips} />
+          <ActiveFilterChips
+            chips={activeChips}
+            onClearAll={
+              activeChips.length > 1
+                ? () => {
+                    setStatusFilter("all");
+                    setPlacedFrom("");
+                    setPlacedTo("");
+                  }
+                : undefined
+            }
+          />
         </div>
 
         <FilterPanel
           open={filtersOpen}
           onOpenChange={setFiltersOpen}
           title="Filter orders"
-          description="Show orders by current status."
-          onReset={() => setDraftStatus("all")}
+          description="Pick when the order was placed, then a status."
+          onReset={() => {
+            setDraftStatus("all");
+            setDraftPreset("any");
+            setDraftFrom("");
+            setDraftTo("");
+          }}
           resetLabel="Clear"
-          onApply={() => setStatusFilter(draftStatus)}
+          onApply={() => {
+            if (!isPlacedRangeOrdered(draftFrom, draftTo)) return;
+            setPlacedFrom(draftFrom);
+            setPlacedTo(draftTo);
+            setStatusFilter(draftStatus);
+          }}
+          applyDisabled={!isPlacedRangeOrdered(draftFrom, draftTo)}
           applyLabel={
-            draftStatus === "all"
-              ? "Show all orders"
-              : `Show ${(statusTabs.find((t) => t.id === draftStatus)?.label ?? draftStatus).toLowerCase()}`
+            !isPlacedRangeOrdered(draftFrom, draftTo)
+              ? "End time is too early"
+              : draftFrom || draftTo
+                ? "Show matching orders"
+                : draftStatus === "all"
+                  ? "Show all orders"
+                  : `Show ${(statusTabs.find((t) => t.id === draftStatus)?.label ?? draftStatus).toLowerCase()}`
           }
         >
-          <FilterSection title="Status">
-            {statusOptions.map((tab, index) => (
-              <FilterSelectRow
-                key={tab.id}
-                label={tab.label}
-                count={statusCounts[tab.id] ?? 0}
-                selected={draftStatus === tab.id}
-                onClick={() => setDraftStatus(tab.id)}
-                showDivider={index > 0}
+          <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-y-auto overscroll-contain">
+            <FilterSection title="Order placed" className="shrink-0">
+              <PlacedRangeEditor
+                preset={draftPreset}
+                from={draftFrom}
+                to={draftTo}
+                onChange={(next) => {
+                  setDraftPreset(next.preset);
+                  setDraftFrom(next.from);
+                  setDraftTo(next.to);
+                }}
               />
-            ))}
-          </FilterSection>
+            </FilterSection>
+            <FilterSection title="Status" className="shrink-0">
+              {statusOptions.map((tab, index) => (
+                <FilterSelectRow
+                  key={tab.id}
+                  label={tab.label}
+                  count={statusCounts[tab.id] ?? 0}
+                  selected={draftStatus === tab.id}
+                  onClick={() => setDraftStatus(tab.id)}
+                  showDivider={index > 0}
+                />
+              ))}
+            </FilterSection>
+          </div>
         </FilterPanel>
 
         <p className="mb-4 text-xs text-muted-foreground">
@@ -266,7 +332,7 @@ const VendorOrders = () => {
         <PageContentGate loading={isLoading && !data}>
         <div className={cn("transition-opacity duration-200", isPageChanging && "opacity-50")}>
         {pageSlice.length === 0 ? (
-          <p className="py-8 text-center text-sm text-muted-foreground">No orders found for this status.</p>
+          <p className="py-8 text-center text-sm text-muted-foreground">No orders match your search or filter.</p>
         ) : (
           <div className="space-y-3">
             {(() => {

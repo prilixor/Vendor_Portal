@@ -139,6 +139,7 @@ type FilterPanelProps = {
   resetLabel?: string;
   onApply: () => void;
   applyLabel?: string;
+  applyDisabled?: boolean;
   children: ReactNode;
 };
 
@@ -152,6 +153,7 @@ export function FilterPanel({
   resetLabel = "Clear all",
   onApply,
   applyLabel = "Show results",
+  applyDisabled = false,
   children,
 }: FilterPanelProps) {
   return (
@@ -188,7 +190,9 @@ export function FilterPanel({
           <Button
             type="button"
             className="h-10 flex-[2] rounded-lg"
+            disabled={applyDisabled}
             onClick={() => {
+              if (applyDisabled) return;
               onApply();
               onOpenChange(false);
             }}

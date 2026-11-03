@@ -603,6 +603,8 @@ export const customerApi = {
   getOrderSummaries(params: {
     search?: string;
     status?: string;
+    from?: string;
+    to?: string;
     page?: number;
     pageSize?: number;
   } = {}, options?: ApiClientOptions): Promise<CustomerOrderListResult> {
@@ -610,6 +612,8 @@ export const customerApi = {
     const search = params.search?.trim();
     if (search) qs.set("search", search);
     if (params.status && params.status !== "All") qs.set("status", params.status);
+    if (params.from) qs.set("from", params.from);
+    if (params.to) qs.set("to", params.to);
     qs.set("page", String(params.page && params.page > 0 ? params.page : 1));
     qs.set("pageSize", String(params.pageSize && params.pageSize > 0 ? params.pageSize : 8));
     return apiClient.get<CustomerOrderListResult>(`/customers/me/orders/summaries?${qs.toString()}`, options);

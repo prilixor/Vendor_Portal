@@ -796,7 +796,8 @@ public sealed record CustomerOrderDto(
     OrderReturnDto? ReturnSettlement = null,
     OrderCancellationRefundDto? CancellationRefund = null,
     string? DiscountCode = null,
-    decimal DiscountAmount = 0);
+    decimal DiscountAmount = 0,
+    DateTime CreatedOnUtc = default);
 
 internal static class CustomerOrderPricingRules
 {
@@ -2022,7 +2023,10 @@ internal sealed class GetCustomerOrdersQueryHandler(
                 RentalFinalPrice: o.RentalFinalPrice,
                 IsExtended: o.IsExtended,
                 DiscountCode: o.DiscountCode,
-                DiscountAmount: o.DiscountAmount));
+                DiscountAmount: o.DiscountAmount,
+                CreatedOnUtc: o.CreatedOnUtc.Kind == DateTimeKind.Local
+                    ? o.CreatedOnUtc.ToUniversalTime()
+                    : DateTime.SpecifyKind(o.CreatedOnUtc, DateTimeKind.Utc)));
         }
 
         var withReturns = await OrderReturnMapper.AttachAsync(customers, list, cancellationToken);

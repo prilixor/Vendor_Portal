@@ -675,6 +675,12 @@ public sealed class GetCustomerOrderSummariesRequest
 
     [QueryParam]
     public int PageSize { get; set; } = 8;
+
+    [QueryParam]
+    public DateTimeOffset? From { get; set; }
+
+    [QueryParam]
+    public DateTimeOffset? To { get; set; }
 }
 
 public sealed class GetCustomerExpirationSummariesRequest
@@ -816,7 +822,7 @@ public sealed class GetCustomerOrderSummariesEndpoint(IMediator mediator)
         var page = req.Page < 1 ? 1 : req.Page;
         var pageSize = req.PageSize is < 1 or > 50 ? 8 : req.PageSize;
         var result = await mediator.Send(
-            new GetCustomerOrderListQuery(customerId, req.Search, req.Status, page, pageSize),
+            new GetCustomerOrderListQuery(customerId, req.Search, req.Status, page, pageSize, req.From, req.To),
             ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
