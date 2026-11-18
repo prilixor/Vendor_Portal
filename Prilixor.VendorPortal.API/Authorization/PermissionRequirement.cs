@@ -13,7 +13,9 @@ public sealed class PermissionAuthorizationHandler : AuthorizationHandler<Permis
         AuthorizationHandlerContext context,
         PermissionRequirement requirement)
     {
-        if (context.User.HasClaim(Application.Onboarding.AdminPermissions.ClaimType, requirement.Permission))
+        if (context.User.HasClaim(Application.Onboarding.AdminPermissions.ClaimType, requirement.Permission)
+            || context.User.HasClaim(Application.Onboarding.AdminPermissions.AdminRoleClaimType, "super_admin")
+            || context.User.IsInRole("super_admin"))
         {
             context.Succeed(requirement);
         }

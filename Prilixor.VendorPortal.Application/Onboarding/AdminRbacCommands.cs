@@ -38,6 +38,10 @@ internal sealed class GetAdminRolesQueryHandler(IVendorOnboardingRepository repo
         foreach (var role in roles)
         {
             var codes = await repository.GetPermissionCodesForRoleAsync(role.Id, cancellationToken);
+            if (role.Code == SuperAdminRules.RoleCode || role.Code == "super_admin")
+            {
+                codes = AdminPermissions.AllCodes.ToList();
+            }
             result.Add(new AdminRoleDto(
                 role.Id.ToString(),
                 role.Code,

@@ -48,6 +48,31 @@ internal sealed class AddVendorDocumentCommandHandler(
         var existingDoc = existingDocuments.FirstOrDefault(d => d.DocumentType == request.DocumentType);
         if (existingDoc is not null)
         {
+            if (string.Equals(existingDoc.VerificationStatus, "rejected", StringComparison.OrdinalIgnoreCase))
+            {
+                // Allow re-upload/replacement for rejected documents
+                existingDoc.FileUrl = request.FileUrl;
+                existingDoc.OriginalFileName = SanitizeOriginalFileName(request.OriginalFileName);
+                existingDoc.DocumentNumber = request.DocumentNumber;
+                existingDoc.VerificationStatus = "pending";
+                existingDoc.RejectionReason = null;
+                existingDoc.VerifiedAt = null;
+
+                await repository.UpdateVendorDocumentAsync(existingDoc, cancellationToken);
+                await repository.SaveChangesAsync(cancellationToken);
+
+                return Result.Success(new VendorDocumentDto(
+                    existingDoc.Id.ToString(),
+                    existingDoc.VendorId.ToString(),
+                    existingDoc.DocumentType,
+                    fileUrlResolver.Resolve(existingDoc.FileUrl),
+                    existingDoc.DocumentNumber,
+                    existingDoc.VerificationStatus,
+                    existingDoc.RejectionReason,
+                    existingDoc.VerifiedAt,
+                    existingDoc.OriginalFileName));
+            }
+
             return Result.Failure<VendorDocumentDto>(new Error("vendors.document_duplicate", "This document is already uploaded. Please delete the existing file before uploading a new one.", ErrorCategory.Validation));
         }
 

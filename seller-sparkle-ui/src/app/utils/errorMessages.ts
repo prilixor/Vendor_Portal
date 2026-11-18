@@ -74,10 +74,16 @@ const errorMessages: Record<string, string> = {
   // Document errors
   "documents.not_found": "Document not found.",
   "documents.invalid_type": "Invalid document type.",
+  "vendors.document.mismatch": "Document details do not match the vendor profile.",
+  "vendors.document.verification_failed": "Document verification failed.",
 
   // Bank account errors
   "bank_accounts.not_found": "Bank account not found.",
   "bank_accounts.invalid_ifsc": "Invalid IFSC code format.",
+  "vendors.bank_account.not_found": "Bank account not found.",
+  "vendors.bank_account.invalid_data": "Bank Account Number and IFSC Code cannot be empty.",
+  "vendors.bank_account.mismatch": "Bank details do not match the uploaded Cancelled Cheque.",
+  "vendors.bank_account.verification_failed": "Bank verification failed via penny drop. Please check account number and IFSC code.",
 
   // Auth
   EMAIL_NOT_VERIFIED: "Please verify your email before continuing.",
