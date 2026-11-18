@@ -10,6 +10,7 @@ import '../../core/models/support_model.dart';
 import '../../core/providers/vendor_support_provider.dart';
 import '../../core/utils/chat_day_label.dart';
 import '../../core/utils/media_url.dart';
+import '../../core/utils/stable_media_url.dart';
 import '../../core/utils/multipart_file_util.dart';
 import '../../core/utils/support_chat_routing.dart';
 import '../../core/theme.dart';
@@ -632,7 +633,12 @@ class _MessageBubble extends StatelessWidget {
                       height: 1.35,
                     ),
                   ),
-                  ...message.attachmentUrls.map(_AttachmentPreview.new),
+                  ...message.attachmentUrls.map(
+                    (url) => _AttachmentPreview(
+                      key: ValueKey(mediaObjectKey(resolveMediaUrl(url) ?? url)),
+                      url: url,
+                    ),
+                  ),
                 ],
               ),
             ),
@@ -643,19 +649,42 @@ class _MessageBubble extends StatelessWidget {
   }
 }
 
-class _AttachmentPreview extends StatelessWidget {
+class _AttachmentPreview extends StatefulWidget {
   final String url;
-  const _AttachmentPreview(this.url);
+  const _AttachmentPreview({super.key, required this.url});
+
+  @override
+  State<_AttachmentPreview> createState() => _AttachmentPreviewState();
+}
+
+class _AttachmentPreviewState extends State<_AttachmentPreview> {
+  late String _url;
+  var _hasFrame = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _url = resolveMediaUrl(widget.url) ?? widget.url;
+  }
+
+  @override
+  void didUpdateWidget(covariant _AttachmentPreview oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final resolved = resolveMediaUrl(widget.url) ?? widget.url;
+    final next = keepStableMediaUrl(_url, resolved);
+    if (mediaObjectKey(next) != mediaObjectKey(_url)) _hasFrame = false;
+    _url = next;
+  }
 
   @override
   Widget build(BuildContext context) {
-    final resolved = resolveMediaUrl(url) ?? url;
-    final clean = resolved.split('?').first;
+    final clean = _url.split('?').first;
     final isImage = RegExp(r'\.(jpg|jpeg|png|gif|webp|svg|bmp)$', caseSensitive: false)
         .hasMatch(clean);
 
     Future<void> openAttachment() async {
-      final uri = Uri.tryParse(resolved);
+      final fresh = resolveMediaUrl(widget.url) ?? widget.url;
+      final uri = Uri.tryParse(fresh);
       if (uri == null) return;
       await launchUrl(uri, mode: LaunchMode.externalApplication);
     }
@@ -668,13 +697,32 @@ class _AttachmentPreview extends StatelessWidget {
           child: ClipRRect(
             borderRadius: BorderRadius.circular(8),
             child: Image.network(
-              resolved,
+              _url,
               height: 120,
               fit: BoxFit.cover,
+              gaplessPlayback: true,
               errorBuilder: (context, error, stackTrace) => Text(
                 'Image attachment',
                 style: TextStyle(color: context.appColors.textMuted, fontSize: 12),
               ),
+              loadingBuilder: (context, child, progress) {
+                if (progress == null) {
+                  _hasFrame = true;
+                  return child;
+                }
+                if (_hasFrame) return child;
+                return const SizedBox(
+                  height: 120,
+                  width: 120,
+                  child: Center(
+                    child: SizedBox(
+                      width: 22,
+                      height: 22,
+                      child: CircularProgressIndicator(strokeWidth: 2, color: Color(0xFF6C63FF)),
+                    ),
+                  ),
+                );
+              },
             ),
           ),
         ),

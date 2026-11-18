@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme.dart';
 import '../../core/utils/media_url.dart';
+import '../../core/utils/stable_media_url.dart';
 
 /// Catalog product image with empty/error placeholders.
 /// On web, prefers HTML <img> so cross-origin images render without CORS decode failures.
@@ -27,74 +28,138 @@ class CatalogImage extends StatelessWidget {
     final resolved = resolveMediaUrl(url);
     final child = resolved == null
         ? _CatalogImagePlaceholder(message: 'Image will be updated soon', borderRadius: borderRadius)
-        : Image.network(
-            resolved,
+        : _CatalogNetworkImage(
+            url: resolved,
             width: width,
             height: height,
             fit: fit,
-            webHtmlElementStrategy:
-                kIsWeb ? WebHtmlElementStrategy.prefer : WebHtmlElementStrategy.never,
-            errorBuilder: (_, _, _) {
-              final original = originalUrlFromThumb(resolved);
-              if (original != null && original != resolved) {
-                return Image.network(
-                  original,
-                  width: width,
-                  height: height,
-                  fit: fit,
-                  webHtmlElementStrategy:
-                      kIsWeb ? WebHtmlElementStrategy.prefer : WebHtmlElementStrategy.never,
-                  errorBuilder: (_, _, _) => _CatalogImagePlaceholder(
-                    message: 'Image currently unavailable',
-                    borderRadius: borderRadius,
-                  ),
-                  loadingBuilder: (context, child, progress) {
-                    if (progress == null) return child;
-                    return Container(
-                      width: width,
-                      height: height,
-                      color: context.appColors.surfaceElevated,
-                      alignment: Alignment.center,
-                      child: const SizedBox(
-                        width: 22,
-                        height: 22,
-                        child: CircularProgressIndicator(
-                          strokeWidth: 2,
-                          color: Color(0xFF6C63FF),
-                        ),
-                      ),
-                    );
-                  },
-                );
-              }
-              return _CatalogImagePlaceholder(
-                message: 'Image currently unavailable',
-                borderRadius: borderRadius,
-              );
-            },
-            loadingBuilder: (context, child, progress) {
-              if (progress == null) return child;
-              return Container(
-                width: width,
-                height: height,
-                color: context.appColors.surfaceElevated,
-                alignment: Alignment.center,
-                child: const SizedBox(
-                  width: 22,
-                  height: 22,
-                  child: CircularProgressIndicator(
-                    strokeWidth: 2,
-                    color: Color(0xFF6C63FF),
-                  ),
-                ),
-              );
-            },
+            errorChild: _CatalogImagePlaceholder(
+              message: 'Image currently unavailable',
+              borderRadius: borderRadius,
+            ),
           );
 
     if (borderRadius != null) {
       return ClipRRect(borderRadius: borderRadius!, child: child);
     }
     return child;
+  }
+}
+
+/// Holds the signed URL already on screen so a poll cannot reload the same file.
+class _CatalogNetworkImage extends StatefulWidget {
+  final String url;
+  final double? width;
+  final double? height;
+  final BoxFit fit;
+  final Widget errorChild;
+
+  const _CatalogNetworkImage({
+    required this.url,
+    required this.width,
+    required this.height,
+    required this.fit,
+    required this.errorChild,
+  });
+
+  @override
+  State<_CatalogNetworkImage> createState() => _CatalogNetworkImageState();
+}
+
+class _CatalogNetworkImageState extends State<_CatalogNetworkImage> {
+  late String _url;
+  var _triedOriginal = false;
+  var _fallbackQueued = false;
+  var _hasFrame = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _url = widget.url;
+  }
+
+  @override
+  void didUpdateWidget(covariant _CatalogNetworkImage oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    final next = _adoptIncoming(widget.url);
+    if (mediaObjectKey(next) != mediaObjectKey(_url)) {
+      _triedOriginal = false;
+      _fallbackQueued = false;
+      _hasFrame = false;
+    }
+    _url = next;
+  }
+
+  String _adoptIncoming(String incoming) {
+    final originalOfIncoming = originalUrlFromThumb(incoming);
+    if (_triedOriginal &&
+        originalOfIncoming != null &&
+        mediaObjectKey(_url) == mediaObjectKey(originalOfIncoming)) {
+      return _url;
+    }
+    return keepStableMediaUrl(_url, incoming);
+  }
+
+  String? _fallbackCandidate() => originalUrlFromThumb(_url);
+
+  void _queueOriginalFallback() {
+    if (_triedOriginal || _fallbackQueued) return;
+    final original = _fallbackCandidate();
+    if (original == null || original == _url) return;
+    _fallbackQueued = true;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      setState(() {
+        _triedOriginal = true;
+        _fallbackQueued = false;
+        _hasFrame = false;
+        _url = original;
+      });
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Image.network(
+      _url,
+      key: ValueKey(mediaObjectKey(_url)),
+      width: widget.width,
+      height: widget.height,
+      fit: widget.fit,
+      gaplessPlayback: true,
+      webHtmlElementStrategy: kIsWeb ? WebHtmlElementStrategy.prefer : WebHtmlElementStrategy.never,
+      errorBuilder: (_, _, _) {
+        if (!_triedOriginal) {
+          final original = _fallbackCandidate();
+          if (original != null && original != _url) {
+            _queueOriginalFallback();
+            return ColoredBox(color: context.appColors.surfaceElevated);
+          }
+        }
+        return widget.errorChild;
+      },
+      loadingBuilder: (context, child, progress) {
+        if (progress == null) {
+          _hasFrame = true;
+          return child;
+        }
+        if (_hasFrame) return child;
+        return Container(
+          width: widget.width,
+          height: widget.height,
+          color: context.appColors.surfaceElevated,
+          alignment: Alignment.center,
+          child: const SizedBox(
+            width: 22,
+            height: 22,
+            child: CircularProgressIndicator(
+              strokeWidth: 2,
+              color: Color(0xFF6C63FF),
+            ),
+          ),
+        );
+      },
+    );
   }
 }
 

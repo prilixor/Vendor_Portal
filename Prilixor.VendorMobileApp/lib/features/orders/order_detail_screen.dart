@@ -2346,14 +2346,12 @@ class _ReturnClaimCard extends StatelessWidget {
                             ),
                           );
                         },
-                        child: ClipRRect(
+                        child: CatalogImage(
+                          url: urls[index],
+                          width: tile,
+                          height: tile,
+                          fit: BoxFit.cover,
                           borderRadius: BorderRadius.circular(8),
-                          child: Image.network(
-                            urls[index],
-                            width: tile,
-                            height: tile,
-                            fit: BoxFit.cover,
-                          ),
                         ),
                       ),
                   ],

@@ -3,6 +3,7 @@ import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../../core/utils/media_url.dart';
+import '../../core/utils/stable_media_url.dart';
 import '../../shared/widgets/catalog_image.dart';
 import '../../shared/widgets/gallery_thumb_strip.dart';
 
@@ -37,6 +38,8 @@ class _ProductImageViewerScreenState extends State<ProductImageViewerScreen> {
   final Map<int, bool> _originalReady = {};
   final Map<int, ImageStream> _originalStreams = {};
   final Map<int, ImageStreamListener> _originalListeners = {};
+  final Map<int, String> _stableUrls = {};
+  final Map<int, String> _stablePreviews = {};
   bool _webZoomed = false;
 
   @override
@@ -62,14 +65,27 @@ class _ProductImageViewerScreenState extends State<ProductImageViewerScreen> {
     super.dispose();
   }
 
-  String? _resolved(int i) => resolveMediaUrl(widget.imageUrls[i]);
+  String? _resolved(int i) {
+    if (i < 0 || i >= widget.imageUrls.length) return null;
+    final next = resolveMediaUrl(widget.imageUrls[i]);
+    if (next == null) return null;
+    final kept = keepStableMediaUrl(_stableUrls[i], next);
+    _stableUrls[i] = kept;
+    return kept;
+  }
 
-  String? _preview(int i) => galleryPreviewUrl(
-        index: i,
-        originals: widget.imageUrls,
-        thumbnails: widget.thumbnails,
-        placeholder: widget.placeholder,
-      );
+  String? _preview(int i) {
+    final next = galleryPreviewUrl(
+      index: i,
+      originals: widget.imageUrls,
+      thumbnails: widget.thumbnails,
+      placeholder: widget.placeholder,
+    );
+    if (next == null) return null;
+    final kept = keepStableMediaUrl(_stablePreviews[i], next);
+    _stablePreviews[i] = kept;
+    return kept;
+  }
 
   bool _canZoom(int i) => _preview(i) == null || _originalReady[i] == true;
 
@@ -314,6 +330,7 @@ class _ProductImageViewerScreenState extends State<ProductImageViewerScreen> {
             child: Image.network(
               preview,
               fit: BoxFit.contain,
+              gaplessPlayback: true,
               errorBuilder: (_, _, _) => const SizedBox.shrink(),
             ),
           );
@@ -325,10 +342,12 @@ class _ProductImageViewerScreenState extends State<ProductImageViewerScreen> {
           mode: ExtendedImageMode.gesture,
           enableLoadState: true,
           handleLoadingProgress: true,
+          gaplessPlayback: true,
           cache: true,
           loadStateChanged: (ExtendedImageState state) {
             switch (state.extendedImageLoadState) {
               case LoadState.loading:
+                if (state.extendedImageInfo != null) return null;
                 return const ColoredBox(
                   color: Colors.black,
                   child: Center(

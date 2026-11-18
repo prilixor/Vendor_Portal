@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 
 import '../../core/theme.dart';
+import '../../core/utils/stable_media_url.dart';
 import 'catalog_image.dart';
 
 /// Vendor Web [ListingThumb] parity for product/inventory list rows.
@@ -40,7 +41,9 @@ class ListingThumb extends StatelessWidget {
         ),
         clipBehavior: Clip.antiAlias,
         child: CatalogImage(
-          key: ValueKey(url ?? 'listing-thumb-empty'),
+          key: ValueKey(
+            url == null || url!.trim().isEmpty ? 'listing-thumb-empty' : mediaObjectKey(url!),
+          ),
           url: url,
           fit: BoxFit.cover,
           width: size,

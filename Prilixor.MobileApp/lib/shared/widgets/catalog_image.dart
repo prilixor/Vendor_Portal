@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 
 import '../../core/theme.dart';
 import '../../core/utils/media_url.dart';
+import '../../core/utils/stable_media_url.dart';
 
 /// Catalog product image with React-like empty/error placeholders.
 /// Fixes Flutter web relative `/api/...` URLs and prefers HTML <img> on web
@@ -111,6 +112,7 @@ class _CatalogNetworkImageState extends State<_CatalogNetworkImage> {
   late String _url;
   var _triedOriginal = false;
   var _fallbackQueued = false;
+  var _hasFrame = false;
 
   @override
   void initState() {
@@ -121,11 +123,28 @@ class _CatalogNetworkImageState extends State<_CatalogNetworkImage> {
   @override
   void didUpdateWidget(covariant _CatalogNetworkImage oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.url != widget.url || oldWidget.fallbackUrl != widget.fallbackUrl) {
-      _url = widget.url;
+    final next = _adoptIncoming(widget.url);
+    if (mediaObjectKey(next) != mediaObjectKey(_url)) {
+      _triedOriginal = false;
+      _fallbackQueued = false;
+      _hasFrame = false;
+    } else if (oldWidget.fallbackUrl != widget.fallbackUrl && next != _url) {
       _triedOriginal = false;
       _fallbackQueued = false;
     }
+    _url = next;
+  }
+
+  /// A poll refreshes the S3 signature. Keep the address already painting,
+  /// including a thumb that already fell back to the original file.
+  String _adoptIncoming(String incoming) {
+    final originalOfIncoming = originalUrlFromThumb(incoming);
+    if (_triedOriginal &&
+        originalOfIncoming != null &&
+        mediaObjectKey(_url) == mediaObjectKey(originalOfIncoming)) {
+      return _url;
+    }
+    return keepStableMediaUrl(_url, incoming);
   }
 
   String? _fallbackCandidate() {
@@ -144,6 +163,7 @@ class _CatalogNetworkImageState extends State<_CatalogNetworkImage> {
       setState(() {
         _triedOriginal = true;
         _fallbackQueued = false;
+        _hasFrame = false;
         _url = original;
       });
     });
@@ -157,7 +177,7 @@ class _CatalogNetworkImageState extends State<_CatalogNetworkImage> {
         : null;
     return Image.network(
       _url,
-      key: ValueKey(_url),
+      key: ValueKey(mediaObjectKey(_url)),
       width: widget.width,
       height: widget.height,
       cacheWidth: decodeW,
@@ -177,7 +197,12 @@ class _CatalogNetworkImageState extends State<_CatalogNetworkImage> {
       loadingBuilder: kIsWeb || !widget.showLoadingIndicator
           ? null
           : (context, child, progress) {
-              if (progress == null) return child;
+              if (progress == null) {
+                _hasFrame = true;
+                return child;
+              }
+              // A refreshed signature must not cover the photo already on screen.
+              if (_hasFrame) return child;
               return Container(
                 width: widget.width,
                 height: widget.height,

@@ -13,6 +13,7 @@ import '../../core/models/product_detail_model.dart';
 import '../../core/models/product_variant_model.dart';
 import '../../core/models/rental_pricing_plan_model.dart';
 import '../../core/utils/media_url.dart';
+import '../../core/utils/stable_media_url.dart';
 import '../../core/utils/rental_period.dart';
 import '../../core/utils/rental_plan_display.dart';
 import '../../shared/widgets/brand_page_loader.dart';
@@ -201,7 +202,7 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       ),
       alignment: Alignment.center,
       child: CatalogImage(
-        key: ValueKey(url),
+        key: ValueKey(mediaObjectKey(url)),
         url: url,
         fallbackUrl: thumb != original ? thumb : null,
         width: iconSize,
