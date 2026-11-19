@@ -1,13 +1,14 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { ArrowUpRight, Scale } from "lucide-react";
+import { ArrowUpRight, ChevronDown, Scale } from "lucide-react";
 import { legalHref, type LegalWebSurface } from "@/app/helpers/legalSurface";
 import { publicLegalApi, type PublicLegalDocumentListItem } from "@/app/services/publicLegalApi";
 import { cn } from "@/app/helpers/utils";
 import { Button } from "@/app/components/ui/button";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/app/components/ui/collapsible";
 import { Popover, PopoverContent, PopoverTrigger } from "@/app/components/ui/popover";
 
-type LegalPolicyLinksLayout = "inline" | "quiet" | "menu";
+type LegalPolicyLinksLayout = "inline" | "quiet" | "menu" | "disclosure";
 
 /** @deprecated mapped to quiet / menu */
 type LegacyLayout = "list" | "stack" | "rows" | "grid";
@@ -50,6 +51,41 @@ function PolicyQuiet({
         </li>
       ))}
     </ul>
+  );
+}
+
+function PolicyDisclosure({
+  docs,
+  menuLabel,
+  className,
+  linkClassName,
+}: {
+  docs: PublicLegalDocumentListItem[];
+  menuLabel: string;
+  className?: string;
+  linkClassName?: string;
+}) {
+  return (
+    <Collapsible className={cn("min-w-0", className)}>
+      <CollapsibleTrigger asChild>
+        <button
+          type="button"
+          className="group flex min-h-10 w-full items-center justify-between gap-2 rounded-md py-2 text-left text-[13px] font-medium text-muted-foreground transition-colors hover:text-primary"
+        >
+          <span className="flex min-w-0 items-center gap-1.5">
+            <Scale className="h-3.5 w-3.5 shrink-0 opacity-70" aria-hidden />
+            <span className="truncate">{menuLabel}</span>
+          </span>
+          <ChevronDown
+            className="h-3.5 w-3.5 shrink-0 text-muted-foreground transition-transform duration-200 group-data-[state=open]:rotate-180"
+            aria-hidden
+          />
+        </button>
+      </CollapsibleTrigger>
+      <CollapsibleContent className="max-h-[40vh] overflow-y-auto overscroll-contain">
+        <PolicyQuiet docs={docs} className="mt-0.5" linkClassName={cn("py-1.5 text-[13px]", linkClassName)} />
+      </CollapsibleContent>
+    </Collapsible>
   );
 }
 
@@ -103,6 +139,7 @@ export function LegalPolicyLinks({
    * inline — phone: one full-width row; sm+: dot-separated line
    * quiet — settings list
    * menu — sidebar popover
+   * disclosure — one row that expands the list in place (phone drawer)
    */
   layout?: LegalPolicyLinksLayout | LegacyLayout;
   menuLabel?: string;
@@ -136,6 +173,12 @@ export function LegalPolicyLinks({
 
   if (resolvedLayout === "quiet") {
     return <PolicyQuiet docs={docs} className={className} linkClassName={linkClassName} />;
+  }
+
+  if (resolvedLayout === "disclosure") {
+    return (
+      <PolicyDisclosure docs={docs} menuLabel={menuLabel} className={className} linkClassName={linkClassName} />
+    );
   }
 
   if (resolvedLayout === "menu") {

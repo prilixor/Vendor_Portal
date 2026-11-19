@@ -93,8 +93,9 @@ export const Sidebar = ({ variant = "vendor", sections, brandLabel, brandHeading
 
   return (
     <aside
+      data-app-drawer=""
       className={cn(
-        "fixed inset-y-0 left-0 z-50 flex h-[100dvh] flex-col border-r border-sidebar-border bg-sidebar pointer-events-auto transition-transform duration-300 ease-out lg:sticky lg:top-0 lg:h-screen lg:translate-x-0",
+        "fixed inset-y-0 left-0 z-50 flex h-[100dvh] flex-col overflow-hidden overscroll-contain border-r border-sidebar-border bg-sidebar pointer-events-auto transition-transform duration-300 ease-out lg:sticky lg:top-0 lg:h-screen lg:translate-x-0",
         isOpen ? "translate-x-0" : "-translate-x-full lg:translate-x-0",
         collapsed ? "lg:w-[72px]" : "lg:w-[260px] w-[260px]"
       )}
@@ -132,7 +133,7 @@ export const Sidebar = ({ variant = "vendor", sections, brandLabel, brandHeading
       </div>
 
       {/* Sections */}
-      <nav className="flex-1 overflow-y-auto px-3 py-4 space-y-6">
+      <nav className="min-h-0 flex-1 touch-pan-y space-y-6 overflow-y-auto overscroll-contain px-3 py-4">
         {dynamicSections.map((section) => (
           <div key={section.title}>
             {!collapsed && (
@@ -217,9 +218,9 @@ export const Sidebar = ({ variant = "vendor", sections, brandLabel, brandHeading
         ))}
       </nav>
 
-      {/* Footer hint. Phone drawer uses full-width rows; the desktop rail keeps a compact menu. */}
+      {/* Footer hint. Phone drawer keeps policies behind one row; the desktop rail uses a popover. */}
       {!collapsed && (
-        <div className="m-3 shrink-0 rounded-xl bg-gradient-soft p-3 text-xs">
+        <div className="m-2 shrink-0 rounded-xl bg-gradient-soft p-2.5 text-xs lg:m-3 lg:p-3">
           <p className="font-semibold">Need help?</p>
           <p className="mt-0.5 text-muted-foreground">
             {variant === "vendor" ? (
@@ -238,14 +239,15 @@ export const Sidebar = ({ variant = "vendor", sections, brandLabel, brandHeading
               "Check the docs or chat with support."
             )}
           </p>
-          <div className="mt-3 space-y-2 border-t border-border/50 pt-3">
+          <div className="mt-2 space-y-1 border-t border-border/50 pt-2 lg:mt-3 lg:space-y-2 lg:pt-3">
             {variant === "vendor" || variant === "customer" ? (
               <>
                 <div className="lg:hidden">
                   <LegalPolicyLinks
                     surface={variant === "vendor" ? "vendor_web" : "customer_web"}
                     screen="footer"
-                    layout="quiet"
+                    layout="disclosure"
+                    menuLabel="Policies"
                   />
                 </div>
                 <div className="hidden lg:block">
@@ -263,7 +265,8 @@ export const Sidebar = ({ variant = "vendor", sections, brandLabel, brandHeading
                   <LegalPolicyLinks
                     surface="customer_web"
                     screen="footer"
-                    layout="quiet"
+                    layout="disclosure"
+                    menuLabel="Policies"
                     fallback={ADMIN_FOOTER_POLICIES}
                   />
                 </div>
