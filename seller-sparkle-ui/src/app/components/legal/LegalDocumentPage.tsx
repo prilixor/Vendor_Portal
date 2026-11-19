@@ -15,7 +15,10 @@ function formatStamp(value?: string | null) {
 }
 
 function pageSurface(slug: string) {
-  return resolveLegalSurface(slug === "vendor-seller-policy" ? "vendor" : undefined);
+  // Published only for the vendor surface. The public URL is on blinksmed.com,
+  // where host detection would otherwise request the missing customer copy.
+  if (slug === "vendor-seller-policy") return "vendor_web";
+  return resolveLegalSurface();
 }
 
 export default function LegalDocumentPage({ slug }: { slug: string }) {

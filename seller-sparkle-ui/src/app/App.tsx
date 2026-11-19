@@ -1,5 +1,6 @@
+import { useEffect } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Route, Routes, Navigate, useParams } from "react-router-dom";
+import { BrowserRouter, Route, Routes, Navigate, useLocation, useParams } from "react-router-dom";
 import { Toaster as Sonner } from "@/app/components/ui/sonner";
 import { Toaster } from "@/app/components/ui/toaster";
 import { TooltipProvider } from "@/app/components/ui/tooltip";
@@ -90,6 +91,19 @@ import CustomerExpirations from "@/app/components/customer/CustomerExpirations";
 
 const queryClient = new QueryClient();
 
+/** Keep the canonical on the page that is open. The HTML shell defaults to the homepage. */
+function CanonicalUrl() {
+  const { pathname } = useLocation();
+  useEffect(() => {
+    let path = pathname || "/";
+    if (path.length > 1 && path.endsWith("/")) path = path.slice(0, -1);
+    const url = `https://blinksmed.com${path || "/"}`;
+    document.querySelector('link[rel="canonical"]')?.setAttribute("href", url);
+    document.querySelector('meta[property="og:url"]')?.setAttribute("content", url);
+  }, [pathname]);
+  return null;
+}
+
 /** Keeps old /customer/browse/:id bookmarks working after rename to /shop. */
 function LegacyBrowseListingRedirect() {
   const { listingId } = useParams();
@@ -108,6 +122,7 @@ const App = () => (
             <BootSplashDismiss />
             <PortalHostGuard>
             <StandalonePortalLoader />
+            <CanonicalUrl />
             <Routes>
             <Route path="/" element={<Index />} />
             <Route path="/login" element={<Login />} />

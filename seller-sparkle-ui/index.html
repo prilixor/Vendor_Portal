@@ -7,6 +7,17 @@
     <meta name="description" content="BlinksMed medical equipment rental marketplace. Browse, rent, manage, and return equipment in one place." />
     <meta name="author" content="BlinksMed" />
     <link rel="canonical" href="https://blinksmed.com/" />
+    <script>
+      (function () {
+        var path = window.location.pathname || "/";
+        if (path.length > 1 && path.charAt(path.length - 1) === "/") path = path.slice(0, -1);
+        var url = "https://blinksmed.com" + (path || "/");
+        var canonical = document.querySelector('link[rel="canonical"]');
+        if (canonical) canonical.setAttribute("href", url);
+        var og = document.querySelector('meta[property="og:url"]');
+        if (og) og.setAttribute("content", url);
+      })();
+    </script>
 
     <link rel="icon" type="image/svg+xml" href="/bm-icon.svg?v=20260825r" />
     <link rel="icon" type="image/png" sizes="32x32" href="/bm-icon.png?v=20260825r" />
