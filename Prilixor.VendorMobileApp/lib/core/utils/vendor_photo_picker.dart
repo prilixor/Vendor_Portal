@@ -1,6 +1,7 @@
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
+import 'package:image_cropper/image_cropper.dart';
 import 'package:image_picker/image_picker.dart';
 
 import '../theme.dart';
@@ -60,7 +61,7 @@ Future<VendorPhotoPickSource?> showVendorPhotoSourceSheet(BuildContext context) 
               _PhotoSourceTile(
                 icon: Icons.photo_camera_outlined,
                 title: 'Take photo',
-                subtitle: 'Open your camera now',
+                subtitle: 'Open the camera, then crop the photo',
                 onTap: () => Navigator.pop(ctx, VendorPhotoPickSource.camera),
               ),
               const SizedBox(height: 8),
@@ -152,6 +153,9 @@ class _PhotoSourceTile extends StatelessWidget {
 }
 
 /// Returns platform files ready for multipart upload.
+///
+/// A camera photo opens the crop screen before it is returned. Cancelling
+/// the crop drops the photo. Gallery picks are returned as chosen.
 Future<List<PlatformFile>> pickVendorPhotoFiles({
   required VendorPhotoPickSource source,
   int maxCount = 1,
@@ -168,7 +172,17 @@ Future<List<PlatformFile>> pickVendorPhotoFiles({
       preferredCameraDevice: CameraDevice.rear,
     );
     if (photo == null) return [];
-    return [await _platformFileFromXFile(photo)];
+    final cropped = await _cropTakenPhoto(photo.path);
+    if (cropped == null) return [];
+    return [
+      await _platformFileFromXFile(
+        XFile(
+          cropped.path,
+          name: 'photo_${DateTime.now().millisecondsSinceEpoch}.jpg',
+          mimeType: 'image/jpeg',
+        ),
+      ),
+    ];
   }
 
   if (!kIsWeb) {
@@ -203,6 +217,49 @@ Future<List<PlatformFile>> pickVendorPhotoFiles({
   );
   if (result == null || result.files.isEmpty) return [];
   return result.files.take(maxCount).toList();
+}
+
+const _cropAspectRatios = <CropAspectRatioPresetData>[
+  CropAspectRatioPreset.original,
+  CropAspectRatioPreset.square,
+  CropAspectRatioPreset.ratio4x3,
+  CropAspectRatioPreset.ratio3x2,
+  CropAspectRatioPreset.ratio16x9,
+];
+
+/// Free crop of a camera photo. `null` means the vendor cancelled.
+Future<CroppedFile?> _cropTakenPhoto(String sourcePath) {
+  return ImageCropper().cropImage(
+    sourcePath: sourcePath,
+    maxWidth: 2048,
+    compressFormat: ImageCompressFormat.jpg,
+    compressQuality: 90,
+    uiSettings: [
+      AndroidUiSettings(
+        toolbarTitle: 'Crop photo',
+        toolbarColor: AppTheme.accent,
+        toolbarWidgetColor: Colors.white,
+        activeControlsWidgetColor: AppTheme.accent,
+        backgroundColor: AppTheme.bgColor,
+        statusBarLight: false,
+        navBarLight: false,
+        lockAspectRatio: false,
+        initAspectRatio: CropAspectRatioPreset.original,
+        cropFrameColor: Colors.white,
+        cropGridColor: Colors.white70,
+        showCropGrid: true,
+        aspectRatioPresets: _cropAspectRatios,
+      ),
+      IOSUiSettings(
+        title: 'Crop photo',
+        doneButtonTitle: 'Use photo',
+        cancelButtonTitle: 'Cancel',
+        aspectRatioLockEnabled: false,
+        resetAspectRatioEnabled: true,
+        aspectRatioPresets: _cropAspectRatios,
+      ),
+    ],
+  );
 }
 
 Future<PlatformFile> _platformFileFromXFile(XFile file) async {
