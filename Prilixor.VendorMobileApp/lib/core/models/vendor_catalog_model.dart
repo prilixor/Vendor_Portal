@@ -154,6 +154,7 @@ class CatalogProduct {
   final double? buyPrice;
   final double vendorDailyRent;
   final double? vendorBuyPrice;
+  final double vendorSecurityDeposit;
   final double gstPercent;
   final bool isRentEnabled;
   final bool isBuyEnabled;
@@ -175,6 +176,7 @@ class CatalogProduct {
     this.buyPrice,
     this.vendorDailyRent = 0,
     this.vendorBuyPrice,
+    this.vendorSecurityDeposit = 0,
     this.gstPercent = 0,
     this.isRentEnabled = true,
     this.isBuyEnabled = false,
@@ -223,6 +225,7 @@ class CatalogProduct {
       vendorDailyRent: _toDouble(json['vendorDailyRent']),
       vendorBuyPrice:
           json['vendorBuyPrice'] == null ? null : _toDouble(json['vendorBuyPrice']),
+      vendorSecurityDeposit: _toDouble(json['vendorSecurityDeposit']),
       gstPercent: _toDouble(json['gstPercent']),
       isRentEnabled: json['isRentEnabled'] != false,
       isBuyEnabled: json['isBuyEnabled'] == true,
@@ -317,6 +320,8 @@ class VendorListingRow {
   final ListingUiStatus status;
   final double? buyPriceMin;
   final double? buyPriceMax;
+  final double? payoutPriceMin;
+  final double? payoutPriceMax;
   final String? primaryImageUrl;
 
   const VendorListingRow({
@@ -329,8 +334,62 @@ class VendorListingRow {
     required this.status,
     this.buyPriceMin,
     this.buyPriceMax,
+    this.payoutPriceMin,
+    this.payoutPriceMax,
     this.primaryImageUrl,
   });
+}
+
+/// Customer buy-price range stays available. [vendorMin]/[vendorMax] are the payout shown to vendors.
+class ChemicalPriceRanges {
+  final double? customerMin;
+  final double? customerMax;
+  final double? vendorMin;
+  final double? vendorMax;
+
+  const ChemicalPriceRanges({
+    this.customerMin,
+    this.customerMax,
+    this.vendorMin,
+    this.vendorMax,
+  });
+
+  static ChemicalPriceRanges fromJson(dynamic raw) {
+    if (raw is! List) return const ChemicalPriceRanges();
+    final customer = <double>[];
+    final vendor = <double>[];
+    for (final item in raw) {
+      if (item is! Map) continue;
+      final buy = _toDouble(item['buyPrice']);
+      final payout = _toDouble(item['vendorPrice']);
+      if (buy > 0) customer.add(buy);
+      if (payout > 0) vendor.add(payout);
+    }
+    customer.sort();
+    vendor.sort();
+    return ChemicalPriceRanges(
+      customerMin: customer.isEmpty ? null : customer.first,
+      customerMax: customer.isEmpty ? null : customer.last,
+      vendorMin: vendor.isEmpty ? null : vendor.first,
+      vendorMax: vendor.isEmpty ? null : vendor.last,
+    );
+  }
+}
+
+/// Customer prices stay in the widget tree. Vendors see payout amounts until this is turned on.
+final showCustomerPricing = false;
+
+/// GST markup stays available if it should be shown later.
+final showVendorGst = false;
+
+/// Vendor deposit when Admin set one; otherwise the catalog deposit so the amount stays visible.
+double payoutSecurityDeposit({
+  double? vendorSecurityDeposit,
+  double? securityDeposit,
+}) {
+  final vendor = vendorSecurityDeposit ?? 0;
+  if (vendor > 0) return vendor;
+  return securityDeposit ?? 0;
 }
 
 class VendorInventorySnapshot {

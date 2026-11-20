@@ -643,6 +643,11 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
       (sum, item) => sum + (vendorEarnsPayout(item.status) ? item.payoutAmount : 0),
     );
     final showGroupPayout = groupItems.any((item) => vendorEarnsPayout(item.status));
+    final groupDeposit = groupItems.fold(
+      0.0,
+      (sum, item) => sum + (item.orderType.toLowerCase() == 'buy' ? 0 : item.depositAmount),
+    );
+    final showGroupDeposit = groupItems.any((item) => item.orderType.toLowerCase() != 'buy');
     final baseOrderNumber =
         order == null ? '' : getBaseOrderNumber(order.orderNumber);
 
@@ -676,6 +681,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                             itemCount: groupItems.length,
                             groupPayout: groupPayout,
                             showPayout: showGroupPayout,
+                            groupDeposit: groupDeposit,
+                            showDeposit: showGroupPayout && showGroupDeposit && groupItems.length > 1,
                           ),
                           const SizedBox(height: 10),
                           _SectionCard(
@@ -811,6 +818,17 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                                                     ),
                                                   ),
                                                 ],
+                                                if (groupItems.length > 1 && item.orderType.toLowerCase() != 'buy') ...[
+                                                  const SizedBox(height: 2),
+                                                  Text(
+                                                    'Deposit ${formatVendorMoney(item.depositAmount)}',
+                                                    style: TextStyle(
+                                                      color: context.appColors.textMuted,
+                                                      fontWeight: FontWeight.w600,
+                                                      fontSize: 10,
+                                                    ),
+                                                  ),
+                                                ],
                                               ],
                                             ),
                                           ],
@@ -920,12 +938,16 @@ class _GroupHeroCard extends StatelessWidget {
   final int itemCount;
   final double groupPayout;
   final bool showPayout;
+  final double groupDeposit;
+  final bool showDeposit;
 
   const _GroupHeroCard({
     required this.baseOrderNumber,
     required this.itemCount,
     required this.groupPayout,
     required this.showPayout,
+    required this.groupDeposit,
+    required this.showDeposit,
   });
 
   @override
@@ -968,25 +990,38 @@ class _GroupHeroCard extends StatelessWidget {
               ],
             ),
           ),
-          if (showPayout)
+          if (showPayout || showDeposit)
             Column(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
-                Text(
-                  formatVendorMoney(groupPayout),
-                  style: TextStyle(
-                    color: context.appColors.textPrimary,
-                    fontWeight: FontWeight.w800,
-                    fontSize: 18,
+                if (showPayout) ...[
+                  Text(
+                    formatVendorMoney(groupPayout),
+                    style: TextStyle(
+                      color: context.appColors.textPrimary,
+                      fontWeight: FontWeight.w800,
+                      fontSize: 18,
+                    ),
                   ),
-                ),
-                Text(
-                  itemCount > 1 ? 'Estimated payout (combined)' : 'Estimated payout',
-                  style: TextStyle(
-                    color: context.appColors.textMuted,
-                    fontSize: 10,
+                  Text(
+                    itemCount > 1 ? 'Estimated payout (combined)' : 'Estimated payout',
+                    style: TextStyle(
+                      color: context.appColors.textMuted,
+                      fontSize: 10,
+                    ),
                   ),
-                ),
+                ],
+                if (showDeposit) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    'Deposit held ${formatVendorMoney(groupDeposit)}',
+                    style: TextStyle(
+                      color: context.appColors.textMuted,
+                      fontSize: 10,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ],
               ],
             ),
         ],
@@ -2185,6 +2220,10 @@ class _ItemDetailsPanel extends StatelessWidget {
             const SizedBox(height: 8),
             _VendorExtensionBreakdown(order: order, paidExtensions: paidExtensions),
           ],
+          if (vendorEarnsPayout(order.status)) ...[
+            const SizedBox(height: 8),
+            _YourPayoutBar(amount: order.payoutAmount),
+          ],
           if (!isBuy) ...[
             const SizedBox(height: 8),
             _SubsectionLabel('Rental period'),
@@ -2591,34 +2630,24 @@ class _MetricStrip extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isBuy = order.orderType.toLowerCase() == 'buy';
-    final payout = formatVendorMoney(order.payoutAmount);
-    final showPayout = vendorEarnsPayout(order.status);
 
     if (isBuy) {
-      return Column(
-        crossAxisAlignment: CrossAxisAlignment.stretch,
+      return Row(
         children: [
-          Row(
-            children: [
-              Expanded(
-                child: _MetricTile(
-                  label: 'Purchase',
-                  value: formatDetailDate(order.startDate),
-                ),
-              ),
-              const SizedBox(width: 8),
-              Expanded(child: _MetricTile(label: 'Qty', value: '${order.quantity}')),
-              if (showPayout) ...[
-                const SizedBox(width: 8),
-                Expanded(child: _MetricTile(label: 'Payout', value: payout, highlight: true)),
-              ],
-            ],
+          Expanded(
+            child: _MetricTile(
+              label: 'Purchase',
+              value: formatDetailDate(order.startDate),
+            ),
           ),
+          const SizedBox(width: 8),
+          Expanded(child: _MetricTile(label: 'Quantity', value: '${order.quantity}')),
         ],
       );
     }
 
     return Column(
+      crossAxisAlignment: CrossAxisAlignment.stretch,
       children: [
         Row(
           children: [
@@ -2635,25 +2664,65 @@ class _MetricStrip extends StatelessWidget {
                 value: formatDetailDate(order.endDate),
               ),
             ),
+            const SizedBox(width: 8),
+            Expanded(child: _MetricTile(label: 'Days', value: '${order.rentalDays}')),
           ],
         ),
         const SizedBox(height: 8),
         Row(
           children: [
-            Expanded(
-              child: _MetricTile(label: 'Days', value: '${order.rentalDays}'),
-            ),
+            Expanded(child: _MetricTile(label: 'Quantity', value: '${order.quantity}')),
             const SizedBox(width: 8),
-            Expanded(child: _MetricTile(label: 'Qty', value: '${order.quantity}')),
-            if (showPayout) ...[
-              const SizedBox(width: 8),
-              Expanded(
-                child: _MetricTile(label: 'Payout', value: payout, highlight: true),
+            Expanded(
+              child: _MetricTile(
+                label: 'Security deposit',
+                value: formatVendorMoney(order.depositAmount),
               ),
-            ],
+            ),
           ],
         ),
       ],
+    );
+  }
+}
+
+class _YourPayoutBar extends StatelessWidget {
+  final double amount;
+
+  const _YourPayoutBar({required this.amount});
+
+  @override
+  Widget build(BuildContext context) {
+    final colors = context.appColors;
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+      decoration: BoxDecoration(
+        color: colors.surfaceElevated.withValues(alpha: 0.65),
+        borderRadius: BorderRadius.circular(10),
+        border: Border.all(color: colors.border),
+      ),
+      child: Row(
+        children: [
+          Text(
+            'YOUR PAYOUT',
+            style: TextStyle(
+              color: colors.textMuted,
+              fontSize: 11,
+              fontWeight: FontWeight.w700,
+              letterSpacing: 0.4,
+            ),
+          ),
+          const Spacer(),
+          Text(
+            formatVendorMoney(amount),
+            style: TextStyle(
+              color: colors.success,
+              fontSize: 16,
+              fontWeight: FontWeight.w800,
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

@@ -612,6 +612,7 @@ class _OrderGroupCard extends StatelessWidget {
                   if (i > 0) const SizedBox(height: 10),
                   OrderGroupListItem(
                     order: group.items[i],
+                    showDeposit: group.items.length > 1,
                     onTap: () => onOpenItem(group.items[i].orderId),
                   ),
                 ],

@@ -342,11 +342,16 @@ class _CreateListingScreenState extends State<CreateListingScreen> {
                 if (selectedProduct != null) ...[
                   const SizedBox(height: 14),
                   _FormSection(
-                    title: widget.isChemical ? 'Admin sizing & pricing' : 'Admin pricing',
+                    title: showCustomerPricing
+                        ? (widget.isChemical ? 'Admin sizing & pricing' : 'Admin pricing')
+                        : 'Your payout',
                     subtitle: 'Read-only — set by platform Admin',
                     trailing: _ReadOnlyBadge(),
                     child: widget.isChemical
-                        ? AdminSizingPricingBody(product: selectedProduct)
+                        ? AdminSizingPricingBody(
+                            product: selectedProduct,
+                            showPayoutSummary: false,
+                          )
                         : _EquipmentPricingInfo(product: selectedProduct),
                   ),
                 ],
@@ -887,6 +892,8 @@ class _EquipmentPricingInfo extends StatelessWidget {
     return '₹${value.toStringAsFixed(0)}';
   }
 
+  String _amount(num? value) => '₹${(value ?? 0).toStringAsFixed(0)}';
+
   @override
   Widget build(BuildContext context) {
     final modes = <String>[
@@ -895,39 +902,67 @@ class _EquipmentPricingInfo extends StatelessWidget {
     ];
     final modesLabel = modes.isEmpty ? 'Off' : modes.join(' + ');
 
+    final customerPanel = _PricingPanel(
+      title: 'Customer',
+      accent: context.appColors.info,
+      children: [
+        _MetricTile(label: 'Daily rate', value: _money(product.dailyRent)),
+        _MetricTile(label: 'Deposit', value: _money(product.securityDeposit)),
+        _MetricTile(label: 'Buy price', value: _money(product.buyPrice)),
+        _MetricTile(
+          label: 'GST / Modes',
+          value: '${product.gstPercent.toStringAsFixed(0)}% · $modesLabel',
+          compact: true,
+        ),
+      ],
+    );
+    final previousPayoutPanel = _PricingPanel(
+      title: 'Your payout',
+      accent: AppTheme.accent,
+      children: [
+        _MetricTile(label: 'Vendor daily', value: _money(product.vendorDailyRent)),
+        _MetricTile(label: 'Vendor buy', value: _money(product.vendorBuyPrice)),
+      ],
+    );
+
     return Column(
       children: [
-        Row(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Expanded(
-              child: _PricingPanel(
-                title: 'Customer',
-                accent: context.appColors.info,
-                children: [
-                  _MetricTile(label: 'Daily rate', value: _money(product.dailyRent)),
-                  _MetricTile(label: 'Deposit', value: _money(product.securityDeposit)),
-                  _MetricTile(label: 'Buy price', value: _money(product.buyPrice)),
-                  _MetricTile(
-                    label: 'GST / Modes',
-                    value: '${product.gstPercent.toStringAsFixed(0)}% · $modesLabel',
-                    compact: true,
-                  ),
-                ],
+        Visibility(
+          visible: showCustomerPricing,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(child: customerPanel),
+              const SizedBox(width: 10),
+              Expanded(child: previousPayoutPanel),
+            ],
+          ),
+        ),
+        Visibility(
+          visible: !showCustomerPricing,
+          child: _PricingPanel(
+            title: '',
+            accent: AppTheme.accent,
+            children: [
+              _MetricTile(label: 'Daily rate', value: _amount(product.vendorDailyRent)),
+              _MetricTile(
+                label: 'Security deposit',
+                value: _amount(payoutSecurityDeposit(
+                  vendorSecurityDeposit: product.vendorSecurityDeposit,
+                  securityDeposit: product.securityDeposit,
+                )),
               ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _PricingPanel(
-                title: 'Your payout',
-                accent: AppTheme.accent,
-                children: [
-                  _MetricTile(label: 'Vendor daily', value: _money(product.vendorDailyRent)),
-                  _MetricTile(label: 'Vendor buy', value: _money(product.vendorBuyPrice)),
-                ],
+              _MetricTile(label: 'Buy price', value: _money(product.vendorBuyPrice)),
+              Visibility(
+                visible: showVendorGst,
+                child: _MetricTile(
+                  label: 'GST',
+                  value: '${product.gstPercent.toStringAsFixed(0)}%',
+                  compact: true,
+                ),
               ),
-            ),
-          ],
+            ],
+          ),
         ),
         const SizedBox(height: 10),
         Container(
@@ -975,16 +1010,18 @@ class _PricingPanel extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            title.toUpperCase(),
-            style: TextStyle(
-              color: accent,
-              fontSize: 10,
-              fontWeight: FontWeight.w800,
-              letterSpacing: 0.7,
+          if (title.trim().isNotEmpty) ...[
+            Text(
+              title.toUpperCase(),
+              style: TextStyle(
+                color: accent,
+                fontSize: 10,
+                fontWeight: FontWeight.w800,
+                letterSpacing: 0.7,
+              ),
             ),
-          ),
-          const SizedBox(height: 10),
+            const SizedBox(height: 10),
+          ],
           ...children,
         ],
       ),

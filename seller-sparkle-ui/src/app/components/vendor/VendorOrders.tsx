@@ -409,6 +409,9 @@ const VendorOrders = () => {
                                   ₹{(order.vendorSubtotalAmount && order.vendorSubtotalAmount > 0 ? order.vendorSubtotalAmount : order.totalAmount).toFixed(0)}
                                 </span>
                               ) : null}
+                              {group.items.length > 1 && order.orderType?.toLowerCase() !== "buy" ? (
+                                <span className="tabular-nums">Deposit ₹{formatInr(order.depositAmount ?? 0)}</span>
+                              ) : null}
                             </p>
                           </div>
                         </div>

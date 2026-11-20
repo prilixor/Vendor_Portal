@@ -117,7 +117,30 @@ class _EditListingScreenState extends State<EditListingScreen> {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Edit listing')),
+      appBar: AppBar(
+        title: Row(
+          children: [
+            const Text('Edit listing'),
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+              decoration: BoxDecoration(
+                color: (row.isChemical ? const Color(0xFF7C3AED) : AppTheme.accent)
+                    .withValues(alpha: 0.12),
+                borderRadius: BorderRadius.circular(999),
+              ),
+              child: Text(
+                row.isChemical ? 'Chemical' : 'Equipment',
+                style: TextStyle(
+                  color: row.isChemical ? const Color(0xFF7C3AED) : AppTheme.accent,
+                  fontSize: 11,
+                  fontWeight: FontWeight.w800,
+                ),
+              ),
+            ),
+          ],
+        ),
+      ),
       body: ListView(
         padding: const EdgeInsets.all(16),
         children: [
@@ -137,7 +160,7 @@ class _EditListingScreenState extends State<EditListingScreen> {
           if (row.isChemical) ...[
             const SizedBox(height: 16),
             Text(
-              'ADMIN SIZING & PRICING',
+              showCustomerPricing ? 'ADMIN SIZING & PRICING' : 'YOUR PAYOUT',
               style: TextStyle(
                 color: context.appColors.textSecondary,
                 fontWeight: FontWeight.w800,
@@ -176,9 +199,60 @@ class _EditListingScreenState extends State<EditListingScreen> {
                       ),
                     ),
                   ),
-                  AdminSizingPricingBody(product: catalogProduct),
+                  AdminSizingPricingBody(
+                    product: catalogProduct,
+                    showPayoutSummary: false,
+                  ),
                 ],
               ),
+            ),
+          ] else ...[
+            const SizedBox(height: 16),
+            Text(
+              row.listing.hasCustomVendorPricing ? 'YOUR PAYOUT · SET FOR YOU' : 'YOUR PAYOUT',
+              style: TextStyle(
+                color: context.appColors.textSecondary,
+                fontWeight: FontWeight.w800,
+                fontSize: 11,
+                letterSpacing: 0.8,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.fromLTRB(14, 10, 14, 12),
+              decoration: BoxDecoration(
+                color: AppTheme.card(context),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(color: context.appColors.border),
+              ),
+              child: () {
+                final catalog = catalogProduct;
+                if (catalog == null) {
+                  return Text(
+                    'Catalog pricing is unavailable for this listing.',
+                    style: TextStyle(color: context.appColors.textMuted, fontSize: 13),
+                  );
+                }
+                return VendorPayoutSummary(
+                  dailyRate: row.listing.hasCustomVendorPricing
+                      ? row.listing.vendorDailyRent
+                      : catalog.vendorDailyRent,
+                  securityDeposit: payoutSecurityDeposit(
+                    vendorSecurityDeposit: catalog.vendorSecurityDeposit,
+                    securityDeposit: catalog.securityDeposit,
+                  ),
+                  buyPrice: row.listing.hasCustomVendorPricing
+                      ? row.listing.vendorBuyPrice
+                      : catalog.vendorBuyPrice,
+                  gstPercent: catalog.gstPercent,
+                );
+              }(),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              'Rental payout = vendor daily rate × plan days (set by Admin)',
+              style: TextStyle(color: context.appColors.textMuted, fontSize: 11),
             ),
           ],
           const SizedBox(height: 16),

@@ -373,8 +373,9 @@ class OrderMetaChip extends StatelessWidget {
 /// Vendor web list: customer and quantity, then place and payout.
 class OrderItemMetaLine extends StatelessWidget {
   final VendorOrder order;
+  final bool showDeposit;
 
-  const OrderItemMetaLine({super.key, required this.order});
+  const OrderItemMetaLine({super.key, required this.order, this.showDeposit = false});
 
   @override
   Widget build(BuildContext context) {
@@ -436,6 +437,8 @@ class OrderItemMetaLine extends StatelessWidget {
             ),
             if (vendorEarnsPayout(order.status))
               Text(formatVendorMoney(order.payoutAmount), style: strong),
+            if (showDeposit && order.orderType.toLowerCase() != 'buy')
+              Text('Deposit ${formatVendorMoney(order.depositAmount)}', style: muted),
           ],
         ),
       ],
@@ -532,11 +535,13 @@ class OrderGroupCardHeader extends StatelessWidget {
 class OrderGroupListItem extends StatelessWidget {
   final VendorOrder order;
   final VoidCallback onTap;
+  final bool showDeposit;
 
   const OrderGroupListItem({
     super.key,
     required this.order,
     required this.onTap,
+    this.showDeposit = false,
   });
 
   @override
@@ -581,7 +586,7 @@ class OrderGroupListItem extends StatelessWidget {
                           ),
                         ),
                         const SizedBox(height: 7),
-                        OrderItemMetaLine(order: order),
+                        OrderItemMetaLine(order: order, showDeposit: showDeposit),
                       ],
                     ),
                   ),

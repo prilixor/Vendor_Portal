@@ -443,11 +443,15 @@ class _ProductCard extends StatelessWidget {
     final title = row.productName.trim().isNotEmpty
         ? row.productName
         : listing.listingTitle;
-    final priceLine = row.isChemical
-        ? '${_chemicalPrice(row)}${listing.hasCustomVendorPricing ? ' · your payout is set' : ''}'
+    final customerPriceLine = row.isChemical
+        ? '${_chemicalPrice(row, vendor: false)}${listing.hasCustomVendorPricing ? ' · your payout is set' : ''}'
         : '₹${listing.dailyRent.toStringAsFixed(0)}/day'
             '${listing.hasCustomVendorPricing ? ' · your payout ₹${listing.vendorDailyRent.toStringAsFixed(0)}/day' : ''}'
             ' · Qty ${row.quantity}';
+    final vendorPriceLine = row.isChemical
+        ? '${_chemicalPrice(row, vendor: true)} · Qty ${row.quantity}'
+        : '₹${_inrAmount(listing.vendorDailyRent)}/day · Qty ${row.quantity}';
+    final priceLine = showCustomerPricing ? customerPriceLine : vendorPriceLine;
 
     return Material(
       color: colors.surface,
@@ -570,15 +574,29 @@ class _ProductCard extends StatelessWidget {
     );
   }
 
-  String _chemicalPrice(VendorListingRow row) {
-    final min = row.buyPriceMin;
-    final max = row.buyPriceMax;
+  String _chemicalPrice(VendorListingRow row, {required bool vendor}) {
+    final min = vendor ? row.payoutPriceMin : row.buyPriceMin;
+    final max = vendor ? row.payoutPriceMax : row.buyPriceMax;
     if (min != null && max != null && min != max) {
-      return '₹${min.toStringAsFixed(0)}–${max.toStringAsFixed(0)} · Qty ${row.quantity}';
+      final range = vendor
+          ? '₹${_inrAmount(min)}–${_inrAmount(max)}'
+          : '₹${min.toStringAsFixed(0)}–${max.toStringAsFixed(0)}';
+      return vendor ? range : '$range · Qty ${row.quantity}';
     }
     if (min != null) {
-      return '₹${min.toStringAsFixed(0)} · Qty ${row.quantity}';
+      final amount = vendor ? '₹${_inrAmount(min)}' : '₹${min.toStringAsFixed(0)}';
+      return vendor ? amount : '$amount · Qty ${row.quantity}';
     }
-    return 'Qty ${row.quantity}';
+    return vendor ? '—' : 'Qty ${row.quantity}';
   }
+}
+
+String _inrAmount(num value) {
+  if ((value - value.roundToDouble()).abs() < 0.001) {
+    return value.round().toString();
+  }
+  var text = value.toStringAsFixed(2);
+  text = text.replaceFirst(RegExp(r'0+$'), '');
+  text = text.replaceFirst(RegExp(r'\.$'), '');
+  return text;
 }

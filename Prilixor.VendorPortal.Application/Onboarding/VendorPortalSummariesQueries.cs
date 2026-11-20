@@ -399,7 +399,7 @@ public sealed class VendorListingVariantPayoutDto
     public decimal VendorPrice { get; init; }
 }
 
-/// <summary>One packaging size on a chemical listing, with admin buy price and live stock.</summary>
+/// <summary>One packaging size on a chemical listing, with customer buy price, vendor payout, and live stock.</summary>
 public sealed class VendorListingChemicalSizeDto
 {
     public string VariantId { get; init; } = string.Empty;
@@ -408,6 +408,7 @@ public sealed class VendorListingChemicalSizeDto
     public decimal SizeValue { get; init; }
     public string SizeUnit { get; init; } = string.Empty;
     public decimal BuyPrice { get; init; }
+    public decimal VendorPrice { get; init; }
     public int TotalQuantity { get; init; }
     public int AvailableQuantity { get; init; }
     public int ReservedQuantity { get; init; }

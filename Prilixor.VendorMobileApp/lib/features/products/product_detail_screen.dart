@@ -737,6 +737,38 @@ class _ListingDetailsPanel extends StatelessWidget {
     return _money(value);
   }
 
+  Widget _payoutRows(
+    BuildContext context, {
+    required double dailyRate,
+    required double securityDeposit,
+    required double? buyPrice,
+    double? gstPercent,
+    bool showRentalNote = false,
+  }) {
+    return Column(
+      children: [
+        _DetailRow(label: 'Daily rate', value: _money(dailyRate)),
+        _DetailRow(label: 'Security deposit', value: _money(securityDeposit)),
+        _DetailRow(label: 'Buy price', value: _moneyOrDash(buyPrice)),
+        Visibility(
+          visible: showVendorGst,
+          child: _DetailRow(
+            label: 'GST',
+            value: gstPercent == null ? '—' : '${gstPercent.toStringAsFixed(0)}%',
+          ),
+        ),
+        if (showRentalNote)
+          Padding(
+            padding: const EdgeInsets.only(top: 2, bottom: 8),
+            child: Text(
+              'Rental payout = vendor daily rate × plan days (set by Admin)',
+              style: TextStyle(color: context.appColors.textMuted, fontSize: 11),
+            ),
+          ),
+      ],
+    );
+  }
+
   List<String> get _modes {
     final modes = <String>[
       if (catalogProduct?.isRentEnabled == true) 'Rent',
@@ -778,16 +810,18 @@ class _ListingDetailsPanel extends StatelessWidget {
                 value: '${row.quantity}',
               ),
             ),
-            const SizedBox(width: 10),
-            Expanded(
-              child: _QuickStatTile(
-                icon: Icons.percent_outlined,
-                label: 'GST',
-                value: catalogProduct != null
-                    ? '${catalogProduct!.gstPercent.toStringAsFixed(0)}%'
-                    : '—',
+            if (showVendorGst) ...[
+              const SizedBox(width: 10),
+              Expanded(
+                child: _QuickStatTile(
+                  icon: Icons.percent_outlined,
+                  label: 'GST',
+                  value: catalogProduct != null
+                      ? '${catalogProduct!.gstPercent.toStringAsFixed(0)}%'
+                      : '—',
+                ),
               ),
-            ),
+            ],
             if (listing.favoriteCount > 0) ...[
               const SizedBox(width: 10),
               Expanded(
@@ -818,57 +852,63 @@ class _ListingDetailsPanel extends StatelessWidget {
         if (row.isChemical) ...[
           const SizedBox(height: 10),
           _DetailSection(
-            title: 'Admin sizing & pricing',
+            title: showCustomerPricing ? 'Admin sizing & pricing' : 'Your payout',
             icon: Icons.payments_outlined,
             badge: 'Read-only',
             children: [
               AdminSizingPricingBody(
                 product: catalogProduct,
+                showPayoutSummary: false,
                 vendorPayoutByVariantId: listing.hasCustomVendorPricing ? listing.variantPayouts : const {},
               ),
             ],
           ),
         ] else ...[
-          const SizedBox(height: 10),
-          _DetailSection(
-            title: 'Customer pricing',
-            icon: Icons.payments_outlined,
-            badge: 'Read-only',
-            children: [
-              _DetailRow(
-                label: 'Daily rate',
-                value: _money(catalogProduct?.dailyRent ?? listing.dailyRent),
+          Visibility(
+            visible: showCustomerPricing,
+            child: Padding(
+              padding: const EdgeInsets.only(top: 10),
+              child: _DetailSection(
+                title: 'Customer pricing',
+                icon: Icons.payments_outlined,
+                badge: 'Read-only',
+                children: [
+                  _DetailRow(
+                    label: 'Daily rate',
+                    value: _money(catalogProduct?.dailyRent ?? listing.dailyRent),
+                  ),
+                  _DetailRow(
+                    label: 'Deposit',
+                    value: _money(catalogProduct?.securityDeposit ?? listing.securityDeposit),
+                  ),
+                  _DetailRow(
+                    label: 'Buy price',
+                    value: _moneyOrDash(catalogProduct?.buyPrice),
+                  ),
+                ],
               ),
-              _DetailRow(
-                label: 'Deposit',
-                value: _money(catalogProduct?.securityDeposit ?? listing.securityDeposit),
-              ),
-              _DetailRow(
-                label: 'Buy price',
-                value: _moneyOrDash(catalogProduct?.buyPrice),
-              ),
-            ],
+            ),
           ),
           const SizedBox(height: 10),
           _DetailSection(
-            title: listing.hasCustomVendorPricing ? 'Your pricing · set for you' : 'Your pricing',
+            title: listing.hasCustomVendorPricing ? 'Your payout · set for you' : 'Your payout',
             icon: Icons.storefront_outlined,
+            badge: 'Read-only',
             children: [
-              _DetailRow(
-                label: 'Daily rate',
-                value: _money(
-                  listing.hasCustomVendorPricing
-                      ? listing.vendorDailyRent
-                      : (catalogProduct?.vendorDailyRent ?? 0),
+              _payoutRows(
+                context,
+                dailyRate: listing.hasCustomVendorPricing
+                    ? listing.vendorDailyRent
+                    : (catalogProduct?.vendorDailyRent ?? 0),
+                securityDeposit: payoutSecurityDeposit(
+                  vendorSecurityDeposit: catalogProduct?.vendorSecurityDeposit,
+                  securityDeposit: catalogProduct?.securityDeposit ?? listing.securityDeposit,
                 ),
-              ),
-              _DetailRow(
-                label: 'Buy price',
-                value: _moneyOrDash(
-                  listing.hasCustomVendorPricing
-                      ? listing.vendorBuyPrice
-                      : catalogProduct?.vendorBuyPrice,
-                ),
+                buyPrice: listing.hasCustomVendorPricing
+                    ? listing.vendorBuyPrice
+                    : catalogProduct?.vendorBuyPrice,
+                gstPercent: catalogProduct?.gstPercent,
+                showRentalNote: true,
               ),
             ],
           ),

@@ -295,6 +295,7 @@ class VendorCatalogProvider extends ChangeNotifier {
     });
     final productName = json['productName']?.toString() ?? listing.listingTitle;
     final categoryName = json['categoryName']?.toString() ?? '';
+    final prices = ChemicalPriceRanges.fromJson(json['chemicalSizes']);
     return VendorListingRow(
       listing: listing,
       categoryName: categoryName.isEmpty ? 'Unknown' : categoryName,
@@ -303,6 +304,10 @@ class VendorCatalogProvider extends ChangeNotifier {
       isChemical: json['isChemical'] == true,
       quantity: asJsonInt(json['totalQuantity'], listing.availableQuantity),
       status: normalizeListingStatus(listing.listingStatus),
+      buyPriceMin: prices.customerMin,
+      buyPriceMax: prices.customerMax,
+      payoutPriceMin: prices.vendorMin,
+      payoutPriceMax: prices.vendorMax,
       primaryImageUrl: resolveListingPrimaryImageUrl(
         listingPrimaryImageUrl: listing.primaryImageUrl,
         listingPrimaryThumbnailUrl: listing.primaryThumbnailUrl,

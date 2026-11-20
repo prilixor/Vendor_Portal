@@ -1937,7 +1937,8 @@ public sealed class VendorOnboardingRepository(
     private static List<VendorListingChemicalSizeDto> BuildChemicalSizes(
         Guid productId,
         List<VendorVariantInventory>? stocks,
-        IReadOnlyDictionary<Guid, List<ProductVariant>> catalogByProduct)
+        IReadOnlyDictionary<Guid, List<ProductVariant>> catalogByProduct,
+        IReadOnlyDictionary<Guid, decimal>? vendorPriceOverrides = null)
     {
         var stockByVariant = (stocks ?? [])
             .GroupBy(s => s.ProductVariantId)
@@ -1946,18 +1947,21 @@ public sealed class VendorOnboardingRepository(
         if (catalogByProduct.TryGetValue(productId, out var catalog) && catalog.Count > 0)
         {
             return catalog
-                .Select(variant => ToChemicalSize(variant, stockByVariant.GetValueOrDefault(variant.Id)))
+                .Select(variant => ToChemicalSize(variant, stockByVariant.GetValueOrDefault(variant.Id), vendorPriceOverrides))
                 .ToList();
         }
 
         return (stocks ?? [])
             .Where(s => s.ProductVariant is not null)
             .OrderBy(s => s.ProductVariant.SizeValue)
-            .Select(s => ToChemicalSize(s.ProductVariant, s))
+            .Select(s => ToChemicalSize(s.ProductVariant, s, vendorPriceOverrides))
             .ToList();
     }
 
-    private static VendorListingChemicalSizeDto ToChemicalSize(ProductVariant variant, VendorVariantInventory? stock)
+    private static VendorListingChemicalSizeDto ToChemicalSize(
+        ProductVariant variant,
+        VendorVariantInventory? stock,
+        IReadOnlyDictionary<Guid, decimal>? vendorPriceOverrides)
         => new()
         {
             VariantId = variant.Id.ToString(),
@@ -1966,6 +1970,9 @@ public sealed class VendorOnboardingRepository(
             SizeValue = variant.SizeValue,
             SizeUnit = variant.SizeUnit ?? string.Empty,
             BuyPrice = variant.BuyPrice,
+            VendorPrice = vendorPriceOverrides != null && vendorPriceOverrides.TryGetValue(variant.Id, out var payout)
+                ? payout
+                : variant.VendorPrice,
             TotalQuantity = stock?.TotalQuantity ?? 0,
             AvailableQuantity = stock?.AvailableQuantity ?? 0,
             ReservedQuantity = stock?.ReservedQuantity ?? 0,
@@ -2222,7 +2229,15 @@ public sealed class VendorOnboardingRepository(
                     }).ToList()
                     : [],
                 ChemicalSizes = isChem
-                    ? BuildChemicalSizes(l.ProductId, variants, catalogVariantsByProduct)
+                    ? BuildChemicalSizes(
+                        l.ProductId,
+                        variants,
+                        catalogVariantsByProduct,
+                        hasCustomVendorPrice
+                            ? vendorPrice!.Variants
+                                .GroupBy(v => v.ProductVariantId)
+                                .ToDictionary(g => g.Key, g => g.Last().VendorPrice)
+                            : null)
                     : [],
             };
         });

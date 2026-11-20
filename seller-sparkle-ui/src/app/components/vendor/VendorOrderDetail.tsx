@@ -356,6 +356,12 @@ function itemPayout(item: VendorOrderApiDto): number {
     : item.totalAmount;
 }
 
+/** Buy lines have no deposit. A rental line stores product deposit × quantity. */
+function itemDeposit(item: VendorOrderApiDto): number {
+  if (item.orderType?.toLowerCase() === "buy") return 0;
+  return Number(item.depositAmount ?? 0);
+}
+
 function formatRupee(value: number): string {
   const rounded = Math.round(value * 100) / 100;
   const hasPaise = Math.abs(rounded % 1) > 0.001;
@@ -872,6 +878,16 @@ const VendorOrderDetail = () => {
     [orderGroupItems],
   );
 
+  const groupDepositAmount = useMemo(
+    () => orderGroupItems.reduce((sum, item) => sum + itemDeposit(item), 0),
+    [orderGroupItems],
+  );
+
+  const groupHasRental = useMemo(
+    () => orderGroupItems.some((item) => item.orderType?.toLowerCase() !== "buy"),
+    [orderGroupItems],
+  );
+
   const baseOrderNumber = useMemo(
     () => (order?.orderNumber ? getBaseOrderNumber(order.orderNumber) : ""),
     [order],
@@ -1335,6 +1351,11 @@ const VendorOrderDetail = () => {
                   <p className="mt-1 text-[11px] text-muted-foreground uppercase font-semibold tracking-wider sm:text-xs">
                     Estimated Vendor Payout{orderGroupItems.length > 1 ? " (Combined)" : ""}
                   </p>
+                  {orderGroupItems.length > 1 && groupHasRental ? (
+                    <p className="mt-1 text-xs tabular-nums text-muted-foreground">
+                      Deposit held ₹{formatRupee(groupDepositAmount)}
+                    </p>
+                  ) : null}
                 </div>
               ) : null}
             </div>
@@ -1436,10 +1457,19 @@ const VendorOrderDetail = () => {
                       {formatOrderStatusLabel(item.status)}
                     </span>
                     </div>
-                    {orderShowsVendorPayout(item.status) ? (
-                      <span className="shrink-0 text-sm font-semibold tabular-nums">
-                        ₹{formatRupee(itemPayout(item))}
-                      </span>
+                    {orderShowsVendorPayout(item.status) || item.orderType?.toLowerCase() !== "buy" ? (
+                      <div className="flex shrink-0 flex-col items-end">
+                        {orderShowsVendorPayout(item.status) ? (
+                          <span className="text-sm font-semibold tabular-nums">
+                            ₹{formatRupee(itemPayout(item))}
+                          </span>
+                        ) : null}
+                        {orderGroupItems.length > 1 && item.orderType?.toLowerCase() !== "buy" ? (
+                          <span className="text-[11px] tabular-nums text-muted-foreground">
+                            Deposit ₹{formatRupee(itemDeposit(item))}
+                          </span>
+                        ) : null}
+                      </div>
                     ) : null}
                   </div>
                 </button>
@@ -1680,9 +1710,17 @@ const VendorOrderDetail = () => {
                     </>
                   )}
                   </div>
-                  <div className="border-t border-border/70 px-4 py-4 sm:px-6">
-                    <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">Quantity</p>
-                    <p className="text-sm font-medium tabular-nums">{order.quantity}</p>
+                  <div className="grid grid-cols-2 gap-3 border-t border-border/70 px-4 py-4 sm:px-6">
+                    <div>
+                      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">Quantity</p>
+                      <p className="text-sm font-medium tabular-nums">{order.quantity}</p>
+                    </div>
+                    {order.orderType?.toLowerCase() !== "buy" ? (
+                      <div>
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground sm:text-xs">Security deposit</p>
+                        <p className="text-sm font-medium tabular-nums">₹{formatRupee(itemDeposit(order))}</p>
+                      </div>
+                    ) : null}
                   </div>
                   {orderShowsVendorPayout(order.status) ? (
                     <VendorPayoutBreakdown order={order} paidExtensions={continuations?.paidExtensions ?? []} />

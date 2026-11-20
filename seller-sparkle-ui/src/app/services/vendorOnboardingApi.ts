@@ -684,6 +684,8 @@ export interface VendorListingChemicalSizeApiDto {
   sizeValue: number;
   sizeUnit: string;
   buyPrice: number;
+  /** Vendor payout for this pack size. Customer buyPrice stays on the payload. */
+  vendorPrice?: number;
   totalQuantity: number;
   availableQuantity: number;
   reservedQuantity: number;

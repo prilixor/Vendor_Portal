@@ -28,6 +28,71 @@ import { cn, resolveItemImageUrl, resolveCatalogProductImageUrl } from "@/app/he
 import { Badge } from "@/app/components/ui/badge";
 import { CatalogMediaLauncher } from "@/app/components/shared/CatalogProductMediaSection";
 
+/** Customer prices stay in the markup and API. Vendors see their payout until this is turned on. */
+const showCustomerPricing = false;
+/** GST stays in the markup so it can be shown later without rebuilding the pricing card. */
+const showVendorGst = false;
+
+const formatInr = (value?: number | null) =>
+  `₹${Number(value ?? 0).toLocaleString("en-IN", { maximumFractionDigits: 2 })}`;
+
+/** Prefer the vendor security deposit. If Admin has not set one, keep the catalog deposit visible. */
+const payoutSecurityDeposit = (vendorDeposit?: number | null, catalogDeposit?: number | null) => {
+  const vendor = Number(vendorDeposit ?? 0);
+  if (vendor > 0) return vendor;
+  return Number(catalogDeposit ?? 0);
+};
+
+const VendorPayoutCard = ({
+  dailyRate,
+  securityDeposit,
+  buyPrice,
+  gstPercent,
+  showRentalNote,
+  className,
+}: {
+  dailyRate?: number;
+  securityDeposit?: number;
+  buyPrice?: number | null;
+  gstPercent?: number;
+  showRentalNote?: boolean;
+  className?: string;
+}) => (
+  <div
+    className={cn(
+      "space-y-2 rounded-xl border border-border bg-muted/20 px-3 py-2.5",
+      !showCustomerPricing && "sm:col-span-2",
+      className,
+    )}
+  >
+    <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+      <div>
+        <p className="text-[11px] text-muted-foreground">Daily rate</p>
+        <p className="mt-0.5 font-mono text-sm font-semibold tabular-nums">{formatInr(dailyRate)}</p>
+      </div>
+      <div>
+        <p className="text-[11px] text-muted-foreground">Security deposit</p>
+        <p className="mt-0.5 font-mono text-sm font-semibold tabular-nums">{formatInr(securityDeposit)}</p>
+      </div>
+      <div>
+        <p className="text-[11px] text-muted-foreground">Buy price</p>
+        <p className="mt-0.5 font-mono text-sm font-semibold tabular-nums">
+          {buyPrice != null && buyPrice > 0 ? formatInr(buyPrice) : "—"}
+        </p>
+      </div>
+      <div className={cn(!showVendorGst && "hidden")}>
+        <p className="text-[11px] text-muted-foreground">GST</p>
+        <p className="mt-0.5 text-sm font-semibold">{gstPercent ?? 18}%</p>
+      </div>
+    </div>
+    {showRentalNote ? (
+      <p className="text-[11px] text-muted-foreground">
+        Rental payout = vendor daily rate × plan days (set by Admin)
+      </p>
+    ) : null}
+  </div>
+);
+
 type ChemStockSize = { label: string; sku: string; total: number; available: number };
 
 type LocalListing = ProductListing & {
@@ -36,6 +101,7 @@ type LocalListing = ProductListing & {
   buyPrice?: number;
   vendorDailyRent?: number;
   vendorBuyPrice?: number;
+  vendorSecurityDeposit?: number;
   hasCustomVendorPricing?: boolean;
   variantPayouts?: { variantId: string; vendorPrice: number }[];
   gstPercent?: number;
@@ -59,6 +125,7 @@ type LocalListing = ProductListing & {
     sizeValue: number;
     sizeUnit: string;
     buyPrice: number;
+    vendorPrice?: number;
     totalQuantity: number;
     availableQuantity: number;
   }[];
@@ -81,6 +148,7 @@ type CatalogProduct = {
   buyPrice?: number;
   vendorDailyRent?: number;
   vendorBuyPrice?: number;
+  vendorSecurityDeposit?: number;
   gstPercent?: number;
   isRentEnabled?: boolean;
   isBuyEnabled?: boolean;
@@ -126,6 +194,7 @@ const blankListing = (category?: CatalogCategory, product?: CatalogProduct): Loc
   buyPrice: product?.buyPrice,
   vendorDailyRent: product?.vendorDailyRent ?? 0,
   vendorBuyPrice: product?.vendorBuyPrice,
+  vendorSecurityDeposit: product?.vendorSecurityDeposit ?? 0,
   gstPercent: product?.gstPercent ?? 18,
   isRentEnabled: product?.isRentEnabled ?? true,
   isBuyEnabled: product?.isBuyEnabled ?? true,
@@ -271,7 +340,10 @@ const mapListingSummary = (l: VendorListingSummaryApiDto): LocalListing => ({
   vendorDailyRent: l.vendorDailyRent,
   vendorBuyPrice: l.vendorBuyPrice ?? undefined,
   variantPayouts: l.variantPayouts,
-  chemicalSizes: l.chemicalSizes ?? [],
+  chemicalSizes: (l.chemicalSizes ?? []).map((size) => ({
+    ...size,
+    vendorPrice: size.vendorPrice ?? 0,
+  })),
   sizeStocks: (l.chemicalSizes ?? []).map((size) => ({
     label: size.label,
     sku: size.sku,
@@ -461,8 +533,10 @@ const Products = () => {
       variants,
       rentalPricingPlans: catalog?.rentalPricingPlans || p.rentalPricingPlans || [],
       buyPrice: catalog?.buyPrice ?? p.buyPrice,
+      securityDeposit: catalog?.securityDeposit ?? p.securityDeposit,
       vendorDailyRent: p.hasCustomVendorPricing ? p.vendorDailyRent ?? catalog?.vendorDailyRent : catalog?.vendorDailyRent ?? p.vendorDailyRent,
       vendorBuyPrice: p.hasCustomVendorPricing ? p.vendorBuyPrice ?? catalog?.vendorBuyPrice : catalog?.vendorBuyPrice ?? p.vendorBuyPrice,
+      vendorSecurityDeposit: catalog?.vendorSecurityDeposit ?? p.vendorSecurityDeposit ?? 0,
       gstPercent: catalog?.gstPercent ?? p.gstPercent,
       isRentEnabled: catalog?.isRentEnabled ?? p.isRentEnabled,
       isBuyEnabled: catalog?.isBuyEnabled ?? p.isBuyEnabled,
@@ -490,22 +564,50 @@ const Products = () => {
     }
   };
 
-  // Chemicals are priced per packaging size; expose the customer buy-price range + sorted sizes.
-  const getChemPricing = (p: LocalListing) => {
-    const active = (p.chemicalSizes ?? []).filter((size) => size.buyPrice > 0);
+  // Chemicals are priced per packaging size. Customer buy price stays available; the list shows vendor payout.
+  const getChemPricing = (p: LocalListing, source: "customer" | "vendor") => {
+    const active = (p.chemicalSizes ?? []).filter((size) =>
+      source === "customer" ? size.buyPrice > 0 : Number(size.vendorPrice ?? 0) > 0,
+    );
     if (active.length === 0) return null;
-    const prices = active.map((size) => size.buyPrice);
+    const prices = active.map((size) => (source === "customer" ? size.buyPrice : Number(size.vendorPrice ?? 0)));
     const min = Math.min(...prices);
     const max = Math.max(...prices);
-    const label =
-      min === max
-        ? `₹${min.toLocaleString("en-IN")}`
-        : `₹${min.toLocaleString("en-IN")} – ₹${max.toLocaleString("en-IN")}`;
+    const label = min === max ? formatInr(min) : `${formatInr(min)} – ${formatInr(max)}`;
     const sizes = active
       .slice()
       .sort((a, b) => a.sizeValue - b.sizeValue)
-      .map((size) => ({ sizeValue: size.sizeValue, sizeUnit: size.sizeUnit, buyPrice: size.buyPrice }));
+      .map((size) => ({
+        sizeValue: size.sizeValue,
+        sizeUnit: size.sizeUnit,
+        buyPrice: source === "customer" ? size.buyPrice : Number(size.vendorPrice ?? 0),
+      }));
     return { label, sizes, count: active.length };
+  };
+
+  const renderChemPrices = (p: LocalListing, align: "start" | "end" = "end") => {
+    const customer = getChemPricing(p, "customer");
+    const vendor = getChemPricing(p, "vendor");
+    const visible = showCustomerPricing ? customer : vendor;
+    if (!customer && !vendor) return <span className="text-muted-foreground">—</span>;
+    return (
+      <div className={cn("flex max-w-full flex-col", align === "end" ? "items-end" : "items-start")}>
+        {customer ? (
+          <div className={cn("flex flex-col", align === "end" ? "items-end" : "items-start", !showCustomerPricing && "hidden")}>
+            <ChemPriceDisclosure label={customer.label} count={customer.count} sizes={customer.sizes} align={align} />
+            {p.hasCustomVendorPricing ? (
+              <span className="font-sans text-[10px] font-normal text-muted-foreground">your payout is set</span>
+            ) : null}
+          </div>
+        ) : null}
+        {vendor ? (
+          <div className={cn(showCustomerPricing && "hidden")}>
+            <ChemPriceDisclosure label={vendor.label} count={vendor.count} sizes={vendor.sizes} align={align} />
+          </div>
+        ) : null}
+        {!visible ? <span className="text-muted-foreground">—</span> : null}
+      </div>
+    );
   };
 
   const confirmDeleteListing = async (id: string) => {
@@ -549,6 +651,7 @@ const Products = () => {
       buyPrice: p.buyPrice,
       vendorDailyRent: p.vendorDailyRent ?? 0,
       vendorBuyPrice: p.vendorBuyPrice,
+      vendorSecurityDeposit: p.vendorSecurityDeposit ?? 0,
       gstPercent: p.gstPercent,
       isRentEnabled: p.isRentEnabled,
       isBuyEnabled: p.isBuyEnabled,
@@ -877,34 +980,25 @@ const Products = () => {
                   <td className="px-3 py-3 text-muted-foreground sm:px-4">{p.category}</td>
                   {activeTab === "equipment" && (
                     <td className="px-3 py-3 text-right sm:px-4">
-                      <div className="font-mono tabular-nums text-sm">
-                        ₹{p.dailyRent ?? 0}
+                      <div className={cn(!showCustomerPricing && "hidden")}>
+                        <div className="font-mono tabular-nums text-sm">
+                          ₹{p.dailyRent ?? 0}
+                          <span className="text-muted-foreground">/day</span>
+                        </div>
+                        {p.hasCustomVendorPricing && (
+                          <div className="text-[11px] text-emerald-700 dark:text-emerald-400">
+                            Your payout ₹{Number(p.vendorDailyRent ?? 0).toLocaleString("en-IN")}/day
+                          </div>
+                        )}
+                      </div>
+                      <div className={cn("font-mono tabular-nums text-sm", showCustomerPricing && "hidden")}>
+                        {formatInr(p.vendorDailyRent)}
                         <span className="text-muted-foreground">/day</span>
                       </div>
-                      {p.hasCustomVendorPricing && (
-                        <div className="text-[11px] text-emerald-700 dark:text-emerald-400">
-                          Your payout ₹{Number(p.vendorDailyRent ?? 0).toLocaleString("en-IN")}/day
-                        </div>
-                      )}
                     </td>
                   )}
                   {activeTab === "chemical" && (
-                    <td className="px-3 py-3 text-right font-mono sm:px-4">
-                      {(() => {
-                        const pricing = getChemPricing(p);
-                        if (!pricing) {
-                          return <span className="text-muted-foreground">—</span>;
-                        }
-                        return (
-                          <div className="flex flex-col items-end">
-                            <ChemPriceDisclosure label={pricing.label} count={pricing.count} sizes={pricing.sizes} />
-                            {p.hasCustomVendorPricing ? (
-                              <span className="font-sans text-[10px] font-normal text-muted-foreground">your payout is set</span>
-                            ) : null}
-                          </div>
-                        );
-                      })()}
-                    </td>
+                    <td className="px-3 py-3 text-right font-mono sm:px-4">{renderChemPrices(p)}</td>
                   )}
                   <td className="px-3 py-3 text-right sm:px-4">
                     {activeTab === "chemical" && (p.sizeStocks?.length ?? 0) > 0 ? (
@@ -948,7 +1042,6 @@ const Products = () => {
         {/* Mobile: card layout (table becomes unreadable on narrow screens) */}
         <div className="space-y-3 md:hidden">
           {paginatedProducts.map((p) => {
-            const pricing = activeTab === "chemical" ? getChemPricing(p) : null;
             return (
               <div key={p.id} className="rounded-lg border border-border p-3">
                 <div className="flex items-start justify-between gap-3">
@@ -993,18 +1086,17 @@ const Products = () => {
                   {activeTab === "equipment" ? (
                     <div className="col-span-2 min-w-0">
                       <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">Daily rate</dt>
-                      <dd className="font-mono tabular-nums text-sm">₹{p.dailyRent ?? 0}/day</dd>
+                      <dd className={cn("font-mono tabular-nums text-sm", !showCustomerPricing && "hidden")}>
+                        ₹{p.dailyRent ?? 0}/day
+                      </dd>
+                      <dd className={cn("font-mono tabular-nums text-sm", showCustomerPricing && "hidden")}>
+                        {formatInr(p.vendorDailyRent)}/day
+                      </dd>
                     </div>
                   ) : (
                     <div className="col-span-2 min-w-0">
                       <dt className="text-[11px] uppercase tracking-wide text-muted-foreground">Buy price</dt>
-                      {pricing ? (
-                        <dd className="mt-1">
-                          <ChemPriceDisclosure label={pricing.label} count={pricing.count} sizes={pricing.sizes} align="start" />
-                        </dd>
-                      ) : (
-                        <dd className="text-muted-foreground">—</dd>
-                      )}
+                      <dd className="mt-1">{renderChemPrices(p, "start")}</dd>
                     </div>
                   )}
                 </dl>
@@ -1045,7 +1137,25 @@ const Products = () => {
       <Dialog open={!!editing} onOpenChange={(v) => !v && setEditing(null)}>
         <DialogContent className="flex max-h-[min(92dvh,900px)] w-[calc(100vw-1rem)] max-w-2xl flex-col gap-0 overflow-hidden p-0 sm:w-[calc(100vw-1.5rem)] sm:max-w-2xl">
           <DialogHeader className="shrink-0 space-y-1 border-b border-border px-4 py-3.5 pr-12 text-left sm:px-6 sm:py-4">
-            <DialogTitle>{editing?.id ? "Edit listing" : "New listing"}</DialogTitle>
+            <DialogTitle className="flex flex-wrap items-center gap-2">
+              <span>{editing?.id ? "Edit listing" : "New listing"}</span>
+              <Badge
+                variant="secondary"
+                className={cn(
+                  "h-5 gap-1 px-2 text-[10px] font-semibold uppercase tracking-wide",
+                  activeTab === "chemical"
+                    ? "bg-violet-100 text-violet-700 hover:bg-violet-100 dark:bg-violet-950/50 dark:text-violet-300"
+                    : "bg-sky-100 text-sky-800 hover:bg-sky-100 dark:bg-sky-950/50 dark:text-sky-300",
+                )}
+              >
+                {activeTab === "chemical" ? (
+                  <FlaskConical className="h-3 w-3" />
+                ) : (
+                  <Package className="h-3 w-3" />
+                )}
+                {activeTab === "chemical" ? "Chemical" : "Equipment"}
+              </Badge>
+            </DialogTitle>
             <DialogDescription>
               Pricing and catalog name are set by Admin. Update quantity and status for your listing.
             </DialogDescription>
@@ -1132,6 +1242,7 @@ const Products = () => {
                           buyPrice: selected?.buyPrice,
                           vendorDailyRent: selected?.vendorDailyRent ?? 0,
                           vendorBuyPrice: selected?.vendorBuyPrice,
+                          vendorSecurityDeposit: selected?.vendorSecurityDeposit ?? 0,
                           gstPercent: selected?.gstPercent ?? 18,
                           isRentEnabled: selected?.isRentEnabled ?? true,
                           isBuyEnabled: selected?.isBuyEnabled ?? true,
@@ -1175,7 +1286,10 @@ const Products = () => {
                 <section className="space-y-3">
                   <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
                     <p className="min-w-0 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Admin pricing
+                      <span className={cn(!showCustomerPricing && "hidden")}>Admin pricing</span>
+                      <span className={cn(showCustomerPricing && "hidden")}>
+                        Your payout{editing.hasCustomVendorPricing ? " · set for you" : ""}
+                      </span>
                     </p>
                     <Badge variant="secondary" className="h-5 shrink-0 px-1.5 text-[10px] font-normal">
                       <Shield className="mr-1 h-3 w-3" />
@@ -1183,7 +1297,7 @@ const Products = () => {
                     </Badge>
                   </div>
                   <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
-                    <div className="rounded-xl border border-border bg-muted/20 px-3 py-2.5 space-y-2">
+                    <div className={cn("space-y-2 rounded-xl border border-border bg-muted/20 px-3 py-2.5", !showCustomerPricing && "hidden")}>
                       <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
                         Customer
                       </p>
@@ -1222,31 +1336,41 @@ const Products = () => {
                         </div>
                       </div>
                     </div>
-                    <div className="rounded-xl border border-border bg-muted/20 px-3 py-2.5 space-y-2">
-                      <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
-                        Your payout
-                        {editing.hasCustomVendorPricing ? " · set for you" : ""}
-                      </p>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <p className="text-[11px] text-muted-foreground">Vendor daily rate</p>
-                          <p className="mt-0.5 font-mono text-sm font-semibold tabular-nums">
-                            ₹{Number(editing.vendorDailyRent ?? 0).toLocaleString("en-IN")}
-                          </p>
+                    <div className={cn(!showCustomerPricing && "hidden")}>
+                      <div className="space-y-2 rounded-xl border border-border bg-muted/20 px-3 py-2.5">
+                        <p className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">
+                          Your payout
+                          {editing.hasCustomVendorPricing ? " · set for you" : ""}
+                        </p>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <p className="text-[11px] text-muted-foreground">Vendor daily rate</p>
+                            <p className="mt-0.5 font-mono text-sm font-semibold tabular-nums">
+                              ₹{Number(editing.vendorDailyRent ?? 0).toLocaleString("en-IN")}
+                            </p>
+                          </div>
+                          <div>
+                            <p className="text-[11px] text-muted-foreground">Vendor buy price</p>
+                            <p className="mt-0.5 font-mono text-sm font-semibold tabular-nums">
+                              {editing.vendorBuyPrice != null && editing.vendorBuyPrice > 0
+                                ? `₹${Number(editing.vendorBuyPrice).toLocaleString("en-IN")}`
+                                : "—"}
+                            </p>
+                          </div>
                         </div>
-                        <div>
-                          <p className="text-[11px] text-muted-foreground">Vendor buy price</p>
-                          <p className="mt-0.5 font-mono text-sm font-semibold tabular-nums">
-                            {editing.vendorBuyPrice != null && editing.vendorBuyPrice > 0
-                              ? `₹${Number(editing.vendorBuyPrice).toLocaleString("en-IN")}`
-                              : "—"}
-                          </p>
-                        </div>
+                        <p className="text-[11px] text-muted-foreground">
+                          Rental payout = vendor daily rate × plan days (set by Admin)
+                        </p>
                       </div>
-                      <p className="text-[11px] text-muted-foreground">
-                        Rental payout = vendor daily rate × plan days (set by Admin)
-                      </p>
                     </div>
+                    <VendorPayoutCard
+                      className={cn(showCustomerPricing && "hidden")}
+                      dailyRate={editing.vendorDailyRent}
+                      securityDeposit={payoutSecurityDeposit(editing.vendorSecurityDeposit, editing.securityDeposit)}
+                      buyPrice={editing.vendorBuyPrice}
+                      gstPercent={editing.gstPercent}
+                      showRentalNote
+                    />
                   </div>
                 </section>
               )}
@@ -1255,7 +1379,8 @@ const Products = () => {
                 <section className="space-y-3">
                   <div className="flex flex-wrap items-center justify-between gap-x-2 gap-y-1">
                     <p className="min-w-0 text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-                      Admin sizing & pricing
+                      <span className={cn(!showCustomerPricing && "hidden")}>Admin sizing & pricing</span>
+                      <span className={cn(showCustomerPricing && "hidden")}>Your payout</span>
                     </p>
                     <Badge variant="secondary" className="h-5 shrink-0 px-1.5 text-[10px] font-normal">
                       <Shield className="mr-1 h-3 w-3" />
@@ -1264,9 +1389,16 @@ const Products = () => {
                   </div>
                   {(!editing.variants || editing.variants.length === 0) ? (
                     <div className="rounded-xl border border-dashed border-border bg-muted/20 px-3 py-4 text-sm text-muted-foreground">
-                      {editing.buyPrice
-                        ? `Buy price ₹${editing.buyPrice.toLocaleString("en-IN")} · no packaging sizes yet`
-                        : "No packaging sizes defined. Ask Admin to add variants first."}
+                      <p className={cn(!showCustomerPricing && "hidden")}>
+                        {editing.buyPrice
+                          ? `Buy price ₹${editing.buyPrice.toLocaleString("en-IN")} · no packaging sizes yet`
+                          : "No packaging sizes defined. Ask Admin to add variants first."}
+                      </p>
+                      <p className={cn(showCustomerPricing && "hidden")}>
+                        {editing.vendorBuyPrice != null && editing.vendorBuyPrice > 0
+                          ? `Buy price ${formatInr(editing.vendorBuyPrice)} · no packaging sizes yet`
+                          : "No packaging sizes defined. Ask Admin to add variants first."}
+                      </p>
                     </div>
                   ) : (
                     <div className="overflow-hidden rounded-xl border border-border divide-y divide-border/70">
@@ -1279,7 +1411,7 @@ const Products = () => {
                             <p className="text-[11px] font-mono text-muted-foreground">{v.sku}</p>
                           </div>
                           <div className="shrink-0 text-right text-xs">
-                            <p className="text-muted-foreground">
+                            <p className={cn("text-muted-foreground", !showCustomerPricing && "hidden")}>
                               Customer{" "}
                               <span className="font-mono font-semibold text-foreground">
                                 ₹{Number(v.buyPrice || 0).toLocaleString("en-IN")}
