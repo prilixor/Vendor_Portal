@@ -56,7 +56,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
       }).toList();
     }
     if (_statusFilter != 'All') {
-      list = list.where((o) => _matchesStatusFilter(o.status, _statusFilter)).toList();
+      list = list
+          .where((o) => _matchesStatusFilter(o.status, _statusFilter))
+          .toList();
     }
     return list;
   }
@@ -114,7 +116,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
       context: context,
       builder: (ctx) => AlertDialog(
         backgroundColor: context.appColors.surface,
-        title: Text('Cancel request?', style: TextStyle(color: context.appColors.textPrimary)),
+        title: Text(
+          'Cancel request?',
+          style: TextStyle(color: context.appColors.textPrimary),
+        ),
         content: Column(
           mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
@@ -128,27 +133,47 @@ class _OrdersScreenState extends State<OrdersScreen> {
           ],
         ),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: Text('Keep', style: TextStyle(color: context.appColors.textSecondary))),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: Text(
+              'Keep',
+              style: TextStyle(color: context.appColors.textSecondary),
+            ),
+          ),
           TextButton(
             onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Cancel request', style: TextStyle(color: Colors.redAccent)),
+            child: const Text(
+              'Cancel request',
+              style: TextStyle(color: Colors.redAccent),
+            ),
           ),
         ],
       ),
     );
     if (confirmed != true || !mounted) return;
-    final detailProvider = Provider.of<OrderDetailProvider>(context, listen: false);
+    final detailProvider = Provider.of<OrderDetailProvider>(
+      context,
+      listen: false,
+    );
     final ok = await detailProvider.cancelOrder(order.id);
     if (!mounted) return;
     if (ok) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('Order cancelled.'), backgroundColor: Colors.green),
+        const SnackBar(
+          content: Text('Order cancelled.'),
+          backgroundColor: Colors.green,
+        ),
       );
-      Provider.of<OrderProvider>(context, listen: false).fetchOrders(silent: true);
+      Provider.of<OrderProvider>(
+        context,
+        listen: false,
+      ).fetchOrders(silent: true);
     } else {
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(
-          content: Text(detailProvider.errorMessage ?? 'Failed to cancel order'),
+          content: Text(
+            detailProvider.errorMessage ?? 'Failed to cancel order',
+          ),
           backgroundColor: Colors.redAccent,
         ),
       );
@@ -160,7 +185,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
     final colors = context.appColors;
     final auth = Provider.of<AuthProvider>(context);
     final provider = Provider.of<OrderProvider>(context);
-    final placedOrders = provider.orders.where((order) => orderMatchesPlacedRange(order.createdAtUtc, _placed)).toList();
+    final placedOrders = provider.orders
+        .where((order) => orderMatchesPlacedRange(order.createdAtUtc, _placed))
+        .toList();
     final filtered = _filteredOrders(placedOrders);
     final counts = _statusCounts(placedOrders);
     final groups = _groupOrders(filtered);
@@ -173,13 +200,24 @@ class _OrdersScreenState extends State<OrdersScreen> {
         title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            Text('Orders', style: TextStyle(color: context.appColors.textPrimary, fontWeight: FontWeight.bold, fontSize: 22)),
+            Text(
+              'Orders',
+              style: TextStyle(
+                color: context.appColors.textPrimary,
+                fontWeight: FontWeight.bold,
+                fontSize: 22,
+              ),
+            ),
             SizedBox(height: 2),
             Text(
               'Track rentals and purchases',
               maxLines: 1,
               overflow: TextOverflow.ellipsis,
-              style: TextStyle(color: context.appColors.textMuted, fontSize: 12, fontWeight: FontWeight.normal),
+              style: TextStyle(
+                color: context.appColors.textMuted,
+                fontSize: 12,
+                fontWeight: FontWeight.normal,
+              ),
             ),
           ],
         ),
@@ -196,217 +234,300 @@ class _OrdersScreenState extends State<OrdersScreen> {
           : provider.isLoading && provider.orders.isEmpty
           ? const BrandPageLoader()
           : provider.errorMessage != null
-              ? Center(child: Text(provider.errorMessage!, style: const TextStyle(color: Colors.redAccent)))
-              : RefreshIndicator(
-                  color: const Color(0xFF6C63FF),
-                  onRefresh: () => provider.fetchOrders(),
-                  child: CustomScrollView(
-                    // Prevent sideways shift when a child briefly overflows on small widths.
-                    physics: const AlwaysScrollableScrollPhysics(),
-                    clipBehavior: Clip.hardEdge,
-                    slivers: [
-                      SliverToBoxAdapter(
-                        child: Padding(
-                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                          child: Column(
-                            crossAxisAlignment: CrossAxisAlignment.stretch,
-                            children: [
-                              LayoutBuilder(
-                                builder: (context, constraints) {
-                                  final narrow = constraints.maxWidth < 360;
-                                  final rentalsTotal = provider.activeRentalsTotal;
-                                  final cardGap = narrow
-                                      ? _statCardsMinGap
-                                      : 14.0;
-                                  return IntrinsicHeight(
-                                    child: Row(
-                                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                                      children: [
-                                        Expanded(
-                                          child: _buildStatCard(
-                                            icon: Icons.inventory_2_outlined,
-                                            title: narrow ? 'Active' : 'Active rentals',
-                                            value: provider.activeRentalsCount.toString(),
-                                            subtitle: narrow
-                                                ? _formatInrCompact(rentalsTotal)
-                                                : '${_formatInr(rentalsTotal)} in flight',
-                                            accent: context.appColors.success,
-                                            wellColor: context.appColors.successSoft,
-                                            compact: narrow,
-                                          ),
-                                        ),
-                                        SizedBox(width: cardGap),
-                                        Expanded(
-                                          child: _buildStatCard(
-                                            icon: Icons.local_shipping_outlined,
-                                            title: narrow ? 'Upcoming' : 'Deliveries',
-                                            value: provider.upcomingDeliveriesCount.toString(),
-                                            subtitle: narrow ? 'Pending / transit' : 'Pending & in transit',
-                                            accent: context.appColors.info,
-                                            wellColor: context.appColors.infoSoft,
-                                            compact: narrow,
-                                          ),
-                                        ),
-                                      ],
+          ? Center(
+              child: Text(
+                provider.errorMessage!,
+                style: const TextStyle(color: Colors.redAccent),
+              ),
+            )
+          : RefreshIndicator(
+              color: const Color(0xFF6C63FF),
+              onRefresh: () => provider.fetchOrders(),
+              child: CustomScrollView(
+                // Prevent sideways shift when a child briefly overflows on small widths.
+                physics: const AlwaysScrollableScrollPhysics(),
+                clipBehavior: Clip.hardEdge,
+                slivers: [
+                  SliverToBoxAdapter(
+                    child: Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.stretch,
+                        children: [
+                          LayoutBuilder(
+                            builder: (context, constraints) {
+                              final narrow = constraints.maxWidth < 360;
+                              final rentalsTotal = provider.activeRentalsTotal;
+                              final cardGap = narrow ? _statCardsMinGap : 14.0;
+                              return IntrinsicHeight(
+                                child: Row(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    Expanded(
+                                      child: _buildStatCard(
+                                        icon: Icons.inventory_2_outlined,
+                                        title: narrow
+                                            ? 'Active'
+                                            : 'Active rentals',
+                                        value: provider.activeRentalsCount
+                                            .toString(),
+                                        subtitle: narrow
+                                            ? _formatInrCompact(rentalsTotal)
+                                            : '${_formatInr(rentalsTotal)} in flight',
+                                        accent: context.appColors.success,
+                                        wellColor:
+                                            context.appColors.successSoft,
+                                        compact: narrow,
+                                      ),
                                     ),
-                                  );
-                                },
-                              ),
-                              const SizedBox(height: 14),
-                              LayoutBuilder(
-                                builder: (context, constraints) {
-                                  final narrow = constraints.maxWidth < 360;
-                                  return Row(
-                                    children: [
-                                      Expanded(
-                                        child: TextField(
-                                          controller: _searchController,
-                                          style: TextStyle(color: context.appColors.textPrimary, fontSize: 14),
-                                          onChanged: (v) => setState(() => _searchQuery = v),
-                                          decoration: InputDecoration(
-                                            hintText: narrow ? 'Search orders' : 'Search by order ID or item',
-                                            hintStyle: const TextStyle(color: Color(0xFF64748B), fontSize: 13),
-                                            prefixIcon: const Padding(
-                                              padding: EdgeInsets.only(left: 4),
-                                              child: Icon(Icons.search_rounded, color: Color(0xFF94A3B8), size: 20),
-                                            ),
-                                            prefixIconConstraints: const BoxConstraints(minWidth: 44, minHeight: 44),
-                                            isDense: true,
-                                            filled: true,
-                                            fillColor: context.appColors.surface,
-                                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
-                                            border: OutlineInputBorder(
-                                              borderRadius: BorderRadius.circular(14),
-                                              borderSide: BorderSide.none,
-                                            ),
-                                            enabledBorder: OutlineInputBorder(
-                                              borderRadius: BorderRadius.circular(14),
-                                              borderSide: BorderSide(color: context.appColors.border),
-                                            ),
-                                            focusedBorder: OutlineInputBorder(
-                                              borderRadius: BorderRadius.circular(14),
-                                              borderSide: const BorderSide(color: Color(0xFF6C63FF), width: 1.2),
-                                            ),
-                                          ),
-                                        ),
+                                    SizedBox(width: cardGap),
+                                    Expanded(
+                                      child: _buildStatCard(
+                                        icon: Icons.local_shipping_outlined,
+                                        title: narrow
+                                            ? 'Upcoming'
+                                            : 'Deliveries',
+                                        value: provider.upcomingDeliveriesCount
+                                            .toString(),
+                                        subtitle: narrow
+                                            ? 'Pending / transit'
+                                            : 'Pending & in transit',
+                                        accent: context.appColors.info,
+                                        wellColor: context.appColors.infoSoft,
+                                        compact: narrow,
                                       ),
-                                      const SizedBox(width: 8),
-                                      Material(
-                                        color: _statusFilter != 'All' || _placed.isActive
-                                            ? const Color(0xFF6C63FF)
-                                            : context.appColors.surface,
-                                        borderRadius: BorderRadius.circular(14),
-                                        child: InkWell(
-                                          onTap: () => _openStatusFilterSheet(counts),
-                                          borderRadius: BorderRadius.circular(14),
-                                          child: Container(
-                                            width: 48,
-                                            height: 48,
-                                            decoration: BoxDecoration(
-                                              borderRadius: BorderRadius.circular(14),
-                                              border: Border.all(
-                                                color: _statusFilter != 'All' || _placed.isActive
-                                                    ? const Color(0xFF6C63FF)
-                                                    : context.appColors.border,
-                                              ),
-                                            ),
-                                            child: Stack(
-                                              alignment: Alignment.center,
-                                              children: [
-                                                Icon(
-                                                  Icons.tune_rounded,
-                                                  size: 20,
-                                                  color: _statusFilter != 'All' || _placed.isActive ? Colors.white : context.appColors.textSecondary,
-                                                ),
-                                                if (_statusFilter != 'All' || _placed.isActive)
-                                                  Positioned(
-                                                    top: 8,
-                                                    right: 8,
-                                                    child: Container(
-                                                      width: 7,
-                                                      height: 7,
-                                                      decoration: BoxDecoration(
-                                                        color: context.appColors.textPrimary,
-                                                        shape: BoxShape.circle,
-                                                      ),
-                                                    ),
-                                                  ),
-                                              ],
-                                            ),
-                                          ),
-                                        ),
-                                      ),
-                                    ],
-                                  );
-                                },
-                              ),
-                              if (_statusFilter != 'All' || _placed.isActive) ...[
-                                const SizedBox(height: 12),
-                                Align(
-                                  alignment: Alignment.centerLeft,
-                                  child: Wrap(
-                                    spacing: 8,
-                                    runSpacing: 8,
-                                    children: [
-                                      if (_placed.isActive)
-                                        _OrdersActiveFilterChip(
-                                          label: _placed.chipLabel,
-                                          onClear: () => setState(() => _placed = const PlacedOrderRange()),
-                                        ),
-                                      if (_statusFilter != 'All')
-                                        _OrdersActiveFilterChip(
-                                          label: '$_statusFilter (${counts[_statusFilter] ?? 0})',
-                                          onClear: () => setState(() => _statusFilter = 'All'),
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                              ],
-                              const SizedBox(height: 10),
-                              Text.rich(
-                                TextSpan(
-                                  style: TextStyle(color: context.appColors.textMuted, fontSize: 12, height: 1.35),
-                                  children: const [
-                                    TextSpan(text: 'Status note: '),
-                                    TextSpan(text: 'Cancelled', style: TextStyle(fontWeight: FontWeight.w700)),
-                                    TextSpan(
-                                      text: ' includes requests you stopped and orders no supplier accepted.',
                                     ),
                                   ],
                                 ),
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 14),
+                          LayoutBuilder(
+                            builder: (context, constraints) {
+                              final narrow = constraints.maxWidth < 360;
+                              return Row(
+                                children: [
+                                  Expanded(
+                                    child: TextField(
+                                      controller: _searchController,
+                                      style: TextStyle(
+                                        color: context.appColors.textPrimary,
+                                        fontSize: 14,
+                                      ),
+                                      onChanged: (v) =>
+                                          setState(() => _searchQuery = v),
+                                      decoration: InputDecoration(
+                                        hintText: narrow
+                                            ? 'Search orders'
+                                            : 'Search by order ID or item',
+                                        hintStyle: const TextStyle(
+                                          color: Color(0xFF64748B),
+                                          fontSize: 13,
+                                        ),
+                                        prefixIcon: const Padding(
+                                          padding: EdgeInsets.only(left: 4),
+                                          child: Icon(
+                                            Icons.search_rounded,
+                                            color: Color(0xFF94A3B8),
+                                            size: 20,
+                                          ),
+                                        ),
+                                        prefixIconConstraints:
+                                            const BoxConstraints(
+                                              minWidth: 44,
+                                              minHeight: 44,
+                                            ),
+                                        isDense: true,
+                                        filled: true,
+                                        fillColor: context.appColors.surface,
+                                        contentPadding:
+                                            const EdgeInsets.symmetric(
+                                              horizontal: 12,
+                                              vertical: 14,
+                                            ),
+                                        border: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            14,
+                                          ),
+                                          borderSide: BorderSide.none,
+                                        ),
+                                        enabledBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            14,
+                                          ),
+                                          borderSide: BorderSide(
+                                            color: context.appColors.border,
+                                          ),
+                                        ),
+                                        focusedBorder: OutlineInputBorder(
+                                          borderRadius: BorderRadius.circular(
+                                            14,
+                                          ),
+                                          borderSide: const BorderSide(
+                                            color: Color(0xFF6C63FF),
+                                            width: 1.2,
+                                          ),
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Material(
+                                    color:
+                                        _statusFilter != 'All' ||
+                                            _placed.isActive
+                                        ? const Color(0xFF6C63FF)
+                                        : context.appColors.surface,
+                                    borderRadius: BorderRadius.circular(14),
+                                    child: InkWell(
+                                      onTap: () =>
+                                          _openStatusFilterSheet(counts),
+                                      borderRadius: BorderRadius.circular(14),
+                                      child: Container(
+                                        width: 48,
+                                        height: 48,
+                                        decoration: BoxDecoration(
+                                          borderRadius: BorderRadius.circular(
+                                            14,
+                                          ),
+                                          border: Border.all(
+                                            color:
+                                                _statusFilter != 'All' ||
+                                                    _placed.isActive
+                                                ? const Color(0xFF6C63FF)
+                                                : context.appColors.border,
+                                          ),
+                                        ),
+                                        child: Stack(
+                                          alignment: Alignment.center,
+                                          children: [
+                                            Icon(
+                                              Icons.tune_rounded,
+                                              size: 20,
+                                              color:
+                                                  _statusFilter != 'All' ||
+                                                      _placed.isActive
+                                                  ? Colors.white
+                                                  : context
+                                                        .appColors
+                                                        .textSecondary,
+                                            ),
+                                            if (_statusFilter != 'All' ||
+                                                _placed.isActive)
+                                              Positioned(
+                                                top: 8,
+                                                right: 8,
+                                                child: Container(
+                                                  width: 7,
+                                                  height: 7,
+                                                  decoration: BoxDecoration(
+                                                    color: context
+                                                        .appColors
+                                                        .textPrimary,
+                                                    shape: BoxShape.circle,
+                                                  ),
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                ],
+                              );
+                            },
+                          ),
+                          if (_statusFilter != 'All' || _placed.isActive) ...[
+                            const SizedBox(height: 12),
+                            Align(
+                              alignment: Alignment.centerLeft,
+                              child: Wrap(
+                                spacing: 8,
+                                runSpacing: 8,
+                                children: [
+                                  if (_placed.isActive)
+                                    _OrdersActiveFilterChip(
+                                      label: _placed.chipLabel,
+                                      onClear: () => setState(
+                                        () =>
+                                            _placed = const PlacedOrderRange(),
+                                      ),
+                                    ),
+                                  if (_statusFilter != 'All')
+                                    _OrdersActiveFilterChip(
+                                      label:
+                                          '$_statusFilter (${counts[_statusFilter] ?? 0})',
+                                      onClear: () =>
+                                          setState(() => _statusFilter = 'All'),
+                                    ),
+                                ],
                               ),
-                              const SizedBox(height: 16),
-                            ],
+                            ),
+                          ],
+                          const SizedBox(height: 10),
+                          Text.rich(
+                            TextSpan(
+                              style: TextStyle(
+                                color: context.appColors.textMuted,
+                                fontSize: 12,
+                                height: 1.35,
+                              ),
+                              children: const [
+                                TextSpan(text: 'Status note: '),
+                                TextSpan(
+                                  text: 'Cancelled',
+                                  style: TextStyle(fontWeight: FontWeight.w700),
+                                ),
+                                TextSpan(
+                                  text:
+                                      ' includes requests you stopped and orders no supplier accepted.',
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                        ],
+                      ),
+                    ),
+                  ),
+                  if (filtered.isEmpty)
+                    SliverFillRemaining(
+                      hasScrollBody: false,
+                      child: Center(
+                        child: Text(
+                          _searchQuery.trim().isNotEmpty ||
+                                  _statusFilter != 'All' ||
+                                  _placed.isActive
+                              ? 'No orders match your search or filter.'
+                              : 'No orders found.',
+                          style: TextStyle(
+                            color: context.appColors.textMuted,
+                            fontSize: 16,
                           ),
                         ),
                       ),
-                      if (filtered.isEmpty)
-                        SliverFillRemaining(
-                          hasScrollBody: false,
-                          child: Center(
-                            child: Text(
-                              _searchQuery.trim().isNotEmpty || _statusFilter != 'All' || _placed.isActive
-                                  ? 'No orders match your search or filter.'
-                                  : 'No orders found.',
-                              style: TextStyle(color: context.appColors.textMuted, fontSize: 16),
-                            ),
-                          ),
-                        )
-                      else
-                        SliverPadding(
-                          padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
-                          sliver: SliverList.separated(
-                            itemCount: groupKeys.length,
-                            separatorBuilder: (_, __) => const SizedBox(height: 16),
-                            itemBuilder: (context, index) {
-                              final key = groupKeys[index];
-                              return _buildOrderGroupCard(context, key, groups[key]!);
-                            },
-                          ),
-                        ),
-                    ],
-                  ),
-                ),
+                    )
+                  else
+                    SliverPadding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 24),
+                      sliver: SliverList.separated(
+                        itemCount: groupKeys.length,
+                        separatorBuilder: (_, __) => const SizedBox(height: 16),
+                        itemBuilder: (context, index) {
+                          final key = groupKeys[index];
+                          return _buildOrderGroupCard(
+                            context,
+                            key,
+                            groups[key]!,
+                          );
+                        },
+                      ),
+                    ),
+                ],
+              ),
+            ),
     );
   }
 
@@ -427,14 +548,22 @@ class _OrdersScreenState extends State<OrdersScreen> {
             final maxH = MediaQuery.of(ctx).size.height * 0.78;
             final bottomInset = MediaQuery.of(ctx).viewInsets.bottom;
             return SafeArea(
+              top: false,
+              left: false,
+              right: false,
               child: Align(
                 alignment: Alignment.bottomCenter,
                 child: Container(
+                  width: double.infinity,
                   constraints: BoxConstraints(maxHeight: maxH),
                   decoration: BoxDecoration(
                     color: context.appColors.background,
-                    borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
-                    border: Border(top: BorderSide(color: context.appColors.border)),
+                    borderRadius: BorderRadius.vertical(
+                      top: Radius.circular(24),
+                    ),
+                    border: Border(
+                      top: BorderSide(color: context.appColors.border),
+                    ),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -451,7 +580,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                         ),
                       ),
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 16, 8, 12),
+                        padding: const EdgeInsets.fromLTRB(16, 10, 4, 0),
                         child: Row(
                           children: [
                             Expanded(
@@ -459,7 +588,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
                                 'Filter orders',
                                 style: TextStyle(
                                   color: context.appColors.textPrimary,
-                                  fontSize: 22,
+                                  fontSize: 18,
                                   fontWeight: FontWeight.w700,
                                   letterSpacing: -0.3,
                                 ),
@@ -472,12 +601,18 @@ class _OrdersScreenState extends State<OrdersScreen> {
                               }),
                               child: Text(
                                 'Clear',
-                                style: TextStyle(color: context.appColors.textMuted, fontWeight: FontWeight.w600),
+                                style: TextStyle(
+                                  color: context.appColors.textMuted,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ),
                             IconButton(
                               onPressed: () => Navigator.pop(ctx, false),
-                              icon: Icon(Icons.close_rounded, color: context.appColors.textMuted),
+                              icon: Icon(
+                                Icons.close_rounded,
+                                color: context.appColors.textMuted,
+                              ),
                             ),
                           ],
                         ),
@@ -485,56 +620,82 @@ class _OrdersScreenState extends State<OrdersScreen> {
                       Divider(height: 1, color: context.appColors.border),
                       Expanded(
                         child: SingleChildScrollView(
-                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                          padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
                           child: Column(
                             children: [
                               PlacedOrderRangeSection(
                                 value: draftRange,
-                                onChanged: (next) => setSheetState(() => draftRange = next),
+                                onChanged: (next) =>
+                                    setSheetState(() => draftRange = next),
                               ),
-                              const SizedBox(height: 12),
+                              const SizedBox(height: 10),
                               Container(
-                            decoration: BoxDecoration(
-                              color: context.appColors.surface,
-                              borderRadius: BorderRadius.circular(16),
-                              border: Border.all(color: context.appColors.border),
-                            ),
-                            clipBehavior: Clip.antiAlias,
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.stretch,
-                              children: [
-                                 Padding(
-                                  padding: EdgeInsets.fromLTRB(16, 14, 16, 6),
-                                  child: Text(
-                                    'Status',
-                                    style: TextStyle(
-                                      color: context.appColors.textPrimary,
-                                      fontSize: 15,
-                                      fontWeight: FontWeight.w700,
-                                    ),
+                                decoration: BoxDecoration(
+                                  color: context.appColors.surface,
+                                  borderRadius: BorderRadius.circular(16),
+                                  border: Border.all(
+                                    color: context.appColors.border,
                                   ),
                                 ),
-                                for (var i = 0; i < options.length; i++) ...[
-                                  if (i > 0) Divider(height: 1, color: context.appColors.border),
-                                  _OrdersStatusRow(
-                                    label: options[i],
-                                    count: counts[options[i]] ?? 0,
-                                    selected: draft == options[i],
-                                    onTap: () => setSheetState(() => draft = options[i]),
-                                  ),
-                                ],
-                              ],
-                            ),
-                          ),
+                                clipBehavior: Clip.antiAlias,
+                                child: Column(
+                                  crossAxisAlignment:
+                                      CrossAxisAlignment.stretch,
+                                  children: [
+                                    Padding(
+                                      padding: EdgeInsets.fromLTRB(
+                                        12,
+                                        10,
+                                        12,
+                                        4,
+                                      ),
+                                      child: Text(
+                                        'Status',
+                                        style: TextStyle(
+                                          color: context.appColors.textPrimary,
+                                          fontSize: 15,
+                                          fontWeight: FontWeight.w700,
+                                        ),
+                                      ),
+                                    ),
+                                    for (
+                                      var i = 0;
+                                      i < options.length;
+                                      i++
+                                    ) ...[
+                                      if (i > 0)
+                                        Divider(
+                                          height: 1,
+                                          color: context.appColors.border,
+                                        ),
+                                      _OrdersStatusRow(
+                                        label: options[i],
+                                        count: counts[options[i]] ?? 0,
+                                        selected: draft == options[i],
+                                        onTap: () => setSheetState(
+                                          () => draft = options[i],
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                              ),
                             ],
                           ),
                         ),
                       ),
                       Container(
-                        padding: EdgeInsets.fromLTRB(16, 12, 16, 12 + bottomInset),
+                        padding: EdgeInsets.fromLTRB(
+                          12,
+                          10,
+                          12,
+                          10 + bottomInset,
+                        ),
                         decoration: BoxDecoration(
                           color: context.appColors.background,
-                          border: Border(top: BorderSide(color: context.appColors.border)),
+                          border: Border(
+                            top: BorderSide(color: context.appColors.border),
+                          ),
                         ),
                         child: Row(
                           children: [
@@ -542,12 +703,20 @@ class _OrdersScreenState extends State<OrdersScreen> {
                               child: OutlinedButton(
                                 onPressed: () => Navigator.pop(ctx, false),
                                 style: OutlinedButton.styleFrom(
-                                  foregroundColor: context.appColors.textSecondary,
-                                  side: BorderSide(color: context.appColors.border),
+                                  foregroundColor:
+                                      context.appColors.textSecondary,
+                                  side: BorderSide(
+                                    color: context.appColors.border,
+                                  ),
                                   minimumSize: const Size.fromHeight(48),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
                                 ),
-                                child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.w600)),
+                                child: const Text(
+                                  'Cancel',
+                                  style: TextStyle(fontWeight: FontWeight.w600),
+                                ),
                               ),
                             ),
                             const SizedBox(width: 12),
@@ -560,15 +729,20 @@ class _OrdersScreenState extends State<OrdersScreen> {
                                   foregroundColor: Colors.white,
                                   elevation: 0,
                                   minimumSize: const Size.fromHeight(48),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
                                 ),
                                 child: Text(
                                   draftRange.isActive
                                       ? 'Show matching orders'
                                       : draft == 'All'
-                                          ? 'Show all orders'
-                                          : 'Show ${draft.toLowerCase()}',
-                                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                                      ? 'Show all orders'
+                                      : 'Show ${draft.toLowerCase()}',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 15,
+                                  ),
                                 ),
                               ),
                             ),
@@ -610,9 +784,12 @@ class _OrdersScreenState extends State<OrdersScreen> {
 
   String _formatInrCompact(num amount) {
     final n = amount.round();
-    if (n >= 10000000) return '₹${(n / 10000000).toStringAsFixed(n % 10000000 == 0 ? 0 : 1)}Cr';
-    if (n >= 100000) return '₹${(n / 100000).toStringAsFixed(n % 100000 == 0 ? 0 : 1)}L';
-    if (n >= 1000) return '₹${(n / 1000).toStringAsFixed(n % 1000 == 0 ? 0 : 1)}K';
+    if (n >= 10000000)
+      return '₹${(n / 10000000).toStringAsFixed(n % 10000000 == 0 ? 0 : 1)}Cr';
+    if (n >= 100000)
+      return '₹${(n / 100000).toStringAsFixed(n % 100000 == 0 ? 0 : 1)}L';
+    if (n >= 1000)
+      return '₹${(n / 1000).toStringAsFixed(n % 1000 == 0 ? 0 : 1)}K';
     return '₹$n';
   }
 
@@ -628,7 +805,12 @@ class _OrdersScreenState extends State<OrdersScreen> {
     return Container(
       width: double.infinity,
       constraints: const BoxConstraints(minHeight: 104),
-      padding: EdgeInsets.fromLTRB(compact ? 12 : 14, 12, compact ? 12 : 14, 12),
+      padding: EdgeInsets.fromLTRB(
+        compact ? 12 : 14,
+        12,
+        compact ? 12 : 14,
+        12,
+      ),
       decoration: BoxDecoration(
         color: context.appColors.surface,
         borderRadius: BorderRadius.circular(14),
@@ -644,8 +826,11 @@ class _OrdersScreenState extends State<OrdersScreen> {
                 width: compact ? 28 : 30,
                 height: compact ? 28 : 30,
                 decoration: BoxDecoration(
-                  color: wellColor ??
-                      accent.withValues(alpha: context.isDarkMode ? 0.14 : 0.16),
+                  color:
+                      wellColor ??
+                      accent.withValues(
+                        alpha: context.isDarkMode ? 0.14 : 0.16,
+                      ),
                   borderRadius: BorderRadius.circular(8),
                 ),
                 child: Icon(icon, size: compact ? 15 : 16, color: accent),
@@ -695,8 +880,15 @@ class _OrdersScreenState extends State<OrdersScreen> {
     );
   }
 
-  Widget _buildOrderGroupCard(BuildContext context, String baseOrderNumber, List<OrderModel> ordersInGroup) {
-    final groupTotal = ordersInGroup.fold(0.0, (sum, order) => sum + order.totalAmount);
+  Widget _buildOrderGroupCard(
+    BuildContext context,
+    String baseOrderNumber,
+    List<OrderModel> ordersInGroup,
+  ) {
+    final groupTotal = ordersInGroup.fold(
+      0.0,
+      (sum, order) => sum + order.totalAmount,
+    );
     final placedOn = _formatOrderDateShort(ordersInGroup.first.startDate);
     final compact = MediaQuery.sizeOf(context).width < 400;
 
@@ -711,7 +903,12 @@ class _OrdersScreenState extends State<OrdersScreen> {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: EdgeInsets.fromLTRB(compact ? 12 : 14, 14, compact ? 12 : 14, 12),
+            padding: EdgeInsets.fromLTRB(
+              compact ? 12 : 14,
+              14,
+              compact ? 12 : 14,
+              12,
+            ),
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
@@ -727,7 +924,11 @@ class _OrdersScreenState extends State<OrdersScreen> {
                 const SizedBox(height: 4),
                 Text(
                   baseOrderNumber,
-                  style: TextStyle(color: context.appColors.textPrimary, fontSize: compact ? 14 : 15, fontWeight: FontWeight.bold),
+                  style: TextStyle(
+                    color: context.appColors.textPrimary,
+                    fontSize: compact ? 14 : 15,
+                    fontWeight: FontWeight.bold,
+                  ),
                   maxLines: 1,
                   overflow: TextOverflow.ellipsis,
                 ),
@@ -737,14 +938,21 @@ class _OrdersScreenState extends State<OrdersScreen> {
                     Expanded(
                       child: Text(
                         'Placed $placedOn',
-                        style: TextStyle(color: context.appColors.textSecondary, fontSize: 12),
+                        style: TextStyle(
+                          color: context.appColors.textSecondary,
+                          fontSize: 12,
+                        ),
                         maxLines: 1,
                         overflow: TextOverflow.ellipsis,
                       ),
                     ),
                     Text(
                       '₹${groupTotal.toStringAsFixed(0)}',
-                      style: TextStyle(color: context.appColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w700),
+                      style: TextStyle(
+                        color: context.appColors.textPrimary,
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                      ),
                     ),
                   ],
                 ),
@@ -768,7 +976,11 @@ class _OrdersScreenState extends State<OrdersScreen> {
     );
   }
 
-  Widget _buildItemCard(BuildContext context, OrderModel order, List<OrderModel> ordersInGroup) {
+  Widget _buildItemCard(
+    BuildContext context,
+    OrderModel order,
+    List<OrderModel> ordersInGroup,
+  ) {
     final isBuy = order.orderType.toLowerCase().trim() == 'buy';
     final screenW = MediaQuery.sizeOf(context).width;
     final compact = screenW < 400;
@@ -789,7 +1001,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
             ),
           );
           if (context.mounted) {
-            Provider.of<OrderProvider>(context, listen: false).fetchOrders(silent: true);
+            Provider.of<OrderProvider>(
+              context,
+              listen: false,
+            ).fetchOrders(silent: true);
           }
         },
         child: Container(
@@ -828,7 +1043,12 @@ class _OrdersScreenState extends State<OrdersScreen> {
                       children: [
                         Text(
                           order.listingTitle,
-                          style: TextStyle(color: context.appColors.textPrimary, fontSize: 14, fontWeight: FontWeight.w600, height: 1.25),
+                          style: TextStyle(
+                            color: context.appColors.textPrimary,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            height: 1.25,
+                          ),
                           maxLines: 2,
                           overflow: TextOverflow.ellipsis,
                         ),
@@ -836,21 +1056,35 @@ class _OrdersScreenState extends State<OrdersScreen> {
                         if (isBuy)
                           Text(
                             '${_formatOrderDateShort(order.startDate)} · Qty ${order.quantity}',
-                            style: TextStyle(color: context.appColors.textMuted, fontSize: 12, height: 1.3),
+                            style: TextStyle(
+                              color: context.appColors.textMuted,
+                              fontSize: 12,
+                              height: 1.3,
+                            ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           )
                         else ...[
                           Text(
-                            _formatDateRangeShort(order.startDate, order.endDate),
-                            style: TextStyle(color: context.appColors.textMuted, fontSize: 12, height: 1.3),
+                            _formatDateRangeShort(
+                              order.startDate,
+                              order.endDate,
+                            ),
+                            style: TextStyle(
+                              color: context.appColors.textMuted,
+                              fontSize: 12,
+                              height: 1.3,
+                            ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
                           const SizedBox(height: 2),
                           Text(
                             _rentalQtyLine(order),
-                            style: TextStyle(color: context.appColors.textMuted, fontSize: 12),
+                            style: TextStyle(
+                              color: context.appColors.textMuted,
+                              fontSize: 12,
+                            ),
                             maxLines: 1,
                             overflow: TextOverflow.ellipsis,
                           ),
@@ -864,12 +1098,19 @@ class _OrdersScreenState extends State<OrdersScreen> {
               _OrderItemMeta(
                 badges: () => [
                   _buildOrderTypeBadge(context, order.orderType),
-                  if (order.isExtended && order.orderType.toLowerCase() != 'buy')
+                  if (order.isExtended &&
+                      order.orderType.toLowerCase() != 'buy')
                     _buildExtendedBadge(context),
                   if (order.returnSettlement?.chipLabel != null)
-                    _buildRefundBadge(context, order.returnSettlement!.chipLabel!),
+                    _buildRefundBadge(
+                      context,
+                      order.returnSettlement!.chipLabel!,
+                    ),
                   if (order.cancellationRefund?.chipLabel != null)
-                    _buildRefundBadge(context, order.cancellationRefund!.chipLabel!),
+                    _buildRefundBadge(
+                      context,
+                      order.cancellationRefund!.chipLabel!,
+                    ),
                   _buildStatusBadge(context, order.status),
                 ],
                 trailing: Row(
@@ -894,7 +1135,13 @@ class _OrdersScreenState extends State<OrdersScreen> {
                           visualDensity: VisualDensity.compact,
                         ),
                         onPressed: () => _confirmCancelOrder(order),
-                        child: const Text('Cancel', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700)),
+                        child: const Text(
+                          'Cancel',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                          ),
+                        ),
                       ),
                     ],
                     const SizedBox(width: 10),
@@ -906,7 +1153,11 @@ class _OrdersScreenState extends State<OrdersScreen> {
                         fontWeight: FontWeight.w700,
                       ),
                     ),
-                    const Icon(Icons.chevron_right, color: Color(0xFF6C63FF), size: 16),
+                    const Icon(
+                      Icons.chevron_right,
+                      color: Color(0xFF6C63FF),
+                      size: 16,
+                    ),
                   ],
                 ),
               ),
@@ -922,7 +1173,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF78350F).withValues(alpha: 0.45) : const Color(0xFFFEF3C7),
+        color: isDark
+            ? const Color(0xFF78350F).withValues(alpha: 0.45)
+            : const Color(0xFFFEF3C7),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
@@ -944,7 +1197,9 @@ class _OrdersScreenState extends State<OrdersScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
       decoration: BoxDecoration(
-        color: isDark ? const Color(0xFF0C4A6E).withValues(alpha: 0.55) : const Color(0xFFE0F2FE),
+        color: isDark
+            ? const Color(0xFF0C4A6E).withValues(alpha: 0.55)
+            : const Color(0xFFE0F2FE),
         borderRadius: BorderRadius.circular(999),
       ),
       child: Text(
@@ -964,14 +1219,22 @@ class _OrdersScreenState extends State<OrdersScreen> {
     final isDark = context.isDarkMode;
     final isBuy = orderType.toLowerCase().trim() == 'buy';
     final bg = isBuy
-        ? (isDark ? const Color(0xFF312E81).withValues(alpha: 0.45) : const Color(0xFFEEF2FF))
-        : (isDark ? const Color(0xFF134E4A).withValues(alpha: 0.45) : const Color(0xFFF0FDFA));
+        ? (isDark
+              ? const Color(0xFF312E81).withValues(alpha: 0.45)
+              : const Color(0xFFEEF2FF))
+        : (isDark
+              ? const Color(0xFF134E4A).withValues(alpha: 0.45)
+              : const Color(0xFFF0FDFA));
     final fg = isBuy
         ? (isDark ? const Color(0xFFA5B4FC) : const Color(0xFF4338CA))
         : (isDark ? const Color(0xFF5EEAD4) : const Color(0xFF0F766E));
     final border = isBuy
-        ? (isDark ? const Color(0xFF4338CA).withValues(alpha: 0.7) : const Color(0xFFC7D2FE))
-        : (isDark ? const Color(0xFF0F766E).withValues(alpha: 0.7) : const Color(0xFF99F6E4));
+        ? (isDark
+              ? const Color(0xFF4338CA).withValues(alpha: 0.7)
+              : const Color(0xFFC7D2FE))
+        : (isDark
+              ? const Color(0xFF0F766E).withValues(alpha: 0.7)
+              : const Color(0xFF99F6E4));
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
@@ -1022,46 +1285,116 @@ class _OrdersScreenState extends State<OrdersScreen> {
     );
   }
 
-  (Color, Color, Color) _statusColors(BuildContext context, bool isDark, String status) {
+  (Color, Color, Color) _statusColors(
+    BuildContext context,
+    bool isDark,
+    String status,
+  ) {
     final s = status.toLowerCase().replaceAll('_', ' ').trim();
     if (s == 'active') {
       return isDark
-          ? (const Color(0xFF14532D).withValues(alpha: 0.4), const Color(0xFF16A34A), const Color(0xFF86EFAC))
-          : (const Color(0xFFF0FDF4), const Color(0xFF86EFAC), const Color(0xFF15803D));
+          ? (
+              const Color(0xFF14532D).withValues(alpha: 0.4),
+              const Color(0xFF16A34A),
+              const Color(0xFF86EFAC),
+            )
+          : (
+              const Color(0xFFF0FDF4),
+              const Color(0xFF86EFAC),
+              const Color(0xFF15803D),
+            );
     }
-    if (s == 'pending' || s == 'awaiting vendor acceptance' || s == 'awaiting') {
+    if (s == 'pending' ||
+        s == 'awaiting vendor acceptance' ||
+        s == 'awaiting') {
       return isDark
-          ? (const Color(0xFF78350F).withValues(alpha: 0.35), const Color(0xFFD97706), const Color(0xFFFCD34D))
-          : (const Color(0xFFFFFBEB), const Color(0xFFFDE68A), const Color(0xFFB45309));
+          ? (
+              const Color(0xFF78350F).withValues(alpha: 0.35),
+              const Color(0xFFD97706),
+              const Color(0xFFFCD34D),
+            )
+          : (
+              const Color(0xFFFFFBEB),
+              const Color(0xFFFDE68A),
+              const Color(0xFFB45309),
+            );
     }
     if (s == 'confirmed') {
       return isDark
-          ? (const Color(0xFF0C4A6E).withValues(alpha: 0.4), const Color(0xFF0284C7), const Color(0xFF7DD3FC))
-          : (const Color(0xFFF0F9FF), const Color(0xFFBAE6FD), const Color(0xFF0369A1));
+          ? (
+              const Color(0xFF0C4A6E).withValues(alpha: 0.4),
+              const Color(0xFF0284C7),
+              const Color(0xFF7DD3FC),
+            )
+          : (
+              const Color(0xFFF0F9FF),
+              const Color(0xFFBAE6FD),
+              const Color(0xFF0369A1),
+            );
     }
     if (s.contains('transit')) {
       return isDark
-          ? (const Color(0xFF1E3A8A).withValues(alpha: 0.4), const Color(0xFF3B82F6), const Color(0xFF93C5FD))
-          : (const Color(0xFFEEF2FF), const Color(0xFFC7D2FE), const Color(0xFF4338CA));
+          ? (
+              const Color(0xFF1E3A8A).withValues(alpha: 0.4),
+              const Color(0xFF3B82F6),
+              const Color(0xFF93C5FD),
+            )
+          : (
+              const Color(0xFFEEF2FF),
+              const Color(0xFFC7D2FE),
+              const Color(0xFF4338CA),
+            );
     }
     if (s == 'returned' || s == 'completed') {
       return isDark
-          ? (const Color(0xFF334155).withValues(alpha: 0.5), const Color(0xFF64748B), const Color(0xFFE2E8F0))
-          : (const Color(0xFFF8FAFC), const Color(0xFFCBD5E1), const Color(0xFF475569));
+          ? (
+              const Color(0xFF334155).withValues(alpha: 0.5),
+              const Color(0xFF64748B),
+              const Color(0xFFE2E8F0),
+            )
+          : (
+              const Color(0xFFF8FAFC),
+              const Color(0xFFCBD5E1),
+              const Color(0xFF475569),
+            );
     }
     if (s == 'bought out' || s == 'buyout') {
       return isDark
-          ? (const Color(0xFF4A044E).withValues(alpha: 0.4), const Color(0xFFC026D3), const Color(0xFFF0ABFC))
-          : (const Color(0xFFFDF4FF), const Color(0xFFF5D0FE), const Color(0xFF86198F));
+          ? (
+              const Color(0xFF4A044E).withValues(alpha: 0.4),
+              const Color(0xFFC026D3),
+              const Color(0xFFF0ABFC),
+            )
+          : (
+              const Color(0xFFFDF4FF),
+              const Color(0xFFF5D0FE),
+              const Color(0xFF86198F),
+            );
     }
     if (s.contains('cancel') || s.contains('fail')) {
       return isDark
-          ? (const Color(0xFF7F1D1D).withValues(alpha: 0.35), const Color(0xFFEF4444), const Color(0xFFFCA5A5))
-          : (const Color(0xFFFEF2F2), const Color(0xFFFECACA), const Color(0xFFB91C1C));
+          ? (
+              const Color(0xFF7F1D1D).withValues(alpha: 0.35),
+              const Color(0xFFEF4444),
+              const Color(0xFFFCA5A5),
+            )
+          : (
+              const Color(0xFFFEF2F2),
+              const Color(0xFFFECACA),
+              const Color(0xFFB91C1C),
+            );
     }
     return isDark
-        ? (context.appColors.surfaceElevated, context.appColors.border, context.appColors.textSecondary)
-        : (const Color(0xFFF1F5F9), const Color(0xFFE2E8F0), const Color(0xFF475569));
+        ? (
+            context.appColors.surfaceElevated,
+            context.appColors.border,
+            context.appColors.textSecondary,
+          )
+        : (
+            const Color(0xFFF1F5F9),
+            const Color(0xFFE2E8F0),
+            const Color(0xFF475569),
+          );
   }
 
   String _formatOrderDate(String? value) {
@@ -1070,7 +1403,20 @@ class _OrdersScreenState extends State<OrdersScreen> {
     if (parsed == null) {
       final parts = value.split('T').first.split('-');
       if (parts.length == 3) {
-        const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+        const months = [
+          'Jan',
+          'Feb',
+          'Mar',
+          'Apr',
+          'May',
+          'Jun',
+          'Jul',
+          'Aug',
+          'Sep',
+          'Oct',
+          'Nov',
+          'Dec',
+        ];
         final month = int.tryParse(parts[1]);
         final day = int.tryParse(parts[2]);
         if (month != null && day != null && month >= 1 && month <= 12) {
@@ -1079,7 +1425,20 @@ class _OrdersScreenState extends State<OrdersScreen> {
       }
       return value.split('T').first;
     }
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
     return '${months[parsed.month - 1]} ${parsed.day}, ${parsed.year}';
   }
 
@@ -1099,7 +1458,20 @@ class _OrdersScreenState extends State<OrdersScreen> {
       }
     }
     if (d == null) return value.split('T').first;
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const months = [
+      'Jan',
+      'Feb',
+      'Mar',
+      'Apr',
+      'May',
+      'Jun',
+      'Jul',
+      'Aug',
+      'Sep',
+      'Oct',
+      'Nov',
+      'Dec',
+    ];
     return '${months[d.month - 1]} ${d.day}';
   }
 
@@ -1124,7 +1496,10 @@ class _OrdersScreenState extends State<OrdersScreen> {
   String _rentalQtyLine(OrderModel order) {
     final raw = order.rentalDurationLabel?.trim() ?? '';
     final duration = raw
-        .replaceAll(RegExp(r'\s*Billing Cycles?', caseSensitive: false), ' cycles')
+        .replaceAll(
+          RegExp(r'\s*Billing Cycles?', caseSensitive: false),
+          ' cycles',
+        )
         .replaceAll(RegExp(r'\s*Billing Cycle', caseSensitive: false), ' cycle')
         .trim();
     if (duration.isEmpty) return 'Qty ${order.quantity}';
@@ -1145,18 +1520,28 @@ class _OrdersActiveFilterChip extends StatelessWidget {
       decoration: BoxDecoration(
         color: const Color(0xFF6C63FF).withValues(alpha: 0.18),
         borderRadius: BorderRadius.circular(999),
-        border: Border.all(color: const Color(0xFF6C63FF).withValues(alpha: 0.45)),
+        border: Border.all(
+          color: const Color(0xFF6C63FF).withValues(alpha: 0.45),
+        ),
       ),
       child: Row(
         mainAxisSize: MainAxisSize.min,
         children: [
           Text(
             label,
-            style: TextStyle(color: context.appColors.textPrimary, fontSize: 13, fontWeight: FontWeight.w600),
+            style: TextStyle(
+              color: context.appColors.textPrimary,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
           ),
           IconButton(
             onPressed: onClear,
-            icon: Icon(Icons.close, size: 16, color: context.appColors.textSecondary),
+            icon: Icon(
+              Icons.close,
+              size: 16,
+              color: context.appColors.textSecondary,
+            ),
             padding: EdgeInsets.zero,
             constraints: const BoxConstraints(minWidth: 28, minHeight: 28),
             visualDensity: VisualDensity.compact,
@@ -1187,13 +1572,13 @@ class _OrdersStatusRow extends StatelessWidget {
     return Material(
       color: selected
           ? (isDark
-              ? const Color(0xFF6C63FF).withValues(alpha: 0.2)
-              : const Color(0xFF6C63FF).withValues(alpha: 0.12))
+                ? const Color(0xFF6C63FF).withValues(alpha: 0.2)
+                : const Color(0xFF6C63FF).withValues(alpha: 0.12))
           : Colors.transparent,
       child: InkWell(
         onTap: onTap,
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
           child: Row(
             children: [
               Expanded(
@@ -1261,7 +1646,10 @@ class _OrderItemMeta extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return _OrderItemMetaBar(
-      inlineBadges: Row(mainAxisSize: MainAxisSize.min, children: _spaced(badges())),
+      inlineBadges: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: _spaced(badges()),
+      ),
       wrappedBadges: Wrap(
         spacing: 6,
         runSpacing: 4,
@@ -1281,13 +1669,16 @@ class _OrderItemMetaBar extends MultiChildRenderObjectWidget {
   }) : super(children: [inlineBadges, wrappedBadges, trailing]);
 
   @override
-  RenderObject createRenderObject(BuildContext context) => _RenderOrderItemMetaBar();
+  RenderObject createRenderObject(BuildContext context) =>
+      _RenderOrderItemMetaBar();
 }
 
 class _MetaParentData extends ContainerBoxParentData<RenderBox> {}
 
 class _RenderOrderItemMetaBar extends RenderBox
-    with ContainerRenderObjectMixin<RenderBox, _MetaParentData>, RenderBoxContainerDefaultsMixin<RenderBox, _MetaParentData> {
+    with
+        ContainerRenderObjectMixin<RenderBox, _MetaParentData>,
+        RenderBoxContainerDefaultsMixin<RenderBox, _MetaParentData> {
   static const double _gap = 8;
   bool _oneLine = true;
 
@@ -1315,9 +1706,14 @@ class _RenderOrderItemMetaBar extends RenderBox
 
     _oneLine = inlineSize.width + _gap + trailingSize.width <= maxWidth;
     if (_oneLine) {
-      final height = inlineSize.height > trailingSize.height ? inlineSize.height : trailingSize.height;
+      final height = inlineSize.height > trailingSize.height
+          ? inlineSize.height
+          : trailingSize.height;
       size = Size(maxWidth, height);
-      (inline.parentData as _MetaParentData).offset = Offset(0, (height - inlineSize.height) / 2);
+      (inline.parentData as _MetaParentData).offset = Offset(
+        0,
+        (height - inlineSize.height) / 2,
+      );
       (trailing.parentData as _MetaParentData).offset = Offset(
         (maxWidth - trailingSize.width).clamp(0.0, maxWidth),
         (height - trailingSize.height) / 2,
@@ -1338,7 +1734,9 @@ class _RenderOrderItemMetaBar extends RenderBox
   void visitChildrenForSemantics(RenderObjectVisitor visitor) {
     final children = getChildrenAsList();
     if (children.length < 3) return;
-    final visible = _oneLine ? [children[0], children[2]] : [children[1], children[2]];
+    final visible = _oneLine
+        ? [children[0], children[2]]
+        : [children[1], children[2]];
     for (final child in visible) {
       visitor(child);
     }
@@ -1347,7 +1745,9 @@ class _RenderOrderItemMetaBar extends RenderBox
   @override
   void paint(PaintingContext context, Offset offset) {
     final children = getChildrenAsList();
-    final visible = _oneLine ? [children[0], children[2]] : [children[1], children[2]];
+    final visible = _oneLine
+        ? [children[0], children[2]]
+        : [children[1], children[2]];
     for (final child in visible) {
       final childParentData = child.parentData as _MetaParentData;
       context.paintChild(child, offset + childParentData.offset);
@@ -1357,7 +1757,9 @@ class _RenderOrderItemMetaBar extends RenderBox
   @override
   bool hitTestChildren(BoxHitTestResult result, {required Offset position}) {
     final children = getChildrenAsList();
-    final visible = _oneLine ? [children[2], children[0]] : [children[2], children[1]];
+    final visible = _oneLine
+        ? [children[2], children[0]]
+        : [children[2], children[1]];
     for (final child in visible) {
       final childParentData = child.parentData as _MetaParentData;
       final hit = result.addWithPaintOffset(

@@ -7,7 +7,9 @@ const _placedAccent = Color(0xFF6C63FF);
 ThemeData _placedDatePickerTheme(BuildContext context) {
   final colors = context.appColors;
   final dark = Theme.of(context).brightness == Brightness.dark;
-  final rangeFill = dark ? colors.primarySoft : _placedAccent.withValues(alpha: 0.16);
+  final rangeFill = dark
+      ? colors.primarySoft
+      : _placedAccent.withValues(alpha: 0.16);
   final scheme = Theme.of(context).colorScheme.copyWith(
     primary: _placedAccent,
     onPrimary: Colors.white,
@@ -28,10 +30,17 @@ ThemeData _placedDatePickerTheme(BuildContext context) {
       rangePickerHeaderBackgroundColor: colors.surface,
       rangePickerHeaderForegroundColor: colors.textPrimary,
       rangeSelectionBackgroundColor: rangeFill,
-      weekdayStyle: TextStyle(color: colors.textMuted, fontWeight: FontWeight.w600),
-      dayStyle: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w500),
+      weekdayStyle: TextStyle(
+        color: colors.textMuted,
+        fontWeight: FontWeight.w600,
+      ),
+      dayStyle: TextStyle(
+        color: colors.textPrimary,
+        fontWeight: FontWeight.w500,
+      ),
       dayForegroundColor: WidgetStateProperty.resolveWith((states) {
-        if (states.contains(WidgetState.disabled)) return colors.textMuted.withValues(alpha: 0.4);
+        if (states.contains(WidgetState.disabled))
+          return colors.textMuted.withValues(alpha: 0.4);
         if (states.contains(WidgetState.selected)) return Colors.white;
         return colors.textPrimary;
       }),
@@ -49,7 +58,9 @@ ThemeData _placedDatePickerTheme(BuildContext context) {
       }),
       todayBorder: const BorderSide(color: _placedAccent),
       confirmButtonStyle: TextButton.styleFrom(foregroundColor: _placedAccent),
-      cancelButtonStyle: TextButton.styleFrom(foregroundColor: colors.textMuted),
+      cancelButtonStyle: TextButton.styleFrom(
+        foregroundColor: colors.textMuted,
+      ),
     ),
   );
 }
@@ -69,11 +80,7 @@ class PlacedOrderRange {
   final DateTime? fromLocal;
   final DateTime? toLocal;
 
-  const PlacedOrderRange({
-    this.preset = 'any',
-    this.fromLocal,
-    this.toLocal,
-  });
+  const PlacedOrderRange({this.preset = 'any', this.fromLocal, this.toLocal});
 
   bool get isActive => fromLocal != null || toLocal != null;
 
@@ -82,7 +89,12 @@ class PlacedOrderRange {
 
   String get chipLabel {
     final named = placedPresetOptions
-        .where((option) => option.$1 == preset && option.$1 != 'any' && option.$1 != 'custom')
+        .where(
+          (option) =>
+              option.$1 == preset &&
+              option.$1 != 'any' &&
+              option.$1 != 'custom',
+        )
         .map((option) => option.$2);
     if (named.isNotEmpty) return named.first;
     return formatPlacedSummary(fromLocal, toLocal);
@@ -112,11 +124,18 @@ class PlacedOrderRange {
     );
   }
 
-  PlacedOrderRange withDates(DateTime from, DateTime to, {bool wholeDay = true}) {
+  PlacedOrderRange withDates(
+    DateTime from,
+    DateTime to, {
+    bool wholeDay = true,
+  }) {
     var start = from;
     var end = to;
     if (start.isAfter(end)) {
-      final sameDay = start.year == end.year && start.month == end.month && start.day == end.day;
+      final sameDay =
+          start.year == end.year &&
+          start.month == end.month &&
+          start.day == end.day;
       if (sameDay) {
         end = start;
       } else {
@@ -140,7 +159,8 @@ bool orderMatchesPlacedRange(DateTime? createdUtc, PlacedOrderRange range) {
   final from = range.fromLocal?.toUtc();
   final to = range.toLocal?.toUtc();
   if (from != null && created.isBefore(from)) return false;
-  if (to != null && !created.isBefore(to.add(const Duration(minutes: 1)))) return false;
+  if (to != null && !created.isBefore(to.add(const Duration(minutes: 1))))
+    return false;
   return true;
 }
 
@@ -148,10 +168,12 @@ String formatPlacedSummary(DateTime? from, DateTime? to) {
   if (from == null && to == null) return 'Any time';
   if (from != null && to != null) {
     final whole = _isStartOfDay(from) && _isEndOfDay(to);
-    final same = from.year == to.year && from.month == to.month && from.day == to.day;
+    final same =
+        from.year == to.year && from.month == to.month && from.day == to.day;
     if (whole && same) return _formatDay(from);
     if (whole) return '${_formatDay(from)} – ${_formatDay(to)}';
-    if (same) return '${_formatDay(from)}, ${_formatClock(from)} – ${_formatClock(to)}';
+    if (same)
+      return '${_formatDay(from)}, ${_formatClock(from)} – ${_formatClock(to)}';
     return '${_formatDay(from)}, ${_formatClock(from)} – ${_formatDay(to)}, ${_formatClock(to)}';
   }
   if (from != null) return 'From ${_formatDay(from)}';
@@ -161,9 +183,23 @@ String formatPlacedSummary(DateTime? from, DateTime? to) {
 bool _isStartOfDay(DateTime value) => value.hour == 0 && value.minute == 0;
 bool _isEndOfDay(DateTime value) => value.hour == 23 && value.minute == 59;
 
-const _months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const _months = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+];
 
-String _formatDay(DateTime value) => '${value.day} ${_months[value.month - 1]} ${value.year}';
+String _formatDay(DateTime value) =>
+    '${value.day} ${_months[value.month - 1]} ${value.year}';
 
 String _formatClock(DateTime value) {
   final hour = value.hour % 12 == 0 ? 12 : value.hour % 12;
@@ -195,7 +231,8 @@ class PlacedOrderRangeSection extends StatefulWidget {
   });
 
   @override
-  State<PlacedOrderRangeSection> createState() => _PlacedOrderRangeSectionState();
+  State<PlacedOrderRangeSection> createState() =>
+      _PlacedOrderRangeSectionState();
 }
 
 class _PlacedOrderRangeSectionState extends State<PlacedOrderRangeSection> {
@@ -229,18 +266,22 @@ class _PlacedOrderRangeSectionState extends State<PlacedOrderRangeSection> {
       firstDate: DateTime(2024, 1, 1),
       lastDate: DateTime(now.year, now.month, now.day),
       initialDateRange: DateTimeRange(
-        start: DateTime(initialStart.year, initialStart.month, initialStart.day),
+        start: DateTime(
+          initialStart.year,
+          initialStart.month,
+          initialStart.day,
+        ),
         end: DateTime(initialEnd.year, initialEnd.month, initialEnd.day),
       ),
       helpText: 'Order placed',
       saveText: 'Done',
-      builder: (context, child) => Theme(
-        data: _placedDatePickerTheme(context),
-        child: child!,
-      ),
+      builder: (context, child) =>
+          Theme(data: _placedDatePickerTheme(context), child: child!),
     );
     if (picked == null) return;
-    widget.onChanged(widget.value.withDates(picked.start, picked.end, wholeDay: _wholeDay));
+    widget.onChanged(
+      widget.value.withDates(picked.start, picked.end, wholeDay: _wholeDay),
+    );
   }
 
   void _setTime({required bool start, required DateTime next}) {
@@ -259,7 +300,7 @@ class _PlacedOrderRangeSectionState extends State<PlacedOrderRangeSection> {
         borderRadius: BorderRadius.circular(16),
         border: Border.all(color: colors.border),
       ),
-      padding: const EdgeInsets.fromLTRB(12, 12, 12, 12),
+      padding: const EdgeInsets.fromLTRB(12, 10, 12, 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -283,11 +324,13 @@ class _PlacedOrderRangeSectionState extends State<PlacedOrderRangeSection> {
                   selected: value.preset == option.$1,
                   onTap: () {
                     if (option.$1 == 'custom') {
-                      widget.onChanged(PlacedOrderRange(
-                        preset: 'custom',
-                        fromLocal: value.fromLocal,
-                        toLocal: value.toLocal,
-                      ));
+                      widget.onChanged(
+                        PlacedOrderRange(
+                          preset: 'custom',
+                          fromLocal: value.fromLocal,
+                          toLocal: value.toLocal,
+                        ),
+                      );
                       return;
                     }
                     setState(() => _wholeDay = true);
@@ -304,8 +347,13 @@ class _PlacedOrderRangeSectionState extends State<PlacedOrderRangeSection> {
                 foregroundColor: colors.textPrimary,
                 side: BorderSide(color: colors.border),
                 minimumSize: const Size.fromHeight(44),
-                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
-                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 8,
+                ),
+                shape: RoundedRectangleBorder(
+                  borderRadius: BorderRadius.circular(12),
+                ),
               ),
               child: _RangeSummary(from: value.fromLocal, to: value.toLocal),
             ),
@@ -323,8 +371,21 @@ class _PlacedOrderRangeSectionState extends State<PlacedOrderRangeSection> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          Text('All day', style: TextStyle(color: colors.textPrimary, fontSize: 14, fontWeight: FontWeight.w600)),
-                          Text('12:00 AM – 11:59 PM', style: TextStyle(color: colors.textMuted, fontSize: 11)),
+                          Text(
+                            'All day',
+                            style: TextStyle(
+                              color: colors.textPrimary,
+                              fontSize: 14,
+                              fontWeight: FontWeight.w600,
+                            ),
+                          ),
+                          Text(
+                            '12:00 AM – 11:59 PM',
+                            style: TextStyle(
+                              color: colors.textMuted,
+                              fontSize: 11,
+                            ),
+                          ),
                         ],
                       ),
                     ),
@@ -336,7 +397,10 @@ class _PlacedOrderRangeSectionState extends State<PlacedOrderRangeSection> {
                         final from = value.fromLocal;
                         final to = value.toLocal ?? from;
                         if (from == null || to == null) return;
-                        if (on) widget.onChanged(value.withDates(from, to, wholeDay: true));
+                        if (on)
+                          widget.onChanged(
+                            value.withDates(from, to, wholeDay: true),
+                          );
                       },
                     ),
                   ],
@@ -354,7 +418,9 @@ class _PlacedOrderRangeSectionState extends State<PlacedOrderRangeSection> {
               _PlacedClock(
                 label: 'End',
                 time: value.toLocal ?? value.fromLocal!,
-                minMinutes: _sameDay(value.fromLocal, value.toLocal) ? _minutesOf(value.fromLocal!) : null,
+                minMinutes: _sameDay(value.fromLocal, value.toLocal)
+                    ? _minutesOf(value.fromLocal!)
+                    : null,
                 onChanged: (next) => _setTime(start: false, next: next),
               ),
             ],
@@ -363,7 +429,11 @@ class _PlacedOrderRangeSectionState extends State<PlacedOrderRangeSection> {
             Text(
               formatPlacedSummary(value.fromLocal, value.toLocal),
               textAlign: TextAlign.center,
-              style: TextStyle(color: colors.textPrimary, fontSize: 12, fontWeight: FontWeight.w600),
+              style: TextStyle(
+                color: colors.textPrimary,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
             ),
           ],
         ],
@@ -380,16 +450,33 @@ class _RangeSummary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    const dateStyle = TextStyle(fontSize: 13, fontWeight: FontWeight.w600, height: 1.25);
-    final timeStyle = TextStyle(fontSize: 12, fontWeight: FontWeight.w600, height: 1.25, color: context.appColors.textMuted);
+    const dateStyle = TextStyle(
+      fontSize: 13,
+      fontWeight: FontWeight.w600,
+      height: 1.25,
+    );
+    final timeStyle = TextStyle(
+      fontSize: 12,
+      fontWeight: FontWeight.w600,
+      height: 1.25,
+      color: context.appColors.textMuted,
+    );
     if (from == null) return const Text('Choose dates', style: dateStyle);
     final end = to ?? from!;
     final whole = _isStartOfDay(from!) && _isEndOfDay(end);
-    final dates = _sameDay(from, end) ? _formatDay(from!) : '${_formatDay(from!)} – ${_formatDay(end)}';
+    final dates = _sameDay(from, end)
+        ? _formatDay(from!)
+        : '${_formatDay(from!)} – ${_formatDay(end)}';
     return Column(
       mainAxisSize: MainAxisSize.min,
       children: [
-        Text(dates, textAlign: TextAlign.center, maxLines: 1, overflow: TextOverflow.ellipsis, style: dateStyle),
+        Text(
+          dates,
+          textAlign: TextAlign.center,
+          maxLines: 1,
+          overflow: TextOverflow.ellipsis,
+          style: dateStyle,
+        ),
         if (!whole)
           Text(
             '${_formatClock(from!)} – ${_formatClock(end)}',
@@ -408,7 +495,11 @@ class _PresetChip extends StatelessWidget {
   final bool selected;
   final VoidCallback onTap;
 
-  const _PresetChip({required this.label, required this.selected, required this.onTap});
+  const _PresetChip({
+    required this.label,
+    required this.selected,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -422,7 +513,9 @@ class _PresetChip extends StatelessWidget {
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(999),
-            border: Border.all(color: selected ? _placedAccent : context.appColors.border),
+            border: Border.all(
+              color: selected ? _placedAccent : context.appColors.border,
+            ),
           ),
           child: Text(
             label,
@@ -451,7 +544,10 @@ class _PlacedClock extends StatelessWidget {
     this.minMinutes,
   });
 
-  bool _blocked(int next) => next < 0 || next > 23 * 60 + 59 || (minMinutes != null && next < minMinutes!);
+  bool _blocked(int next) =>
+      next < 0 ||
+      next > 23 * 60 + 59 ||
+      (minMinutes != null && next < minMinutes!);
 
   void _apply(int next) {
     if (_blocked(next)) return;
@@ -499,7 +595,14 @@ class _PlacedClock extends StatelessWidget {
                     ),
                     Padding(
                       padding: const EdgeInsets.only(bottom: 14),
-                      child: Text(':', style: TextStyle(color: colors.textMuted, fontSize: 18, fontWeight: FontWeight.w700)),
+                      child: Text(
+                        ':',
+                        style: TextStyle(
+                          color: colors.textMuted,
+                          fontSize: 18,
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
                     ),
                     _ClockStep(
                       caption: 'Minute',
@@ -553,13 +656,21 @@ class _ClockStep extends StatelessWidget {
         Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            _TickButton(icon: Icons.remove, enabled: downEnabled, onTap: onDown),
+            _TickButton(
+              icon: Icons.remove,
+              enabled: downEnabled,
+              onTap: onDown,
+            ),
             SizedBox(
               width: 26,
               child: Text(
                 value,
                 textAlign: TextAlign.center,
-                style: TextStyle(color: colors.textPrimary, fontSize: 18, fontWeight: FontWeight.w700),
+                style: TextStyle(
+                  color: colors.textPrimary,
+                  fontSize: 18,
+                  fontWeight: FontWeight.w700,
+                ),
               ),
             ),
             _TickButton(icon: Icons.add, enabled: upEnabled, onTap: onUp),
@@ -568,7 +679,12 @@ class _ClockStep extends StatelessWidget {
         const SizedBox(height: 2),
         Text(
           caption.toUpperCase(),
-          style: TextStyle(color: colors.textMuted, fontSize: 9, fontWeight: FontWeight.w600, letterSpacing: 0.3),
+          style: TextStyle(
+            color: colors.textMuted,
+            fontSize: 9,
+            fontWeight: FontWeight.w600,
+            letterSpacing: 0.3,
+          ),
         ),
       ],
     );
@@ -580,7 +696,11 @@ class _TickButton extends StatelessWidget {
   final bool enabled;
   final VoidCallback onTap;
 
-  const _TickButton({required this.icon, required this.enabled, required this.onTap});
+  const _TickButton({
+    required this.icon,
+    required this.enabled,
+    required this.onTap,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -595,7 +715,13 @@ class _TickButton extends StatelessWidget {
         child: SizedBox(
           width: 28,
           height: 28,
-          child: Icon(icon, size: 14, color: enabled ? colors.textPrimary : colors.textMuted.withValues(alpha: 0.4)),
+          child: Icon(
+            icon,
+            size: 14,
+            color: enabled
+                ? colors.textPrimary
+                : colors.textMuted.withValues(alpha: 0.4),
+          ),
         ),
       ),
     );
@@ -620,7 +746,12 @@ class _PeriodSwitch extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final colors = context.appColors;
-    Widget period(String label, bool selected, bool enabled, VoidCallback onTap) {
+    Widget period(
+      String label,
+      bool selected,
+      bool enabled,
+      VoidCallback onTap,
+    ) {
       return InkWell(
         onTap: enabled ? onTap : null,
         child: Container(
@@ -631,7 +762,9 @@ class _PeriodSwitch extends StatelessWidget {
           child: Text(
             label,
             style: TextStyle(
-              color: selected ? Colors.white : colors.textMuted.withValues(alpha: enabled ? 1 : 0.35),
+              color: selected
+                  ? Colors.white
+                  : colors.textMuted.withValues(alpha: enabled ? 1 : 0.35),
               fontSize: 12,
               fontWeight: FontWeight.w700,
             ),

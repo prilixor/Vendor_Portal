@@ -24,6 +24,8 @@ class HomeScreen extends StatefulWidget {
 
 class _HomeScreenState extends State<HomeScreen> {
   final TextEditingController _searchController = TextEditingController();
+  final FocusNode _searchFocus = FocusNode();
+  bool _searchOpen = false;
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
   static const _locationPromptKey = 'locationPromptDismissed';
 
@@ -69,7 +71,20 @@ class _HomeScreenState extends State<HomeScreen> {
     _catalogSearchDebouncer.dispose();
     _searchController.removeListener(_scheduleDebouncedSearch);
     _searchController.dispose();
+    _searchFocus.dispose();
     super.dispose();
+  }
+
+  void _toggleSearch() {
+    final open = !_searchOpen;
+    setState(() => _searchOpen = open);
+    if (open) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _searchFocus.requestFocus();
+      });
+    } else {
+      _searchFocus.unfocus();
+    }
   }
 
   void _scheduleDebouncedSearch() {
@@ -79,6 +94,10 @@ class _HomeScreenState extends State<HomeScreen> {
   void _submitSearchNow() {
     _catalogSearchDebouncer.cancel();
     _onSearch();
+    if (_searchOpen) {
+      setState(() => _searchOpen = false);
+      _searchFocus.unfocus();
+    }
   }
 
   bool _hasGeoAddress(AddressProvider addressProvider) =>
@@ -365,204 +384,91 @@ class _HomeScreenState extends State<HomeScreen> {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Padding(
-              padding: const EdgeInsets.all(16.0),
+              padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
               child: Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
+                crossAxisAlignment: CrossAxisAlignment.stretch,
                 children: [
-                  Text(
-                    'Discover',
-                    style: TextStyle(
-                      fontSize: 28,
-                      fontWeight: FontWeight.bold,
-                      color: colors.textPrimary,
-                    ),
-                  ),
-                  const SizedBox(height: 8),
-                  Text(
-                    'Medical equipment and chemicals from verified vendors.',
-                    style: TextStyle(color: colors.textMuted, fontSize: 13),
-                  ),
-                  if (auth.isAuthenticated) ...[
-                    const SizedBox(height: 12),
-                    _locationBanner(addressProvider),
-                  ],
-                  const SizedBox(height: 16),
-                  Container(
-                    padding: const EdgeInsets.all(4),
-                    decoration: BoxDecoration(
-                      color: colors.surface,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Row(
-                      children: [
-                        Expanded(
-                          child: _browseModeChip('equipment', 'Equipment'),
-                        ),
-                        Expanded(
-                          child: _browseModeChip('chemicals', 'Chemicals'),
-                        ),
-                      ],
-                    ),
-                  ),
-                  const SizedBox(height: 16),
                   Row(
                     children: [
                       Expanded(
-                        child: TextField(
-                          controller: _searchController,
-                          onSubmitted: (_) => _submitSearchNow(),
-                          textInputAction: TextInputAction.search,
-                          style: TextStyle(color: colors.textPrimary),
-                          decoration: InputDecoration(
-                            hintText: _browseMode == 'chemicals'
-                                ? 'Search chemicals...'
-                                : 'Search equipment...',
-                            hintStyle: TextStyle(color: colors.textMuted),
-                            prefixIcon: Icon(
-                              Icons.search,
-                              color: colors.textSecondary,
-                            ),
-                            filled: true,
-                            fillColor: colors.surface,
-                            border: OutlineInputBorder(
-                              borderRadius: BorderRadius.circular(16),
-                              borderSide: BorderSide.none,
-                            ),
-                            contentPadding: const EdgeInsets.symmetric(
-                              horizontal: 12,
-                              vertical: 14,
-                            ),
+                        child: Container(
+                          padding: const EdgeInsets.all(3),
+                          decoration: BoxDecoration(
+                            color: colors.surface,
+                            borderRadius: BorderRadius.circular(10),
                           ),
-                        ),
-                      ),
-                      const SizedBox(width: 10),
-                      Container(
-                        decoration: BoxDecoration(
-                          borderRadius: BorderRadius.circular(16),
-                          border: Border.all(
-                            color: context.isDarkMode
-                                ? Colors.transparent
-                                : colors.border,
-                          ),
-                        ),
-                        child: Material(
-                          color: _hasActiveFilters
-                              ? const Color(0xFF6C63FF)
-                              : colors.surface,
-                          borderRadius: BorderRadius.circular(15),
-                          clipBehavior: Clip.antiAlias,
-                          child: InkWell(
-                            onTap: () => _openFiltersSheet(modeCategories),
-                            child: SizedBox(
-                              width: 52,
-                              height: 52,
-                              child: Stack(
-                                alignment: Alignment.center,
-                                children: [
-                                  Icon(
-                                    Icons.tune_rounded,
-                                    color: _hasActiveFilters
-                                        ? Colors.white
-                                        : colors.textSecondary,
-                                  ),
-                                  if (_activeFilterCount > 0)
-                                    Positioned(
-                                      top: 10,
-                                      right: 10,
-                                      child: Container(
-                                        width: 16,
-                                        height: 16,
-                                        alignment: Alignment.center,
-                                        decoration: const BoxDecoration(
-                                          color: Colors.white,
-                                          shape: BoxShape.circle,
-                                        ),
-                                        child: Text(
-                                          '$_activeFilterCount',
-                                          style: const TextStyle(
-                                            color: Color(0xFF6C63FF),
-                                            fontSize: 10,
-                                            fontWeight: FontWeight.bold,
-                                          ),
-                                        ),
-                                      ),
-                                    ),
-                                ],
+                          child: Row(
+                            children: [
+                              Expanded(
+                                child: _browseModeChip(
+                                  'equipment',
+                                  'Equipment',
+                                ),
                               ),
-                            ),
+                              Expanded(
+                                child: _browseModeChip(
+                                  'chemicals',
+                                  'Chemicals',
+                                ),
+                              ),
+                            ],
                           ),
                         ),
                       ),
+                      const SizedBox(width: 8),
+                      _catalogIconButton(
+                        tooltip: _searchOpen ? 'Close search' : 'Search',
+                        icon: _searchOpen ? Icons.close : Icons.search,
+                        highlighted:
+                            _searchOpen ||
+                            _searchController.text.trim().isNotEmpty,
+                        colors: colors,
+                        onTap: _toggleSearch,
+                      ),
+                      const SizedBox(width: 6),
+                      _searchFilterButton(modeCategories, colors),
                     ],
                   ),
-                  if (!productProvider.isLoading) ...[
-                    const SizedBox(height: 10),
-                    Text(
-                      _productCountLabel(
-                        catalogBeforeCategory.length,
-                        products.length,
-                      ),
-                      style: const TextStyle(
-                        color: Color(0xFF94A3B8),
-                        fontSize: 13,
+                  if (_searchOpen) ...[
+                    const SizedBox(height: 8),
+                    TextField(
+                      controller: _searchController,
+                      focusNode: _searchFocus,
+                      onSubmitted: (_) => _submitSearchNow(),
+                      textInputAction: TextInputAction.search,
+                      style: TextStyle(color: colors.textPrimary, fontSize: 15),
+                      decoration: InputDecoration(
+                        isDense: true,
+                        hintText: _browseMode == 'chemicals'
+                            ? 'Search chemicals...'
+                            : 'Search equipment...',
+                        hintStyle: TextStyle(color: colors.textMuted),
+                        prefixIcon: Icon(
+                          Icons.search,
+                          color: colors.textSecondary,
+                          size: 22,
+                        ),
+                        prefixIconConstraints: const BoxConstraints(
+                          minWidth: 40,
+                          minHeight: 40,
+                        ),
+                        filled: true,
+                        fillColor: colors.surface,
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                        contentPadding: const EdgeInsets.symmetric(
+                          vertical: 10,
+                        ),
                       ),
                     ),
                   ],
-                  if (_hasActiveFilters) ...[
-                    const SizedBox(height: 12),
-                    SizedBox(
-                      height: 36,
-                      child: ListView(
-                        scrollDirection: Axis.horizontal,
-                        children: [
-                          if (_selectedCategoryName != null)
-                            Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: _ActiveFilterChip(
-                                label: _selectedCategoryName!,
-                                onClear: () {
-                                  setState(() => _selectedCategoryName = null);
-                                },
-                              ),
-                            ),
-                          if (_stockFilter != 'all')
-                            Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: _ActiveFilterChip(
-                                label: stockPills.firstWhere(
-                                  (p) => p['id'] == _stockFilter,
-                                )['label']!,
-                                onClear: () =>
-                                    setState(() => _stockFilter = 'all'),
-                              ),
-                            ),
-                          if (_showFavoritesOnly)
-                            Padding(
-                              padding: const EdgeInsets.only(right: 8),
-                              child: _ActiveFilterChip(
-                                label: 'Favorites',
-                                onClear: () =>
-                                    setState(() => _showFavoritesOnly = false),
-                              ),
-                            ),
-                          TextButton(
-                            onPressed: _clearAllFilters,
-                            style: TextButton.styleFrom(
-                              foregroundColor: colors.textSecondary,
-                              padding: const EdgeInsets.symmetric(
-                                horizontal: 8,
-                              ),
-                              minimumSize: Size.zero,
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                            ),
-                            child: const Text(
-                              'Clear all',
-                              style: TextStyle(fontSize: 13),
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
+                  if (auth.isAuthenticated &&
+                      _addressesLoaded &&
+                      !_hasGeoAddress(addressProvider)) ...[
+                    const SizedBox(height: 8),
+                    _locationBanner(addressProvider),
                   ],
                 ],
               ),
@@ -578,48 +484,162 @@ class _HomeScreenState extends State<HomeScreen> {
                         style: const TextStyle(color: Colors.redAccent),
                       ),
                     )
-                  : products.isEmpty
-                  ? Center(
-                      child: Text(
-                        'No listings match your filters.',
-                        style: TextStyle(color: colors.textSecondary),
-                      ),
-                    )
                   : LayoutBuilder(
                       builder: (context, constraints) {
                         final width = constraints.maxWidth;
                         final cardWidth = width.isFinite
                             ? (width - 44) / 2
                             : 160.0;
-                        return GridView.builder(
-                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                          gridDelegate:
-                              SliverGridDelegateWithFixedCrossAxisCount(
-                                crossAxisCount: 2,
-                                mainAxisSpacing: 14,
-                                crossAxisSpacing: 12,
-                                mainAxisExtent: browseProductCardExtent(
-                                  cardWidth,
+                        return CustomScrollView(
+                          slivers: [
+                            SliverToBoxAdapter(
+                              child: Padding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  0,
+                                  16,
+                                  4,
+                                ),
+                                child: Text(
+                                  _productCountLabel(
+                                    catalogBeforeCategory.length,
+                                    products.length,
+                                  ),
+                                  style: const TextStyle(
+                                    color: Color(0xFF94A3B8),
+                                    fontSize: 13,
+                                  ),
                                 ),
                               ),
-                          itemCount: products.length,
-                          itemBuilder: (context, index) {
-                            final product = products[index];
-                            return BrowseProductCard(
-                              product: product,
-                              onTap: () {
-                                Navigator.push(
-                                  context,
-                                  MaterialPageRoute(
-                                    builder: (_) => ProductDetailScreen(
-                                      listingId: product.id,
-                                      previewImageUrl: product.primaryImageUrl,
+                            ),
+                            if (_hasActiveFilters)
+                              SliverToBoxAdapter(
+                                child: SizedBox(
+                                  height: 36,
+                                  child: ListView(
+                                    scrollDirection: Axis.horizontal,
+                                    padding: const EdgeInsets.fromLTRB(
+                                      16,
+                                      0,
+                                      16,
+                                      0,
+                                    ),
+                                    children: [
+                                      if (_selectedCategoryName != null)
+                                        Padding(
+                                          padding: const EdgeInsets.only(
+                                            right: 8,
+                                          ),
+                                          child: _ActiveFilterChip(
+                                            label: _selectedCategoryName!,
+                                            onClear: () {
+                                              setState(
+                                                () => _selectedCategoryName =
+                                                    null,
+                                              );
+                                            },
+                                          ),
+                                        ),
+                                      if (_stockFilter != 'all')
+                                        Padding(
+                                          padding: const EdgeInsets.only(
+                                            right: 8,
+                                          ),
+                                          child: _ActiveFilterChip(
+                                            label: stockPills.firstWhere(
+                                              (p) => p['id'] == _stockFilter,
+                                            )['label']!,
+                                            onClear: () => setState(
+                                              () => _stockFilter = 'all',
+                                            ),
+                                          ),
+                                        ),
+                                      if (_showFavoritesOnly)
+                                        Padding(
+                                          padding: const EdgeInsets.only(
+                                            right: 8,
+                                          ),
+                                          child: _ActiveFilterChip(
+                                            label: 'Favorites',
+                                            onClear: () => setState(
+                                              () => _showFavoritesOnly = false,
+                                            ),
+                                          ),
+                                        ),
+                                      TextButton(
+                                        onPressed: _clearAllFilters,
+                                        style: TextButton.styleFrom(
+                                          foregroundColor: colors.textSecondary,
+                                          padding: const EdgeInsets.symmetric(
+                                            horizontal: 8,
+                                          ),
+                                          minimumSize: Size.zero,
+                                          tapTargetSize:
+                                              MaterialTapTargetSize.shrinkWrap,
+                                        ),
+                                        child: const Text(
+                                          'Clear all',
+                                          style: TextStyle(fontSize: 13),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                              ),
+                            if (products.isEmpty)
+                              SliverFillRemaining(
+                                hasScrollBody: false,
+                                child: Center(
+                                  child: Text(
+                                    'No listings match your filters.',
+                                    style: TextStyle(
+                                      color: colors.textSecondary,
                                     ),
                                   ),
-                                );
-                              },
-                            );
-                          },
+                                ),
+                              )
+                            else
+                              SliverPadding(
+                                padding: const EdgeInsets.fromLTRB(
+                                  16,
+                                  8,
+                                  16,
+                                  24,
+                                ),
+                                sliver: SliverGrid(
+                                  gridDelegate:
+                                      SliverGridDelegateWithFixedCrossAxisCount(
+                                        crossAxisCount: 2,
+                                        mainAxisSpacing: 14,
+                                        crossAxisSpacing: 12,
+                                        mainAxisExtent: browseProductCardExtent(
+                                          cardWidth,
+                                        ),
+                                      ),
+                                  delegate: SliverChildBuilderDelegate((
+                                    context,
+                                    index,
+                                  ) {
+                                    final product = products[index];
+                                    return BrowseProductCard(
+                                      product: product,
+                                      onTap: () {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => ProductDetailScreen(
+                                              listingId: product.id,
+                                              previewImageUrl:
+                                                  product.primaryImageUrl,
+                                            ),
+                                          ),
+                                        );
+                                      },
+                                    );
+                                  }, childCount: products.length),
+                                ),
+                              ),
+                          ],
                         );
                       },
                     ),
@@ -752,9 +772,13 @@ class _HomeScreenState extends State<HomeScreen> {
             }
 
             return SafeArea(
+              top: false,
+              left: false,
+              right: false,
               child: Align(
                 alignment: Alignment.bottomCenter,
                 child: Container(
+                  width: double.infinity,
                   constraints: BoxConstraints(maxHeight: maxH),
                   decoration: BoxDecoration(
                     color: colors.surface,
@@ -778,7 +802,7 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                       Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 16, 8, 12),
+                        padding: const EdgeInsets.fromLTRB(16, 10, 4, 0),
                         child: Row(
                           children: [
                             Expanded(
@@ -786,7 +810,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                 'Filters',
                                 style: TextStyle(
                                   color: colors.textPrimary,
-                                  fontSize: 22,
+                                  fontSize: 18,
                                   fontWeight: FontWeight.w700,
                                   letterSpacing: -0.3,
                                 ),
@@ -820,28 +844,22 @@ class _HomeScreenState extends State<HomeScreen> {
                           ],
                         ),
                       ),
-                      Padding(
-                        padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-                        child: Text(
-                          'Filter by stock level, category, and saved items. Only active listings are shown.',
-                          style: TextStyle(
-                            color: colors.textMuted,
-                            fontSize: 12,
-                            height: 1.35,
-                          ),
-                        ),
-                      ),
                       Divider(height: 1, color: colors.border),
                       Expanded(
                         child: SingleChildScrollView(
-                          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+                          padding: const EdgeInsets.fromLTRB(12, 12, 12, 8),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.stretch,
                             children: [
                               _FilterSectionCard(
                                 title: 'STOCK',
                                 child: Padding(
-                                  padding: const EdgeInsets.all(10),
+                                  padding: const EdgeInsets.fromLTRB(
+                                    12,
+                                    0,
+                                    12,
+                                    10,
+                                  ),
                                   child: Wrap(
                                     spacing: 8,
                                     runSpacing: 8,
@@ -858,7 +876,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   ),
                                 ),
                               ),
-                              const SizedBox(height: 14),
+                              const SizedBox(height: 10),
                               _FilterSectionCard(
                                 title: 'SAVED',
                                 child: _FavoritesFilterRow(
@@ -880,7 +898,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                   },
                                 ),
                               ),
-                              const SizedBox(height: 14),
+                              const SizedBox(height: 10),
                               _FilterSectionCard(
                                 title: 'CATEGORY',
                                 trailing: '${categories.length} categories',
@@ -892,7 +910,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                           12,
                                           0,
                                           12,
-                                          8,
+                                          6,
                                         ),
                                         child: TextField(
                                           controller: categorySearchController,
@@ -1020,10 +1038,10 @@ class _HomeScreenState extends State<HomeScreen> {
                       ),
                       Container(
                         padding: EdgeInsets.fromLTRB(
-                          16,
                           12,
-                          16,
-                          12 + bottomInset,
+                          10,
+                          12,
+                          10 + bottomInset,
                         ),
                         decoration: BoxDecoration(
                           color: colors.background,
@@ -1097,13 +1115,88 @@ class _HomeScreenState extends State<HomeScreen> {
     }
   }
 
+  Widget _catalogIconButton({
+    required String tooltip,
+    required IconData icon,
+    required bool highlighted,
+    required AppPalette colors,
+    required VoidCallback onTap,
+    Widget? badge,
+  }) {
+    return Tooltip(
+      message: tooltip,
+      child: Material(
+        color: colors.surface,
+        borderRadius: BorderRadius.circular(10),
+        clipBehavior: Clip.antiAlias,
+        child: InkWell(
+          onTap: onTap,
+          child: SizedBox(
+            width: 40,
+            height: 40,
+            child: Stack(
+              alignment: Alignment.center,
+              children: [
+                Icon(
+                  icon,
+                  size: 22,
+                  color: highlighted
+                      ? const Color(0xFF6C63FF)
+                      : colors.textSecondary,
+                ),
+                if (badge != null) badge,
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _searchFilterButton(
+    List<CategoryModel> modeCategories,
+    AppPalette colors,
+  ) {
+    return _catalogIconButton(
+      tooltip: 'Filters',
+      icon: Icons.tune_rounded,
+      highlighted: _hasActiveFilters,
+      colors: colors,
+      onTap: () => _openFiltersSheet(modeCategories),
+      badge: _activeFilterCount > 0
+          ? Positioned(
+              top: 4,
+              right: 4,
+              child: Container(
+                width: 14,
+                height: 14,
+                alignment: Alignment.center,
+                decoration: const BoxDecoration(
+                  color: Color(0xFF6C63FF),
+                  shape: BoxShape.circle,
+                ),
+                child: Text(
+                  '$_activeFilterCount',
+                  style: const TextStyle(
+                    color: Colors.white,
+                    fontSize: 9,
+                    fontWeight: FontWeight.bold,
+                    height: 1,
+                  ),
+                ),
+              ),
+            )
+          : null,
+    );
+  }
+
   Widget _browseModeChip(String mode, String label) {
     final colors = context.appColors;
     final selected = _browseMode == mode;
     return GestureDetector(
       onTap: () => _setBrowseMode(mode),
       child: Container(
-        padding: const EdgeInsets.symmetric(vertical: 10),
+        padding: const EdgeInsets.symmetric(vertical: 7),
         decoration: BoxDecoration(
           color: selected ? const Color(0xFF6C63FF) : Colors.transparent,
           borderRadius: BorderRadius.circular(10),
@@ -1114,6 +1207,7 @@ class _HomeScreenState extends State<HomeScreen> {
           style: TextStyle(
             color: selected ? Colors.white : colors.textSecondary,
             fontWeight: FontWeight.w600,
+            fontSize: 13,
           ),
         ),
       ),
@@ -1186,7 +1280,7 @@ class _FilterSectionCard extends StatelessWidget {
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Padding(
-            padding: const EdgeInsets.fromLTRB(16, 14, 16, 10),
+            padding: const EdgeInsets.fromLTRB(12, 10, 12, 6),
             child: Row(
               children: [
                 Expanded(
@@ -1247,7 +1341,7 @@ class _FilterSelectRow extends StatelessWidget {
           child: InkWell(
             onTap: onTap,
             child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 11),
               child: Row(
                 children: [
                   Expanded(
@@ -1325,7 +1419,7 @@ class _StockFilterChip extends StatelessWidget {
         onTap: onTap,
         borderRadius: BorderRadius.circular(10),
         child: Container(
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(10),
             border: Border.all(
@@ -1371,12 +1465,12 @@ class _FavoritesFilterRow extends StatelessWidget {
       child: InkWell(
         onTap: () => onChanged(!value),
         child: Padding(
-          padding: const EdgeInsets.fromLTRB(16, 12, 14, 14),
+          padding: const EdgeInsets.fromLTRB(12, 8, 12, 10),
           child: Row(
             children: [
               Container(
-                width: 40,
-                height: 40,
+                width: 32,
+                height: 32,
                 decoration: BoxDecoration(
                   color: value
                       ? const Color(
