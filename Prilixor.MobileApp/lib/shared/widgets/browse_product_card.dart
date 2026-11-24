@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/models/product_model.dart';
 import '../../core/providers/favorite_provider.dart';
@@ -9,8 +9,16 @@ import '../utils/require_auth.dart';
 import 'catalog_image.dart';
 import 'favorite_overlay_button.dart';
 
-/// Grid cell height for Discover / related product cards (2-col mobile).
-const double kBrowseProductCardExtent = 304;
+/// Title, price, deposit, and buy line under the square image, including padding.
+const double kBrowseProductCardFooterExtent = 120;
+
+/// Neutral plate behind every shop photo, light and dark. Same idea as the
+/// Amazon / Flipkart thumbnail canvas: a colored photo stays inside this plate.
+const Color kBrowseProductImageWell = Color(0xFFF5F5F5);
+
+/// Row height for a 2-column shop card: square image plus the info block.
+double browseProductCardExtent(double cardWidth) =>
+    cardWidth + kBrowseProductCardFooterExtent;
 
 /// Mobile browse card — web pricing hierarchy, tuned for narrow 2-col grids.
 class BrowseProductCard extends StatelessWidget {
@@ -30,7 +38,9 @@ class BrowseProductCard extends StatelessWidget {
     final colors = context.appColors;
     final ls = product.listingStatus.trim().toLowerCase();
     final isBrowsable = ls == 'active' || ls == 'approved';
-    final isOutOfStock = product.availableQuantity <= 0 || product.availabilityStatus.trim().toLowerCase() == 'out_of_stock';
+    final isOutOfStock =
+        product.availableQuantity <= 0 ||
+        product.availabilityStatus.trim().toLowerCase() == 'out_of_stock';
     final interactive = isBrowsable && !isOutOfStock && onTap != null;
     final badge = product.getAvailabilityBadge();
     final showBadge = badge != null && badge['label'] != 'Available';
@@ -52,7 +62,8 @@ class BrowseProductCard extends StatelessWidget {
       primaryUnit = rate.unit == rentalUnitMonth ? '/month' : '/day';
     } else if (showBuy && (product.buyPrice ?? 0) > 0) {
       primaryValue = formatPlanInr(product.buyPrice!);
-      primaryUnit = product.baseUnit != null && product.baseUnit!.trim().isNotEmpty
+      primaryUnit =
+          product.baseUnit != null && product.baseUnit!.trim().isNotEmpty
           ? ' / ${product.baseUnit}'
           : '';
     }
@@ -89,14 +100,16 @@ class BrowseProductCard extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
-            Expanded(
+            AspectRatio(
+              aspectRatio: 1,
               child: Stack(
                 fit: StackFit.expand,
+                clipBehavior: Clip.hardEdge,
                 children: [
-                  ColoredBox(color: colors.surfaceElevated),
-                  Padding(
-                    padding: const EdgeInsets.fromLTRB(10, 34, 10, 6),
-                    child: CatalogImage(url: product.primaryImageUrl, fit: BoxFit.contain),
+                  const ColoredBox(color: kBrowseProductImageWell),
+                  CatalogImage(
+                    url: product.primaryImageUrl,
+                    fit: BoxFit.contain,
                   ),
                   if (showBadge)
                     Positioned(
@@ -104,7 +117,10 @@ class BrowseProductCard extends StatelessWidget {
                       left: 8,
                       child: Container(
                         constraints: const BoxConstraints(maxWidth: 112),
-                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        padding: const EdgeInsets.symmetric(
+                          horizontal: 8,
+                          vertical: 4,
+                        ),
                         decoration: BoxDecoration(
                           color: Color(badge['color'] as int),
                           borderRadius: BorderRadius.circular(8),
@@ -127,7 +143,9 @@ class BrowseProductCard extends StatelessWidget {
                     right: 8,
                     child: Consumer<FavoriteProvider>(
                       builder: (context, favoriteProvider, _) {
-                        final isFavorite = favoriteProvider.isFavorite(product.id);
+                        final isFavorite = favoriteProvider.isFavorite(
+                          product.id,
+                        );
                         return FavoriteOverlayButton(
                           isFavorite: isFavorite,
                           onTap: () async {
@@ -147,9 +165,8 @@ class BrowseProductCard extends StatelessWidget {
             ),
             Container(
               decoration: BoxDecoration(
-                border: Border(
-                  top: BorderSide(color: colors.border),
-                ),
+                color: colors.surface,
+                border: Border(top: BorderSide(color: colors.border)),
               ),
               padding: const EdgeInsets.fromLTRB(10, 9, 10, 10),
               child: Column(

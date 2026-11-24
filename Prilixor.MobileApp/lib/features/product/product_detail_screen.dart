@@ -1,4 +1,4 @@
-﻿import 'package:flutter/material.dart';
+import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:provider/provider.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -130,7 +130,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     } else if (detail.canRent && !detail.canBuy) {
       // Rent-only product → rent mode
       _orderType = 'rent';
-    } else if (detail.canRent && detail.canBuy && !detail.hasActiveRentalPlans) {
+    } else if (detail.canRent &&
+        detail.canBuy &&
+        !detail.hasActiveRentalPlans) {
       // Can both rent and buy, but NO rental plans configured → default to buy
       // so the Add to Cart button is immediately enabled.
       _orderType = 'buy';
@@ -142,8 +144,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     }
     if (detail.hasActiveRentalPlans && _selectedPlanId == null) {
       // Auto-select the recommended/default plan so the button is immediately enabled
-      _selectedPlanId = detail.defaultRentalPlan?.id ??
-          (detail.activeRentalPlans.isNotEmpty ? detail.activeRentalPlans.first.id : null);
+      _selectedPlanId =
+          detail.defaultRentalPlan?.id ??
+          (detail.activeRentalPlans.isNotEmpty
+              ? detail.activeRentalPlans.first.id
+              : null);
     }
   }
 
@@ -191,7 +196,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     final colors = context.appColors;
     final iconSize = size * 0.72;
     final original = plan == null ? null : resolveRentalIconUrl(plan.iconUrl);
-    final thumb = plan == null ? null : resolveRentalIconUrl(plan.iconThumbnailUrl);
+    final thumb = plan == null
+        ? null
+        : resolveRentalIconUrl(plan.iconThumbnailUrl);
     return Container(
       width: size,
       height: size,
@@ -304,12 +311,17 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       ],
     );
   }
-  List<({String tier, String label, String url})> _tierLegend(List<RentalPricingPlanModel> plans) {
+
+  List<({String tier, String label, String url})> _tierLegend(
+    List<RentalPricingPlanModel> plans,
+  ) {
     final byIcon = <String, ({String label, String url})>{};
     for (final plan in plans) {
       final url = _planIconUrl(plan);
-      final key = plan.rentalDurationIconId ?? plan.iconName ?? plan.valueTier ?? '';
-      if (key.isEmpty || url == null || url.isEmpty || byIcon.containsKey(key)) continue;
+      final key =
+          plan.rentalDurationIconId ?? plan.iconName ?? plan.valueTier ?? '';
+      if (key.isEmpty || url == null || url.isEmpty || byIcon.containsKey(key))
+        continue;
       byIcon[key] = (label: rentalIconLabel(plan), url: url);
     }
     return [
@@ -354,8 +366,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     final actualOrderType = detail == null
         ? _orderType
         : (detail.canRent && detail.canBuy
-            ? _orderType
-            : (detail.canBuy ? 'buy' : 'rent'));
+              ? _orderType
+              : (detail.canBuy ? 'buy' : 'rent'));
     final unitBuyPrice = selectedVariant?.buyPrice ?? detail?.buyPrice ?? 0;
     final rentRatesDaily = detail?.dailyRent ?? 0;
     final rentRatesWeekly = detail?.weeklyRent ?? 0;
@@ -364,15 +376,15 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     final estimate = actualOrderType == 'buy'
         ? unitBuyPrice * _quantity
         : (selectedPlan != null
-            ? selectedPlan.finalRentalPrice * _quantity
-            : estimateRent(
-                _periodUnit,
-                _periodCount,
-                _quantity,
-                dailyRent: rentRatesDaily,
-                weeklyRent: rentRatesWeekly,
-                monthlyRent: rentRatesMonthly,
-              ));
+              ? selectedPlan.finalRentalPrice * _quantity
+              : estimateRent(
+                  _periodUnit,
+                  _periodCount,
+                  _quantity,
+                  dailyRent: rentRatesDaily,
+                  weeklyRent: rentRatesWeekly,
+                  monthlyRent: rentRatesMonthly,
+                ));
     final badge = detail?.getAvailabilityBadge(qtyOverride: currentQty);
     final canAdd = detail != null && currentQty > 0;
     final cannotFulfill = selectedVariant != null && _quantity > currentQty;
@@ -381,7 +393,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       final d = detail;
       final sel = selectedVariant;
       altVariants.addAll(
-        activeVariants.where((v) => v.id != sel.id && d.variantStockOf(v.id) > 0),
+        activeVariants.where(
+          (v) => v.id != sel.id && d.variantStockOf(v.id) > 0,
+        ),
       );
       altVariants.sort((a, b) {
         final aFits = d.variantStockOf(a.id) >= _quantity ? 0 : 1;
@@ -412,10 +426,18 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
           detail?.title ?? 'Product',
           maxLines: 1,
           overflow: TextOverflow.ellipsis,
-          style: TextStyle(color: colors.textPrimary, fontSize: 16, fontWeight: FontWeight.w600),
+          style: TextStyle(
+            color: colors.textPrimary,
+            fontSize: 16,
+            fontWeight: FontWeight.w600,
+          ),
         ),
         leading: IconButton(
-          icon: Icon(Icons.arrow_back_ios_new_rounded, color: colors.textPrimary, size: 20),
+          icon: Icon(
+            Icons.arrow_back_ios_new_rounded,
+            color: colors.textPrimary,
+            size: 20,
+          ),
           onPressed: () => Navigator.maybePop(context),
         ),
         actions: [
@@ -438,7 +460,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   width: 40,
                   height: 40,
                   child: Icon(
-                    isFavorite ? Icons.favorite_rounded : Icons.favorite_border_rounded,
+                    isFavorite
+                        ? Icons.favorite_rounded
+                        : Icons.favorite_border_rounded,
                     color: isFavorite ? Colors.redAccent : colors.textSecondary,
                     size: 20,
                   ),
@@ -451,1215 +475,1641 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       body: _loadingDetail && detail == null
           ? const BrandPageLoader()
           : _detailError != null
-              ? Center(child: Text(_detailError!, style: const TextStyle(color: Colors.redAccent)))
-              : detail == null
-                  ? Center(child: Text('Product not found.', style: TextStyle(color: colors.textPrimary)))
-                  : SingleChildScrollView(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.stretch,
-                        children: [
-                          Padding(
-                            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-                            child: Column(
-                              children: [
-                                Container(
-                                  height: 280,
-                                  width: double.infinity,
-                                  decoration: BoxDecoration(
-                                    color: colors.surface,
-                                    borderRadius: BorderRadius.circular(20),
-                                    border: Border.all(color: colors.border),
-                                  ),
-                                  clipBehavior: Clip.antiAlias,
-                                  child: Stack(
-                                    fit: StackFit.expand,
-                                    children: [
-                                      detail.imageUrls.isEmpty
-                                          ? const Center(
-                                              child: Column(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  Icon(Icons.image_not_supported_outlined, color: Colors.white24, size: 44),
-                                                  SizedBox(height: 8),
-                                                  Text(
-                                                    'No product image',
-                                                    style: TextStyle(color: Colors.white38, fontSize: 13),
-                                                  ),
-                                                ],
-                                              ),
-                                            )
-                                          : GestureDetector(
-                                              onTap: () {
-                                                Navigator.push(
-                                                  context,
-                                                  MaterialPageRoute(
-                                                    builder: (_) => ProductImageViewerScreen(
-                                                      imageUrls: detail.imageUrls,
-                                                      thumbnails: detail.imageThumbnailUrls,
-                                                      placeholder: widget.previewImageUrl,
-                                                      initialIndex: _imageIndex,
-                                                      title: detail.title,
-                                                    ),
-                                                  ),
-                                                );
-                                              },
-                                              child: PageView.builder(
-                                                controller: _imagePageController,
-                                                itemCount: detail.imageUrls.length,
-                                                onPageChanged: (i) => setState(() => _imageIndex = i),
-                                                itemBuilder: (_, i) => Padding(
-                                                  padding: const EdgeInsets.all(16),
-                                                  child: CatalogImage(
-                                                    url: detail.imageUrls[i],
-                                                    previewUrl: _galleryPreview(detail, i),
-                                                    fit: BoxFit.contain,
-                                                    showLoadingIndicator: false,
-                                                  ),
-                                                ),
-                                              ),
-                                            ),
-                                      if (detail.imageUrls.isNotEmpty)
-                                        Positioned(
-                                          right: 12,
-                                          bottom: detail.imageUrls.length > 1 ? 28 : 12,
-                                          child: IgnorePointer(
-                                            child: Container(
-                                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-                                              decoration: BoxDecoration(
-                                                color: Colors.black.withValues(alpha: 0.55),
-                                                borderRadius: BorderRadius.circular(999),
-                                              ),
-                                              child: const Row(
-                                                mainAxisSize: MainAxisSize.min,
-                                                children: [
-                                                  Icon(Icons.zoom_in_rounded, color: Colors.white, size: 14),
-                                                  SizedBox(width: 4),
-                                                  Text(
-                                                    'View & zoom',
-                                                    style: TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
-                                                  ),
-                                                ],
-                                              ),
-                                            ),
-                                          ),
-                                        ),
-                                      if (detail.imageUrls.length > 1)
-                                        Positioned(
-                                          left: 0,
-                                          right: 0,
-                                          bottom: 12,
-                                          child: Row(
-                                            mainAxisAlignment: MainAxisAlignment.center,
-                                            children: List.generate(detail.imageUrls.length, (i) {
-                                              final selected = i == _imageIndex;
-                                              return AnimatedContainer(
-                                                duration: const Duration(milliseconds: 180),
-                                                margin: const EdgeInsets.symmetric(horizontal: 3),
-                                                width: selected ? 18 : 6,
-                                                height: 6,
-                                                decoration: BoxDecoration(
-                                                  color: selected ? const Color(0xFF6C63FF) : colors.border,
-                                                  borderRadius: BorderRadius.circular(999),
-                                                ),
-                                              );
-                                            }),
-                                          ),
-                                        ),
-                                    ],
-                                  ),
-                                ),
-                                if (detail.imageUrls.length > 1)
-                                  Padding(
-                                    padding: const EdgeInsets.only(top: 12),
-                                    child: GalleryThumbStrip(
-                                      itemCount: detail.imageUrls.length,
-                                      selectedIndex: _imageIndex,
-                                      fadeColor: colors.background,
-                                      itemBuilder: (_, i) {
-                                        final selected = i == _imageIndex;
-                                        return AnimatedContainer(
-                                          duration: const Duration(milliseconds: 180),
-                                          decoration: BoxDecoration(
-                                            borderRadius: BorderRadius.circular(12),
-                                            border: Border.all(
-                                              color: selected ? const Color(0xFF6C63FF) : colors.border,
-                                              width: selected ? 2 : 1,
-                                            ),
-                                            color: colors.surface,
-                                          ),
-                                          clipBehavior: Clip.antiAlias,
-                                          child: Padding(
-                                            padding: const EdgeInsets.all(6),
-                                            child: CatalogImage(
-                                              url: _galleryPreview(detail, i) ?? detail.imageUrls[i],
-                                              fit: BoxFit.contain,
-                                              showLoadingIndicator: false,
-                                            ),
-                                          ),
-                                        );
-                                      },
-                                      onSelected: (i) {
-                                        setState(() => _imageIndex = i);
-                                        _imagePageController.animateToPage(
-                                          i,
-                                          duration: const Duration(milliseconds: 220),
-                                          curve: Curves.easeOut,
-                                        );
-                                      },
-                                    ),
-                                  ),
-                              ],
+          ? Center(
+              child: Text(
+                _detailError!,
+                style: const TextStyle(color: Colors.redAccent),
+              ),
+            )
+          : detail == null
+          ? Center(
+              child: Text(
+                'Product not found.',
+                style: TextStyle(color: colors.textPrimary),
+              ),
+            )
+          : SingleChildScrollView(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Padding(
+                    padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+                    child: Column(
+                      children: [
+                        AspectRatio(
+                          aspectRatio: 1,
+                          child: Container(
+                            width: double.infinity,
+                            decoration: BoxDecoration(
+                              color: kBrowseProductImageWell,
+                              borderRadius: BorderRadius.circular(20),
+                              border: Border.all(color: colors.border),
                             ),
-                          ),
-                          Padding(
-                            padding: const EdgeInsets.all(20.0),
-                            child: Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                            clipBehavior: Clip.antiAlias,
+                            child: Stack(
+                              fit: StackFit.expand,
                               children: [
-                                Row(
-                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                  children: [
-                                    Expanded(
-                                      child: Text(
-                                        detail.title,
-                                        style: TextStyle(fontSize: 24, fontWeight: FontWeight.bold, color: colors.textPrimary),
-                                      ),
-                                    ),
-                                    if (detail.isChemical)
-                                      Container(
-                                        margin: const EdgeInsets.only(left: 8),
-                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                                        decoration: BoxDecoration(
-                                          color: context.isDarkMode
-                                              ? const Color(0xFF38BDF8).withValues(alpha: 0.15)
-                                              : const Color(0xFFE0F2FE),
-                                          borderRadius: BorderRadius.circular(12),
-                                          border: Border.all(
-                                            color: context.isDarkMode
-                                                ? const Color(0xFF38BDF8).withValues(alpha: 0.35)
-                                                : const Color(0xFFBAE6FD),
-                                          ),
-                                        ),
-                                        child: Text(
-                                          'Chemical',
-                                          style: TextStyle(
-                                            color: context.isDarkMode
-                                                ? const Color(0xFF38BDF8)
-                                                : const Color(0xFF0369A1),
-                                            fontSize: 12,
-                                            fontWeight: FontWeight.w700,
-                                          ),
-                                        ),
-                                      ),
-                                  ],
-                                ),
-                                if (badge != null && badge['label'] != 'Available') ...[
-                                  const SizedBox(height: 8),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                                    decoration: BoxDecoration(
-                                      color: Color(badge['color']),
-                                      borderRadius: BorderRadius.circular(12),
-                                    ),
-                                    child: Text(
-                                      badge['label'],
-                                      style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
-                                    ),
-                                  ),
-                                  const SizedBox(height: 16),
-                                ] else
-                                  const SizedBox(height: 16),
-                                // Pricing / packaging sizes
-                                _sectionCard(
-                                  title: 'Pricing',
-                                  child: activeVariants.isNotEmpty
-                                      ? Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                detail.imageUrls.isEmpty
+                                    ? const Center(
+                                        child: Column(
+                                          mainAxisSize: MainAxisSize.min,
                                           children: [
-                                            Text('Available Packaging Sizes', style: TextStyle(color: colors.textMuted, fontSize: 12, fontWeight: FontWeight.w600)),
-                                            const SizedBox(height: 10),
-                                            Wrap(
-                                              spacing: 8,
-                                              runSpacing: 8,
-                                              children: activeVariants.map((v) {
-                                                final stock = detail.variantStockOf(v.id);
-                                                final selected = v.id == _selectedVariantId;
-                                                final out = stock <= 0;
-                                                return GestureDetector(
-                                                  onTap: () => setState(() => _selectedVariantId = v.id),
-                                                  child: Container(
-                                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-                                                    decoration: BoxDecoration(
-                                                      color: selected ? const Color(0xFF6C63FF) : colors.surfaceElevated,
-                                                      borderRadius: BorderRadius.circular(10),
-                                                      border: Border.all(
-                                                        color: selected
-                                                            ? const Color(0xFF6C63FF)
-                                                            : colors.border,
-                                                        style: out ? BorderStyle.solid : BorderStyle.solid,
-                                                      ),
-                                                    ),
-                                                    child: Column(
-                                                      crossAxisAlignment: CrossAxisAlignment.start,
-                                                      children: [
-                                                        Text(v.sizeLabel, style: TextStyle(color: selected ? Colors.white : colors.textPrimary, fontWeight: FontWeight.bold, fontSize: 13)),
-                                                        Text(
-                                                          out ? 'Out of stock' : '$stock in stock',
-                                                          style: TextStyle(
-                                                            color: selected
-                                                                ? Colors.white70
-                                                                : (out ? Colors.redAccent : colors.textMuted),
-                                                            fontSize: 11,
-                                                          ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  ),
-                                                );
-                                              }).toList(),
+                                            Icon(
+                                              Icons
+                                                  .image_not_supported_outlined,
+                                              color: Color(0xFF94A3B8),
+                                              size: 44,
                                             ),
-                                            const SizedBox(height: 12),
-                                            Row(
-                                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                                              children: [
-                                                Text(
-                                                  'Price (${selectedVariant?.sizeLabel ?? ''})',
-                                                  style: TextStyle(color: colors.textSecondary),
-                                                ),
-                                                Text(
-                                                  formatPlanInr(selectedVariant?.buyPrice ?? 0),
-                                                  style: TextStyle(
-                                                    color: context.isDarkMode
-                                                        ? const Color(0xFF60A5FA)
-                                                        : const Color(0xFF2563EB),
-                                                    fontSize: 18,
-                                                    fontWeight: FontWeight.bold,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                            if (cannotFulfill) ...[
-                                              const SizedBox(height: 12),
-                                              Container(
-                                                width: double.infinity,
-                                                padding: const EdgeInsets.all(12),
-                                                decoration: BoxDecoration(
-                                                  color: Colors.amber.withValues(alpha: 0.12),
-                                                  borderRadius: BorderRadius.circular(10),
-                                                  border: Border.all(color: Colors.amber.withValues(alpha: 0.4)),
-                                                ),
-                                                child: Column(
-                                                  crossAxisAlignment: CrossAxisAlignment.start,
-                                                  children: [
-                                                    Text(
-                                                      '${selectedVariant.sizeLabel} \u00d7 $_quantity isn\'t available${currentQty > 0 ? ' (only $currentQty in stock)' : ' (out of stock)'}.',
-                                                      style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.w600, fontSize: 12),
-                                                    ),
-                                                    if (altVariants.isNotEmpty) ...[
-                                                      const SizedBox(height: 8),
-                                                      const Text('Try another packaging size:', style: TextStyle(color: Colors.amber, fontSize: 12)),
-                                                      const SizedBox(height: 6),
-                                                      Wrap(
-                                                        spacing: 6,
-                                                        runSpacing: 6,
-                                                        children: altVariants.map((v) {
-                                                          final stock = detail.variantStockOf(v.id);
-                                                          return ActionChip(
-                                                            label: Text('${v.sizeLabel} · ${formatPlanInr(v.buyPrice)} · $stock'),
-                                                            onPressed: () => setState(() => _selectedVariantId = v.id),
-                                                            backgroundColor: Colors.amber.withValues(alpha: 0.15),
-                                                            labelStyle: const TextStyle(color: Colors.amber, fontSize: 11),
-                                                          );
-                                                        }).toList(),
-                                                      ),
-                                                    ],
-                                                  ],
-                                                ),
-                                              ),
-                                            ],
-                                          ],
-                                        )
-                                      : Column(
-                                          children: [
-                                            // Deposit applies to a rental return only.
-                                            if (detail.canRent && actualOrderType == 'rent')
-                                              _priceRow(
-                                                'Security deposit',
-                                                formatPlanInr(detail.securityDeposit),
-                                              ),
-                                            if (detail.canBuy)
-                                              _priceRow(
-                                                'Buy price',
-                                                '${formatPlanInr(detail.buyPrice ?? 0)}${detail.baseUnit != null ? ' / ${detail.baseUnit}' : ' / Unit'}',
-                                                highlight: true,
-                                              ),
-                                          ],
-                                        ),
-                                ),
-
-                                if (detail.prescriptionRequired) ...[
-                                  const SizedBox(height: 12),
-                                  Container(
-                                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                    decoration: BoxDecoration(
-                                      color: context.isDarkMode
-                                          ? Colors.amber.withValues(alpha: 0.1)
-                                          : const Color(0xFFFFFBEB),
-                                      borderRadius: BorderRadius.circular(10),
-                                      border: Border.all(
-                                        color: context.isDarkMode
-                                            ? Colors.amber.withValues(alpha: 0.35)
-                                            : const Color(0xFFFDE68A),
-                                      ),
-                                    ),
-                                    child: Row(
-                                      children: [
-                                        Icon(
-                                          Icons.medical_information,
-                                          color: context.isDarkMode ? Colors.amber : const Color(0xFFD97706),
-                                          size: 18,
-                                        ),
-                                        const SizedBox(width: 8),
-                                        Expanded(
-                                          child: Text(
-                                            'A prescription image or PDF can be added at checkout.',
-                                            style: TextStyle(
-                                              color: context.isDarkMode ? Colors.amber : const Color(0xFF92400E),
-                                              fontSize: 13,
-                                              fontWeight: FontWeight.w500,
-                                            ),
-                                          ),
-                                        ),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-
-                                if (detail.hasChemSpecs) ...[
-                                  const SizedBox(height: 16),
-                                  _sectionCard(
-                                    title: 'Chemical Specifications',
-                                    child: Wrap(
-                                      spacing: 16,
-                                      runSpacing: 12,
-                                      children: [
-                                        if (detail.casNumber != null) _specItem('CAS Number', detail.casNumber!),
-                                        if (detail.chemicalFormula != null) _specItem('Formula', detail.chemicalFormula!),
-                                        if (detail.purityPercentage != null)
-                                          _specItem('Purity', '${detail.purityPercentage}%'),
-                                        if (detail.molecularWeight != null)
-                                          _specItem('Molecular Weight', '${detail.molecularWeight} g/mol'),
-                                      ],
-                                    ),
-                                  ),
-                                ],
-
-                                const SizedBox(height: 16),
-                                Text('Description', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: colors.textPrimary)),
-                                const SizedBox(height: 8),
-                                Text(
-                                  detail.description.isNotEmpty
-                                      ? detail.description
-                                      : 'No description provided for this product.',
-                                  style: TextStyle(color: colors.textSecondary, fontSize: 15, height: 1.5),
-                                ),
-
-                                if (detail.documents.isNotEmpty) ...[
-                                  const SizedBox(height: 12),
-                                  _documentsInline(detail.documents),
-                                ],
-
-                                const SizedBox(height: 24),
-                                Text('Order Options', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold, color: colors.textPrimary)),
-                                const SizedBox(height: 8),
-                                const RequiredFieldsNote(padding: EdgeInsets.only(bottom: 12)),
-
-                                if (detail.canRent && detail.canBuy)
-                                  Row(
-                                    children: [
-                                      Expanded(child: _buildTypeOption('rent', 'Rent')),
-                                      const SizedBox(width: 12),
-                                      Expanded(child: _buildTypeOption('buy', 'Buy')),
-                                    ],
-                                  )
-                                else
-                                  Container(
-                                    width: double.infinity,
-                                    padding: const EdgeInsets.symmetric(vertical: 12),
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF6C63FF).withValues(alpha: 0.2),
-                                      borderRadius: BorderRadius.circular(12),
-                                      border: Border.all(color: const Color(0xFF6C63FF)),
-                                    ),
-                                    alignment: Alignment.center,
-                                    child: Text(
-                                      actualOrderType == 'buy' ? 'Buy only' : 'Rent only',
-                                      style: const TextStyle(color: Color(0xFF6C63FF), fontWeight: FontWeight.bold),
-                                    ),
-                                  ),
-
-                                if (actualOrderType == 'rent') ...[
-                                  const SizedBox(height: 16),
-                                  if (detail.hasActiveRentalPlans) ...[
-                                    Builder(
-                                      builder: (context) {
-                                        final colors = context.appColors;
-                                        final plans = detail.activeRentalPlans;
-                                        final bestId = bestSavingsPlanId(plans);
-                                        final selectedSavings =
-                                            selectedPlan == null ? 0.0 : planSavings(selectedPlan);
-                                        final selectedPct =
-                                            selectedPlan == null ? 0 : planDiscountPercent(selectedPlan);
-                                        final selectedIsBestDeal = selectedPlan != null &&
-                                            bestId == selectedPlan.id &&
-                                            selectedPct > 0;
-                                        final legend = _tierLegend(plans);
-
-                                        final isDark = context.isDarkMode;
-                                        final recommended = selectedPlan?.isRecommended == true;
-                                        final borderColor = recommended
-                                            ? const Color(0xFF3B82F6)
-                                            : (isDark ? colors.border : const Color(0xFFE5E7EB));
-                                        final priceColor = recommended
-                                            ? (isDark ? const Color(0xFF60A5FA) : const Color(0xFF2563EB))
-                                            : (isDark ? const Color(0xFFA78BFA) : colors.accent);
-                                        final cardBg = recommended
-                                            ? (isDark ? const Color(0xFF1E3A5F).withValues(alpha: 0.35) : const Color(0xFFEFF6FF))
-                                            : colors.surface;
-
-                                        return Column(
-                                          crossAxisAlignment: CrossAxisAlignment.start,
-                                          children: [
-                                            RequiredLabel(
-                                              'Rental period',
-                                              required: true,
+                                            SizedBox(height: 8),
+                                            Text(
+                                              'No product image',
                                               style: TextStyle(
-                                                color: colors.textPrimary,
-                                                fontSize: 16,
-                                                fontWeight: FontWeight.w800,
-                                              ),
-                                            ),
-                                            const SizedBox(height: 2),
-                                            const Text(
-                                              'More days, more savings',
-                                              style: TextStyle(
-                                                color: Color(0xFFA78BFA),
+                                                color: Color(0xFF64748B),
                                                 fontSize: 13,
-                                                fontWeight: FontWeight.w600,
                                               ),
                                             ),
-                                            if (legend.isNotEmpty) ...[
-                                              const SizedBox(height: 8),
-                                              SingleChildScrollView(
-                                                scrollDirection: Axis.horizontal,
-                                                child: Row(
-                                                  children: [
-                                                    for (var i = 0; i < legend.length; i++) ...[
-                                                      if (i > 0) const SizedBox(width: 6),
-                                                      Container(
-                                                        padding: const EdgeInsets.symmetric(
-                                                          horizontal: 8,
-                                                          vertical: 5,
-                                                        ),
-                                                        decoration: BoxDecoration(
-                                                          color: colors.surfaceElevated,
-                                                          borderRadius: BorderRadius.circular(999),
-                                                          border: Border.all(color: colors.border),
-                                                        ),
-                                                        child: Row(
-                                                          mainAxisSize: MainAxisSize.min,
-                                                          children: [
-                                                            CatalogImage(
-                                                              url: legend[i].url,
-                                                              width: 18,
-                                                              height: 18,
-                                                              fit: BoxFit.contain,
-                                                              showLoadingIndicator: false,
-                                                            ),
-                                                            const SizedBox(width: 5),
-                                                            Text(
-                                                              legend[i].label,
-                                                              style: TextStyle(
-                                                                color: colors.textSecondary,
-                                                                fontSize: 11,
-                                                                fontWeight: FontWeight.w600,
-                                                              ),
-                                                            ),
-                                                          ],
-                                                        ),
-                                                      ),
-                                                    ],
-                                                  ],
-                                                ),
-                                              ),
-                                            ],
-                                            const SizedBox(height: 10),
-                                            InkWell(
-                                              onTap: () => _openRentalPeriodSheet(
-                                                detail: detail,
-                                                unitBuyPrice: unitBuyPrice,
-                                              ),
-                                              borderRadius: BorderRadius.circular(16),
-                                              child: Container(
-                                                width: double.infinity,
-                                                padding: const EdgeInsets.all(14),
-                                                decoration: BoxDecoration(
-                                                  color: cardBg,
-                                                  borderRadius: BorderRadius.circular(16),
-                                                  border: Border.all(color: borderColor, width: 1.5),
-                                                ),
-                                                child: Row(
-                                                  crossAxisAlignment: CrossAxisAlignment.center,
-                                                  children: [
-                                                    Expanded(
-                                                      child: Column(
-                                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                                        children: [
-                                                          Wrap(
-                                                            crossAxisAlignment: WrapCrossAlignment.center,
-                                                            spacing: 6,
-                                                            runSpacing: 4,
-                                                            children: [
-                                                              Text(
-                                                                selectedPlan == null
-                                                                    ? 'Choose a rental plan'
-                                                                    : dayPlanTitle(
-                                                                        selectedPlan.durationDays,
-                                                                        selectedPlan.durationLabel,
-                                                                      ),
-                                                                style: TextStyle(
-                                                                  color: colors.textPrimary,
-                                                                  fontWeight: FontWeight.w800,
-                                                                  fontSize: 15,
-                                                                ),
-                                                              ),
-                                                              if (recommended) _mostPopularBadge(),
-                                                              if (selectedIsBestDeal) _bestDealBadge(),
-                                                            ],
-                                                          ),
-                                                          if (selectedPlan != null) ...[
-                                                            const SizedBox(height: 4),
-                                                            Text(
-                                                              planTriggerMetaLine(selectedPlan),
-                                                              style: TextStyle(
-                                                                color: colors.textMuted,
-                                                                fontSize: 12,
-                                                                fontWeight: FontWeight.w500,
-                                                              ),
-                                                            ),
-                                                            if (selectedPct > 0 || selectedSavings > 0) ...[
-                                                              const SizedBox(height: 8),
-                                                              Wrap(
-                                                                crossAxisAlignment: WrapCrossAlignment.center,
-                                                                spacing: 8,
-                                                                runSpacing: 4,
-                                                                children: [
-                                                                  if (selectedPct > 0) _pctOffBadge(selectedPct),
-                                                                  if (selectedSavings > 0)
-                                                                    _saveAmountLabel(selectedSavings),
-                                                                ],
-                                                              ),
-                                                            ],
-                                                          ],
-                                                        ],
-                                                      ),
-                                                    ),
-                                                    const SizedBox(width: 8),
-                                                    Row(
-                                                      mainAxisSize: MainAxisSize.min,
-                                                      crossAxisAlignment: CrossAxisAlignment.center,
-                                                      children: [
-                                                        if (_planIconAvatar(selectedPlan, size: 32)
-                                                            case final icon?) ...[
-                                                          icon,
-                                                          const SizedBox(width: 8),
-                                                        ],
-                                                        Column(
-                                                          crossAxisAlignment: CrossAxisAlignment.end,
-                                                          children: [
-                                                            Text(
-                                                              selectedPlan != null
-                                                                  ? formatPlanInr(selectedPlan.finalRentalPrice)
-                                                                  : '\u2014',
-                                                              style: TextStyle(
-                                                                color: priceColor,
-                                                                fontWeight: FontWeight.w800,
-                                                                fontSize: 18,
-                                                                height: 1.1,
-                                                              ),
-                                                            ),
-                                                            if (selectedSavings > 0) ...[
-                                                              const SizedBox(height: 4),
-                                                              StruckPrice(
-                                                                formatPlanInr(selectedPlan!.normalPrice),
-                                                                style: const TextStyle(
-                                                                  fontSize: 12,
-                                                                  fontWeight: FontWeight.w600,
-                                                                ),
-                                                              ),
-                                                            ],
-                                                          ],
-                                                        ),
-                                                        const SizedBox(width: 2),
-                                                        Padding(
-                                                          padding: const EdgeInsets.only(top: 2),
-                                                          child: Icon(
-                                                            Icons.keyboard_arrow_down_rounded,
-                                                            color: colors.textMuted,
-                                                          ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                            ),
-                                            const SizedBox(height: 8),
-                                            const Row(
-                                              children: [
-                                                Icon(Icons.local_shipping_outlined,
-                                                    size: 14, color: Color(0xFFA78BFA)),
-                                                SizedBox(width: 6),
-                                                Text(
-                                                  'Starts when the order is delivered',
-                                                  style: TextStyle(
-                                                    color: Color(0xFFA78BFA),
-                                                    fontSize: 12,
-                                                    fontWeight: FontWeight.w600,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                            if (selectedPlan != null) ...[
-                                              const SizedBox(height: 12),
-                                              Container(
-                                                width: double.infinity,
-                                                decoration: BoxDecoration(
-                                                  color: colors.surfaceElevated,
-                                                  borderRadius: BorderRadius.circular(16),
-                                                  border: Border.all(color: colors.border),
-                                                ),
-                                                child: Column(
-                                                  children: [
-                                                    Padding(
-                                                      padding: const EdgeInsets.fromLTRB(16, 14, 10, 14),
-                                                      child: Row(
-                                                        children: [
-                                                          Expanded(
-                                                            child: Column(
-                                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                                              children: [
-                                                                RequiredLabel(
-                                                                  'Quantity',
-                                                                  required: true,
-                                                                  style: TextStyle(
-                                                                    color: colors.textPrimary,
-                                                                    fontSize: 14,
-                                                                    fontWeight: FontWeight.w800,
-                                                                  ),
-                                                                ),
-                                                                const SizedBox(height: 2),
-                                                                Text(
-                                                                  _availableStockCaption(
-                                                                    currentQty: currentQty,
-                                                                    selectedVariant: selectedVariant,
-                                                                    isChemical: detail.isChemical,
-                                                                  ),
-                                                                  style: TextStyle(
-                                                                    color: colors.textMuted,
-                                                                    fontSize: 12,
-                                                                    fontWeight: FontWeight.w500,
-                                                                  ),
-                                                                ),
-                                                              ],
-                                                            ),
-                                                          ),
-                                                          Row(
-                                                            children: [
-                                                              IconButton(
-                                                                icon: Icon(
-                                                                  Icons.remove_circle_outline,
-                                                                  color: _quantity > 1
-                                                                      ? colors.textPrimary
-                                                                      : colors.textMuted,
-                                                                ),
-                                                                onPressed: _quantity > 1
-                                                                    ? () async {
-                                                                        final next = _quantity - 1;
-                                                                        final blocked =
-                                                                            await _promptRentToBuyIfNeeded(
-                                                                          detail: detail,
-                                                                          unitBuyPrice: unitBuyPrice,
-                                                                          nextQty: next,
-                                                                        );
-                                                                        if (blocked || !mounted) return;
-                                                                        setState(() => _quantity = next);
-                                                                      }
-                                                                    : null,
-                                                              ),
-                                                              Text(
-                                                                '$_quantity',
-                                                                style: TextStyle(
-                                                                  color: colors.textPrimary,
-                                                                  fontSize: 16,
-                                                                  fontWeight: FontWeight.bold,
-                                                                ),
-                                                              ),
-                                                              IconButton(
-                                                                icon: Icon(
-                                                                  Icons.add_circle_outline,
-                                                                  color: _quantity <
-                                                                          (currentQty > 0 ? currentQty : 1)
-                                                                      ? colors.textPrimary
-                                                                      : colors.textMuted,
-                                                                ),
-                                                                onPressed: _quantity <
-                                                                        (currentQty > 0 ? currentQty : 1)
-                                                                    ? () async {
-                                                                        final next = _quantity + 1;
-                                                                        final blocked =
-                                                                            await _promptRentToBuyIfNeeded(
-                                                                          detail: detail,
-                                                                          unitBuyPrice: unitBuyPrice,
-                                                                          nextQty: next,
-                                                                        );
-                                                                        if (blocked || !mounted) return;
-                                                                        setState(() => _quantity = next);
-                                                                      }
-                                                                    : null,
-                                                              ),
-                                                            ],
-                                                          ),
-                                                        ],
-                                                      ),
-                                                    ),
-                                                    Container(
-                                                      width: double.infinity,
-                                                      padding: const EdgeInsets.fromLTRB(16, 14, 16, 16),
-                                                      decoration: BoxDecoration(
-                                                        color: colors.background,
-                                                        border: Border(
-                                                          top: BorderSide(color: colors.border),
-                                                        ),
-                                                      ),
-                                                      child: Column(
-                                                        children: [
-                                                          Container(
-                                                            padding: const EdgeInsets.symmetric(
-                                                              horizontal: 12,
-                                                              vertical: 12,
-                                                            ),
-                                                            decoration: BoxDecoration(
-                                                              color: colors.surface,
-                                                              borderRadius: BorderRadius.circular(12),
-                                                              border: Border.all(color: colors.border),
-                                                            ),
-                                                            child: Row(
-                                                              children: [
-                                                                Icon(
-                                                                  Icons.verified_user_outlined,
-                                                                  size: 18,
-                                                                  color: colors.success,
-                                                                ),
-                                                                const SizedBox(width: 8),
-                                                                Expanded(
-                                                                  child: Text(
-                                                                    'Refundable deposit',
-                                                                    style: TextStyle(
-                                                                      color: colors.textPrimary,
-                                                                      fontSize: 13,
-                                                                      fontWeight: FontWeight.w700,
-                                                                    ),
-                                                                  ),
-                                                                ),
-                                                                Text(
-                                                                  formatPlanInr(
-                                                                    detail.securityDeposit * _quantity,
-                                                                  ),
-                                                                  style: TextStyle(
-                                                                    color: colors.textPrimary,
-                                                                    fontSize: 15,
-                                                                    fontWeight: FontWeight.w800,
-                                                                  ),
-                                                                ),
-                                                              ],
-                                                            ),
-                                                          ),
-                                                          const SizedBox(height: 12),
-                                                          Row(
-                                                            crossAxisAlignment: CrossAxisAlignment.end,
-                                                            children: [
-                                                              Expanded(
-                                                                child: Column(
-                                                                  crossAxisAlignment:
-                                                                      CrossAxisAlignment.start,
-                                                                  children: [
-                                                                    Text(
-                                                                      'You pay for rent',
-                                                                      style: TextStyle(
-                                                                        color: colors.textPrimary,
-                                                                        fontSize: 14,
-                                                                        fontWeight: FontWeight.w800,
-                                                                      ),
-                                                                    ),
-                                                                    const SizedBox(height: 4),
-                                                                    Text(
-                                                                      _quantity > 1
-                                                                          ? '${formatPlanInr(selectedPlan.finalRentalPrice)} \u00d7 $_quantity units'
-                                                                          : 'Excludes deposit & delivery',
-                                                                      style: TextStyle(
-                                                                        color: colors.textMuted,
-                                                                        fontSize: 12,
-                                                                        fontWeight: FontWeight.w500,
-                                                                      ),
-                                                                    ),
-                                                                  ],
-                                                                ),
-                                                              ),
-                                                              Text(
-                                                                formatPlanInr(
-                                                                  selectedPlan.finalRentalPrice *
-                                                                      _quantity,
-                                                                ),
-                                                                style: TextStyle(
-                                                                  color: priceColor,
-                                                                  fontSize: 24,
-                                                                  fontWeight: FontWeight.w800,
-                                                                  height: 1,
-                                                                ),
-                                                              ),
-                                                            ],
-                                                          ),
-                                                        ],
-                                                      ),
-                                                    ),
-                                                  ],
-                                                ),
-                                              ),
-                                            ],
                                           ],
-                                        );
-                                      },
-                                    ),
-                                  ] else ...[
-                                    Container(
-                                      width: double.infinity,
-                                      padding: const EdgeInsets.all(14),
-                                      decoration: BoxDecoration(
-                                        color: context.isDarkMode
-                                            ? const Color(0xFFF59E0B).withValues(alpha: 0.12)
-                                            : const Color(0xFFFFFBEB),
-                                        borderRadius: BorderRadius.circular(12),
-                                        border: Border.all(
-                                          color: context.isDarkMode
-                                              ? const Color(0xFFF59E0B).withValues(alpha: 0.45)
-                                              : const Color(0xFFFDE68A),
                                         ),
-                                      ),
-                                      child: Row(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Icon(
-                                            Icons.info_outline,
-                                            color: context.isDarkMode ? const Color(0xFFFBBF24) : const Color(0xFFD97706),
-                                            size: 18,
-                                          ),
-                                          const SizedBox(width: 10),
-                                          Expanded(
-                                            child: Column(
-                                              crossAxisAlignment: CrossAxisAlignment.start,
-                                              children: [
-                                                Text(
-                                                  'Rental plans not configured',
-                                                  style: TextStyle(
-                                                    color: context.isDarkMode ? const Color(0xFFFBBF24) : const Color(0xFFD97706),
-                                                    fontWeight: FontWeight.w700,
-                                                    fontSize: 14,
-                                                  ),
-                                                ),
-                                                const SizedBox(height: 4),
-                                                Text(
-                                                  'This product cannot be rented until an admin adds rental pricing plans.',
-                                                  style: TextStyle(
-                                                    color: context.isDarkMode ? Colors.white70 : const Color(0xFF92400E),
-                                                    fontSize: 12,
-                                                    height: 1.35,
-                                                  ),
-                                                ),
-                                              ],
-                                            ),
-                                          ),
-                                        ],
-                                      ),
-                                    ),
-                                  ],
-                                ],
-
-                                 if (actualOrderType == 'buy') ...[
-                                   const SizedBox(height: 12),
-                                   Container(
-                                     width: double.infinity,
-                                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
-                                     decoration: BoxDecoration(
-                                       color: context.isDarkMode
-                                           ? const Color(0xFF1E3A5F).withValues(alpha: 0.35)
-                                           : const Color(0xFFEFF6FF),
-                                       borderRadius: BorderRadius.circular(12),
-                                       border: Border.all(
-                                         color: context.isDarkMode
-                                             ? const Color(0xFF60A5FA).withValues(alpha: 0.45)
-                                             : const Color(0xFFBFDBFE),
-                                       ),
-                                     ),
-                                     child: Column(
-                                       crossAxisAlignment: CrossAxisAlignment.start,
-                                       children: [
-                                         Text(
-                                           'You pay to buy',
-                                           style: TextStyle(
-                                             color: colors.textMuted,
-                                             fontSize: 12,
-                                             fontWeight: FontWeight.w500,
-                                           ),
-                                         ),
-                                         const SizedBox(height: 4),
-                                         Text(
-                                           formatPlanInr(estimate),
-                                           style: TextStyle(
-                                             color: context.isDarkMode
-                                                 ? const Color(0xFF60A5FA)
-                                                 : const Color(0xFF2563EB),
-                                             fontSize: 30,
-                                             fontWeight: FontWeight.w800,
-                                             height: 1.1,
-                                             letterSpacing: -0.4,
-                                           ),
-                                         ),
-                                         const SizedBox(height: 4),
-                                         Text(
-                                           'Own the unit · no rental return',
-                                           style: TextStyle(
-                                             color: colors.textMuted,
-                                             fontSize: 12,
-                                             fontWeight: FontWeight.w500,
-                                           ),
-                                         ),
-                                       ],
-                                     ),
-                                   ),
-                                 ],
-
-                                 // Quantity lives inside the rent checkout strip when plans exist.
-                                 if (!(actualOrderType == 'rent' &&
-                                     detail.hasActiveRentalPlans &&
-                                     selectedPlan != null)) ...[
-                                   const SizedBox(height: 12),
-                                   Container(
-                                     width: double.infinity,
-                                     decoration: BoxDecoration(
-                                       color: colors.surfaceElevated,
-                                       borderRadius: BorderRadius.circular(16),
-                                       border: Border.all(color: colors.border),
-                                     ),
-                                     child: Padding(
-                                       padding: const EdgeInsets.fromLTRB(16, 14, 10, 14),
-                                       child: Row(
-                                         children: [
-                                           Expanded(
-                                             child: Column(
-                                               crossAxisAlignment: CrossAxisAlignment.start,
-                                               children: [
-                                                 RequiredLabel(
-                                                   'Quantity',
-                                                   required: true,
-                                                   style: TextStyle(
-                                                     color: colors.textPrimary,
-                                                     fontSize: 14,
-                                                     fontWeight: FontWeight.w800,
-                                                   ),
-                                                 ),
-                                                 const SizedBox(height: 2),
-                                                 Text(
-                                                   _availableStockCaption(
-                                                     currentQty: currentQty,
-                                                     selectedVariant: selectedVariant,
-                                                     isChemical: detail.isChemical,
-                                                   ),
-                                                   style: TextStyle(
-                                                     color: colors.textMuted,
-                                                     fontSize: 12,
-                                                     fontWeight: FontWeight.w500,
-                                                   ),
-                                                 ),
-                                               ],
-                                             ),
-                                           ),
-                                           Row(
-                                             children: [
-                                               IconButton(
-                                                 icon: Icon(
-                                                   Icons.remove_circle_outline,
-                                                   color: _quantity > 1
-                                                       ? colors.textPrimary
-                                                       : colors.textMuted,
-                                                 ),
-                                                 onPressed: _quantity > 1
-                                                     ? () async {
-                                                         final next = _quantity - 1;
-                                                         if (actualOrderType == 'rent') {
-                                                           final blocked =
-                                                               await _promptRentToBuyIfNeeded(
-                                                             detail: detail,
-                                                             unitBuyPrice: unitBuyPrice,
-                                                             nextQty: next,
-                                                           );
-                                                           if (blocked || !mounted) return;
-                                                         }
-                                                         setState(() => _quantity = next);
-                                                       }
-                                                     : null,
-                                               ),
-                                               Text(
-                                                 '$_quantity',
-                                                 style: TextStyle(
-                                                   color: colors.textPrimary,
-                                                   fontSize: 16,
-                                                   fontWeight: FontWeight.bold,
-                                                 ),
-                                               ),
-                                               IconButton(
-                                                 icon: Icon(
-                                                   Icons.add_circle_outline,
-                                                   color: _quantity <
-                                                           (currentQty > 0 ? currentQty : 1)
-                                                       ? colors.textPrimary
-                                                       : colors.textMuted,
-                                                 ),
-                                                 onPressed: _quantity <
-                                                         (currentQty > 0 ? currentQty : 1)
-                                                     ? () async {
-                                                         final next = _quantity + 1;
-                                                         if (actualOrderType == 'rent') {
-                                                           final blocked =
-                                                               await _promptRentToBuyIfNeeded(
-                                                             detail: detail,
-                                                             unitBuyPrice: unitBuyPrice,
-                                                             nextQty: next,
-                                                           );
-                                                           if (blocked || !mounted) return;
-                                                         }
-                                                         setState(() => _quantity = next);
-                                                       }
-                                                     : null,
-                                               ),
-                                             ],
-                                           ),
-                                         ],
-                                       ),
-                                     ),
-                                   ),
-                                   if (actualOrderType != 'buy') ...[
-                                     const SizedBox(height: 8),
-                                     Text(
-                                       'Estimated rent: ${formatPlanInr(estimate)}',
-                                       style: TextStyle(color: colors.textMuted, fontSize: 13),
-                                     ),
-                                   ],
-                                 ],
-                                const SizedBox(height: 16),
-                                ListingDeliveryCheck(
-                                  quoteLine: {
-                                    'listingId': detail.id,
-                                    'quantity': _quantity,
-                                    'rentalDays': actualOrderType == 'buy'
-                                        ? 0
-                                        : (selectedPlan?.durationDays ?? 0),
-                                    'rentalPeriodUnit': rentalUnitDay,
-                                    'orderType': actualOrderType,
-                                    if (_selectedVariantId != null && _selectedVariantId!.isNotEmpty)
-                                      'productVariantId': _selectedVariantId,
-                                    if (actualOrderType == 'rent' && selectedPlan != null)
-                                      'rentalPricingPlanId': selectedPlan.id,
-                                  },
-                                ),
-                                if (_relatedProducts.isNotEmpty) ...[
-                                  const SizedBox(height: 24),
-                                  Text(
-                                    'Related Products',
-                                    style: TextStyle(
-                                      fontSize: 18,
-                                      fontWeight: FontWeight.bold,
-                                      color: colors.textPrimary,
-                                    ),
-                                  ),
-                                  const SizedBox(height: 14),
-                                  GridView.builder(
-                                    physics: const NeverScrollableScrollPhysics(),
-                                    shrinkWrap: true,
-                                    padding: EdgeInsets.zero,
-                                    gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-                                      crossAxisCount: 2,
-                                      mainAxisSpacing: 14,
-                                      crossAxisSpacing: 12,
-                                      mainAxisExtent: kBrowseProductCardExtent,
-                                    ),
-                                    itemCount: _relatedProducts.length,
-                                    itemBuilder: (context, index) {
-                                      final product = _relatedProducts[index];
-                                      return BrowseProductCard(
-                                        product: product,
-                                        dimWhenInactive: true,
+                                      )
+                                    : GestureDetector(
                                         onTap: () {
                                           Navigator.push(
                                             context,
                                             MaterialPageRoute(
-                                              builder: (_) => ProductDetailScreen(
-                                                listingId: product.id,
-                                                previewImageUrl: product.primaryImageUrl,
-                                              ),
+                                              builder: (_) =>
+                                                  ProductImageViewerScreen(
+                                                    imageUrls: detail.imageUrls,
+                                                    thumbnails: detail
+                                                        .imageThumbnailUrls,
+                                                    placeholder:
+                                                        widget.previewImageUrl,
+                                                    initialIndex: _imageIndex,
+                                                    title: detail.title,
+                                                  ),
                                             ),
                                           );
                                         },
-                                      );
-                                    },
-                                  ),
-                                  const SizedBox(height: 16),
-                                  SizedBox(
-                                    width: double.infinity,
-                                    height: 46,
-                                    child: OutlinedButton(
-                                      onPressed: () {
-                                        Navigator.popUntil(context, (route) => route.isFirst);
-                                      },
-                                      style: OutlinedButton.styleFrom(
-                                        side: const BorderSide(color: Color(0xFF6C63FF), width: 1.5),
-                                        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                      ),
-                                      child: const Row(
-                                        mainAxisAlignment: MainAxisAlignment.center,
-                                        children: [
-                                          Text(
-                                            'View More',
-                                            style: TextStyle(
-                                              color: Color(0xFF6C63FF),
-                                              fontSize: 14,
-                                              fontWeight: FontWeight.w600,
+                                        child: PageView.builder(
+                                          controller: _imagePageController,
+                                          itemCount: detail.imageUrls.length,
+                                          onPageChanged: (i) =>
+                                              setState(() => _imageIndex = i),
+                                          itemBuilder: (_, i) => CatalogImage(
+                                            url: detail.imageUrls[i],
+                                            previewUrl: _galleryPreview(
+                                              detail,
+                                              i,
                                             ),
+                                            fit: BoxFit.contain,
+                                            showLoadingIndicator: false,
                                           ),
-                                          SizedBox(width: 6),
-                                          Icon(Icons.arrow_forward_rounded, color: Color(0xFF6C63FF), size: 18),
-                                        ],
+                                        ),
+                                      ),
+                                if (detail.imageUrls.isNotEmpty)
+                                  Positioned(
+                                    right: 12,
+                                    bottom: detail.imageUrls.length > 1
+                                        ? 28
+                                        : 12,
+                                    child: IgnorePointer(
+                                      child: Container(
+                                        padding: const EdgeInsets.symmetric(
+                                          horizontal: 10,
+                                          vertical: 6,
+                                        ),
+                                        decoration: BoxDecoration(
+                                          color: Colors.black.withValues(
+                                            alpha: 0.55,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            999,
+                                          ),
+                                        ),
+                                        child: const Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            Icon(
+                                              Icons.zoom_in_rounded,
+                                              color: Colors.white,
+                                              size: 14,
+                                            ),
+                                            SizedBox(width: 4),
+                                            Text(
+                                              'View & zoom',
+                                              style: TextStyle(
+                                                color: Colors.white,
+                                                fontSize: 11,
+                                                fontWeight: FontWeight.w600,
+                                              ),
+                                            ),
+                                          ],
+                                        ),
                                       ),
                                     ),
                                   ),
-                                ],
-                                SizedBox(height: 100 + navBarInset),
+                                if (detail.imageUrls.length > 1)
+                                  Positioned(
+                                    left: 0,
+                                    right: 0,
+                                    bottom: 12,
+                                    child: Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.center,
+                                      children: List.generate(
+                                        detail.imageUrls.length,
+                                        (i) {
+                                          final selected = i == _imageIndex;
+                                          return AnimatedContainer(
+                                            duration: const Duration(
+                                              milliseconds: 180,
+                                            ),
+                                            margin: const EdgeInsets.symmetric(
+                                              horizontal: 3,
+                                            ),
+                                            width: selected ? 18 : 6,
+                                            height: 6,
+                                            decoration: BoxDecoration(
+                                              color: selected
+                                                  ? const Color(0xFF6C63FF)
+                                                  : colors.border,
+                                              borderRadius:
+                                                  BorderRadius.circular(999),
+                                            ),
+                                          );
+                                        },
+                                      ),
+                                    ),
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ),
+                        if (detail.imageUrls.length > 1)
+                          Padding(
+                            padding: const EdgeInsets.only(top: 12),
+                            child: GalleryThumbStrip(
+                              itemCount: detail.imageUrls.length,
+                              selectedIndex: _imageIndex,
+                              fadeColor: colors.background,
+                              itemBuilder: (_, i) {
+                                final selected = i == _imageIndex;
+                                return AnimatedContainer(
+                                  duration: const Duration(milliseconds: 180),
+                                  decoration: BoxDecoration(
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(
+                                      color: selected
+                                          ? const Color(0xFF6C63FF)
+                                          : colors.border,
+                                      width: selected ? 2 : 1,
+                                    ),
+                                    color: kBrowseProductImageWell,
+                                  ),
+                                  clipBehavior: Clip.antiAlias,
+                                  child: CatalogImage(
+                                    url:
+                                        _galleryPreview(detail, i) ??
+                                        detail.imageUrls[i],
+                                    fit: BoxFit.contain,
+                                    showLoadingIndicator: false,
+                                  ),
+                                );
+                              },
+                              onSelected: (i) {
+                                setState(() => _imageIndex = i);
+                                _imagePageController.animateToPage(
+                                  i,
+                                  duration: const Duration(milliseconds: 220),
+                                  curve: Curves.easeOut,
+                                );
+                              },
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.all(20.0),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Row(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Expanded(
+                              child: Text(
+                                detail.title,
+                                style: TextStyle(
+                                  fontSize: 24,
+                                  fontWeight: FontWeight.bold,
+                                  color: colors.textPrimary,
+                                ),
+                              ),
+                            ),
+                            if (detail.isChemical)
+                              Container(
+                                margin: const EdgeInsets.only(left: 8),
+                                padding: const EdgeInsets.symmetric(
+                                  horizontal: 10,
+                                  vertical: 4,
+                                ),
+                                decoration: BoxDecoration(
+                                  color: context.isDarkMode
+                                      ? const Color(
+                                          0xFF38BDF8,
+                                        ).withValues(alpha: 0.15)
+                                      : const Color(0xFFE0F2FE),
+                                  borderRadius: BorderRadius.circular(12),
+                                  border: Border.all(
+                                    color: context.isDarkMode
+                                        ? const Color(
+                                            0xFF38BDF8,
+                                          ).withValues(alpha: 0.35)
+                                        : const Color(0xFFBAE6FD),
+                                  ),
+                                ),
+                                child: Text(
+                                  'Chemical',
+                                  style: TextStyle(
+                                    color: context.isDarkMode
+                                        ? const Color(0xFF38BDF8)
+                                        : const Color(0xFF0369A1),
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                  ),
+                                ),
+                              ),
+                          ],
+                        ),
+                        if (badge != null && badge['label'] != 'Available') ...[
+                          const SizedBox(height: 8),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 8,
+                              vertical: 4,
+                            ),
+                            decoration: BoxDecoration(
+                              color: Color(badge['color']),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Text(
+                              badge['label'],
+                              style: const TextStyle(
+                                color: Colors.white,
+                                fontSize: 12,
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(height: 16),
+                        ] else
+                          const SizedBox(height: 16),
+                        // Pricing / packaging sizes
+                        _sectionCard(
+                          title: 'Pricing',
+                          child: activeVariants.isNotEmpty
+                              ? Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      'Available Packaging Sizes',
+                                      style: TextStyle(
+                                        color: colors.textMuted,
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 10),
+                                    Wrap(
+                                      spacing: 8,
+                                      runSpacing: 8,
+                                      children: activeVariants.map((v) {
+                                        final stock = detail.variantStockOf(
+                                          v.id,
+                                        );
+                                        final selected =
+                                            v.id == _selectedVariantId;
+                                        final out = stock <= 0;
+                                        return GestureDetector(
+                                          onTap: () => setState(
+                                            () => _selectedVariantId = v.id,
+                                          ),
+                                          child: Container(
+                                            padding: const EdgeInsets.symmetric(
+                                              horizontal: 12,
+                                              vertical: 10,
+                                            ),
+                                            decoration: BoxDecoration(
+                                              color: selected
+                                                  ? const Color(0xFF6C63FF)
+                                                  : colors.surfaceElevated,
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                              border: Border.all(
+                                                color: selected
+                                                    ? const Color(0xFF6C63FF)
+                                                    : colors.border,
+                                                style: out
+                                                    ? BorderStyle.solid
+                                                    : BorderStyle.solid,
+                                              ),
+                                            ),
+                                            child: Column(
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.start,
+                                              children: [
+                                                Text(
+                                                  v.sizeLabel,
+                                                  style: TextStyle(
+                                                    color: selected
+                                                        ? Colors.white
+                                                        : colors.textPrimary,
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 13,
+                                                  ),
+                                                ),
+                                                Text(
+                                                  out
+                                                      ? 'Out of stock'
+                                                      : '$stock in stock',
+                                                  style: TextStyle(
+                                                    color: selected
+                                                        ? Colors.white70
+                                                        : (out
+                                                              ? Colors.redAccent
+                                                              : colors
+                                                                    .textMuted),
+                                                    fontSize: 11,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ),
+                                        );
+                                      }).toList(),
+                                    ),
+                                    const SizedBox(height: 12),
+                                    Row(
+                                      mainAxisAlignment:
+                                          MainAxisAlignment.spaceBetween,
+                                      children: [
+                                        Text(
+                                          'Price (${selectedVariant?.sizeLabel ?? ''})',
+                                          style: TextStyle(
+                                            color: colors.textSecondary,
+                                          ),
+                                        ),
+                                        Text(
+                                          formatPlanInr(
+                                            selectedVariant?.buyPrice ?? 0,
+                                          ),
+                                          style: TextStyle(
+                                            color: context.isDarkMode
+                                                ? const Color(0xFF60A5FA)
+                                                : const Color(0xFF2563EB),
+                                            fontSize: 18,
+                                            fontWeight: FontWeight.bold,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    if (cannotFulfill) ...[
+                                      const SizedBox(height: 12),
+                                      Container(
+                                        width: double.infinity,
+                                        padding: const EdgeInsets.all(12),
+                                        decoration: BoxDecoration(
+                                          color: Colors.amber.withValues(
+                                            alpha: 0.12,
+                                          ),
+                                          borderRadius: BorderRadius.circular(
+                                            10,
+                                          ),
+                                          border: Border.all(
+                                            color: Colors.amber.withValues(
+                                              alpha: 0.4,
+                                            ),
+                                          ),
+                                        ),
+                                        child: Column(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.start,
+                                          children: [
+                                            Text(
+                                              '${selectedVariant.sizeLabel} \u00d7 $_quantity isn\'t available${currentQty > 0 ? ' (only $currentQty in stock)' : ' (out of stock)'}.',
+                                              style: const TextStyle(
+                                                color: Colors.amber,
+                                                fontWeight: FontWeight.w600,
+                                                fontSize: 12,
+                                              ),
+                                            ),
+                                            if (altVariants.isNotEmpty) ...[
+                                              const SizedBox(height: 8),
+                                              const Text(
+                                                'Try another packaging size:',
+                                                style: TextStyle(
+                                                  color: Colors.amber,
+                                                  fontSize: 12,
+                                                ),
+                                              ),
+                                              const SizedBox(height: 6),
+                                              Wrap(
+                                                spacing: 6,
+                                                runSpacing: 6,
+                                                children: altVariants.map((v) {
+                                                  final stock = detail
+                                                      .variantStockOf(v.id);
+                                                  return ActionChip(
+                                                    label: Text(
+                                                      '${v.sizeLabel} · ${formatPlanInr(v.buyPrice)} · $stock',
+                                                    ),
+                                                    onPressed: () => setState(
+                                                      () => _selectedVariantId =
+                                                          v.id,
+                                                    ),
+                                                    backgroundColor: Colors
+                                                        .amber
+                                                        .withValues(
+                                                          alpha: 0.15,
+                                                        ),
+                                                    labelStyle: const TextStyle(
+                                                      color: Colors.amber,
+                                                      fontSize: 11,
+                                                    ),
+                                                  );
+                                                }).toList(),
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                )
+                              : Column(
+                                  children: [
+                                    // Deposit applies to a rental return only.
+                                    if (detail.canRent &&
+                                        actualOrderType == 'rent')
+                                      _priceRow(
+                                        'Security deposit',
+                                        formatPlanInr(detail.securityDeposit),
+                                      ),
+                                    if (detail.canBuy)
+                                      _priceRow(
+                                        'Buy price',
+                                        '${formatPlanInr(detail.buyPrice ?? 0)}${detail.baseUnit != null ? ' / ${detail.baseUnit}' : ' / Unit'}',
+                                        highlight: true,
+                                      ),
+                                  ],
+                                ),
+                        ),
+
+                        if (detail.prescriptionRequired) ...[
+                          const SizedBox(height: 12),
+                          Container(
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 8,
+                            ),
+                            decoration: BoxDecoration(
+                              color: context.isDarkMode
+                                  ? Colors.amber.withValues(alpha: 0.1)
+                                  : const Color(0xFFFFFBEB),
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(
+                                color: context.isDarkMode
+                                    ? Colors.amber.withValues(alpha: 0.35)
+                                    : const Color(0xFFFDE68A),
+                              ),
+                            ),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  Icons.medical_information,
+                                  color: context.isDarkMode
+                                      ? Colors.amber
+                                      : const Color(0xFFD97706),
+                                  size: 18,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(
+                                    'A prescription image or PDF can be added at checkout.',
+                                    style: TextStyle(
+                                      color: context.isDarkMode
+                                          ? Colors.amber
+                                          : const Color(0xFF92400E),
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
                               ],
                             ),
                           ),
                         ],
-                      ),
+
+                        if (detail.hasChemSpecs) ...[
+                          const SizedBox(height: 16),
+                          _sectionCard(
+                            title: 'Chemical Specifications',
+                            child: Wrap(
+                              spacing: 16,
+                              runSpacing: 12,
+                              children: [
+                                if (detail.casNumber != null)
+                                  _specItem('CAS Number', detail.casNumber!),
+                                if (detail.chemicalFormula != null)
+                                  _specItem('Formula', detail.chemicalFormula!),
+                                if (detail.purityPercentage != null)
+                                  _specItem(
+                                    'Purity',
+                                    '${detail.purityPercentage}%',
+                                  ),
+                                if (detail.molecularWeight != null)
+                                  _specItem(
+                                    'Molecular Weight',
+                                    '${detail.molecularWeight} g/mol',
+                                  ),
+                              ],
+                            ),
+                          ),
+                        ],
+
+                        const SizedBox(height: 16),
+                        Text(
+                          'Description',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: colors.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          detail.description.isNotEmpty
+                              ? detail.description
+                              : 'No description provided for this product.',
+                          style: TextStyle(
+                            color: colors.textSecondary,
+                            fontSize: 15,
+                            height: 1.5,
+                          ),
+                        ),
+
+                        if (detail.documents.isNotEmpty) ...[
+                          const SizedBox(height: 12),
+                          _documentsInline(detail.documents),
+                        ],
+
+                        const SizedBox(height: 24),
+                        Text(
+                          'Order Options',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: colors.textPrimary,
+                          ),
+                        ),
+                        const SizedBox(height: 8),
+                        const RequiredFieldsNote(
+                          padding: EdgeInsets.only(bottom: 12),
+                        ),
+
+                        if (detail.canRent && detail.canBuy)
+                          Row(
+                            children: [
+                              Expanded(child: _buildTypeOption('rent', 'Rent')),
+                              const SizedBox(width: 12),
+                              Expanded(child: _buildTypeOption('buy', 'Buy')),
+                            ],
+                          )
+                        else
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            decoration: BoxDecoration(
+                              color: const Color(
+                                0xFF6C63FF,
+                              ).withValues(alpha: 0.2),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: const Color(0xFF6C63FF),
+                              ),
+                            ),
+                            alignment: Alignment.center,
+                            child: Text(
+                              actualOrderType == 'buy'
+                                  ? 'Buy only'
+                                  : 'Rent only',
+                              style: const TextStyle(
+                                color: Color(0xFF6C63FF),
+                                fontWeight: FontWeight.bold,
+                              ),
+                            ),
+                          ),
+
+                        if (actualOrderType == 'rent') ...[
+                          const SizedBox(height: 16),
+                          if (detail.hasActiveRentalPlans) ...[
+                            Builder(
+                              builder: (context) {
+                                final colors = context.appColors;
+                                final plans = detail.activeRentalPlans;
+                                final bestId = bestSavingsPlanId(plans);
+                                final selectedSavings = selectedPlan == null
+                                    ? 0.0
+                                    : planSavings(selectedPlan);
+                                final selectedPct = selectedPlan == null
+                                    ? 0
+                                    : planDiscountPercent(selectedPlan);
+                                final selectedIsBestDeal =
+                                    selectedPlan != null &&
+                                    bestId == selectedPlan.id &&
+                                    selectedPct > 0;
+                                final legend = _tierLegend(plans);
+
+                                final isDark = context.isDarkMode;
+                                final recommended =
+                                    selectedPlan?.isRecommended == true;
+                                final borderColor = recommended
+                                    ? const Color(0xFF3B82F6)
+                                    : (isDark
+                                          ? colors.border
+                                          : const Color(0xFFE5E7EB));
+                                final priceColor = recommended
+                                    ? (isDark
+                                          ? const Color(0xFF60A5FA)
+                                          : const Color(0xFF2563EB))
+                                    : (isDark
+                                          ? const Color(0xFFA78BFA)
+                                          : colors.accent);
+                                final cardBg = recommended
+                                    ? (isDark
+                                          ? const Color(
+                                              0xFF1E3A5F,
+                                            ).withValues(alpha: 0.35)
+                                          : const Color(0xFFEFF6FF))
+                                    : colors.surface;
+
+                                return Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    RequiredLabel(
+                                      'Rental period',
+                                      required: true,
+                                      style: TextStyle(
+                                        color: colors.textPrimary,
+                                        fontSize: 16,
+                                        fontWeight: FontWeight.w800,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 2),
+                                    const Text(
+                                      'More days, more savings',
+                                      style: TextStyle(
+                                        color: Color(0xFFA78BFA),
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                    if (legend.isNotEmpty) ...[
+                                      const SizedBox(height: 8),
+                                      SingleChildScrollView(
+                                        scrollDirection: Axis.horizontal,
+                                        child: Row(
+                                          children: [
+                                            for (
+                                              var i = 0;
+                                              i < legend.length;
+                                              i++
+                                            ) ...[
+                                              if (i > 0)
+                                                const SizedBox(width: 6),
+                                              Container(
+                                                padding:
+                                                    const EdgeInsets.symmetric(
+                                                      horizontal: 8,
+                                                      vertical: 5,
+                                                    ),
+                                                decoration: BoxDecoration(
+                                                  color: colors.surfaceElevated,
+                                                  borderRadius:
+                                                      BorderRadius.circular(
+                                                        999,
+                                                      ),
+                                                  border: Border.all(
+                                                    color: colors.border,
+                                                  ),
+                                                ),
+                                                child: Row(
+                                                  mainAxisSize:
+                                                      MainAxisSize.min,
+                                                  children: [
+                                                    CatalogImage(
+                                                      url: legend[i].url,
+                                                      width: 18,
+                                                      height: 18,
+                                                      fit: BoxFit.contain,
+                                                      showLoadingIndicator:
+                                                          false,
+                                                    ),
+                                                    const SizedBox(width: 5),
+                                                    Text(
+                                                      legend[i].label,
+                                                      style: TextStyle(
+                                                        color: colors
+                                                            .textSecondary,
+                                                        fontSize: 11,
+                                                        fontWeight:
+                                                            FontWeight.w600,
+                                                      ),
+                                                    ),
+                                                  ],
+                                                ),
+                                              ),
+                                            ],
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                    const SizedBox(height: 10),
+                                    InkWell(
+                                      onTap: () => _openRentalPeriodSheet(
+                                        detail: detail,
+                                        unitBuyPrice: unitBuyPrice,
+                                      ),
+                                      borderRadius: BorderRadius.circular(16),
+                                      child: Container(
+                                        width: double.infinity,
+                                        padding: const EdgeInsets.all(14),
+                                        decoration: BoxDecoration(
+                                          color: cardBg,
+                                          borderRadius: BorderRadius.circular(
+                                            16,
+                                          ),
+                                          border: Border.all(
+                                            color: borderColor,
+                                            width: 1.5,
+                                          ),
+                                        ),
+                                        child: Row(
+                                          crossAxisAlignment:
+                                              CrossAxisAlignment.center,
+                                          children: [
+                                            Expanded(
+                                              child: Column(
+                                                crossAxisAlignment:
+                                                    CrossAxisAlignment.start,
+                                                children: [
+                                                  Wrap(
+                                                    crossAxisAlignment:
+                                                        WrapCrossAlignment
+                                                            .center,
+                                                    spacing: 6,
+                                                    runSpacing: 4,
+                                                    children: [
+                                                      Text(
+                                                        selectedPlan == null
+                                                            ? 'Choose a rental plan'
+                                                            : dayPlanTitle(
+                                                                selectedPlan
+                                                                    .durationDays,
+                                                                selectedPlan
+                                                                    .durationLabel,
+                                                              ),
+                                                        style: TextStyle(
+                                                          color: colors
+                                                              .textPrimary,
+                                                          fontWeight:
+                                                              FontWeight.w800,
+                                                          fontSize: 15,
+                                                        ),
+                                                      ),
+                                                      if (recommended)
+                                                        _mostPopularBadge(),
+                                                      if (selectedIsBestDeal)
+                                                        _bestDealBadge(),
+                                                    ],
+                                                  ),
+                                                  if (selectedPlan != null) ...[
+                                                    const SizedBox(height: 4),
+                                                    Text(
+                                                      planTriggerMetaLine(
+                                                        selectedPlan,
+                                                      ),
+                                                      style: TextStyle(
+                                                        color: colors.textMuted,
+                                                        fontSize: 12,
+                                                        fontWeight:
+                                                            FontWeight.w500,
+                                                      ),
+                                                    ),
+                                                    if (selectedPct > 0 ||
+                                                        selectedSavings >
+                                                            0) ...[
+                                                      const SizedBox(height: 8),
+                                                      Wrap(
+                                                        crossAxisAlignment:
+                                                            WrapCrossAlignment
+                                                                .center,
+                                                        spacing: 8,
+                                                        runSpacing: 4,
+                                                        children: [
+                                                          if (selectedPct > 0)
+                                                            _pctOffBadge(
+                                                              selectedPct,
+                                                            ),
+                                                          if (selectedSavings >
+                                                              0)
+                                                            _saveAmountLabel(
+                                                              selectedSavings,
+                                                            ),
+                                                        ],
+                                                      ),
+                                                    ],
+                                                  ],
+                                                ],
+                                              ),
+                                            ),
+                                            const SizedBox(width: 8),
+                                            Row(
+                                              mainAxisSize: MainAxisSize.min,
+                                              crossAxisAlignment:
+                                                  CrossAxisAlignment.center,
+                                              children: [
+                                                if (_planIconAvatar(
+                                                      selectedPlan,
+                                                      size: 32,
+                                                    )
+                                                    case final icon?) ...[
+                                                  icon,
+                                                  const SizedBox(width: 8),
+                                                ],
+                                                Column(
+                                                  crossAxisAlignment:
+                                                      CrossAxisAlignment.end,
+                                                  children: [
+                                                    Text(
+                                                      selectedPlan != null
+                                                          ? formatPlanInr(
+                                                              selectedPlan
+                                                                  .finalRentalPrice,
+                                                            )
+                                                          : '\u2014',
+                                                      style: TextStyle(
+                                                        color: priceColor,
+                                                        fontWeight:
+                                                            FontWeight.w800,
+                                                        fontSize: 18,
+                                                        height: 1.1,
+                                                      ),
+                                                    ),
+                                                    if (selectedSavings >
+                                                        0) ...[
+                                                      const SizedBox(height: 4),
+                                                      StruckPrice(
+                                                        formatPlanInr(
+                                                          selectedPlan!
+                                                              .normalPrice,
+                                                        ),
+                                                        style: const TextStyle(
+                                                          fontSize: 12,
+                                                          fontWeight:
+                                                              FontWeight.w600,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ],
+                                                ),
+                                                const SizedBox(width: 2),
+                                                Padding(
+                                                  padding:
+                                                      const EdgeInsets.only(
+                                                        top: 2,
+                                                      ),
+                                                  child: Icon(
+                                                    Icons
+                                                        .keyboard_arrow_down_rounded,
+                                                    color: colors.textMuted,
+                                                  ),
+                                                ),
+                                              ],
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ),
+                                    const SizedBox(height: 8),
+                                    const Row(
+                                      children: [
+                                        Icon(
+                                          Icons.local_shipping_outlined,
+                                          size: 14,
+                                          color: Color(0xFFA78BFA),
+                                        ),
+                                        SizedBox(width: 6),
+                                        Text(
+                                          'Starts when the order is delivered',
+                                          style: TextStyle(
+                                            color: Color(0xFFA78BFA),
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w600,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                    if (selectedPlan != null) ...[
+                                      const SizedBox(height: 12),
+                                      Container(
+                                        width: double.infinity,
+                                        decoration: BoxDecoration(
+                                          color: colors.surfaceElevated,
+                                          borderRadius: BorderRadius.circular(
+                                            16,
+                                          ),
+                                          border: Border.all(
+                                            color: colors.border,
+                                          ),
+                                        ),
+                                        child: Column(
+                                          children: [
+                                            Padding(
+                                              padding:
+                                                  const EdgeInsets.fromLTRB(
+                                                    16,
+                                                    14,
+                                                    10,
+                                                    14,
+                                                  ),
+                                              child: Row(
+                                                children: [
+                                                  Expanded(
+                                                    child: Column(
+                                                      crossAxisAlignment:
+                                                          CrossAxisAlignment
+                                                              .start,
+                                                      children: [
+                                                        RequiredLabel(
+                                                          'Quantity',
+                                                          required: true,
+                                                          style: TextStyle(
+                                                            color: colors
+                                                                .textPrimary,
+                                                            fontSize: 14,
+                                                            fontWeight:
+                                                                FontWeight.w800,
+                                                          ),
+                                                        ),
+                                                        const SizedBox(
+                                                          height: 2,
+                                                        ),
+                                                        Text(
+                                                          _availableStockCaption(
+                                                            currentQty:
+                                                                currentQty,
+                                                            selectedVariant:
+                                                                selectedVariant,
+                                                            isChemical: detail
+                                                                .isChemical,
+                                                          ),
+                                                          style: TextStyle(
+                                                            color: colors
+                                                                .textMuted,
+                                                            fontSize: 12,
+                                                            fontWeight:
+                                                                FontWeight.w500,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                  Row(
+                                                    children: [
+                                                      IconButton(
+                                                        icon: Icon(
+                                                          Icons
+                                                              .remove_circle_outline,
+                                                          color: _quantity > 1
+                                                              ? colors
+                                                                    .textPrimary
+                                                              : colors
+                                                                    .textMuted,
+                                                        ),
+                                                        onPressed: _quantity > 1
+                                                            ? () async {
+                                                                final next =
+                                                                    _quantity -
+                                                                    1;
+                                                                final blocked =
+                                                                    await _promptRentToBuyIfNeeded(
+                                                                      detail:
+                                                                          detail,
+                                                                      unitBuyPrice:
+                                                                          unitBuyPrice,
+                                                                      nextQty:
+                                                                          next,
+                                                                    );
+                                                                if (blocked ||
+                                                                    !mounted)
+                                                                  return;
+                                                                setState(
+                                                                  () =>
+                                                                      _quantity =
+                                                                          next,
+                                                                );
+                                                              }
+                                                            : null,
+                                                      ),
+                                                      Text(
+                                                        '$_quantity',
+                                                        style: TextStyle(
+                                                          color: colors
+                                                              .textPrimary,
+                                                          fontSize: 16,
+                                                          fontWeight:
+                                                              FontWeight.bold,
+                                                        ),
+                                                      ),
+                                                      IconButton(
+                                                        icon: Icon(
+                                                          Icons
+                                                              .add_circle_outline,
+                                                          color:
+                                                              _quantity <
+                                                                  (currentQty >
+                                                                          0
+                                                                      ? currentQty
+                                                                      : 1)
+                                                              ? colors
+                                                                    .textPrimary
+                                                              : colors
+                                                                    .textMuted,
+                                                        ),
+                                                        onPressed:
+                                                            _quantity <
+                                                                (currentQty > 0
+                                                                    ? currentQty
+                                                                    : 1)
+                                                            ? () async {
+                                                                final next =
+                                                                    _quantity +
+                                                                    1;
+                                                                final blocked =
+                                                                    await _promptRentToBuyIfNeeded(
+                                                                      detail:
+                                                                          detail,
+                                                                      unitBuyPrice:
+                                                                          unitBuyPrice,
+                                                                      nextQty:
+                                                                          next,
+                                                                    );
+                                                                if (blocked ||
+                                                                    !mounted)
+                                                                  return;
+                                                                setState(
+                                                                  () =>
+                                                                      _quantity =
+                                                                          next,
+                                                                );
+                                                              }
+                                                            : null,
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                            Container(
+                                              width: double.infinity,
+                                              padding:
+                                                  const EdgeInsets.fromLTRB(
+                                                    16,
+                                                    14,
+                                                    16,
+                                                    16,
+                                                  ),
+                                              decoration: BoxDecoration(
+                                                color: colors.background,
+                                                border: Border(
+                                                  top: BorderSide(
+                                                    color: colors.border,
+                                                  ),
+                                                ),
+                                              ),
+                                              child: Column(
+                                                children: [
+                                                  Container(
+                                                    padding:
+                                                        const EdgeInsets.symmetric(
+                                                          horizontal: 12,
+                                                          vertical: 12,
+                                                        ),
+                                                    decoration: BoxDecoration(
+                                                      color: colors.surface,
+                                                      borderRadius:
+                                                          BorderRadius.circular(
+                                                            12,
+                                                          ),
+                                                      border: Border.all(
+                                                        color: colors.border,
+                                                      ),
+                                                    ),
+                                                    child: Row(
+                                                      children: [
+                                                        Icon(
+                                                          Icons
+                                                              .verified_user_outlined,
+                                                          size: 18,
+                                                          color: colors.success,
+                                                        ),
+                                                        const SizedBox(
+                                                          width: 8,
+                                                        ),
+                                                        Expanded(
+                                                          child: Text(
+                                                            'Refundable deposit',
+                                                            style: TextStyle(
+                                                              color: colors
+                                                                  .textPrimary,
+                                                              fontSize: 13,
+                                                              fontWeight:
+                                                                  FontWeight
+                                                                      .w700,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                        Text(
+                                                          formatPlanInr(
+                                                            detail.securityDeposit *
+                                                                _quantity,
+                                                          ),
+                                                          style: TextStyle(
+                                                            color: colors
+                                                                .textPrimary,
+                                                            fontSize: 15,
+                                                            fontWeight:
+                                                                FontWeight.w800,
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  ),
+                                                  const SizedBox(height: 12),
+                                                  Row(
+                                                    crossAxisAlignment:
+                                                        CrossAxisAlignment.end,
+                                                    children: [
+                                                      Expanded(
+                                                        child: Column(
+                                                          crossAxisAlignment:
+                                                              CrossAxisAlignment
+                                                                  .start,
+                                                          children: [
+                                                            Text(
+                                                              'You pay for rent',
+                                                              style: TextStyle(
+                                                                color: colors
+                                                                    .textPrimary,
+                                                                fontSize: 14,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w800,
+                                                              ),
+                                                            ),
+                                                            const SizedBox(
+                                                              height: 4,
+                                                            ),
+                                                            Text(
+                                                              _quantity > 1
+                                                                  ? '${formatPlanInr(selectedPlan.finalRentalPrice)} \u00d7 $_quantity units'
+                                                                  : 'Excludes deposit & delivery',
+                                                              style: TextStyle(
+                                                                color: colors
+                                                                    .textMuted,
+                                                                fontSize: 12,
+                                                                fontWeight:
+                                                                    FontWeight
+                                                                        .w500,
+                                                              ),
+                                                            ),
+                                                          ],
+                                                        ),
+                                                      ),
+                                                      Text(
+                                                        formatPlanInr(
+                                                          selectedPlan
+                                                                  .finalRentalPrice *
+                                                              _quantity,
+                                                        ),
+                                                        style: TextStyle(
+                                                          color: priceColor,
+                                                          fontSize: 24,
+                                                          fontWeight:
+                                                              FontWeight.w800,
+                                                          height: 1,
+                                                        ),
+                                                      ),
+                                                    ],
+                                                  ),
+                                                ],
+                                              ),
+                                            ),
+                                          ],
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                );
+                              },
+                            ),
+                          ] else ...[
+                            Container(
+                              width: double.infinity,
+                              padding: const EdgeInsets.all(14),
+                              decoration: BoxDecoration(
+                                color: context.isDarkMode
+                                    ? const Color(
+                                        0xFFF59E0B,
+                                      ).withValues(alpha: 0.12)
+                                    : const Color(0xFFFFFBEB),
+                                borderRadius: BorderRadius.circular(12),
+                                border: Border.all(
+                                  color: context.isDarkMode
+                                      ? const Color(
+                                          0xFFF59E0B,
+                                        ).withValues(alpha: 0.45)
+                                      : const Color(0xFFFDE68A),
+                                ),
+                              ),
+                              child: Row(
+                                crossAxisAlignment: CrossAxisAlignment.start,
+                                children: [
+                                  Icon(
+                                    Icons.info_outline,
+                                    color: context.isDarkMode
+                                        ? const Color(0xFFFBBF24)
+                                        : const Color(0xFFD97706),
+                                    size: 18,
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          'Rental plans not configured',
+                                          style: TextStyle(
+                                            color: context.isDarkMode
+                                                ? const Color(0xFFFBBF24)
+                                                : const Color(0xFFD97706),
+                                            fontWeight: FontWeight.w700,
+                                            fontSize: 14,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 4),
+                                        Text(
+                                          'This product cannot be rented until an admin adds rental pricing plans.',
+                                          style: TextStyle(
+                                            color: context.isDarkMode
+                                                ? Colors.white70
+                                                : const Color(0xFF92400E),
+                                            fontSize: 12,
+                                            height: 1.35,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ],
+                        ],
+
+                        if (actualOrderType == 'buy') ...[
+                          const SizedBox(height: 12),
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(
+                              horizontal: 16,
+                              vertical: 16,
+                            ),
+                            decoration: BoxDecoration(
+                              color: context.isDarkMode
+                                  ? const Color(
+                                      0xFF1E3A5F,
+                                    ).withValues(alpha: 0.35)
+                                  : const Color(0xFFEFF6FF),
+                              borderRadius: BorderRadius.circular(12),
+                              border: Border.all(
+                                color: context.isDarkMode
+                                    ? const Color(
+                                        0xFF60A5FA,
+                                      ).withValues(alpha: 0.45)
+                                    : const Color(0xFFBFDBFE),
+                              ),
+                            ),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  'You pay to buy',
+                                  style: TextStyle(
+                                    color: colors.textMuted,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  formatPlanInr(estimate),
+                                  style: TextStyle(
+                                    color: context.isDarkMode
+                                        ? const Color(0xFF60A5FA)
+                                        : const Color(0xFF2563EB),
+                                    fontSize: 30,
+                                    fontWeight: FontWeight.w800,
+                                    height: 1.1,
+                                    letterSpacing: -0.4,
+                                  ),
+                                ),
+                                const SizedBox(height: 4),
+                                Text(
+                                  'Own the unit · no rental return',
+                                  style: TextStyle(
+                                    color: colors.textMuted,
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                        ],
+
+                        // Quantity lives inside the rent checkout strip when plans exist.
+                        if (!(actualOrderType == 'rent' &&
+                            detail.hasActiveRentalPlans &&
+                            selectedPlan != null)) ...[
+                          const SizedBox(height: 12),
+                          Container(
+                            width: double.infinity,
+                            decoration: BoxDecoration(
+                              color: colors.surfaceElevated,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: colors.border),
+                            ),
+                            child: Padding(
+                              padding: const EdgeInsets.fromLTRB(
+                                16,
+                                14,
+                                10,
+                                14,
+                              ),
+                              child: Row(
+                                children: [
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment:
+                                          CrossAxisAlignment.start,
+                                      children: [
+                                        RequiredLabel(
+                                          'Quantity',
+                                          required: true,
+                                          style: TextStyle(
+                                            color: colors.textPrimary,
+                                            fontSize: 14,
+                                            fontWeight: FontWeight.w800,
+                                          ),
+                                        ),
+                                        const SizedBox(height: 2),
+                                        Text(
+                                          _availableStockCaption(
+                                            currentQty: currentQty,
+                                            selectedVariant: selectedVariant,
+                                            isChemical: detail.isChemical,
+                                          ),
+                                          style: TextStyle(
+                                            color: colors.textMuted,
+                                            fontSize: 12,
+                                            fontWeight: FontWeight.w500,
+                                          ),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Row(
+                                    children: [
+                                      IconButton(
+                                        icon: Icon(
+                                          Icons.remove_circle_outline,
+                                          color: _quantity > 1
+                                              ? colors.textPrimary
+                                              : colors.textMuted,
+                                        ),
+                                        onPressed: _quantity > 1
+                                            ? () async {
+                                                final next = _quantity - 1;
+                                                if (actualOrderType == 'rent') {
+                                                  final blocked =
+                                                      await _promptRentToBuyIfNeeded(
+                                                        detail: detail,
+                                                        unitBuyPrice:
+                                                            unitBuyPrice,
+                                                        nextQty: next,
+                                                      );
+                                                  if (blocked || !mounted)
+                                                    return;
+                                                }
+                                                setState(
+                                                  () => _quantity = next,
+                                                );
+                                              }
+                                            : null,
+                                      ),
+                                      Text(
+                                        '$_quantity',
+                                        style: TextStyle(
+                                          color: colors.textPrimary,
+                                          fontSize: 16,
+                                          fontWeight: FontWeight.bold,
+                                        ),
+                                      ),
+                                      IconButton(
+                                        icon: Icon(
+                                          Icons.add_circle_outline,
+                                          color:
+                                              _quantity <
+                                                  (currentQty > 0
+                                                      ? currentQty
+                                                      : 1)
+                                              ? colors.textPrimary
+                                              : colors.textMuted,
+                                        ),
+                                        onPressed:
+                                            _quantity <
+                                                (currentQty > 0
+                                                    ? currentQty
+                                                    : 1)
+                                            ? () async {
+                                                final next = _quantity + 1;
+                                                if (actualOrderType == 'rent') {
+                                                  final blocked =
+                                                      await _promptRentToBuyIfNeeded(
+                                                        detail: detail,
+                                                        unitBuyPrice:
+                                                            unitBuyPrice,
+                                                        nextQty: next,
+                                                      );
+                                                  if (blocked || !mounted)
+                                                    return;
+                                                }
+                                                setState(
+                                                  () => _quantity = next,
+                                                );
+                                              }
+                                            : null,
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                          if (actualOrderType != 'buy') ...[
+                            const SizedBox(height: 8),
+                            Text(
+                              'Estimated rent: ${formatPlanInr(estimate)}',
+                              style: TextStyle(
+                                color: colors.textMuted,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
+                        ],
+                        const SizedBox(height: 16),
+                        ListingDeliveryCheck(
+                          quoteLine: {
+                            'listingId': detail.id,
+                            'quantity': _quantity,
+                            'rentalDays': actualOrderType == 'buy'
+                                ? 0
+                                : (selectedPlan?.durationDays ?? 0),
+                            'rentalPeriodUnit': rentalUnitDay,
+                            'orderType': actualOrderType,
+                            if (_selectedVariantId != null &&
+                                _selectedVariantId!.isNotEmpty)
+                              'productVariantId': _selectedVariantId,
+                            if (actualOrderType == 'rent' &&
+                                selectedPlan != null)
+                              'rentalPricingPlanId': selectedPlan.id,
+                          },
+                        ),
+                        if (_relatedProducts.isNotEmpty) ...[
+                          const SizedBox(height: 24),
+                          Text(
+                            'Related Products',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: colors.textPrimary,
+                            ),
+                          ),
+                          const SizedBox(height: 14),
+                          LayoutBuilder(
+                            builder: (context, constraints) {
+                              final width = constraints.maxWidth;
+                              final cardWidth = width.isFinite
+                                  ? (width - 12) / 2
+                                  : 160.0;
+                              return GridView.builder(
+                                physics: const NeverScrollableScrollPhysics(),
+                                shrinkWrap: true,
+                                padding: EdgeInsets.zero,
+                                gridDelegate:
+                                    SliverGridDelegateWithFixedCrossAxisCount(
+                                      crossAxisCount: 2,
+                                      mainAxisSpacing: 14,
+                                      crossAxisSpacing: 12,
+                                      mainAxisExtent: browseProductCardExtent(
+                                        cardWidth,
+                                      ),
+                                    ),
+                                itemCount: _relatedProducts.length,
+                                itemBuilder: (context, index) {
+                                  final product = _relatedProducts[index];
+                                  return BrowseProductCard(
+                                    product: product,
+                                    dimWhenInactive: true,
+                                    onTap: () {
+                                      Navigator.push(
+                                        context,
+                                        MaterialPageRoute(
+                                          builder: (_) => ProductDetailScreen(
+                                            listingId: product.id,
+                                            previewImageUrl:
+                                                product.primaryImageUrl,
+                                          ),
+                                        ),
+                                      );
+                                    },
+                                  );
+                                },
+                              );
+                            },
+                          ),
+                          const SizedBox(height: 16),
+                          SizedBox(
+                            width: double.infinity,
+                            height: 46,
+                            child: OutlinedButton(
+                              onPressed: () {
+                                Navigator.popUntil(
+                                  context,
+                                  (route) => route.isFirst,
+                                );
+                              },
+                              style: OutlinedButton.styleFrom(
+                                side: const BorderSide(
+                                  color: Color(0xFF6C63FF),
+                                  width: 1.5,
+                                ),
+                                shape: RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                ),
+                              ),
+                              child: const Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Text(
+                                    'View More',
+                                    style: TextStyle(
+                                      color: Color(0xFF6C63FF),
+                                      fontSize: 14,
+                                      fontWeight: FontWeight.w600,
+                                    ),
+                                  ),
+                                  SizedBox(width: 6),
+                                  Icon(
+                                    Icons.arrow_forward_rounded,
+                                    color: Color(0xFF6C63FF),
+                                    size: 18,
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                        SizedBox(height: 100 + navBarInset),
+                      ],
                     ),
+                  ),
+                ],
+              ),
+            ),
       bottomSheet: detail != null
           ? Consumer<CartProvider>(
               builder: (context, cart, _) {
@@ -1667,170 +2117,176 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                   detail.id,
                   productVariantId: _selectedVariantId,
                 );
-                final addBlocked = !canAdd ||
+                final addBlocked =
+                    !canAdd ||
                     cannotFulfill ||
                     (actualOrderType == 'rent' &&
                         (!detail.hasActiveRentalPlans || selectedPlan == null));
 
                 return Container(
-                    padding: EdgeInsets.fromLTRB(20, 10, 20, 12 + navBarInset),
-                    decoration: BoxDecoration(
-                      color: colors.surface,
-                      border: Border(top: BorderSide(color: colors.border)),
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        SizedBox(
-                      width: double.infinity,
-                      height: 52,
-                      child: ElevatedButton(
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: inCart
-                              ? colors.success
-                              : const Color(0xFF6C63FF),
-                          disabledBackgroundColor: colors.border,
-                          elevation: 0,
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(14),
+                  padding: EdgeInsets.fromLTRB(20, 10, 20, 12 + navBarInset),
+                  decoration: BoxDecoration(
+                    color: colors.surface,
+                    border: Border(top: BorderSide(color: colors.border)),
+                  ),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      SizedBox(
+                        width: double.infinity,
+                        height: 52,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: inCart
+                                ? colors.success
+                                : const Color(0xFF6C63FF),
+                            disabledBackgroundColor: colors.border,
+                            elevation: 0,
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(14),
+                            ),
                           ),
-                        ),
-                        onPressed: inCart
-                            ? () => CustomerDashboard.openCartTab(context)
-                            : addBlocked
-                                ? null
-                                : () async {
-                                    if (_quantity < 1 ||
-                                        (actualOrderType == 'rent' &&
-                                            (!detail.hasActiveRentalPlans ||
-                                                selectedPlan == null))) {
-                                      showRequiredFieldsBlocked(
-                                        context,
-                                        message: detail.hasActiveRentalPlans
-                                            ? 'Please select a rental period and quantity.'
-                                            : 'Rental plans are not configured for this product.',
-                                      );
-                                      return;
-                                    }
-                                    if (_quantity > currentQty) {
-                                      ScaffoldMessenger.of(context).showSnackBar(
-                                        SnackBar(
-                                          content: Text(
-                                            'Only $currentQty unit(s) available in stock.',
-                                          ),
+                          onPressed: inCart
+                              ? () => CustomerDashboard.openCartTab(context)
+                              : addBlocked
+                              ? null
+                              : () async {
+                                  if (_quantity < 1 ||
+                                      (actualOrderType == 'rent' &&
+                                          (!detail.hasActiveRentalPlans ||
+                                              selectedPlan == null))) {
+                                    showRequiredFieldsBlocked(
+                                      context,
+                                      message: detail.hasActiveRentalPlans
+                                          ? 'Please select a rental period and quantity.'
+                                          : 'Rental plans are not configured for this product.',
+                                    );
+                                    return;
+                                  }
+                                  if (_quantity > currentQty) {
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(
+                                          'Only $currentQty unit(s) available in stock.',
                                         ),
-                                      );
-                                      return;
-                                    }
-
-                                    if (actualOrderType == 'rent') {
-                                      final blocked = await _promptRentToBuyIfNeeded(
-                                        detail: detail,
-                                        unitBuyPrice: unitBuyPrice,
-                                      );
-                                      if (!mounted || blocked) return;
-                                    }
-
-                                    final displayTitle = selectedVariant != null
-                                        ? '${detail.title} (${selectedVariant.sizeLabel})'
-                                        : detail.title;
-
-                                    final finalType = detail.canRent && detail.canBuy
-                                        ? _orderType
-                                        : (detail.canBuy ? 'buy' : 'rent');
-
-                                    cart.addLine(
-                                      CartLineModel(
-                                        listingId: detail.id,
-                                        title: displayTitle,
-                                        vendorName: detail.vendorName,
-                                        primaryImageUrl: detail.primaryImageUrl ??
-                                            resolveItemImageUrl(
-                                              imageUrls: detail.imageUrls,
-                                            ),
-                                        dailyRent: detail.dailyRent,
-                                        weeklyRent: detail.weeklyRent,
-                                        monthlyRent: detail.monthlyRent,
-                                        securityDeposit: detail.securityDeposit,
-                                        quantity: _quantity,
-                                        rentalDays: finalType == 'buy'
-                                            ? 0
-                                            : (selectedPlan?.durationDays ?? 0),
-                                        rentalPeriodUnit: rentalUnitDay,
-                                        orderType: finalType,
-                                        prescriptionRequired: detail.prescriptionRequired,
-                                        productVariantId: _selectedVariantId,
-                                        buyPrice: unitBuyPrice > 0
-                                            ? unitBuyPrice
-                                            : detail.buyPrice,
-                                        isBuyEnabled: detail.canBuy,
-                                        isRentEnabled: detail.isRentEnabled,
-                                        isChemical: detail.isChemical,
-                                        rentalPricingPlanId: finalType == 'rent'
-                                            ? selectedPlan?.id
-                                            : null,
-                                        rentalDurationLabel: finalType == 'rent' &&
-                                                selectedPlan != null
-                                            ? dayPlanTitle(
-                                                selectedPlan.durationDays,
-                                                selectedPlan.durationLabel,
-                                              )
-                                            : null,
-                                        rentalDurationDays: finalType == 'rent'
-                                            ? selectedPlan?.durationDays
-                                            : null,
-                                        rentalNormalPrice: finalType == 'rent'
-                                            ? selectedPlan?.normalPrice
-                                            : null,
-                                        rentalDiscountType: finalType == 'rent'
-                                            ? selectedPlan?.discountType
-                                            : null,
-                                        rentalDiscountValue: finalType == 'rent'
-                                            ? selectedPlan?.discountValue
-                                            : null,
-                                        rentalFinalPrice: finalType == 'rent'
-                                            ? selectedPlan?.finalRentalPrice
-                                            : null,
                                       ),
                                     );
-                                  },
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.center,
-                          children: [
-                            Icon(
-                              inCart
-                                  ? Icons.shopping_cart_outlined
-                                  : Icons.add_shopping_cart_outlined,
-                              size: 20,
-                              color: canAdd || inCart
-                                  ? Colors.white
-                                  : colors.textSecondary,
-                            ),
-                            const SizedBox(width: 8),
-                            Text(
-                              !canAdd
-                                  ? 'Out of stock'
-                                  : inCart
-                                      ? 'Go to cart'
-                                      : (actualOrderType == 'buy'
-                                          ? 'Add to cart \u2014 Buy'
-                                          : 'Add to cart \u2014 Rent'),
-                              style: TextStyle(
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
+                                    return;
+                                  }
+
+                                  if (actualOrderType == 'rent') {
+                                    final blocked =
+                                        await _promptRentToBuyIfNeeded(
+                                          detail: detail,
+                                          unitBuyPrice: unitBuyPrice,
+                                        );
+                                    if (!mounted || blocked) return;
+                                  }
+
+                                  final displayTitle = selectedVariant != null
+                                      ? '${detail.title} (${selectedVariant.sizeLabel})'
+                                      : detail.title;
+
+                                  final finalType =
+                                      detail.canRent && detail.canBuy
+                                      ? _orderType
+                                      : (detail.canBuy ? 'buy' : 'rent');
+
+                                  cart.addLine(
+                                    CartLineModel(
+                                      listingId: detail.id,
+                                      title: displayTitle,
+                                      vendorName: detail.vendorName,
+                                      primaryImageUrl:
+                                          detail.primaryImageUrl ??
+                                          resolveItemImageUrl(
+                                            imageUrls: detail.imageUrls,
+                                          ),
+                                      dailyRent: detail.dailyRent,
+                                      weeklyRent: detail.weeklyRent,
+                                      monthlyRent: detail.monthlyRent,
+                                      securityDeposit: detail.securityDeposit,
+                                      quantity: _quantity,
+                                      rentalDays: finalType == 'buy'
+                                          ? 0
+                                          : (selectedPlan?.durationDays ?? 0),
+                                      rentalPeriodUnit: rentalUnitDay,
+                                      orderType: finalType,
+                                      prescriptionRequired:
+                                          detail.prescriptionRequired,
+                                      productVariantId: _selectedVariantId,
+                                      buyPrice: unitBuyPrice > 0
+                                          ? unitBuyPrice
+                                          : detail.buyPrice,
+                                      isBuyEnabled: detail.canBuy,
+                                      isRentEnabled: detail.isRentEnabled,
+                                      isChemical: detail.isChemical,
+                                      rentalPricingPlanId: finalType == 'rent'
+                                          ? selectedPlan?.id
+                                          : null,
+                                      rentalDurationLabel:
+                                          finalType == 'rent' &&
+                                              selectedPlan != null
+                                          ? dayPlanTitle(
+                                              selectedPlan.durationDays,
+                                              selectedPlan.durationLabel,
+                                            )
+                                          : null,
+                                      rentalDurationDays: finalType == 'rent'
+                                          ? selectedPlan?.durationDays
+                                          : null,
+                                      rentalNormalPrice: finalType == 'rent'
+                                          ? selectedPlan?.normalPrice
+                                          : null,
+                                      rentalDiscountType: finalType == 'rent'
+                                          ? selectedPlan?.discountType
+                                          : null,
+                                      rentalDiscountValue: finalType == 'rent'
+                                          ? selectedPlan?.discountValue
+                                          : null,
+                                      rentalFinalPrice: finalType == 'rent'
+                                          ? selectedPlan?.finalRentalPrice
+                                          : null,
+                                    ),
+                                  );
+                                },
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: [
+                              Icon(
+                                inCart
+                                    ? Icons.shopping_cart_outlined
+                                    : Icons.add_shopping_cart_outlined,
+                                size: 20,
                                 color: canAdd || inCart
                                     ? Colors.white
                                     : colors.textSecondary,
                               ),
-                            ),
-                          ],
+                              const SizedBox(width: 8),
+                              Text(
+                                !canAdd
+                                    ? 'Out of stock'
+                                    : inCart
+                                    ? 'Go to cart'
+                                    : (actualOrderType == 'buy'
+                                          ? 'Add to cart \u2014 Buy'
+                                          : 'Add to cart \u2014 Rent'),
+                                style: TextStyle(
+                                  fontSize: 16,
+                                  fontWeight: FontWeight.bold,
+                                  color: canAdd || inCart
+                                      ? Colors.white
+                                      : colors.textSecondary,
+                                ),
+                              ),
+                            ],
+                          ),
                         ),
                       ),
-                    ),
-                      ],
-                    ),
-                  );
+                    ],
+                  ),
+                );
               },
             )
           : null,
@@ -1916,7 +2372,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                           ? const Color(0xFF3B82F6)
                           : const Color(0xFF8B5CF6);
                       final priceColor = plan.isRecommended
-                          ? (isDark ? const Color(0xFF60A5FA) : const Color(0xFF2563EB))
+                          ? (isDark
+                                ? const Color(0xFF60A5FA)
+                                : const Color(0xFF2563EB))
                           : context.appColors.textPrimary;
 
                       return InkWell(
@@ -1935,18 +2393,30 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                           padding: const EdgeInsets.fromLTRB(10, 10, 10, 10),
                           decoration: BoxDecoration(
                             color: selected
-                                ? accent.withValues(alpha: plan.isRecommended ? 0.18 : 0.14)
+                                ? accent.withValues(
+                                    alpha: plan.isRecommended ? 0.18 : 0.14,
+                                  )
                                 : (plan.isRecommended
-                                    ? (isDark ? const Color(0xFF1E3A5F).withValues(alpha: 0.35) : const Color(0xFFEFF6FF))
-                                    : context.appColors.surfaceElevated),
+                                      ? (isDark
+                                            ? const Color(
+                                                0xFF1E3A5F,
+                                              ).withValues(alpha: 0.35)
+                                            : const Color(0xFFEFF6FF))
+                                      : context.appColors.surfaceElevated),
                             borderRadius: BorderRadius.circular(14),
                             border: Border.all(
                               color: selected
                                   ? accent
                                   : (plan.isRecommended
-                                      ? (isDark ? const Color(0xFF3B82F6).withValues(alpha: 0.5) : const Color(0xFF93C5FD))
-                                      : context.appColors.border),
-                              width: selected ? 1.5 : (plan.isRecommended ? 1.2 : 1),
+                                        ? (isDark
+                                              ? const Color(
+                                                  0xFF3B82F6,
+                                                ).withValues(alpha: 0.5)
+                                              : const Color(0xFF93C5FD))
+                                        : context.appColors.border),
+                              width: selected
+                                  ? 1.5
+                                  : (plan.isRecommended ? 1.2 : 1),
                             ),
                           ),
                           child: Row(
@@ -1959,12 +2429,18 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                   shape: BoxShape.circle,
                                   color: selected ? accent : Colors.transparent,
                                   border: Border.all(
-                                    color: selected ? accent : context.appColors.border,
+                                    color: selected
+                                        ? accent
+                                        : context.appColors.border,
                                     width: 2,
                                   ),
                                 ),
                                 child: selected
-                                    ? const Icon(Icons.check, size: 11, color: Colors.white)
+                                    ? const Icon(
+                                        Icons.check,
+                                        size: 11,
+                                        color: Colors.white,
+                                      )
                                     : null,
                               ),
                               const SizedBox(width: 10),
@@ -1974,19 +2450,25 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                   mainAxisSize: MainAxisSize.min,
                                   children: [
                                     Wrap(
-                                      crossAxisAlignment: WrapCrossAlignment.center,
+                                      crossAxisAlignment:
+                                          WrapCrossAlignment.center,
                                       spacing: 6,
                                       runSpacing: 4,
                                       children: [
                                         Text(
-                                          dayPlanTitle(plan.durationDays, plan.durationLabel),
+                                          dayPlanTitle(
+                                            plan.durationDays,
+                                            plan.durationLabel,
+                                          ),
                                           style: TextStyle(
-                                            color: context.appColors.textPrimary,
+                                            color:
+                                                context.appColors.textPrimary,
                                             fontWeight: FontWeight.w800,
                                             fontSize: 13,
                                           ),
                                         ),
-                                        if (plan.isRecommended) _mostPopularBadge(),
+                                        if (plan.isRecommended)
+                                          _mostPopularBadge(),
                                         if (isBestDeal) _bestDealBadge(),
                                       ],
                                     ),
@@ -2016,7 +2498,8 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                                 ),
                               ),
                               const SizedBox(width: 8),
-                              if (_planIconAvatar(plan, size: 28) case final icon?) ...[
+                              if (_planIconAvatar(plan, size: 28)
+                                  case final icon?) ...[
                                 icon,
                                 const SizedBox(width: 6),
                               ],
@@ -2146,7 +2629,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             children: [
               for (var i = 0; i < documents.length; i++) ...[
                 if (i > 0)
-                  Divider(height: 1, thickness: 1, color: colors.border.withValues(alpha: 0.7)),
+                  Divider(
+                    height: 1,
+                    thickness: 1,
+                    color: colors.border.withValues(alpha: 0.7),
+                  ),
                 _docInlineLink(documents[i], documents),
               ],
             ],
@@ -2172,7 +2659,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             padding: const EdgeInsets.only(left: 10, right: 2),
             child: Row(
               children: [
-                const Icon(Icons.insert_drive_file_outlined, size: 15, color: Color(0xFF6C63FF)),
+                const Icon(
+                  Icons.insert_drive_file_outlined,
+                  size: 15,
+                  color: Color(0xFF6C63FF),
+                ),
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
@@ -2195,7 +2686,11 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     child: SizedBox(
                       width: 32,
                       height: 32,
-                      child: Icon(Icons.download_outlined, size: 16, color: colors.textMuted),
+                      child: Icon(
+                        Icons.download_outlined,
+                        size: 16,
+                        color: colors.textMuted,
+                      ),
                     ),
                   ),
                 ),
@@ -2223,7 +2718,10 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
     await Clipboard.setData(ClipboardData(text: url));
     if (!mounted) return;
     ScaffoldMessenger.of(context).showSnackBar(
-      const SnackBar(content: Text('Document link copied'), backgroundColor: Colors.green),
+      const SnackBar(
+        content: Text('Document link copied'),
+        backgroundColor: Colors.green,
+      ),
     );
   }
 
@@ -2240,7 +2738,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(title, style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w600)),
+          Text(
+            title,
+            style: TextStyle(
+              color: colors.textPrimary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
           const SizedBox(height: 12),
           child,
         ],
@@ -2260,7 +2764,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
             value,
             style: TextStyle(
               color: highlight
-                  ? (context.isDarkMode ? const Color(0xFF60A5FA) : const Color(0xFF2563EB))
+                  ? (context.isDarkMode
+                        ? const Color(0xFF60A5FA)
+                        : const Color(0xFF2563EB))
                   : colors.textPrimary,
               fontWeight: FontWeight.bold,
             ),
@@ -2279,7 +2785,13 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         children: [
           Text(label, style: TextStyle(color: colors.textMuted, fontSize: 12)),
           const SizedBox(height: 2),
-          Text(value, style: TextStyle(color: colors.textPrimary, fontWeight: FontWeight.w600)),
+          Text(
+            value,
+            style: TextStyle(
+              color: colors.textPrimary,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
         ],
       ),
     );
@@ -2295,7 +2807,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
         decoration: BoxDecoration(
           color: isSelected ? const Color(0xFF6C63FF) : Colors.transparent,
           borderRadius: BorderRadius.circular(12),
-          border: Border.all(color: isSelected ? const Color(0xFF6C63FF) : colors.border),
+          border: Border.all(
+            color: isSelected ? const Color(0xFF6C63FF) : colors.border,
+          ),
         ),
         alignment: Alignment.center,
         child: Text(

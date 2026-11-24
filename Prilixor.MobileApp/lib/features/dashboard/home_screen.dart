@@ -27,15 +27,20 @@ class _HomeScreenState extends State<HomeScreen> {
   final FlutterSecureStorage _storage = const FlutterSecureStorage();
   static const _locationPromptKey = 'locationPromptDismissed';
 
-  final Debouncer _catalogSearchDebouncer = Debouncer(duration: catalogSearchDebounce);
+  final Debouncer _catalogSearchDebouncer = Debouncer(
+    duration: catalogSearchDebounce,
+  );
 
   String? _selectedCategoryName;
   bool _showFavoritesOnly = false;
+
   /// Mirrors React browseMode: equipment | chemicals
   String _browseMode = 'equipment';
+
   /// all | low_stock | out_of_stock — inventory on active listings (matches web Stock filter).
   String _stockFilter = 'all';
   bool _locationPromptChecked = false;
+
   /// "Later" only snoozes for this app session — not forever across logins.
   bool _locationPromptSnoozed = false;
   bool _addressesLoaded = false;
@@ -45,7 +50,10 @@ class _HomeScreenState extends State<HomeScreen> {
     super.initState();
     _searchController.addListener(_scheduleDebouncedSearch);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      final productProvider = Provider.of<ProductProvider>(context, listen: false);
+      final productProvider = Provider.of<ProductProvider>(
+        context,
+        listen: false,
+      );
       productProvider.fetchCategories();
       productProvider.fetchProducts();
       final auth = Provider.of<AuthProvider>(context, listen: false);
@@ -87,7 +95,10 @@ class _HomeScreenState extends State<HomeScreen> {
     final auth = Provider.of<AuthProvider>(context, listen: false);
     if (!auth.isAuthenticated) return;
 
-    final addressProvider = Provider.of<AddressProvider>(context, listen: false);
+    final addressProvider = Provider.of<AddressProvider>(
+      context,
+      listen: false,
+    );
     await addressProvider.fetchAddresses();
     if (!mounted) return;
     setState(() => _addressesLoaded = true);
@@ -110,7 +121,10 @@ class _HomeScreenState extends State<HomeScreen> {
         final colors = ctx.appColors;
         return AlertDialog(
           backgroundColor: colors.surface,
-          title: Text('Set location first', style: TextStyle(color: colors.textPrimary)),
+          title: Text(
+            'Set location first',
+            style: TextStyle(color: colors.textPrimary),
+          ),
           content: Text(
             'Add your address with map location to see nearest available products first and get correct delivery charges.',
             style: TextStyle(color: colors.textSecondary),
@@ -122,7 +136,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 setState(() => _locationPromptSnoozed = true);
                 Navigator.pop(ctx);
               },
-              child: Text('Later', style: TextStyle(color: colors.textSecondary)),
+              child: Text(
+                'Later',
+                style: TextStyle(color: colors.textSecondary),
+              ),
             ),
             TextButton(
               onPressed: () {
@@ -136,8 +153,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   ),
                 ).then((_) {
                   if (!mounted) return;
-                  Provider.of<AddressProvider>(context, listen: false)
-                      .fetchAddresses();
+                  Provider.of<AddressProvider>(
+                    context,
+                    listen: false,
+                  ).fetchAddresses();
                 });
               },
               child: const Text(
@@ -173,8 +192,10 @@ class _HomeScreenState extends State<HomeScreen> {
             ),
           ).then((_) {
             if (!mounted) return;
-            Provider.of<AddressProvider>(context, listen: false)
-                .fetchAddresses();
+            Provider.of<AddressProvider>(
+              context,
+              listen: false,
+            ).fetchAddresses();
           });
         },
         child: Container(
@@ -190,8 +211,11 @@ class _HomeScreenState extends State<HomeScreen> {
           ),
           child: Row(
             children: [
-              const Icon(Icons.add_location_alt_outlined,
-                  color: Color(0xFF6C63FF), size: 22),
+              const Icon(
+                Icons.add_location_alt_outlined,
+                color: Color(0xFF6C63FF),
+                size: 22,
+              ),
               const SizedBox(width: 12),
               Expanded(
                 child: Column(
@@ -226,9 +250,10 @@ class _HomeScreenState extends State<HomeScreen> {
 
   void _onSearch() {
     final q = _searchController.text.trim();
-    Provider.of<ProductProvider>(context, listen: false).fetchProducts(
-      search: q.isEmpty ? null : q,
-    );
+    Provider.of<ProductProvider>(
+      context,
+      listen: false,
+    ).fetchProducts(search: q.isEmpty ? null : q);
   }
 
   static bool _isActiveListing(ProductModel p) {
@@ -236,7 +261,10 @@ class _HomeScreenState extends State<HomeScreen> {
     return ls == 'active' || ls == 'approved';
   }
 
-  List<ProductModel> _catalogBeforeCategory(List<ProductModel> all, FavoriteProvider favorites) {
+  List<ProductModel> _catalogBeforeCategory(
+    List<ProductModel> all,
+    FavoriteProvider favorites,
+  ) {
     var result = all.where(_isActiveListing).toList();
     if (_browseMode == 'equipment') {
       result = result.where((p) => p.baseUnit == null).toList();
@@ -245,7 +273,9 @@ class _HomeScreenState extends State<HomeScreen> {
     }
     if (_stockFilter != 'all') {
       result = result
-          .where((p) => p.availabilityStatus.trim().toLowerCase() == _stockFilter)
+          .where(
+            (p) => p.availabilityStatus.trim().toLowerCase() == _stockFilter,
+          )
           .toList();
     }
     if (_showFavoritesOnly) {
@@ -270,7 +300,10 @@ class _HomeScreenState extends State<HomeScreen> {
       _browseMode = mode;
       // Clear category if it doesn't belong to the new tab.
       if (_selectedCategoryName != null) {
-        final cats = Provider.of<ProductProvider>(context, listen: false).categories;
+        final cats = Provider.of<ProductProvider>(
+          context,
+          listen: false,
+        ).categories;
         final stillValid = cats.any(
           (c) =>
               c.categoryName == _selectedCategoryName &&
@@ -291,18 +324,32 @@ class _HomeScreenState extends State<HomeScreen> {
     final addressProvider = Provider.of<AddressProvider>(context);
     final auth = Provider.of<AuthProvider>(context);
 
-    var products = _catalogBeforeCategory(productProvider.products, favoriteProvider);
+    var products = _catalogBeforeCategory(
+      productProvider.products,
+      favoriteProvider,
+    );
     if (_selectedCategoryName != null) {
-      products = products.where((p) => p.categoryName == _selectedCategoryName).toList();
+      products = products
+          .where((p) => p.categoryName == _selectedCategoryName)
+          .toList();
     }
 
-    final catalogBeforeCategory =
-        _catalogBeforeCategory(productProvider.products, favoriteProvider);
+    final catalogBeforeCategory = _catalogBeforeCategory(
+      productProvider.products,
+      favoriteProvider,
+    );
 
-    final modeCategories = productProvider.categories
-        .where((c) => _browseMode == 'chemicals' ? c.isChemical : !c.isChemical)
-        .toList()
-      ..sort((a, b) => a.categoryName.toLowerCase().compareTo(b.categoryName.toLowerCase()));
+    final modeCategories =
+        productProvider.categories
+            .where(
+              (c) => _browseMode == 'chemicals' ? c.isChemical : !c.isChemical,
+            )
+            .toList()
+          ..sort(
+            (a, b) => a.categoryName.toLowerCase().compareTo(
+              b.categoryName.toLowerCase(),
+            ),
+          );
     const stockPills = <Map<String, String>>[
       {'id': 'all', 'label': 'All stock'},
       {'id': 'low_stock', 'label': 'Low stock'},
@@ -324,7 +371,11 @@ class _HomeScreenState extends State<HomeScreen> {
                 children: [
                   Text(
                     'Discover',
-                    style: TextStyle(fontSize: 28, fontWeight: FontWeight.bold, color: colors.textPrimary),
+                    style: TextStyle(
+                      fontSize: 28,
+                      fontWeight: FontWeight.bold,
+                      color: colors.textPrimary,
+                    ),
                   ),
                   const SizedBox(height: 8),
                   Text(
@@ -344,8 +395,12 @@ class _HomeScreenState extends State<HomeScreen> {
                     ),
                     child: Row(
                       children: [
-                        Expanded(child: _browseModeChip('equipment', 'Equipment')),
-                        Expanded(child: _browseModeChip('chemicals', 'Chemicals')),
+                        Expanded(
+                          child: _browseModeChip('equipment', 'Equipment'),
+                        ),
+                        Expanded(
+                          child: _browseModeChip('chemicals', 'Chemicals'),
+                        ),
                       ],
                     ),
                   ),
@@ -359,16 +414,24 @@ class _HomeScreenState extends State<HomeScreen> {
                           textInputAction: TextInputAction.search,
                           style: TextStyle(color: colors.textPrimary),
                           decoration: InputDecoration(
-                            hintText: _browseMode == 'chemicals' ? 'Search chemicals...' : 'Search equipment...',
+                            hintText: _browseMode == 'chemicals'
+                                ? 'Search chemicals...'
+                                : 'Search equipment...',
                             hintStyle: TextStyle(color: colors.textMuted),
-                            prefixIcon: Icon(Icons.search, color: colors.textSecondary),
+                            prefixIcon: Icon(
+                              Icons.search,
+                              color: colors.textSecondary,
+                            ),
                             filled: true,
                             fillColor: colors.surface,
                             border: OutlineInputBorder(
                               borderRadius: BorderRadius.circular(16),
                               borderSide: BorderSide.none,
                             ),
-                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+                            contentPadding: const EdgeInsets.symmetric(
+                              horizontal: 12,
+                              vertical: 14,
+                            ),
                           ),
                         ),
                       ),
@@ -377,7 +440,9 @@ class _HomeScreenState extends State<HomeScreen> {
                         decoration: BoxDecoration(
                           borderRadius: BorderRadius.circular(16),
                           border: Border.all(
-                            color: context.isDarkMode ? Colors.transparent : colors.border,
+                            color: context.isDarkMode
+                                ? Colors.transparent
+                                : colors.border,
                           ),
                         ),
                         child: Material(
@@ -396,7 +461,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                 children: [
                                   Icon(
                                     Icons.tune_rounded,
-                                    color: _hasActiveFilters ? Colors.white : colors.textSecondary,
+                                    color: _hasActiveFilters
+                                        ? Colors.white
+                                        : colors.textSecondary,
                                   ),
                                   if (_activeFilterCount > 0)
                                     Positioned(
@@ -406,33 +473,39 @@ class _HomeScreenState extends State<HomeScreen> {
                                         width: 16,
                                         height: 16,
                                         alignment: Alignment.center,
-                                      decoration: const BoxDecoration(
-                                        color: Colors.white,
-                                        shape: BoxShape.circle,
-                                      ),
-                                      child: Text(
-                                        '$_activeFilterCount',
-                                        style: const TextStyle(
-                                          color: Color(0xFF6C63FF),
-                                          fontSize: 10,
-                                          fontWeight: FontWeight.bold,
+                                        decoration: const BoxDecoration(
+                                          color: Colors.white,
+                                          shape: BoxShape.circle,
+                                        ),
+                                        child: Text(
+                                          '$_activeFilterCount',
+                                          style: const TextStyle(
+                                            color: Color(0xFF6C63FF),
+                                            fontSize: 10,
+                                            fontWeight: FontWeight.bold,
+                                          ),
                                         ),
                                       ),
                                     ),
-                                  ),
-                              ],
+                                ],
+                              ),
                             ),
                           ),
                         ),
-                      ),
                       ),
                     ],
                   ),
                   if (!productProvider.isLoading) ...[
                     const SizedBox(height: 10),
                     Text(
-                      _productCountLabel(catalogBeforeCategory.length, products.length),
-                      style: const TextStyle(color: Color(0xFF94A3B8), fontSize: 13),
+                      _productCountLabel(
+                        catalogBeforeCategory.length,
+                        products.length,
+                      ),
+                      style: const TextStyle(
+                        color: Color(0xFF94A3B8),
+                        fontSize: 13,
+                      ),
                     ),
                   ],
                   if (_hasActiveFilters) ...[
@@ -456,9 +529,11 @@ class _HomeScreenState extends State<HomeScreen> {
                             Padding(
                               padding: const EdgeInsets.only(right: 8),
                               child: _ActiveFilterChip(
-                                label: stockPills
-                                    .firstWhere((p) => p['id'] == _stockFilter)['label']!,
-                                onClear: () => setState(() => _stockFilter = 'all'),
+                                label: stockPills.firstWhere(
+                                  (p) => p['id'] == _stockFilter,
+                                )['label']!,
+                                onClear: () =>
+                                    setState(() => _stockFilter = 'all'),
                               ),
                             ),
                           if (_showFavoritesOnly)
@@ -466,18 +541,24 @@ class _HomeScreenState extends State<HomeScreen> {
                               padding: const EdgeInsets.only(right: 8),
                               child: _ActiveFilterChip(
                                 label: 'Favorites',
-                                onClear: () => setState(() => _showFavoritesOnly = false),
+                                onClear: () =>
+                                    setState(() => _showFavoritesOnly = false),
                               ),
                             ),
                           TextButton(
                             onPressed: _clearAllFilters,
                             style: TextButton.styleFrom(
                               foregroundColor: colors.textSecondary,
-                              padding: const EdgeInsets.symmetric(horizontal: 8),
+                              padding: const EdgeInsets.symmetric(
+                                horizontal: 8,
+                              ),
                               minimumSize: Size.zero,
                               tapTargetSize: MaterialTapTargetSize.shrinkWrap,
                             ),
-                            child: const Text('Clear all', style: TextStyle(fontSize: 13)),
+                            child: const Text(
+                              'Clear all',
+                              style: TextStyle(fontSize: 13),
+                            ),
                           ),
                         ],
                       ),
@@ -491,41 +572,57 @@ class _HomeScreenState extends State<HomeScreen> {
               child: productProvider.isLoading
                   ? const BrandPageLoader()
                   : productProvider.errorMessage != null
-                      ? Center(child: Text(productProvider.errorMessage!, style: const TextStyle(color: Colors.redAccent)))
-                      : products.isEmpty
-                          ? Center(
-                              child: Text(
-                                'No listings match your filters.',
-                                style: TextStyle(color: colors.textSecondary),
-                              ),
-                            )
-                          : GridView.builder(
-                              padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
-                              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                  ? Center(
+                      child: Text(
+                        productProvider.errorMessage!,
+                        style: const TextStyle(color: Colors.redAccent),
+                      ),
+                    )
+                  : products.isEmpty
+                  ? Center(
+                      child: Text(
+                        'No listings match your filters.',
+                        style: TextStyle(color: colors.textSecondary),
+                      ),
+                    )
+                  : LayoutBuilder(
+                      builder: (context, constraints) {
+                        final width = constraints.maxWidth;
+                        final cardWidth = width.isFinite
+                            ? (width - 44) / 2
+                            : 160.0;
+                        return GridView.builder(
+                          padding: const EdgeInsets.fromLTRB(16, 8, 16, 24),
+                          gridDelegate:
+                              SliverGridDelegateWithFixedCrossAxisCount(
                                 crossAxisCount: 2,
                                 mainAxisSpacing: 14,
                                 crossAxisSpacing: 12,
-                                mainAxisExtent: kBrowseProductCardExtent,
+                                mainAxisExtent: browseProductCardExtent(
+                                  cardWidth,
+                                ),
                               ),
-                              itemCount: products.length,
-                              itemBuilder: (context, index) {
-                                final product = products[index];
-                                return BrowseProductCard(
-                                  product: product,
-                                  onTap: () {
-                                    Navigator.push(
-                                      context,
-                                      MaterialPageRoute(
-                                        builder: (_) => ProductDetailScreen(
-                                          listingId: product.id,
-                                          previewImageUrl: product.primaryImageUrl,
-                                        ),
-                                      ),
-                                    );
-                                  },
+                          itemCount: products.length,
+                          itemBuilder: (context, index) {
+                            final product = products[index];
+                            return BrowseProductCard(
+                              product: product,
+                              onTap: () {
+                                Navigator.push(
+                                  context,
+                                  MaterialPageRoute(
+                                    builder: (_) => ProductDetailScreen(
+                                      listingId: product.id,
+                                      previewImageUrl: product.primaryImageUrl,
+                                    ),
+                                  ),
                                 );
                               },
-                            ),
+                            );
+                          },
+                        );
+                      },
+                    ),
             ),
           ],
         ),
@@ -534,7 +631,9 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   bool get _hasActiveFilters =>
-      _selectedCategoryName != null || _stockFilter != 'all' || _showFavoritesOnly;
+      _selectedCategoryName != null ||
+      _stockFilter != 'all' ||
+      _showFavoritesOnly;
 
   int get _activeFilterCount {
     var n = 0;
@@ -554,7 +653,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   String _productCountLabel(int catalogTotal, int visibleTotal) {
     final noun = visibleTotal == 1 ? 'product' : 'products';
-    final modeLabel = _browseMode == 'chemicals' ? ' for purchase' : ' for rent';
+    final modeLabel = _browseMode == 'chemicals'
+        ? ' for purchase'
+        : ' for rent';
     if (_selectedCategoryName != null && visibleTotal != catalogTotal) {
       return '$visibleTotal $noun$modeLabel in $_selectedCategoryName';
     }
@@ -584,7 +685,9 @@ class _HomeScreenState extends State<HomeScreen> {
     List<CategoryModel> filteredCategories() {
       final q = categorySearchController.text.trim().toLowerCase();
       if (q.isEmpty) return categories;
-      return categories.where((c) => c.categoryName.toLowerCase().contains(q)).toList();
+      return categories
+          .where((c) => c.categoryName.toLowerCase().contains(q))
+          .toList();
     }
 
     final applied = await showModalBottomSheet<bool>(
@@ -599,10 +702,19 @@ class _HomeScreenState extends State<HomeScreen> {
             final maxH = MediaQuery.of(ctx).size.height * 0.82;
             final bottomInset = MediaQuery.of(ctx).viewInsets.bottom;
             final count = draftCount();
-            final productProvider = Provider.of<ProductProvider>(ctx, listen: false);
-            final favoriteProvider = Provider.of<FavoriteProvider>(ctx, listen: false);
+            final productProvider = Provider.of<ProductProvider>(
+              ctx,
+              listen: false,
+            );
+            final favoriteProvider = Provider.of<FavoriteProvider>(
+              ctx,
+              listen: false,
+            );
             // Counts reflect draft stock and draft favorites filters.
-            List<ProductModel> draftCatalogSnapshot(List<ProductModel> all, FavoriteProvider favorites) {
+            List<ProductModel> draftCatalogSnapshot(
+              List<ProductModel> all,
+              FavoriteProvider favorites,
+            ) {
               var result = all.where(_isActiveListing).toList();
               if (_browseMode == 'equipment') {
                 result = result.where((p) => p.baseUnit == null).toList();
@@ -610,15 +722,26 @@ class _HomeScreenState extends State<HomeScreen> {
                 result = result.where((p) => p.baseUnit != null).toList();
               }
               if (draftStock != 'all') {
-                result = result.where((p) => p.availabilityStatus.trim().toLowerCase() == draftStock).toList();
+                result = result
+                    .where(
+                      (p) =>
+                          p.availabilityStatus.trim().toLowerCase() ==
+                          draftStock,
+                    )
+                    .toList();
               }
               if (draftFavorites) {
-                result = result.where((p) => favorites.isFavorite(p.id)).toList();
+                result = result
+                    .where((p) => favorites.isFavorite(p.id))
+                    .toList();
               }
               return result;
             }
 
-            final catalogSnapshot = draftCatalogSnapshot(productProvider.products, favoriteProvider);
+            final catalogSnapshot = draftCatalogSnapshot(
+              productProvider.products,
+              favoriteProvider,
+            );
             final categoryCountsSnapshot = _categoryCounts(catalogSnapshot);
             final allCategoriesCount = catalogSnapshot.length;
 
@@ -635,10 +758,10 @@ class _HomeScreenState extends State<HomeScreen> {
                   constraints: BoxConstraints(maxHeight: maxH),
                   decoration: BoxDecoration(
                     color: colors.surface,
-                    borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-                    border: Border(
-                      top: BorderSide(color: colors.border),
+                    borderRadius: const BorderRadius.vertical(
+                      top: Radius.circular(24),
                     ),
+                    border: Border(top: BorderSide(color: colors.border)),
                   ),
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.stretch,
@@ -680,12 +803,18 @@ class _HomeScreenState extends State<HomeScreen> {
                               },
                               child: Text(
                                 'Clear all',
-                                style: TextStyle(color: colors.textMuted, fontWeight: FontWeight.w600),
+                                style: TextStyle(
+                                  color: colors.textMuted,
+                                  fontWeight: FontWeight.w600,
+                                ),
                               ),
                             ),
                             IconButton(
                               onPressed: () => Navigator.pop(ctx, false),
-                              icon: Icon(Icons.close_rounded, color: colors.textMuted),
+                              icon: Icon(
+                                Icons.close_rounded,
+                                color: colors.textMuted,
+                              ),
                               tooltip: 'Close',
                             ),
                           ],
@@ -695,7 +824,11 @@ class _HomeScreenState extends State<HomeScreen> {
                         padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
                         child: Text(
                           'Filter by stock level, category, and saved items. Only active listings are shown.',
-                          style: TextStyle(color: colors.textMuted, fontSize: 12, height: 1.35),
+                          style: TextStyle(
+                            color: colors.textMuted,
+                            fontSize: 12,
+                            height: 1.35,
+                          ),
                         ),
                       ),
                       Divider(height: 1, color: colors.border),
@@ -717,7 +850,9 @@ class _HomeScreenState extends State<HomeScreen> {
                                       return _StockFilterChip(
                                         label: opt['label']!,
                                         selected: selected,
-                                        onTap: () => setSheetState(() => draftStock = opt['id']!),
+                                        onTap: () => setSheetState(
+                                          () => draftStock = opt['id']!,
+                                        ),
                                       );
                                     }).toList(),
                                   ),
@@ -729,8 +864,16 @@ class _HomeScreenState extends State<HomeScreen> {
                                 child: _FavoritesFilterRow(
                                   value: draftFavorites,
                                   onChanged: (v) {
-                                    if (v && !Provider.of<AuthProvider>(context, listen: false).isAuthenticated) {
-                                      ensureAuthenticated(context, message: 'Please log in to see your saved items.');
+                                    if (v &&
+                                        !Provider.of<AuthProvider>(
+                                          context,
+                                          listen: false,
+                                        ).isAuthenticated) {
+                                      ensureAuthenticated(
+                                        context,
+                                        message:
+                                            'Please log in to see your saved items.',
+                                      );
                                       return;
                                     }
                                     setSheetState(() => draftFavorites = v);
@@ -745,69 +888,111 @@ class _HomeScreenState extends State<HomeScreen> {
                                   children: [
                                     if (categories.length >= 8)
                                       Padding(
-                                        padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+                                        padding: const EdgeInsets.fromLTRB(
+                                          12,
+                                          0,
+                                          12,
+                                          8,
+                                        ),
                                         child: TextField(
                                           controller: categorySearchController,
-                                          onChanged: (_) => setSheetState(() {}),
-                                          style: TextStyle(color: colors.textPrimary, fontSize: 14),
+                                          onChanged: (_) =>
+                                              setSheetState(() {}),
+                                          style: TextStyle(
+                                            color: colors.textPrimary,
+                                            fontSize: 14,
+                                          ),
                                           decoration: InputDecoration(
                                             hintText: 'Search categories…',
                                             hintStyle: TextStyle(
-                                              color: isDark ? const Color(0xFF94A3B8) : colors.textMuted,
+                                              color: isDark
+                                                  ? const Color(0xFF94A3B8)
+                                                  : colors.textMuted,
                                               fontSize: 13,
                                             ),
                                             prefixIcon: Icon(
                                               Icons.search_rounded,
-                                              color: isDark ? const Color(0xFF94A3B8) : colors.textMuted,
+                                              color: isDark
+                                                  ? const Color(0xFF94A3B8)
+                                                  : colors.textMuted,
                                               size: 18,
                                             ),
                                             filled: true,
                                             fillColor: isDark
-                                                ? const Color(0xFF334155).withValues(alpha: 0.45)
+                                                ? const Color(
+                                                    0xFF334155,
+                                                  ).withValues(alpha: 0.45)
                                                 : const Color(0xFFF1F5F9),
                                             isDense: true,
-                                            contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                                            contentPadding:
+                                                const EdgeInsets.symmetric(
+                                                  horizontal: 12,
+                                                  vertical: 10,
+                                                ),
                                             border: OutlineInputBorder(
-                                              borderRadius: BorderRadius.circular(10),
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
                                               borderSide: BorderSide(
                                                 color: isDark
-                                                    ? const Color(0xFF475569).withValues(alpha: 0.5)
+                                                    ? const Color(
+                                                        0xFF475569,
+                                                      ).withValues(alpha: 0.5)
                                                     : colors.border,
                                               ),
                                             ),
                                             enabledBorder: OutlineInputBorder(
-                                              borderRadius: BorderRadius.circular(10),
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
                                               borderSide: BorderSide(
                                                 color: isDark
-                                                    ? const Color(0xFF475569).withValues(alpha: 0.5)
+                                                    ? const Color(
+                                                        0xFF475569,
+                                                      ).withValues(alpha: 0.5)
                                                     : colors.border,
                                               ),
                                             ),
                                             focusedBorder: OutlineInputBorder(
-                                              borderRadius: BorderRadius.circular(10),
-                                              borderSide: const BorderSide(color: Color(0xFF6C63FF), width: 1.2),
+                                              borderRadius:
+                                                  BorderRadius.circular(10),
+                                              borderSide: const BorderSide(
+                                                color: Color(0xFF6C63FF),
+                                                width: 1.2,
+                                              ),
                                             ),
                                           ),
                                         ),
                                       ),
                                     ConstrainedBox(
-                                      constraints: const BoxConstraints(maxHeight: 280),
+                                      constraints: const BoxConstraints(
+                                        maxHeight: 280,
+                                      ),
                                       child: ListView(
                                         shrinkWrap: true,
                                         children: [
-                                          if (categorySearchController.text.trim().isEmpty)
+                                          if (categorySearchController.text
+                                              .trim()
+                                              .isEmpty)
                                             _FilterSelectRow(
                                               label: 'All categories',
                                               count: allCategoriesCount,
                                               selected: draftCategory == null,
-                                              onTap: () => setSheetState(() => draftCategory = null),
+                                              onTap: () => setSheetState(
+                                                () => draftCategory = null,
+                                              ),
                                             ),
                                           ...filteredCategories().map((c) {
                                             return _FilterSelectRow(
                                               label: c.categoryName,
-                                              count: countForCategory(c.categoryName),
-                                              selected: draftCategory == c.categoryName,
-                                              onTap: () => setSheetState(() => draftCategory = c.categoryName),
+                                              count: countForCategory(
+                                                c.categoryName,
+                                              ),
+                                              selected:
+                                                  draftCategory ==
+                                                  c.categoryName,
+                                              onTap: () => setSheetState(
+                                                () => draftCategory =
+                                                    c.categoryName,
+                                              ),
                                               showDivider: true,
                                             );
                                           }),
@@ -817,7 +1002,10 @@ class _HomeScreenState extends State<HomeScreen> {
                                               child: Text(
                                                 'No categories match',
                                                 textAlign: TextAlign.center,
-                                                style: TextStyle(color: colors.textMuted, fontSize: 13),
+                                                style: TextStyle(
+                                                  color: colors.textMuted,
+                                                  fontSize: 13,
+                                                ),
                                               ),
                                             ),
                                         ],
@@ -831,7 +1019,12 @@ class _HomeScreenState extends State<HomeScreen> {
                         ),
                       ),
                       Container(
-                        padding: EdgeInsets.fromLTRB(16, 12, 16, 12 + bottomInset),
+                        padding: EdgeInsets.fromLTRB(
+                          16,
+                          12,
+                          16,
+                          12 + bottomInset,
+                        ),
                         decoration: BoxDecoration(
                           color: colors.background,
                           border: Border(top: BorderSide(color: colors.border)),
@@ -845,9 +1038,14 @@ class _HomeScreenState extends State<HomeScreen> {
                                   foregroundColor: colors.textSecondary,
                                   side: BorderSide(color: colors.border),
                                   minimumSize: const Size.fromHeight(48),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
                                 ),
-                                child: const Text('Cancel', style: TextStyle(fontWeight: FontWeight.w600)),
+                                child: const Text(
+                                  'Cancel',
+                                  style: TextStyle(fontWeight: FontWeight.w600),
+                                ),
                               ),
                             ),
                             const SizedBox(width: 12),
@@ -860,11 +1058,18 @@ class _HomeScreenState extends State<HomeScreen> {
                                   foregroundColor: Colors.white,
                                   elevation: 0,
                                   minimumSize: const Size.fromHeight(48),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+                                  shape: RoundedRectangleBorder(
+                                    borderRadius: BorderRadius.circular(14),
+                                  ),
                                 ),
                                 child: Text(
-                                  count > 0 ? 'Show results ($count)' : 'Show results',
-                                  style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15),
+                                  count > 0
+                                      ? 'Show results ($count)'
+                                      : 'Show results',
+                                  style: const TextStyle(
+                                    fontWeight: FontWeight.w700,
+                                    fontSize: 15,
+                                  ),
                                 ),
                               ),
                             ),
@@ -937,7 +1142,11 @@ class _ActiveFilterChip extends StatelessWidget {
         children: [
           Text(
             label,
-            style: TextStyle(color: colors.textPrimary, fontSize: 13, fontWeight: FontWeight.w600),
+            style: TextStyle(
+              color: colors.textPrimary,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+            ),
           ),
           IconButton(
             onPressed: onClear,
@@ -957,7 +1166,11 @@ class _FilterSectionCard extends StatelessWidget {
   final Widget child;
   final String? trailing;
 
-  const _FilterSectionCard({required this.title, required this.child, this.trailing});
+  const _FilterSectionCard({
+    required this.title,
+    required this.child,
+    this.trailing,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -990,7 +1203,11 @@ class _FilterSectionCard extends StatelessWidget {
                 if (trailing != null)
                   Text(
                     trailing!,
-                    style: TextStyle(color: colors.textMuted, fontSize: 11, fontWeight: FontWeight.w600),
+                    style: TextStyle(
+                      color: colors.textMuted,
+                      fontSize: 11,
+                      fontWeight: FontWeight.w600,
+                    ),
                   ),
               ],
             ),
@@ -1024,7 +1241,9 @@ class _FilterSelectRow extends StatelessWidget {
       children: [
         if (showDivider) Divider(height: 1, color: colors.border),
         Material(
-          color: selected ? colors.accent.withValues(alpha: 0.12) : Colors.transparent,
+          color: selected
+              ? colors.accent.withValues(alpha: 0.12)
+              : Colors.transparent,
           child: InkWell(
             onTap: onTap,
             child: Padding(
@@ -1035,16 +1254,23 @@ class _FilterSelectRow extends StatelessWidget {
                     child: Text(
                       label,
                       style: TextStyle(
-                        color: selected ? colors.textPrimary : colors.textSecondary,
+                        color: selected
+                            ? colors.textPrimary
+                            : colors.textSecondary,
                         fontSize: 14,
-                        fontWeight: selected ? FontWeight.w600 : FontWeight.w500,
+                        fontWeight: selected
+                            ? FontWeight.w600
+                            : FontWeight.w500,
                       ),
                     ),
                   ),
                   if (count != null)
                     Container(
                       margin: const EdgeInsets.only(right: 10),
-                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                      padding: const EdgeInsets.symmetric(
+                        horizontal: 7,
+                        vertical: 2,
+                      ),
                       decoration: BoxDecoration(
                         color: selected
                             ? const Color(0xFF6C63FF).withValues(alpha: 0.25)
@@ -1054,14 +1280,20 @@ class _FilterSelectRow extends StatelessWidget {
                       child: Text(
                         '$count',
                         style: TextStyle(
-                          color: selected ? colors.textPrimary : colors.textMuted,
+                          color: selected
+                              ? colors.textPrimary
+                              : colors.textMuted,
                           fontSize: 11,
                           fontWeight: FontWeight.w600,
                         ),
                       ),
                     ),
                   if (selected)
-                    const Icon(Icons.check_circle_rounded, color: Color(0xFF6C63FF), size: 20),
+                    const Icon(
+                      Icons.check_circle_rounded,
+                      color: Color(0xFF6C63FF),
+                      size: 20,
+                    ),
                 ],
               ),
             ),
@@ -1100,7 +1332,13 @@ class _StockFilterChip extends StatelessWidget {
               color: selected ? const Color(0xFF6C63FF) : colors.border,
             ),
             boxShadow: selected
-                ? [BoxShadow(color: Colors.black.withValues(alpha: 0.08), blurRadius: 4, offset: const Offset(0, 1))]
+                ? [
+                    BoxShadow(
+                      color: Colors.black.withValues(alpha: 0.08),
+                      blurRadius: 4,
+                      offset: const Offset(0, 1),
+                    ),
+                  ]
                 : null,
           ),
           child: Text(
@@ -1141,18 +1379,30 @@ class _FavoritesFilterRow extends StatelessWidget {
                 height: 40,
                 decoration: BoxDecoration(
                   color: value
-                      ? const Color(0xFFEF4444).withValues(alpha: isDark ? 0.2 : 0.12)
-                      : (isDark ? const Color(0xFF334155).withValues(alpha: 0.5) : const Color(0xFFF1F5F9)),
+                      ? const Color(
+                          0xFFEF4444,
+                        ).withValues(alpha: isDark ? 0.2 : 0.12)
+                      : (isDark
+                            ? const Color(0xFF334155).withValues(alpha: 0.5)
+                            : const Color(0xFFF1F5F9)),
                   borderRadius: BorderRadius.circular(12),
                   border: Border.all(
                     color: value
-                        ? const Color(0xFFEF4444).withValues(alpha: isDark ? 0.35 : 0.2)
-                        : (isDark ? const Color(0xFF475569).withValues(alpha: 0.4) : const Color(0xFFE2E8F0)),
+                        ? const Color(
+                            0xFFEF4444,
+                          ).withValues(alpha: isDark ? 0.35 : 0.2)
+                        : (isDark
+                              ? const Color(0xFF475569).withValues(alpha: 0.4)
+                              : const Color(0xFFE2E8F0)),
                   ),
                 ),
                 child: Icon(
-                  value ? Icons.favorite_rounded : Icons.favorite_border_rounded,
-                  color: value ? const Color(0xFFEF4444) : (isDark ? const Color(0xFF94A3B8) : colors.textMuted),
+                  value
+                      ? Icons.favorite_rounded
+                      : Icons.favorite_border_rounded,
+                  color: value
+                      ? const Color(0xFFEF4444)
+                      : (isDark ? const Color(0xFF94A3B8) : colors.textMuted),
                   size: 20,
                 ),
               ),
@@ -1172,10 +1422,7 @@ class _FavoritesFilterRow extends StatelessWidget {
                     const SizedBox(height: 2),
                     Text(
                       'Show items you have saved',
-                      style: TextStyle(
-                        color: colors.textMuted,
-                        fontSize: 12,
-                      ),
+                      style: TextStyle(color: colors.textMuted, fontSize: 12),
                     ),
                   ],
                 ),
@@ -1186,7 +1433,9 @@ class _FavoritesFilterRow extends StatelessWidget {
                 activeTrackColor: const Color(0xFF6C63FF),
                 activeThumbColor: Colors.white,
                 inactiveThumbColor: Colors.white,
-                inactiveTrackColor: isDark ? const Color(0xFF475569) : const Color(0xFFCBD5E1),
+                inactiveTrackColor: isDark
+                    ? const Color(0xFF475569)
+                    : const Color(0xFFCBD5E1),
                 trackOutlineColor: WidgetStateProperty.resolveWith<Color?>(
                   (_) => Colors.transparent,
                 ),

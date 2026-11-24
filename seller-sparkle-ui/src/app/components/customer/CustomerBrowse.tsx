@@ -94,14 +94,10 @@ export function BrowseCardImage({ src }: { src: string }) {
   if (!src.trim() || !activeSrc) {
     const subtitle = !src.trim() ? "Image will be updated soon" : "Image currently unavailable";
     return (
-      <div className="relative flex h-full w-full items-center justify-center overflow-hidden bg-gradient-to-br from-slate-100 via-slate-50 to-slate-200 text-slate-500 dark:from-slate-900 dark:via-slate-800 dark:to-slate-900 dark:text-slate-300">
-        <div className="absolute -top-8 -right-8 h-28 w-28 rounded-full bg-white/40 blur-2xl dark:bg-white/10" />
-        <div className="absolute -bottom-8 -left-8 h-28 w-28 rounded-full bg-white/40 blur-2xl dark:bg-white/10" />
-        <div className="relative flex flex-col items-center gap-2 rounded-md border border-white/60 bg-white/55 px-4 py-3 text-center shadow-sm backdrop-blur-sm dark:border-white/10 dark:bg-black/20">
-          <ImageOff className="h-5 w-5" />
-          <p className="text-xs font-medium text-slate-600 dark:text-slate-200">No product image</p>
-          <p className="text-[11px] text-slate-500 dark:text-slate-300">{subtitle}</p>
-        </div>
+      <div className="flex h-full w-full flex-col items-center justify-center gap-2 bg-[#F5F5F5] px-4 text-center text-slate-500">
+        <ImageOff className="h-5 w-5 text-slate-400" />
+        <p className="text-xs font-medium text-slate-600">No product image</p>
+        <p className="text-[11px] text-slate-500">{subtitle}</p>
       </div>
     );
   }
@@ -109,7 +105,7 @@ export function BrowseCardImage({ src }: { src: string }) {
     <img
       src={activeSrc}
       alt=""
-      className="h-full w-full object-contain object-center bg-muted"
+      className="customer-catalog-media-img bg-[#F5F5F5]"
       loading="lazy"
       decoding="async"
       onError={() => {
@@ -633,13 +629,13 @@ const CustomerBrowse = () => {
                       state={shopState}
                       className="block focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
                     >
-                      <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
+                      <div className="relative aspect-square w-full overflow-hidden bg-[#F5F5F5]">
                         <BrowseCardImage src={item.primaryImageUrl ?? ""} />
                         {badge ? <Badge className={badge.className}>{badge.label}</Badge> : null}
                       </div>
                     </Link>
                   ) : (
-                    <div className="relative aspect-[4/3] w-full overflow-hidden bg-muted">
+                    <div className="relative aspect-square w-full overflow-hidden bg-[#F5F5F5]">
                       <BrowseCardImage src={item.primaryImageUrl ?? ""} />
                       {badge ? <Badge className={badge.className}>{badge.label}</Badge> : null}
                     </div>

@@ -248,24 +248,24 @@ export function ProductImageGallery({
 
   if (safeImages.length === 0) {
     return (
-      <div className={cn("relative w-full overflow-hidden rounded-lg border bg-muted/40", className)}>
-        <div className="aspect-[4/3] w-full lg:aspect-square" aria-hidden />
-        <div className="absolute inset-0 flex items-center justify-center text-sm text-muted-foreground">No photos</div>
+      <div className={cn("relative mx-auto w-full max-w-[min(100%,calc(100svh-14rem))] overflow-hidden rounded-lg border bg-[#F5F5F5]", className)}>
+        <div className="aspect-square w-full" aria-hidden />
+        <div className="absolute inset-0 flex items-center justify-center text-sm text-slate-500">No photos</div>
       </div>
     );
   }
 
   return (
-    <div className={cn("min-w-0 space-y-2.5", className)}>
+    <div className={cn("mx-auto min-w-0 w-full max-w-[min(100%,calc(100svh-14rem))] space-y-2.5", className)}>
       <button
         type="button"
         onClick={() => openLightbox(imgIx)}
-        className="group relative block w-full overflow-hidden rounded-lg border border-border/80 bg-muted/35 text-left outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring"
+        className="group relative block w-full overflow-hidden rounded-lg border border-border/80 bg-[#F5F5F5] text-left outline-none ring-offset-background focus-visible:ring-2 focus-visible:ring-ring"
         aria-label="Open image zoom viewer"
       >
-        <div className="relative aspect-[4/3] w-full lg:aspect-square">
+        <div className="relative aspect-square w-full bg-[#F5F5F5]">
           <div
-            className="absolute inset-3 overflow-hidden sm:inset-4 lg:inset-[1.125rem]"
+            className="absolute inset-0 overflow-hidden"
             onMouseMove={onHoverMove}
             onMouseLeave={() => setOrigin("50% 50%")}
           >
@@ -297,7 +297,7 @@ export function ProductImageGallery({
               onClick={() => setImgIx(i)}
               onDoubleClick={() => openLightbox(i)}
               className={cn(
-                "relative h-14 w-14 shrink-0 overflow-hidden rounded-md border bg-muted/40",
+                "relative h-14 w-14 shrink-0 overflow-hidden rounded-md border bg-[#F5F5F5]",
                 i === imgIx ? "border-primary ring-1 ring-primary/40" : "border-border/70 hover:border-foreground/30",
               )}
               aria-label={`View image ${i + 1}`}
