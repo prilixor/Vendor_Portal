@@ -473,20 +473,16 @@ internal sealed class VendorUploadStorageService(
 
             if (fitSquare)
             {
-                var side = Math.Min(width, height);
-                // Already a small square. The shop tile can use the original.
-                if (width == height && side <= ThumbnailMaxWidth)
+                // Fit the whole photo inside 400px. Do not crop: a center crop fills the
+                // tile and looks too big, and the original file is too large for the shop.
+                var longest = Math.Max(width, height);
+                if (longest <= ThumbnailMaxWidth)
                     return null;
 
-                var cropX = (width - side) / 2;
-                var cropY = (height - side) / 2;
-                image.Mutate(ctx =>
-                {
-                    if (width != height)
-                        ctx.Crop(new Rectangle(cropX, cropY, side, side));
-                    if (side > ThumbnailMaxWidth)
-                        ctx.Resize(ThumbnailMaxWidth, ThumbnailMaxWidth);
-                });
+                var scale = ThumbnailMaxWidth / (double)longest;
+                var newWidth = Math.Max(1, (int)Math.Round(width * scale));
+                var newHeight = Math.Max(1, (int)Math.Round(height * scale));
+                image.Mutate(x => x.Resize(newWidth, newHeight));
             }
             else
             {
