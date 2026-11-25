@@ -16,7 +16,7 @@ public sealed record BackfillProductImageThumbnailsResult(
     int ListingFailed,
     bool MoreRemaining);
 
-public sealed record BackfillProductImageThumbnailsCommand(int Limit = 50)
+public sealed record BackfillProductImageThumbnailsCommand(int Limit = 50, DateTime? RebuildBeforeUtc = null)
     : ICommand<BackfillProductImageThumbnailsResult>;
 
 public sealed class BackfillProductImageThumbnailsCommandValidator : AbstractValidator<BackfillProductImageThumbnailsCommand>
@@ -41,8 +41,11 @@ internal sealed class BackfillProductImageThumbnailsCommandHandler(
         CancellationToken cancellationToken)
     {
         var limit = Math.Clamp(request.Limit, 1, 500);
+        var rebuildBefore = request.RebuildBeforeUtc;
 
-        var catalog = await repository.GetProductImagesMissingThumbnailsAsync(limit, cancellationToken);
+        var catalog = rebuildBefore is null
+            ? await repository.GetProductImagesMissingThumbnailsAsync(limit, cancellationToken)
+            : await repository.GetProductImagesForFittedThumbnailRebuildAsync(limit, rebuildBefore.Value, cancellationToken);
         var catalogCreated = 0;
         var catalogSkipped = 0;
         var catalogFailed = 0;
@@ -51,27 +54,41 @@ internal sealed class BackfillProductImageThumbnailsCommandHandler(
         {
             try
             {
-                var thumbRef = await uploadStorage.CreateThumbnailForExistingImageAsync(image.ImageUrl, cancellationToken);
+                var thumbRef = await uploadStorage.CreateThumbnailForExistingImageAsync(
+                    image.ImageUrl,
+                    cancellationToken,
+                    fitSquare: true);
                 if (string.IsNullOrWhiteSpace(thumbRef))
                 {
                     // Mark as processed so small/already-optimized images are not retried forever.
                     image.ThumbnailUrl = image.ImageUrl;
+                    if (rebuildBefore is not null)
+                        image.ModifiedOnUtc = DateTime.UtcNow;
                     await repository.UpdateProductImageAsync(image, cancellationToken);
                     catalogSkipped++;
                     continue;
                 }
 
                 image.ThumbnailUrl = thumbRef;
+                if (rebuildBefore is not null)
+                    image.ModifiedOnUtc = DateTime.UtcNow;
                 await repository.UpdateProductImageAsync(image, cancellationToken);
                 catalogCreated++;
             }
             catch
             {
+                if (rebuildBefore is not null)
+                {
+                    image.ModifiedOnUtc = DateTime.UtcNow;
+                    await repository.UpdateProductImageAsync(image, cancellationToken);
+                }
                 catalogFailed++;
             }
         }
 
-        var listing = await repository.GetVendorProductImagesMissingThumbnailsAsync(limit, cancellationToken);
+        var listing = rebuildBefore is null
+            ? await repository.GetVendorProductImagesMissingThumbnailsAsync(limit, cancellationToken)
+            : await repository.GetVendorProductImagesForFittedThumbnailRebuildAsync(limit, rebuildBefore.Value, cancellationToken);
         var listingCreated = 0;
         var listingSkipped = 0;
         var listingFailed = 0;
@@ -80,29 +97,45 @@ internal sealed class BackfillProductImageThumbnailsCommandHandler(
         {
             try
             {
-                var thumbRef = await uploadStorage.CreateThumbnailForExistingImageAsync(image.ImageUrl, cancellationToken);
+                var thumbRef = await uploadStorage.CreateThumbnailForExistingImageAsync(
+                    image.ImageUrl,
+                    cancellationToken,
+                    fitSquare: true);
                 if (string.IsNullOrWhiteSpace(thumbRef))
                 {
                     image.ThumbnailUrl = image.ImageUrl;
+                    if (rebuildBefore is not null)
+                        image.ModifiedOnUtc = DateTime.UtcNow;
                     await repository.UpdateVendorProductImageAsync(image, cancellationToken);
                     listingSkipped++;
                     continue;
                 }
 
                 image.ThumbnailUrl = thumbRef;
+                if (rebuildBefore is not null)
+                    image.ModifiedOnUtc = DateTime.UtcNow;
                 await repository.UpdateVendorProductImageAsync(image, cancellationToken);
                 listingCreated++;
             }
             catch
             {
+                if (rebuildBefore is not null)
+                {
+                    image.ModifiedOnUtc = DateTime.UtcNow;
+                    await repository.UpdateVendorProductImageAsync(image, cancellationToken);
+                }
                 listingFailed++;
             }
         }
 
         await repository.SaveChangesAsync(cancellationToken);
 
-        var moreCatalog = (await repository.GetProductImagesMissingThumbnailsAsync(1, cancellationToken)).Count > 0;
-        var moreListing = (await repository.GetVendorProductImagesMissingThumbnailsAsync(1, cancellationToken)).Count > 0;
+        var moreCatalog = rebuildBefore is null
+            ? (await repository.GetProductImagesMissingThumbnailsAsync(1, cancellationToken)).Count > 0
+            : (await repository.GetProductImagesForFittedThumbnailRebuildAsync(1, rebuildBefore.Value, cancellationToken)).Count > 0;
+        var moreListing = rebuildBefore is null
+            ? (await repository.GetVendorProductImagesMissingThumbnailsAsync(1, cancellationToken)).Count > 0
+            : (await repository.GetVendorProductImagesForFittedThumbnailRebuildAsync(1, rebuildBefore.Value, cancellationToken)).Count > 0;
 
         return Result.Success(new BackfillProductImageThumbnailsResult(
             catalog.Count,

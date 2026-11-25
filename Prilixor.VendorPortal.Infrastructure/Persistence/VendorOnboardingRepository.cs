@@ -924,6 +924,19 @@ public sealed class VendorOnboardingRepository(
             .ToListAsync(cancellationToken);
     }
 
+    public Task<List<ProductImage>> GetProductImagesForFittedThumbnailRebuildAsync(
+        int limit,
+        DateTime modifiedBeforeUtc,
+        CancellationToken cancellationToken)
+    {
+        var take = Math.Clamp(limit, 1, 500);
+        return commonDbContext.ProductImages
+            .Where(x => !x.IsDeleted && (x.ModifiedOnUtc == null || x.ModifiedOnUtc < modifiedBeforeUtc))
+            .OrderBy(x => x.CreatedOnUtc)
+            .Take(take)
+            .ToListAsync(cancellationToken);
+    }
+
     public async Task AddProductDocumentAsync(ProductDocument document, CancellationToken cancellationToken)
     {
         await commonDbContext.ProductDocuments.AddAsync(document, cancellationToken);
@@ -1459,6 +1472,19 @@ public sealed class VendorOnboardingRepository(
         var take = Math.Clamp(limit, 1, 500);
         return dbContext.VendorProductImages
             .Where(x => !x.IsDeleted && (x.ThumbnailUrl == null || x.ThumbnailUrl == ""))
+            .OrderBy(x => x.CreatedOnUtc)
+            .Take(take)
+            .ToListAsync(cancellationToken);
+    }
+
+    public Task<List<VendorProductImage>> GetVendorProductImagesForFittedThumbnailRebuildAsync(
+        int limit,
+        DateTime modifiedBeforeUtc,
+        CancellationToken cancellationToken)
+    {
+        var take = Math.Clamp(limit, 1, 500);
+        return dbContext.VendorProductImages
+            .Where(x => !x.IsDeleted && (x.ModifiedOnUtc == null || x.ModifiedOnUtc < modifiedBeforeUtc))
             .OrderBy(x => x.CreatedOnUtc)
             .Take(take)
             .ToListAsync(cancellationToken);

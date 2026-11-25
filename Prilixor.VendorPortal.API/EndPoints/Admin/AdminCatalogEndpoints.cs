@@ -734,6 +734,12 @@ public sealed class DownloadCatalogExcelEndpoint(IMediator mediator)
 public sealed class BackfillProductImageThumbnailsRequest
 {
     public int Limit { get; set; } = 50;
+
+    /// <summary>
+    /// When set, rebuild shop thumbs as center squares for images last modified before this time.
+    /// Send the same value on every batch until moreRemaining is false.
+    /// </summary>
+    public DateTime? RebuildBeforeUtc { get; set; }
 }
 
 /// <summary>
@@ -755,7 +761,11 @@ public sealed class BackfillProductImageThumbnailsEndpoint(IMediator mediator)
         BackfillProductImageThumbnailsRequest req,
         CancellationToken ct)
     {
-        var result = await mediator.Send(new BackfillProductImageThumbnailsCommand(req.Limit <= 0 ? 50 : req.Limit), ct);
+        var result = await mediator.Send(
+            new BackfillProductImageThumbnailsCommand(
+                req.Limit <= 0 ? 50 : req.Limit,
+                req.RebuildBeforeUtc),
+            ct);
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
 }

@@ -80,7 +80,10 @@ internal sealed class VendorUploadStorageService(
                 || folderType == VendorFileFolderType.OrderImages)
             && LooksLikeImage(contentType, extension))
         {
-            thumbnailBytes = TryCreateThumbnailJpeg(sourceMs, sourceMs.Length);
+            thumbnailBytes = TryCreateThumbnailJpeg(
+                sourceMs,
+                sourceMs.Length,
+                fitSquare: folderType == VendorFileFolderType.ProductImages);
             sourceMs.Position = 0;
             if (thumbnailBytes is { Length: > 0 })
             {
@@ -223,7 +226,8 @@ internal sealed class VendorUploadStorageService(
 
     public async Task<string?> CreateThumbnailForExistingImageAsync(
         string storedImageReference,
-        CancellationToken cancellationToken)
+        CancellationToken cancellationToken,
+        bool fitSquare = false)
     {
         if (string.IsNullOrWhiteSpace(storedImageReference))
             return null;
@@ -233,7 +237,7 @@ internal sealed class VendorUploadStorageService(
             return null;
 
         await using var sourceMs = new MemoryStream(originalBytes);
-        var thumbBytes = TryCreateThumbnailJpeg(sourceMs, originalBytes.Length);
+        var thumbBytes = TryCreateThumbnailJpeg(sourceMs, originalBytes.Length, fitSquare);
         if (thumbBytes is null || thumbBytes.Length == 0)
             return null;
 
@@ -457,7 +461,7 @@ internal sealed class VendorUploadStorageService(
         return ext is ".gif" or ".webp";
     }
 
-    private static byte[]? TryCreateThumbnailJpeg(Stream source, long originalByteLength)
+    private static byte[]? TryCreateThumbnailJpeg(Stream source, long originalByteLength, bool fitSquare)
     {
         try
         {
@@ -467,19 +471,39 @@ internal sealed class VendorUploadStorageService(
             if (width <= 0 || height <= 0)
                 return null;
 
-            // Already small enough for list cards — don't invent a second file that can end up larger after re-encode.
-            if (width <= ThumbnailMaxWidth && height <= ThumbnailMaxWidth)
-                return null;
+            if (fitSquare)
+            {
+                var side = Math.Min(width, height);
+                // Already a small square. The shop tile can use the original.
+                if (width == height && side <= ThumbnailMaxWidth)
+                    return null;
 
-            var newHeight = (int)Math.Round(height * (ThumbnailMaxWidth / (double)width));
-            image.Mutate(x => x.Resize(ThumbnailMaxWidth, Math.Max(1, newHeight)));
+                var cropX = (width - side) / 2;
+                var cropY = (height - side) / 2;
+                image.Mutate(ctx =>
+                {
+                    if (width != height)
+                        ctx.Crop(new Rectangle(cropX, cropY, side, side));
+                    if (side > ThumbnailMaxWidth)
+                        ctx.Resize(ThumbnailMaxWidth, ThumbnailMaxWidth);
+                });
+            }
+            else
+            {
+                // Already small enough for list cards — don't invent a second file that can end up larger after re-encode.
+                if (width <= ThumbnailMaxWidth && height <= ThumbnailMaxWidth)
+                    return null;
+
+                var newHeight = (int)Math.Round(height * (ThumbnailMaxWidth / (double)width));
+                image.Mutate(x => x.Resize(ThumbnailMaxWidth, Math.Max(1, newHeight)));
+            }
 
             using var outMs = new MemoryStream();
             image.Save(outMs, new JpegEncoder { Quality = ThumbnailJpegQuality });
             var bytes = outMs.ToArray();
 
-            // Only keep a thumb when it is meaningfully smaller than the original payload.
-            if (originalByteLength > 0 && bytes.Length >= originalByteLength)
+            // A fitted square is kept even when the jpeg is not smaller. The shop needs the shape.
+            if (!fitSquare && originalByteLength > 0 && bytes.Length >= originalByteLength)
                 return null;
 
             return bytes;

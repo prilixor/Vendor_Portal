@@ -38,8 +38,12 @@ public interface IVendorUploadStorageService
     /// <summary>
     /// For existing originals (Prod backfill): download, create thumb if worthwhile, store beside original.
     /// Returns thumbnail stored reference, or null when skipped/failed.
+    /// When <paramref name="fitSquare"/> is true, the thumb is a center square for shop tiles.
     /// </summary>
-    Task<string?> CreateThumbnailForExistingImageAsync(string storedImageReference, CancellationToken cancellationToken);
+    Task<string?> CreateThumbnailForExistingImageAsync(
+        string storedImageReference,
+        CancellationToken cancellationToken,
+        bool fitSquare = false);
 
     Task<byte[]?> ReadStoredBytesAsync(string storedReference, CancellationToken cancellationToken = default);
 }

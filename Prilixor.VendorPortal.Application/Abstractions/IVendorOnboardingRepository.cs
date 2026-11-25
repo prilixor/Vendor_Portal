@@ -64,6 +64,7 @@ public interface IVendorOnboardingRepository
     Task UpdateProductImageAsync(ProductImage image, CancellationToken cancellationToken);
     Task<List<ProductImage>> GetProductImagesAsync(Guid productId, CancellationToken cancellationToken);
     Task<List<ProductImage>> GetProductImagesMissingThumbnailsAsync(int limit, CancellationToken cancellationToken);
+    Task<List<ProductImage>> GetProductImagesForFittedThumbnailRebuildAsync(int limit, DateTime modifiedBeforeUtc, CancellationToken cancellationToken);
     Task AddProductDocumentAsync(ProductDocument document, CancellationToken cancellationToken);
     Task<ProductDocument?> GetProductDocumentByIdAsync(Guid productId, Guid documentId, CancellationToken cancellationToken);
     Task UpdateProductDocumentAsync(ProductDocument document, CancellationToken cancellationToken);
@@ -100,6 +101,7 @@ public interface IVendorOnboardingRepository
     Task<List<VendorProductImage>> GetVendorProductImagesByListingIdsAsync(IReadOnlyList<Guid> listingIds, CancellationToken cancellationToken);
     Task<List<ProductImage>> GetProductImagesByProductIdsAsync(IReadOnlyList<Guid> productIds, CancellationToken cancellationToken);
     Task<List<VendorProductImage>> GetVendorProductImagesMissingThumbnailsAsync(int limit, CancellationToken cancellationToken);
+    Task<List<VendorProductImage>> GetVendorProductImagesForFittedThumbnailRebuildAsync(int limit, DateTime modifiedBeforeUtc, CancellationToken cancellationToken);
 
     Task AddVendorProductDocumentAsync(VendorProductDocument document, CancellationToken cancellationToken);
     Task<VendorProductDocument?> GetVendorProductDocumentByIdAsync(Guid vendorId, Guid listingId, Guid documentId, CancellationToken cancellationToken);
