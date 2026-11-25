@@ -34,6 +34,7 @@ class _LoginScreenState extends State<LoginScreen> {
   String? _passwordError;
   bool _showPassword = false;
   bool _isProcessing = false;
+  bool _otpDialogOpen = false;
   bool? _phoneOtpEnabled;
   String _method = 'otp';
   int _cooldown = 0;
@@ -107,17 +108,23 @@ class _LoginScreenState extends State<LoginScreen> {
 
     _startCooldown(45);
 
-    final verified = await PhoneOtpDialog.show(
-      context,
-      phone: national,
-      role: 'customer',
-      skipAutoSend: true,
-      title: 'Enter verification code',
-      description: 'Enter the 6-digit code sent to +91 $national.',
-      successMessage: 'Welcome!',
-      onSendOtp: (p) => authProvider.sendCustomerLoginOtp(p),
-      onVerifyOtp: (p, code) => authProvider.loginWithCustomerPhoneOtp(p, code),
-    );
+    setState(() => _otpDialogOpen = true);
+    bool? verified;
+    try {
+      verified = await PhoneOtpDialog.show(
+        context,
+        phone: national,
+        role: 'customer',
+        skipAutoSend: true,
+        title: 'Enter verification code',
+        description: 'Enter the 6-digit code sent to +91 $national.',
+        successMessage: 'Welcome!',
+        onSendOtp: (p) => authProvider.sendCustomerLoginOtp(p),
+        onVerifyOtp: (p, code) => authProvider.loginWithCustomerPhoneOtp(p, code),
+      );
+    } finally {
+      if (mounted) setState(() => _otpDialogOpen = false);
+    }
 
     if (verified == true && mounted) {
       if (widget.popOnSuccess) {
@@ -316,25 +323,39 @@ class _LoginScreenState extends State<LoginScreen> {
                       },
                     ),
                     const SizedBox(height: 24),
-                    SizedBox(
-                      height: 56,
-                      child: ElevatedButton(
-                        onPressed: (isLoading || _cooldown > 0) ? null : _handleSendOtp,
-                        child: isLoading
-                            ? const SizedBox(
-                                width: 24,
-                                height: 24,
-                                child: CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 2,
+                    // The dialog owns Verify and Resend. Hide this button while it
+                    // is open so a second "Send OTP" does not sit under Verify.
+                    if (!_otpDialogOpen)
+                      SizedBox(
+                        height: 56,
+                        child: ElevatedButton(
+                          style: ElevatedButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(horizontal: 16),
+                            minimumSize: const Size.fromHeight(56),
+                            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                            textStyle: const TextStyle(
+                              fontSize: 16,
+                              fontWeight: FontWeight.w700,
+                              height: 1.25,
+                            ),
+                          ),
+                          onPressed: (isLoading || _cooldown > 0) ? null : _handleSendOtp,
+                          child: isLoading
+                              ? const SizedBox(
+                                  width: 24,
+                                  height: 24,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : Text(
+                                  _cooldown > 0 ? 'Send OTP in ${_cooldown}s' : 'Send OTP',
                                 ),
-                              )
-                            : Text(
-                                _cooldown > 0 ? 'Send OTP in ${_cooldown}s' : 'Send OTP',
-                                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
-                              ),
-                      ),
-                    ),
+                        ),
+                      )
+                    else
+                      const SizedBox(height: 56),
                   ],
                 ],
                 const SizedBox(height: 32),

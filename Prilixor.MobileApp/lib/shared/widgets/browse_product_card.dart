@@ -9,16 +9,87 @@ import '../utils/require_auth.dart';
 import 'catalog_image.dart';
 import 'favorite_overlay_button.dart';
 
-/// Title, price, deposit, and buy line under the square image, including padding.
-const double kBrowseProductCardFooterExtent = 120;
-
 /// Neutral plate behind every shop photo, light and dark. Same idea as the
 /// Amazon / Flipkart thumbnail canvas: a colored photo stays inside this plate.
 const Color kBrowseProductImageWell = Color(0xFFF5F5F5);
 
-/// Row height for a 2-column shop card: square image plus the info block.
-double browseProductCardExtent(double cardWidth) =>
-    cardWidth + kBrowseProductCardFooterExtent;
+const double _kBrowseFooterPadTop = 9;
+const double _kBrowseFooterPadBottom = 10;
+const double _kBrowseTitlePriceGap = 6;
+const double _kBrowsePriceDepositGap = 4;
+const double _kBrowsePriceLineExtent = 17;
+const double _kBrowseDepositLineExtent = 14;
+const double _kBrowseFooterSlack = 4;
+
+TextStyle browseProductTitleStyle(Color color) => TextStyle(
+  fontWeight: FontWeight.w700,
+  fontSize: 13,
+  height: 1.25,
+  color: color,
+);
+
+double browseTitleBlockHeight(
+  String title,
+  double cardWidth, {
+  TextScaler textScaler = TextScaler.noScaling,
+}) {
+  final painter = TextPainter(
+    text: TextSpan(text: title, style: browseProductTitleStyle(Colors.black)),
+    maxLines: 2,
+    textDirection: TextDirection.ltr,
+    textScaler: textScaler,
+    ellipsis: '…',
+  )..layout(maxWidth: (cardWidth - 20).clamp(0, double.infinity));
+  return painter.size.height;
+}
+
+/// Square image plus the lines this product actually shows.
+double browseProductCardExtent(
+  double cardWidth, {
+  required String title,
+  required bool includeDeposit,
+  TextScaler textScaler = TextScaler.noScaling,
+}) {
+  final titleHeight = browseTitleBlockHeight(
+    title,
+    cardWidth,
+    textScaler: textScaler,
+  );
+  var footer =
+      _kBrowseFooterPadTop +
+      titleHeight +
+      _kBrowseTitlePriceGap +
+      _kBrowsePriceLineExtent +
+      _kBrowseFooterPadBottom +
+      _kBrowseFooterSlack;
+  if (includeDeposit) {
+    footer += _kBrowsePriceDepositGap + _kBrowseDepositLineExtent;
+  }
+  return cardWidth + footer;
+}
+
+/// A pair of tiles shares one height: the taller name, and a deposit if either rental needs it.
+double browseProductRowExtent(
+  double cardWidth,
+  ProductModel left,
+  ProductModel? right, {
+  TextScaler textScaler = TextScaler.noScaling,
+}) {
+  final leftHeight = browseProductCardExtent(
+    cardWidth,
+    title: left.title,
+    includeDeposit: left.canRent,
+    textScaler: textScaler,
+  );
+  if (right == null) return leftHeight;
+  final rightHeight = browseProductCardExtent(
+    cardWidth,
+    title: right.title,
+    includeDeposit: right.canRent,
+    textScaler: textScaler,
+  );
+  return leftHeight > rightHeight ? leftHeight : rightHeight;
+}
 
 /// Mobile browse card — web pricing hierarchy, tuned for narrow 2-col grids.
 class BrowseProductCard extends StatelessWidget {
@@ -68,27 +139,12 @@ class BrowseProductCard extends StatelessWidget {
           : '';
     }
 
-    // Mobile-tuned: deposit only on the card; plans live on the PDP (tap).
+    // Mobile-tuned: deposit only on the card; buy price and plans live on the PDP.
     String? depositLine;
     if (showRent) {
       depositLine = product.depositRequired
           ? 'Deposit ${formatPlanInr(product.securityDeposit)}'
           : 'Rental plans available';
-    }
-
-    String? buyLine;
-    if (showBuy && showRent && (product.buyPrice ?? 0) > 0) {
-      final max = product.maxBuyPrice;
-      final range = max != null && max > product.buyPrice!
-          ? ' – ${formatPlanInr(max)}'
-          : '';
-      buyLine = 'Also buy for ${formatPlanInr(product.buyPrice!)}$range';
-    } else if (showBuy &&
-        !showRent &&
-        (product.buyPrice ?? 0) > 0 &&
-        product.maxBuyPrice != null &&
-        product.maxBuyPrice! > product.buyPrice!) {
-      buyLine = 'Up to ${formatPlanInr(product.maxBuyPrice!)}';
     }
 
     final card = Material(
@@ -172,22 +228,11 @@ class BrowseProductCard extends StatelessWidget {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  SizedBox(
-                    height: 34,
-                    child: Align(
-                      alignment: Alignment.topLeft,
-                      child: Text(
-                        product.title,
-                        maxLines: 2,
-                        overflow: TextOverflow.ellipsis,
-                        style: TextStyle(
-                          fontWeight: FontWeight.w700,
-                          fontSize: 13,
-                          height: 1.25,
-                          color: colors.textPrimary,
-                        ),
-                      ),
-                    ),
+                  Text(
+                    product.title,
+                    maxLines: 2,
+                    overflow: TextOverflow.ellipsis,
+                    style: browseProductTitleStyle(colors.textPrimary),
                   ),
                   const SizedBox(height: 6),
                   if (primaryValue != null)
@@ -221,8 +266,8 @@ class BrowseProductCard extends StatelessWidget {
                     )
                   else
                     const SizedBox(height: 17),
-                  const SizedBox(height: 4),
-                  if (depositLine != null)
+                  if (depositLine != null) ...[
+                    const SizedBox(height: 4),
                     Text(
                       depositLine,
                       maxLines: 1,
@@ -232,24 +277,8 @@ class BrowseProductCard extends StatelessWidget {
                         height: 1.2,
                         color: colors.textMuted,
                       ),
-                    )
-                  else
-                    const SizedBox(height: 13),
-                  const SizedBox(height: 3),
-                  if (buyLine != null)
-                    Text(
-                      buyLine,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: TextStyle(
-                        fontSize: 11,
-                        height: 1.2,
-                        fontWeight: FontWeight.w600,
-                        color: context.appColors.success,
-                      ),
-                    )
-                  else
-                    const SizedBox(height: 13),
+                    ),
+                  ],
                 ],
               ),
             ),
@@ -262,5 +291,63 @@ class BrowseProductCard extends StatelessWidget {
       return Opacity(opacity: 0.55, child: card);
     }
     return card;
+  }
+}
+
+/// Two shop tiles in one row. The row is as tall as the taller tile.
+class BrowseProductPair extends StatelessWidget {
+  final ProductModel left;
+  final ProductModel? right;
+  final double cardWidth;
+  final ValueChanged<ProductModel> onTap;
+  final bool dimWhenInactive;
+  final double bottomGap;
+
+  const BrowseProductPair({
+    super.key,
+    required this.left,
+    required this.right,
+    required this.cardWidth,
+    required this.onTap,
+    this.dimWhenInactive = false,
+    this.bottomGap = 14,
+  });
+
+  @override
+  Widget build(BuildContext context) {
+    final height = browseProductRowExtent(
+      cardWidth,
+      left,
+      right,
+      textScaler: MediaQuery.textScalerOf(context),
+    );
+    return Padding(
+      padding: EdgeInsets.only(bottom: bottomGap),
+      child: SizedBox(
+        height: height,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(
+              child: BrowseProductCard(
+                product: left,
+                dimWhenInactive: dimWhenInactive,
+                onTap: () => onTap(left),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: right == null
+                  ? const SizedBox.shrink()
+                  : BrowseProductCard(
+                      product: right!,
+                      dimWhenInactive: dimWhenInactive,
+                      onTap: () => onTap(right!),
+                    ),
+            ),
+          ],
+        ),
+      ),
+    );
   }
 }

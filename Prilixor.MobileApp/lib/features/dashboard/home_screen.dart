@@ -606,24 +606,24 @@ class _HomeScreenState extends State<HomeScreen> {
                                   16,
                                   24,
                                 ),
-                                sliver: SliverGrid(
-                                  gridDelegate:
-                                      SliverGridDelegateWithFixedCrossAxisCount(
-                                        crossAxisCount: 2,
-                                        mainAxisSpacing: 14,
-                                        crossAxisSpacing: 12,
-                                        mainAxisExtent: browseProductCardExtent(
-                                          cardWidth,
-                                        ),
-                                      ),
+                                sliver: SliverList(
                                   delegate: SliverChildBuilderDelegate((
                                     context,
                                     index,
                                   ) {
-                                    final product = products[index];
-                                    return BrowseProductCard(
-                                      product: product,
-                                      onTap: () {
+                                    final left = products[index * 2];
+                                    final rightIndex = index * 2 + 1;
+                                    final right = rightIndex < products.length
+                                        ? products[rightIndex]
+                                        : null;
+                                    final rowCount = (products.length / 2)
+                                        .ceil();
+                                    return BrowseProductPair(
+                                      left: left,
+                                      right: right,
+                                      cardWidth: cardWidth,
+                                      bottomGap: index == rowCount - 1 ? 0 : 14,
+                                      onTap: (product) {
                                         Navigator.push(
                                           context,
                                           MaterialPageRoute(
@@ -636,7 +636,7 @@ class _HomeScreenState extends State<HomeScreen> {
                                         );
                                       },
                                     );
-                                  }, childCount: products.length),
+                                  }, childCount: (products.length / 2).ceil()),
                                 ),
                               ),
                           ],

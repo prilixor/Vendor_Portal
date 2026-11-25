@@ -497,7 +497,9 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                     child: Column(
                       children: [
                         AspectRatio(
-                          aspectRatio: 1,
+                          // Shorter than the shop tile so price and options
+                          // stay on the first screen. Photo stays whole.
+                          aspectRatio: 4 / 3,
                           child: Container(
                             width: double.infinity,
                             decoration: BoxDecoration(
@@ -2025,39 +2027,35 @@ class _ProductDetailScreenState extends State<ProductDetailScreen> {
                               final cardWidth = width.isFinite
                                   ? (width - 12) / 2
                                   : 160.0;
-                              return GridView.builder(
-                                physics: const NeverScrollableScrollPhysics(),
-                                shrinkWrap: true,
-                                padding: EdgeInsets.zero,
-                                gridDelegate:
-                                    SliverGridDelegateWithFixedCrossAxisCount(
-                                      crossAxisCount: 2,
-                                      mainAxisSpacing: 14,
-                                      crossAxisSpacing: 12,
-                                      mainAxisExtent: browseProductCardExtent(
-                                        cardWidth,
-                                      ),
-                                    ),
-                                itemCount: _relatedProducts.length,
-                                itemBuilder: (context, index) {
-                                  final product = _relatedProducts[index];
-                                  return BrowseProductCard(
-                                    product: product,
-                                    dimWhenInactive: true,
-                                    onTap: () {
-                                      Navigator.push(
-                                        context,
-                                        MaterialPageRoute(
-                                          builder: (_) => ProductDetailScreen(
-                                            listingId: product.id,
-                                            previewImageUrl:
-                                                product.primaryImageUrl,
+                              final rowCount = (_relatedProducts.length / 2)
+                                  .ceil();
+                              return Column(
+                                children: [
+                                  for (var index = 0; index < rowCount; index++)
+                                    BrowseProductPair(
+                                      left: _relatedProducts[index * 2],
+                                      right:
+                                          index * 2 + 1 <
+                                              _relatedProducts.length
+                                          ? _relatedProducts[index * 2 + 1]
+                                          : null,
+                                      cardWidth: cardWidth,
+                                      dimWhenInactive: true,
+                                      bottomGap: index == rowCount - 1 ? 0 : 14,
+                                      onTap: (product) {
+                                        Navigator.push(
+                                          context,
+                                          MaterialPageRoute(
+                                            builder: (_) => ProductDetailScreen(
+                                              listingId: product.id,
+                                              previewImageUrl:
+                                                  product.primaryImageUrl,
+                                            ),
                                           ),
-                                        ),
-                                      );
-                                    },
-                                  );
-                                },
+                                        );
+                                      },
+                                    ),
+                                ],
                               );
                             },
                           ),

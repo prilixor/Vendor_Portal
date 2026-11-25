@@ -220,7 +220,7 @@ class _PhoneOtpDialogState extends State<PhoneOtpDialog> {
       shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(18)),
       child: ConstrainedBox(
         constraints: const BoxConstraints(maxWidth: 400),
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 20.0, vertical: 22.0),
           child: Column(
             mainAxisSize: MainAxisSize.min,
@@ -351,27 +351,33 @@ class _PhoneOtpDialogState extends State<PhoneOtpDialog> {
                         ),
                 ),
               ),
-              const SizedBox(height: 16),
-              SizedBox(
-                height: 48,
-                child: ElevatedButton(
-                  onPressed: _isVerifying || _code.length < 6 ? null : _verify,
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: const Color(0xFF6C63FF),
-                    disabledBackgroundColor: const Color(0xFF6C63FF).withValues(alpha: 0.4),
-                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              const SizedBox(height: 8),
+              ElevatedButton(
+                onPressed: _isVerifying || _code.length < 6 ? null : _verify,
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: const Color(0xFF6C63FF),
+                  disabledBackgroundColor: const Color(0xFF6C63FF).withValues(alpha: 0.55),
+                  foregroundColor: Colors.white,
+                  disabledForegroundColor: Colors.white,
+                  elevation: 0,
+                  // Theme padding is 16px. A fixed 48px height clips "Verify" on a phone.
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
+                  minimumSize: const Size.fromHeight(52),
+                  tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  textStyle: const TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.w700,
+                    height: 1.25,
                   ),
-                  child: _isVerifying
-                      ? const SizedBox(
-                          height: 20,
-                          width: 20,
-                          child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                        )
-                      : const Text(
-                          'Verify',
-                          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: Colors.white),
-                        ),
                 ),
+                child: _isVerifying
+                    ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                      )
+                    : const Text('Verify'),
               ),
             ],
           ),
