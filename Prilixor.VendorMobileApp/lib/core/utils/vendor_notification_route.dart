@@ -64,6 +64,10 @@ VendorNotificationRoute? resolveVendorNotificationRoute({
     );
   }
 
+  if (type == 'equipment_emergency') {
+    return _ordersRoute(orderIdFromMessage);
+  }
+
   if (type == 'dispatch_offer' ||
       type == 'new_order' ||
       type.contains('order_request')) {
@@ -175,7 +179,9 @@ VendorNotificationRoute? resolveVendorNotificationRouteFor(VendorNotification n)
   return resolveVendorNotificationRoute(
     notificationType: n.notificationType,
     title: n.title,
-    orderIdFromMessage: extractOrderIdFromMessage(n.message),
+    orderIdFromMessage: (n.relatedOrderId != null && n.relatedOrderId!.isNotEmpty)
+        ? n.relatedOrderId
+        : extractOrderIdFromMessage(n.message),
     supportTicketNumber: extractSupportTicketNumber(n.message),
   );
 }

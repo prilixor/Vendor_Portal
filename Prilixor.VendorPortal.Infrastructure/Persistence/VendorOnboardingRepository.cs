@@ -1735,6 +1735,9 @@ public sealed class VendorOnboardingRepository(
 
     public async Task AddVendorNotificationAsync(VendorNotification notification, CancellationToken cancellationToken)
     {
+        // The vendor list sorts by SentAt. A null SentAt sorts first in Postgres (DESC), so older
+        // notifications without a sent time would float above newer ones. Always stamp it.
+        notification.SentAt ??= DateTimeOffset.UtcNow;
         await dbContext.VendorNotifications.AddAsync(notification, cancellationToken);
     }
 
@@ -1800,7 +1803,8 @@ public sealed class VendorOnboardingRepository(
                 x.Channel,
                 x.Status,
                 x.SentAt,
-                x.ReadAt)),
+                x.ReadAt,
+                x.RelatedOrderId?.ToString())),
             TotalCount = totalCount,
             UnreadCount = unreadCount,
             Page = page,
@@ -3124,6 +3128,7 @@ public sealed class VendorOnboardingRepository(
             PrescriptionRequired = source.PrescriptionRequired,
             DepositRequired = source.DepositRequired,
             InstallationRequired = source.InstallationRequired,
+            EmergencySupportEnabled = source.EmergencySupportEnabled,
             IsChemical = source.IsChemical,
             IsActive = source.IsActive,
             CreatedOnUtc = source.CreatedOnUtc,
@@ -3139,6 +3144,7 @@ public sealed class VendorOnboardingRepository(
         destination.PrescriptionRequired = source.PrescriptionRequired;
         destination.DepositRequired = source.DepositRequired;
         destination.InstallationRequired = source.InstallationRequired;
+        destination.EmergencySupportEnabled = source.EmergencySupportEnabled;
         destination.IsChemical = source.IsChemical;
         destination.IsActive = source.IsActive;
         destination.CreatedOnUtc = source.CreatedOnUtc;
@@ -3172,6 +3178,7 @@ public sealed class VendorOnboardingRepository(
             IsRentEnabled = source.IsRentEnabled,
             IsBuyEnabled = source.IsBuyEnabled,
             IsActive = source.IsActive,
+            EmergencySupport = source.EmergencySupport,
             CreatedOnUtc = source.CreatedOnUtc,
             ModifiedOnUtc = source.ModifiedOnUtc,
             IsDeleted = source.IsDeleted,
@@ -3249,6 +3256,7 @@ public sealed class VendorOnboardingRepository(
         destination.IsRentEnabled = source.IsRentEnabled;
         destination.IsBuyEnabled = source.IsBuyEnabled;
         destination.IsActive = source.IsActive;
+        destination.EmergencySupport = source.EmergencySupport;
         destination.CreatedOnUtc = source.CreatedOnUtc;
         destination.ModifiedOnUtc = source.ModifiedOnUtc;
         destination.IsDeleted = source.IsDeleted;

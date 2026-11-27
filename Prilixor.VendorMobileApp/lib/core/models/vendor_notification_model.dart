@@ -8,6 +8,7 @@ class VendorNotification {
   final String status;
   final DateTime? sentAt;
   final DateTime? readAt;
+  final String? relatedOrderId;
 
   const VendorNotification({
     required this.id,
@@ -19,6 +20,7 @@ class VendorNotification {
     required this.status,
     this.sentAt,
     this.readAt,
+    this.relatedOrderId,
   });
 
   bool get isUnread => readAt == null;
@@ -38,6 +40,7 @@ class VendorNotification {
       status: status ?? this.status,
       sentAt: sentAt,
       readAt: clearReadAt ? null : (readAt ?? this.readAt),
+      relatedOrderId: relatedOrderId,
     );
   }
 
@@ -59,6 +62,7 @@ class VendorNotification {
       status: json['status']?.toString() ?? '',
       sentAt: parseDt(json['sentAt'] ?? json['createdAt']),
       readAt: parseDt(json['readAt']),
+      relatedOrderId: json['relatedOrderId']?.toString(),
     );
   }
 }

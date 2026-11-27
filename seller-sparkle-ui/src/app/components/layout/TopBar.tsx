@@ -20,6 +20,7 @@ import { adminApi } from "@/app/services/adminApi";
 import { chatApi } from "@/app/services/chatApi";
 import { supportApi } from "@/app/services/supportApi";
 import { getVendorPortalHref } from "@/app/helpers/portalHost";
+import { useAdminEmergencies } from "@/app/components/admin/AdminEmergencyAlert";
 interface TopBarProps {
   onMenuClick?: () => void;
   variant?: "vendor" | "admin" | "customer";
@@ -48,6 +49,8 @@ export const TopBar = ({ onMenuClick, variant = "vendor" }: TopBarProps) => {
     enabled: variant === "customer" && !!user,
     refetchInterval: 30000,
   });
+
+  const { data: adminEmergencies } = useAdminEmergencies(variant === "admin" && !!user);
 
   const { data: adminAlertSummary } = useQuery({
     queryKey: ["admin-alert-summary"],
@@ -78,8 +81,9 @@ export const TopBar = ({ onMenuClick, variant = "vendor" }: TopBarProps) => {
     const listingPricingAlerts = adminAlertSummary?.listingPricingAlertCount ?? 0;
     const chatUnread = adminChatUnread?.count ?? 0;
     const supportUnread = adminSupportUnread?.count ?? 0;
-    return criticalOrders + pendingRefunds + pendingVendors + listingPricingAlerts + chatUnread + supportUnread;
-  }, [adminAlertSummary, adminChatUnread, adminSupportUnread]);
+    const openEmergencies = (adminEmergencies ?? []).filter((item) => item.status === "open").length;
+    return criticalOrders + pendingRefunds + pendingVendors + listingPricingAlerts + chatUnread + supportUnread + openEmergencies;
+  }, [adminAlertSummary, adminChatUnread, adminSupportUnread, adminEmergencies]);
 
   useEffect(() => {
     document.documentElement.classList.toggle("dark", dark);

@@ -322,6 +322,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final t = type.trim().toLowerCase();
     final h = title.trim().toLowerCase();
 
+    if (t == 'equipment_emergency') {
+      return Icons.emergency_outlined;
+    }
     if (t.contains('welcome') || h.contains('welcome')) {
       return Icons.waving_hand_outlined;
     }
@@ -380,6 +383,9 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
     final t = type.trim().toLowerCase();
     final h = title.trim().toLowerCase();
 
+    if (t == 'equipment_emergency') {
+      return colors.danger;
+    }
     if (t.contains('welcome') || h.contains('welcome')) {
       return colors.info;
     }
@@ -448,6 +454,7 @@ class _NotificationsScreenState extends State<NotificationsScreen> {
   String? _getBadgeLabel(String type) {
     final t = type.trim().toLowerCase();
     if (t.isEmpty || t == 'general') return null;
+    if (t == 'equipment_emergency') return 'Emergency';
     if (t == 'welcome') return 'Welcome';
     if (t == 'order_pending') return 'Pending';
     if (t == 'order_confirmed') return 'Confirmed';

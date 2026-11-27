@@ -19,6 +19,7 @@ import { Button } from "@/app/components/ui/button";
 import { Badge } from "@/app/components/ui/badge";
 import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
 import { OrderPrescriptionFilesCard } from "@/app/components/shared/OrderPrescriptionFilesCard";
+import { AdminOrderEmergencyCard } from "@/app/components/admin/AdminOrderEmergencyCard";
 import { PageLoaderSlot } from "@/app/components/shared/PageLoader";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/app/components/ui/select";
 import { Input } from "@/app/components/ui/input";
@@ -914,6 +915,8 @@ const AdminOrderDetail = () => {
           </CardContent>
         </Card>
       )}
+
+      <AdminOrderEmergencyCard orderId={selectedOrder.orderId} />
 
       {showAdminActions ? (
           <Card className="border-border/80 shadow-sm">

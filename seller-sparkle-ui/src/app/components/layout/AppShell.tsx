@@ -38,6 +38,7 @@ import {
 } from "@/app/contexts/VendorDispatchOffersContext";
 
 import { SupportChatProvider } from "@/app/contexts/SupportChatContext";
+import { AdminEmergencyAlert, useAdminEmergencies } from "@/app/components/admin/AdminEmergencyAlert";
 
 import {
 
@@ -278,6 +279,8 @@ export const AppShell = ({ variant }: AppShellProps) => {
 
 
 
+  const { data: adminEmergencies } = useAdminEmergencies(variant === "admin" && !!user);
+
   const { data: adminAlertSummary } = useQuery({
     queryKey: ["admin-alert-summary"],
     queryFn: () => adminApi.getAdminAlertSummary({ quiet: true }),
@@ -308,8 +311,9 @@ export const AppShell = ({ variant }: AppShellProps) => {
       + (adminAlertSummary?.pendingCancellationRefundCount ?? 0);
     const pendingVendors = adminAlertSummary?.pendingVendorCount ?? 0;
     const listingPricingAlerts = adminAlertSummary?.listingPricingAlertCount ?? 0;
-    return criticalOrders + pendingRefunds + pendingVendors + listingPricingAlerts + customerChatUnread + vendorSupportUnread;
-  }, [adminAlertSummary, customerChatUnread, vendorSupportUnread]);
+    const openEmergencies = (adminEmergencies ?? []).filter((item) => item.status === "open").length;
+    return criticalOrders + pendingRefunds + pendingVendors + listingPricingAlerts + customerChatUnread + vendorSupportUnread + openEmergencies;
+  }, [adminAlertSummary, adminEmergencies, customerChatUnread, vendorSupportUnread]);
 
 
 
@@ -496,6 +500,7 @@ export const AppShell = ({ variant }: AppShellProps) => {
             >
 
               <TopBar variant={variant} onMenuClick={() => setMobileSidebarOpen(true)} />
+              {variant === "admin" && <AdminEmergencyAlert enabled={!!user} />}
 
               <main className="relative z-0 min-w-0 flex-1 overflow-x-clip px-3 py-4 sm:px-6 lg:px-8">
 

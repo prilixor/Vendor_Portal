@@ -23,4 +23,7 @@ public static class CustomerNotificationTypes
 
     /// <summary>BlinksMed support (admin) replied on an order chat.</summary>
     public const string SupportChatReply = "support_chat_reply";
+
+    /// <summary>Customer raised an equipment emergency. Confirmation only.</summary>
+    public const string EquipmentEmergency = "equipment_emergency";
 }

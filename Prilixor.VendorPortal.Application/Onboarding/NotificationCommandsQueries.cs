@@ -197,7 +197,8 @@ internal sealed class GetVendorNotificationsQueryHandler(IVendorOnboardingReposi
             x.Channel,
             x.Status,
             x.SentAt,
-            x.ReadAt)).ToList();
+            x.ReadAt,
+            x.RelatedOrderId?.ToString())).ToList();
 
         return Result.Success(result);
     }

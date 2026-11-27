@@ -911,7 +911,46 @@ export const customerApi = {
       `/customers/me/orders/${encodeURIComponent(orderId)}/prescriptions/${encodeURIComponent(fileId)}`,
     );
   },
+
+  getEquipmentEmergency(orderId: string): Promise<CustomerEquipmentEmergencyStateApi> {
+    return apiClient.get<CustomerEquipmentEmergencyStateApi>(
+      `/customers/me/orders/${encodeURIComponent(orderId)}/emergency`,
+    );
+  },
+
+  raiseEquipmentEmergency(
+    orderId: string,
+    payload: { reason: string; note?: string },
+  ): Promise<EquipmentEmergencyApi> {
+    return apiClient.post<EquipmentEmergencyApi>(
+      `/customers/me/orders/${encodeURIComponent(orderId)}/emergency`,
+      payload,
+    );
+  },
 };
+
+export interface EquipmentEmergencyApi {
+  id: string;
+  orderId: string;
+  orderNumber: string;
+  customerName: string;
+  customerPhone?: string | null;
+  vendorName: string;
+  productName: string;
+  reason: string;
+  reasonLabel: string;
+  note?: string | null;
+  status: string;
+  vendorNotified: boolean;
+  createdAt: string;
+  acknowledgedAt?: string | null;
+  resolvedAt?: string | null;
+}
+
+export interface CustomerEquipmentEmergencyStateApi {
+  eligible: boolean;
+  emergency: EquipmentEmergencyApi | null;
+}
 
 export interface CustomerFavoriteApi {
   id: string;

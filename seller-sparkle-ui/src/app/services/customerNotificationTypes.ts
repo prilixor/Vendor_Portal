@@ -25,6 +25,7 @@ const BADGE_META: Record<string, NotificationBadgeMeta> = {
   order_cancelled: { label: "Cancelled", className: BADGE_MUTED },
   order_expiring_soon: { label: "Expiring", className: BADGE_WARNING },
   support_chat_reply: { label: "Support", className: BADGE_SUPPORT },
+  equipment_emergency: { label: "Emergency", className: BADGE_DANGER },
   order_confirmed: { label: "Confirmed", className: BADGE_SUCCESS },
   order_awaiting_payment: { label: "Payment due", className: BADGE_PAYMENT },
   order_status_updated: { label: "Updated", className: BADGE_INFO },

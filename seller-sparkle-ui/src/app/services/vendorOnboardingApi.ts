@@ -461,6 +461,20 @@ export interface VendorNotificationDto {
   status: string;
   sentAt?: string;
   readAt?: string;
+  relatedOrderId?: string | null;
+}
+
+/** What a vendor may see about an equipment emergency. No customer name, phone or address. */
+export interface VendorEquipmentEmergencyApiDto {
+  id: string;
+  orderNumber: string;
+  productName: string;
+  reasonLabel: string;
+  note?: string | null;
+  status: string;
+  createdAt: string;
+  acknowledgedAt?: string | null;
+  resolvedAt?: string | null;
 }
 
 export interface VendorDispatchOfferApiDto {
@@ -1067,6 +1081,14 @@ export const vendorOnboardingApi = {
 
   getVendorOrder(vendorId: string, orderId: string) {
     return apiClient.get<VendorOrderApiDto>(`/vendors/${vendorId}/orders/${orderId}`);
+  },
+
+  async getVendorOrderEmergency(vendorId: string, orderId: string): Promise<VendorEquipmentEmergencyApiDto | null> {
+    const result = await apiClient.get<{ emergency?: VendorEquipmentEmergencyApiDto | null }>(
+      `/vendors/${vendorId}/orders/${encodeURIComponent(orderId)}/emergency`,
+      { quiet: true },
+    );
+    return result?.emergency ?? null;
   },
 
   getVendorOrderGroup(vendorId: string, orderId: string, options?: ApiClientOptions) {

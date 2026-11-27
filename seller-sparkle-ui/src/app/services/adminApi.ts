@@ -46,6 +46,40 @@ export interface AdminVerificationListResult {
   pageSize: number;
 }
 
+export interface EquipmentEmergencyDto {
+  id: string;
+  orderId: string;
+  orderNumber: string;
+  customerName: string;
+  customerPhone?: string | null;
+  vendorName: string;
+  productName: string;
+  reason: string;
+  reasonLabel: string;
+  note?: string | null;
+  status: string;
+  vendorNotified: boolean;
+  createdAt: string;
+  acknowledgedAt?: string | null;
+  resolvedAt?: string | null;
+}
+
+export type EquipmentEmergencyStatusFilter = "all" | "open" | "acknowledged" | "resolved" | "live";
+
+export interface EquipmentEmergencyPageDto {
+  items: EquipmentEmergencyDto[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  openCount: number;
+  acknowledgedCount: number;
+  resolvedCount: number;
+}
+
+export interface EquipmentEmergencySettingsDto {
+  alertVendorEnabled: boolean;
+}
+
 export interface AdminAlertSummaryDto {
   criticalOrderCount: number;
   pendingDepositRefundCount?: number;
@@ -568,6 +602,7 @@ export interface ProductCategoryDto {
   installationRequired: boolean;
   isChemical?: boolean;
   isActive: boolean;
+  emergencySupportEnabled?: boolean;
 }
 
 export interface ProductVariantDto {
@@ -698,6 +733,8 @@ export interface ProductDto {
   variants?: ProductVariantDto[];
   rentalPricingPlans?: ProductRentalPricingPlanDto[];
   minimumRentalDays?: number | null;
+  /** null/undefined follows the category; true/false overrides it. */
+  emergencySupport?: boolean | null;
 }
 
 export interface ProductImageDto {
@@ -746,6 +783,7 @@ export interface CreateProductCategoryRequest {
   installationRequired: boolean;
   isChemical?: boolean;
   isActive: boolean;
+  emergencySupportEnabled?: boolean;
 }
 
 export interface UpdateProductCategoryRequest {
@@ -756,6 +794,7 @@ export interface UpdateProductCategoryRequest {
   installationRequired: boolean;
   isChemical?: boolean;
   isActive: boolean;
+  emergencySupportEnabled?: boolean;
 }
 
 export interface AdminDoctorDto {
@@ -888,6 +927,8 @@ export interface CreateProductRequest {
   variants?: ProductVariantDto[];
   rentalPricingPlans?: ProductRentalPricingPlanDto[];
   minimumRentalDays?: number | null;
+  /** null/undefined follows the category; true/false overrides it. */
+  emergencySupport?: boolean | null;
 }
 
 export interface UpdateProductRequest {
@@ -922,6 +963,8 @@ export interface UpdateProductRequest {
   variants?: ProductVariantDto[];
   rentalPricingPlans?: ProductRentalPricingPlanDto[];
   minimumRentalDays?: number | null;
+  /** null/undefined follows the category; true/false overrides it. */
+  emergencySupport?: boolean | null;
 }
 
 export interface ExcelUploadErrorDto {
@@ -1554,6 +1597,46 @@ export const adminApi = {
   async downloadCatalogExcel(isChemical: boolean = false): Promise<void> {
     const filename = `catalog_${isChemical ? 'chemical' : 'equipment'}_export_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "_")}.xlsx`;
     return apiClient.downloadBlob(`/admin/catalog/download-excel?isChemical=${isChemical}`, filename);
+  },
+
+  /** Emergencies still waiting for acknowledge. Used by the popup, alarm and bell count. */
+  async getEquipmentEmergencies(options?: ApiClientOptions): Promise<EquipmentEmergencyDto[]> {
+    return apiClient.get<EquipmentEmergencyDto[]>("/admin/emergencies?status=open", options);
+  },
+
+  async getEquipmentEmergencyPage(
+    params: { status?: EquipmentEmergencyStatusFilter; page: number; pageSize: number },
+    options?: ApiClientOptions,
+  ): Promise<EquipmentEmergencyPageDto> {
+    const query = new URLSearchParams({
+      status: params.status ?? "all",
+      page: String(params.page),
+      pageSize: String(params.pageSize),
+    });
+    return apiClient.get<EquipmentEmergencyPageDto>(`/admin/emergencies/page?${query.toString()}`, options);
+  },
+
+  async getOrderEquipmentEmergencies(orderId: string, options?: ApiClientOptions): Promise<EquipmentEmergencyDto[]> {
+    return apiClient.get<EquipmentEmergencyDto[]>(
+      `/admin/emergencies?orderId=${encodeURIComponent(orderId)}`,
+      options,
+    );
+  },
+
+  async acknowledgeEquipmentEmergency(id: string): Promise<EquipmentEmergencyDto> {
+    return apiClient.post<EquipmentEmergencyDto>(`/admin/emergencies/${encodeURIComponent(id)}/acknowledge`, {});
+  },
+
+  async resolveEquipmentEmergency(id: string): Promise<EquipmentEmergencyDto> {
+    return apiClient.post<EquipmentEmergencyDto>(`/admin/emergencies/${encodeURIComponent(id)}/resolve`, {});
+  },
+
+  async getEquipmentEmergencySettings(): Promise<EquipmentEmergencySettingsDto> {
+    return apiClient.get<EquipmentEmergencySettingsDto>("/admin/emergency-settings");
+  },
+
+  async updateEquipmentEmergencySettings(alertVendorEnabled: boolean): Promise<EquipmentEmergencySettingsDto> {
+    return apiClient.put<EquipmentEmergencySettingsDto>("/admin/emergency-settings", { alertVendorEnabled });
   },
 
   async getAdminAlertSummary(options?: ApiClientOptions): Promise<AdminAlertSummaryDto> {

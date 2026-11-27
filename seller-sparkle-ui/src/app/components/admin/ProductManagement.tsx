@@ -78,6 +78,7 @@ const ProductManagement = () => {
     installationRequired: false,
     isChemical: false,
     isActive: true,
+    emergencySupportEnabled: false,
   });
   
   // Product dialog state
@@ -327,6 +328,7 @@ const ProductManagement = () => {
         installationRequired: category.installationRequired,
         isChemical: category.isChemical,
         isActive: action === 'activate',
+        emergencySupportEnabled: category.emergencySupportEnabled ?? false,
       });
 
       setCategories(categories.map((c) => (c.id === id ? updated : c)));
@@ -377,6 +379,7 @@ const ProductManagement = () => {
         isBuyEnabled: product.isBuyEnabled,
         isActive: action === 'activate',
         minimumRentalDays: product.minimumRentalDays,
+        emergencySupport: product.emergencySupport ?? null,
         rentalPricingPlans: product.rentalPricingPlans,
       });
 
@@ -403,6 +406,7 @@ const ProductManagement = () => {
         installationRequired: category.installationRequired,
         isChemical: category.isChemical,
         isActive: category.isActive,
+        emergencySupportEnabled: category.emergencySupportEnabled ?? false,
       });
     } else {
       setEditingCategory(null);
@@ -413,6 +417,7 @@ const ProductManagement = () => {
         installationRequired: false,
         isChemical: false,
         isActive: true,
+        emergencySupportEnabled: false,
       });
     }
     setCategoryDialogOpen(true);
@@ -567,6 +572,7 @@ const ProductManagement = () => {
           isBuyEnabled: full.isBuyEnabled,
           isActive: full.isActive,
           minimumRentalDays: full.minimumRentalDays ?? undefined,
+          emergencySupport: full.emergencySupport ?? null,
           rentalPricingPlans: (full.rentalPricingPlans ?? []).map((p) => ({ ...p })),
         });
         void loadProductImages(full.id, { silent: true });
@@ -602,6 +608,7 @@ const ProductManagement = () => {
         isBuyEnabled: true,
         isActive: true,
         minimumRentalDays: undefined,
+        emergencySupport: null,
         rentalPricingPlans: [],
       });
       setProductImages([]);
@@ -1127,6 +1134,7 @@ const ProductManagement = () => {
                       <th className="px-4 py-3 font-semibold">Prescription</th>
                       <th className="px-4 py-3 font-semibold">Deposit</th>
                       <th className="px-4 py-3 font-semibold">Installation</th>
+                      <th className="px-4 py-3 font-semibold">Emergency</th>
                       <th className="px-4 py-3 font-semibold">Status</th>
                       <th className="px-4 py-3" />
                     </tr>
@@ -1138,6 +1146,7 @@ const ProductManagement = () => {
                         <td className="px-4 py-3">{c.prescriptionRequired ? "Yes" : "No"}</td>
                         <td className="px-4 py-3">{c.depositRequired ? "Yes" : "No"}</td>
                         <td className="px-4 py-3">{c.installationRequired ? "Yes" : "No"}</td>
+                        <td className="px-4 py-3">{c.emergencySupportEnabled ? "Yes" : "No"}</td>
                         <td className="px-4 py-3">
                           <Switch
                             checked={c.isActive}
@@ -1485,6 +1494,18 @@ const ProductManagement = () => {
               <div className="flex items-center gap-2">
                 <input
                   type="checkbox"
+                  id="emergency-support"
+                  checked={!!categoryForm.emergencySupportEnabled}
+                  onChange={(e) => setCategoryForm({ ...categoryForm, emergencySupportEnabled: e.target.checked })}
+                />
+                <Label htmlFor="emergency-support">Emergency support</Label>
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                After delivery, the customer can send an equipment emergency. Admin sees it immediately. Beds and wheelchairs stay off.
+              </p>
+              <div className="flex items-center gap-2">
+                <input
+                  type="checkbox"
                   id="active"
                   checked={categoryForm.isActive}
                   onChange={(e) => setCategoryForm({ ...categoryForm, isActive: e.target.checked })}
@@ -1625,6 +1646,42 @@ const ProductManagement = () => {
                     placeholder="Full product details for customers"
                     rows={3}
                   />
+                </div>
+                <div className="space-y-1.5 sm:col-span-2">
+                  <Label>Emergency support</Label>
+                  <Select
+                    value={
+                      productForm.emergencySupport === true
+                        ? "on"
+                        : productForm.emergencySupport === false
+                          ? "off"
+                          : "inherit"
+                    }
+                    onValueChange={(v) =>
+                      setProductForm({
+                        ...productForm,
+                        emergencySupport: v === "on" ? true : v === "off" ? false : null,
+                      })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="inherit">
+                        Follow category (
+                        {categories.find((c) => c.id === productForm.categoryId)?.emergencySupportEnabled
+                          ? "currently on"
+                          : "currently off"}
+                        )
+                      </SelectItem>
+                      <SelectItem value="on">Always on for this product</SelectItem>
+                      <SelectItem value="off">Off for this product</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <p className="text-[11px] text-muted-foreground">
+                    Use for life-support or critical devices. Customers see the Emergency button after delivery.
+                  </p>
                 </div>
               </FormGrid>
             </section>

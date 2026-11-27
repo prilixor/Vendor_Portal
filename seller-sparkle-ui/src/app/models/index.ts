@@ -142,6 +142,7 @@ export interface Notification {
   read: boolean;
   timestamp: string;
   notificationType?: string;
+  relatedOrderId?: string;
 }
 
 export interface Vendor {

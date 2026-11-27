@@ -28,6 +28,11 @@ public class Product : AuditableEntity<Guid>, ISoftDelete
     /// Null means every duration master is offered, subject to the buy-price cap.
     /// </summary>
     public int? MinimumRentalDays { get; set; }
+    /// <summary>
+    /// Equipment emergency override. Null follows the category flag,
+    /// true always offers the Emergency button, false never does.
+    /// </summary>
+    public bool? EmergencySupport { get; set; }
     public bool IsActive { get; set; } = true;
     public bool IsDeleted { get; set; }
     public DateTimeOffset? DeletedAt { get; set; }

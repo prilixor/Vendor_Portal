@@ -21,6 +21,7 @@ public class ApplicationDbContext : DbContext
     }
 
     public DbSet<PlatformSmsSettings> PlatformSmsSettings => Set<PlatformSmsSettings>();
+    public DbSet<PlatformEmergencySettings> PlatformEmergencySettings => Set<PlatformEmergencySettings>();
     public DbSet<Vendor> Vendors => Set<Vendor>();
     public DbSet<VendorProfile> VendorProfiles => Set<VendorProfile>();
     public DbSet<VendorDocument> VendorDocuments => Set<VendorDocument>();
@@ -288,6 +289,7 @@ public class ApplicationDbContext : DbContext
             entity.Property(x => x.PrescriptionRequired).HasColumnName("prescription_required");
             entity.Property(x => x.DepositRequired).HasColumnName("deposit_required");
             entity.Property(x => x.InstallationRequired).HasColumnName("installation_required");
+            entity.Property(x => x.EmergencySupportEnabled).HasColumnName("emergency_support_enabled");
             entity.Property(x => x.IsChemical).HasColumnName("is_chemical");
             entity.Property(x => x.IsActive).HasColumnName("is_active");
             entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
@@ -327,6 +329,7 @@ public class ApplicationDbContext : DbContext
             entity.Property(x => x.IsRentEnabled).HasColumnName("is_rent_enabled");
             entity.Property(x => x.IsBuyEnabled).HasColumnName("is_buy_enabled");
             entity.Property(x => x.MinimumRentalDays).HasColumnName("minimum_rental_days");
+            entity.Property(x => x.EmergencySupport).HasColumnName("emergency_support");
             entity.Property(x => x.IsActive).HasColumnName("is_active");
             entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
             entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
@@ -735,6 +738,7 @@ public class ApplicationDbContext : DbContext
             entity.Property(x => x.Status).HasColumnName("status");
             entity.Property(x => x.SentAt).HasColumnName("sent_at");
             entity.Property(x => x.ReadAt).HasColumnName("read_at");
+            entity.Property(x => x.RelatedOrderId).HasColumnName("related_order_id");
             entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
             entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
             entity.Property(x => x.CreatedBy).HasColumnName("created_by");

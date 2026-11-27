@@ -178,6 +178,7 @@ const Notifications = () => {
     read: n.status.trim().toLowerCase() === "read" || !!n.readAt,
     timestamp: n.sentAt ?? n.readAt ?? new Date().toISOString(),
     notificationType: n.notificationType,
+    relatedOrderId: n.relatedOrderId ?? undefined,
   }));
   const totalCount = data?.totalCount ?? 0;
 
@@ -276,7 +277,9 @@ const Notifications = () => {
     const uuidRegex = /([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})/i;
     const match = n.message.match(uuidRegex);
 
-    if (route === "/vendor/orders" && match) {
+    if (route === "/vendor/orders" && n.relatedOrderId) {
+      route = `/vendor/orders/${n.relatedOrderId}`;
+    } else if (route === "/vendor/orders" && match) {
       route = `/vendor/orders/${match[1]}`;
     }
 

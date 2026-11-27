@@ -38,6 +38,7 @@ import {
 import { formatInr, vendorClaimLabel } from "@/app/helpers/orderReturn";
 import { toast } from "sonner";
 import { BackLink } from "@/app/components/shared/BackLink";
+import { VendorOrderEmergencyCard } from "@/app/components/vendor/VendorOrderEmergencyCard";
 import { OrderPrescriptionFilesCard } from "@/app/components/shared/OrderPrescriptionFilesCard";
 import type { CustomerPrescriptionFileApi } from "@/app/services/customerApi";
 
@@ -1478,6 +1479,10 @@ const VendorOrderDetail = () => {
           </CardContent>
         </Card>
       )}
+
+      {order && user?.id ? (
+        <VendorOrderEmergencyCard vendorId={user.id} orderId={activeOrder?.orderId ?? order.orderId} />
+      ) : null}
 
       {order && (nextAction || hasPendingRequests) ? (
         <Card className="border-border/80 shadow-sm">

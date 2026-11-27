@@ -259,6 +259,16 @@ public interface ICustomerRepository
     Task<CustomerCheckoutSession?> GetOpenCheckoutSessionByReceiptAsync(string receipt, CancellationToken cancellationToken);
     Task<List<CustomerRentalOrder>> GetOrdersByCheckoutSessionIdAsync(Guid sessionId, CancellationToken cancellationToken);
 
+    Task<EmergencyListingSnapshot?> GetEmergencyListingSnapshotAsync(Guid listingId, CancellationToken cancellationToken);
+    Task<CustomerOrderEmergency?> GetLatestOrderEmergencyAsync(Guid orderId, CancellationToken cancellationToken);
+    Task<CustomerOrderEmergency?> GetActiveOrderEmergencyAsync(Guid orderId, CancellationToken cancellationToken);
+    Task<CustomerOrderEmergency?> GetOrderEmergencyByIdAsync(Guid emergencyId, CancellationToken cancellationToken);
+    Task AddOrderEmergencyAsync(CustomerOrderEmergency emergency, CancellationToken cancellationToken);
+    /// <param name="status">null/all, open, acknowledged, resolved, or live (open + acknowledged).</param>
+    Task<List<CustomerOrderEmergency>> ListRecentOrderEmergenciesAsync(int take, Guid? orderId, string? status, CancellationToken cancellationToken);
+    Task<(List<CustomerOrderEmergency> Items, int TotalCount)> ListOrderEmergencyPageAsync(string? status, int page, int pageSize, CancellationToken cancellationToken);
+    Task<(int Open, int Acknowledged, int Resolved)> GetEmergencyStatusCountsAsync(CancellationToken cancellationToken);
+
     Task<int> SaveChangesAsync(CancellationToken cancellationToken);
 }
 

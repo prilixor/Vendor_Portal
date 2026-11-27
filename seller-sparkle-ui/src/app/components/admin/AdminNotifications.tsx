@@ -1,7 +1,14 @@
 import { useState, useMemo, useEffect } from "react";
-import { keepPreviousData, useQuery } from "@tanstack/react-query";
+import { keepPreviousData, useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
 import { useNavigate, useSearchParams } from "react-router-dom";
-import { adminApi, type AdminAlertFeedItem } from "@/app/services/adminApi";
+import {
+  adminApi,
+  type AdminAlertFeedItem,
+  type EquipmentEmergencyDto,
+  type EquipmentEmergencyStatusFilter,
+} from "@/app/services/adminApi";
+import { ADMIN_EMERGENCIES_QUERY_KEY } from "@/app/components/admin/AdminEmergencyAlert";
 import { chatApi } from "@/app/services/chatApi";
 import { supportApi } from "@/app/services/supportApi";
 import { PageHeader } from "@/app/components/shared/PageHeader";
@@ -27,8 +34,14 @@ import {
   RefreshCw,
   Clock,
   CheckCircle2,
+  Siren,
 } from "lucide-react";
 import { cn } from "@/app/helpers/utils";
+import { Switch } from "@/app/components/ui/switch";
+
+const EMERGENCY_PAGE_SIZE = 10;
+/** How many live emergencies the "All Alerts" tab shows before pointing to the Equipment Emergency tab. */
+const EMERGENCY_SUMMARY_SIZE = 5;
 
 function mapFeedItemToAlert(item: AdminAlertFeedItem) {
   return {
@@ -58,7 +71,7 @@ function mapFeedItemToAlert(item: AdminAlertFeedItem) {
 export const AdminNotifications = () => {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
-  const tabValues = ["all", "orders", "vendors", "listings", "chats", "support", "logs"] as const;
+  const tabValues = ["all", "emergency", "orders", "vendors", "listings", "chats", "support", "logs"] as const;
   type AdminAlertTab = (typeof tabValues)[number];
   const initialTab = (searchParams.get("tab") as AdminAlertTab) ?? "all";
   const [activeTab, setActiveTab] = useState<AdminAlertTab>(
@@ -89,8 +102,71 @@ export const AdminNotifications = () => {
     setSearchParams(searchParams, { replace: true });
   };
 
-  const feedTab = activeTab === "chats" || activeTab === "support" ? "all" : activeTab;
-  const feedPage = activeTab === "chats" || activeTab === "support" ? 1 : page;
+  // Chats, support and emergencies have their own lists; the alert feed just shows "all" behind them.
+  const usesOwnList = activeTab === "chats" || activeTab === "support" || activeTab === "emergency";
+  const feedTab = usesOwnList ? "all" : activeTab;
+  const feedPage = usesOwnList ? 1 : page;
+
+  const queryClient = useQueryClient();
+  const [emergencyFilter, setEmergencyFilter] = useState<EquipmentEmergencyStatusFilter>("all");
+
+  // Small summary: live emergencies for the "All Alerts" tab and the counts on the tab and filter chips.
+  const { data: emergencySummary, refetch: refetchEmergencySummary } = useQuery({
+    queryKey: [...ADMIN_EMERGENCIES_QUERY_KEY, "page", "summary"],
+    queryFn: () => adminApi.getEquipmentEmergencyPage({ status: "live", page: 1, pageSize: EMERGENCY_SUMMARY_SIZE }, { quiet: true }),
+    refetchInterval: 10000,
+    refetchIntervalInBackground: true,
+  });
+  const emergencyOpenCount = emergencySummary?.openCount ?? 0;
+  const emergencyAcknowledgedCount = emergencySummary?.acknowledgedCount ?? 0;
+  const emergencyResolvedCount = emergencySummary?.resolvedCount ?? 0;
+  const emergencyLiveCount = emergencyOpenCount + emergencyAcknowledgedCount;
+  const emergencyTotalCount = emergencyLiveCount + emergencyResolvedCount;
+  const liveEmergencies = emergencySummary?.items ?? [];
+
+  // Full history, filtered and paged on the server. Only loaded while the Equipment Emergency tab is open.
+  const {
+    data: emergencyPageData,
+    isError: emergenciesUnavailable,
+    isLoading: isLoadingEmergencies,
+    isPlaceholderData: isEmergencyPlaceholder,
+    refetch: refetchEmergencyPage,
+  } = useQuery({
+    queryKey: [...ADMIN_EMERGENCIES_QUERY_KEY, "page", emergencyFilter, page],
+    queryFn: () => adminApi.getEquipmentEmergencyPage({ status: emergencyFilter, page, pageSize: EMERGENCY_PAGE_SIZE }, { quiet: true }),
+    enabled: activeTab === "emergency",
+    placeholderData: keepPreviousData,
+    refetchInterval: 10000,
+  });
+  const emergencies = emergencyPageData?.items ?? [];
+  const emergencyFilteredTotal = emergencyPageData?.totalCount ?? 0;
+  const { data: emergencySettings } = useQuery({
+    queryKey: ["admin-emergency-settings"],
+    queryFn: () => adminApi.getEquipmentEmergencySettings(),
+  });
+  const saveVendorAlert = useMutation({
+    mutationFn: (enabled: boolean) => adminApi.updateEquipmentEmergencySettings(enabled),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ["admin-emergency-settings"] });
+      toast.success("Emergency alert setting saved.");
+    },
+    onError: (err: Error) => toast.error(err.message || "Could not save the setting."),
+  });
+  const acknowledgeEmergency = useMutation({
+    mutationFn: (id: string) => adminApi.acknowledgeEquipmentEmergency(id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ADMIN_EMERGENCIES_QUERY_KEY });
+    },
+    onError: (err: Error) => toast.error(err.message || "Could not acknowledge the emergency."),
+  });
+  const resolveEmergency = useMutation({
+    mutationFn: (id: string) => adminApi.resolveEquipmentEmergency(id),
+    onSuccess: async () => {
+      await queryClient.invalidateQueries({ queryKey: ADMIN_EMERGENCIES_QUERY_KEY });
+      toast.success("Emergency marked resolved. The customer has been told.");
+    },
+    onError: (err: Error) => toast.error(err.message || "Could not resolve the emergency."),
+  });
 
   const { data: feed, isLoading: isLoadingFeed, refetch: refetchFeed, isPlaceholderData } = useQuery({
     queryKey: ["admin-alert-feed", feedTab, feedPage],
@@ -102,7 +178,7 @@ export const AdminNotifications = () => {
     placeholderData: keepPreviousData,
     refetchInterval: 30000,
   });
-  const isFeedPageChanging = isPlaceholderData && !isLoadingFeed && activeTab !== "chats" && activeTab !== "support";
+  const isFeedPageChanging = isPlaceholderData && !isLoadingFeed && !usesOwnList;
 
   const { data: continuationPage, isLoading: isLoadingContinuations, refetch: refetchContinuations } = useQuery({
     queryKey: ["admin-pending-continuation-summaries", 1, PAGE_SIZE],
@@ -160,10 +236,10 @@ export const AdminNotifications = () => {
   const unreadSupportCount = supportPageData?.totalCount ?? 0;
 
   const isLoading =
-    isLoadingFeed
+    activeTab !== "emergency" && (isLoadingFeed
     || isLoadingContinuations
     || (activeTab === "chats" && isLoadingChats && !chatPageData)
-    || (activeTab === "support" && isLoadingSupport && !supportPageData);
+    || (activeTab === "support" && isLoadingSupport && !supportPageData));
   const [manualRefresh, setManualRefresh] = useState(false);
 
   const handleRefreshAll = async () => {
@@ -171,6 +247,8 @@ export const AdminNotifications = () => {
     try {
       await Promise.all([
         refetchFeed(),
+        refetchEmergencySummary(),
+        activeTab === "emergency" ? refetchEmergencyPage() : Promise.resolve(),
         refetchContinuations(),
         refetchChats(),
         refetchSupport(),
@@ -385,7 +463,18 @@ export const AdminNotifications = () => {
       <Tabs value={activeTab} onValueChange={handleTabChange}>
         <TabsList className="h-auto w-full flex-nowrap overflow-x-auto justify-start bg-muted/40 p-1 mb-6">
           <TabsTrigger value="all" className="text-xs">
-            All Alerts ({counts.all})
+            All Alerts ({counts.all + emergencyLiveCount})
+          </TabsTrigger>
+          <TabsTrigger value="emergency" className="gap-1.5 text-xs">
+            <Siren className={cn("h-3.5 w-3.5", emergencyOpenCount > 0 && "text-red-600")} />
+            Equipment Emergency
+            {emergencyOpenCount > 0 ? (
+              <span className="rounded-full bg-red-600 px-1.5 py-0.5 text-[10px] font-semibold leading-none text-white">
+                {emergencyOpenCount}
+              </span>
+            ) : (
+              <span>({emergencyLiveCount})</span>
+            )}
           </TabsTrigger>
           <TabsTrigger value="orders" className="text-xs">
             Order Alerts ({counts.orders})
@@ -411,8 +500,38 @@ export const AdminNotifications = () => {
       <PageContentGate loading={isLoading}>
         <div className={cn("space-y-4 transition-opacity duration-200", (isFeedPageChanging || isChatPageChanging || isSupportPageChanging) && "opacity-50")}>
           {/* TAB: ALL ALERTS */}
+          {activeTab === "all" && page === 1 && liveEmergencies.length > 0 && (
+            <div className="space-y-2 rounded-xl border border-red-200 bg-red-50/40 p-3 dark:border-red-900 dark:bg-red-950/20">
+              <div className="flex flex-wrap items-center justify-between gap-2">
+                <p className="flex items-center gap-2 text-sm font-semibold">
+                  <Siren className="h-4 w-4 text-red-600" />
+                  Equipment emergencies needing attention ({emergencyLiveCount})
+                </p>
+                <Button type="button" variant="outline" size="sm" onClick={() => handleTabChange("emergency")}>
+                  View all emergencies
+                  <ArrowRight className="ml-1 h-3.5 w-3.5" />
+                </Button>
+              </div>
+              {liveEmergencies.map((item) => (
+                <EmergencyRow
+                  key={item.id}
+                  item={item}
+                  busy={acknowledgeEmergency.isPending || resolveEmergency.isPending}
+                  onAcknowledge={() => acknowledgeEmergency.mutate(item.id)}
+                  onResolve={() => resolveEmergency.mutate(item.id)}
+                  onOpen={() => navigate(`/admin/orders/${item.orderId}`)}
+                />
+              ))}
+              {emergencyLiveCount > liveEmergencies.length && (
+                <p className="text-xs text-muted-foreground">
+                  Showing the latest {liveEmergencies.length}. Open the Equipment Emergency tab to see the rest.
+                </p>
+              )}
+            </div>
+          )}
           {activeTab === "all" && (
             counts.all === 0 ? (
+              emergencyLiveCount > 0 ? null :
               <Card className="border-border/60 p-12 text-center">
                 <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-emerald-100 text-emerald-600 dark:bg-emerald-950/40">
                   <CheckCircle2 className="h-6 w-6" />
@@ -496,6 +615,99 @@ export const AdminNotifications = () => {
                 {renderPagination(counts.listings)}
               </div>
             )
+          )}
+
+          {/* TAB: EQUIPMENT EMERGENCY */}
+          {activeTab === "emergency" && (
+            <Card className="border-border/80">
+              <CardContent className="space-y-4 p-4">
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="flex items-center gap-2 text-sm font-semibold">
+                      <Siren className="h-4 w-4 text-red-600" />
+                      Equipment emergencies
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Raised by customers on rented or bought equipment. Admin always gets the popup and the bell.
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 rounded-lg border bg-muted/30 px-3 py-2">
+                    <Switch
+                      id="alert-vendor-emergency"
+                      checked={emergencySettings?.alertVendorEnabled ?? false}
+                      disabled={saveVendorAlert.isPending || !emergencySettings}
+                      onCheckedChange={(checked) => saveVendorAlert.mutate(checked)}
+                    />
+                    <label htmlFor="alert-vendor-emergency" className="text-sm">Also alert the vendor</label>
+                  </div>
+                </div>
+
+                <div className="flex flex-wrap gap-2" role="tablist" aria-label="Emergency status">
+                  {(
+                    [
+                      { value: "all", label: "All", count: emergencyTotalCount },
+                      { value: "open", label: "Waiting", count: emergencyOpenCount },
+                      { value: "acknowledged", label: "Acknowledged", count: emergencyAcknowledgedCount },
+                      { value: "resolved", label: "Resolved", count: emergencyResolvedCount },
+                    ] as { value: EquipmentEmergencyStatusFilter; label: string; count: number }[]
+                  ).map((chip) => (
+                    <button
+                      key={chip.value}
+                      type="button"
+                      role="tab"
+                      aria-selected={emergencyFilter === chip.value}
+                      onClick={() => {
+                        setEmergencyFilter(chip.value);
+                        setPage(1);
+                      }}
+                      className={cn(
+                        "rounded-full border px-3 py-1 text-xs font-medium transition-colors",
+                        emergencyFilter === chip.value
+                          ? "border-foreground bg-foreground text-background"
+                          : "border-border text-muted-foreground hover:bg-muted",
+                      )}
+                    >
+                      {chip.label} ({chip.count})
+                    </button>
+                  ))}
+                </div>
+
+                {emergenciesUnavailable ? (
+                  <p className="text-sm text-destructive">Emergency list is unavailable. Apply the equipment emergency database scripts, then refresh.</p>
+                ) : isLoadingEmergencies ? (
+                  <p className="text-sm text-muted-foreground">Loading emergencies…</p>
+                ) : emergencies.length === 0 ? (
+                  <div className="rounded-lg border border-dashed p-8 text-center">
+                    <CheckCircle2 className="mx-auto h-6 w-6 text-emerald-600" />
+                    <p className="mt-2 text-sm font-medium">
+                      {emergencyFilter === "all" ? "No equipment emergencies yet." : "Nothing in this status."}
+                    </p>
+                  </div>
+                ) : (
+                  <div className={cn("space-y-2 transition-opacity", isEmergencyPlaceholder && "opacity-50")}>
+                    {emergencies.map((item) => (
+                      <EmergencyRow
+                        key={item.id}
+                        item={item}
+                        busy={acknowledgeEmergency.isPending || resolveEmergency.isPending}
+                        onAcknowledge={() => acknowledgeEmergency.mutate(item.id)}
+                        onResolve={() => resolveEmergency.mutate(item.id)}
+                        onOpen={() => navigate(`/admin/orders/${item.orderId}`)}
+                      />
+                    ))}
+                  </div>
+                )}
+
+                <TablePagination
+                  page={page}
+                  pageSize={EMERGENCY_PAGE_SIZE}
+                  total={emergencyFilteredTotal}
+                  onPageChange={setPage}
+                  label="emergencies"
+                  hideWhenSinglePage
+                />
+              </CardContent>
+            </Card>
           )}
 
           {/* TAB: CUSTOMER CHATS */}
@@ -757,5 +969,81 @@ const AlertCard = ({
     </div>
   );
 };
+
+function EmergencyRow({
+  item,
+  busy,
+  onAcknowledge,
+  onResolve,
+  onOpen,
+}: {
+  item: EquipmentEmergencyDto;
+  busy: boolean;
+  onAcknowledge: () => void;
+  onResolve: () => void;
+  onOpen: () => void;
+}) {
+  const open = item.status === "open";
+  const acknowledged = item.status === "acknowledged";
+  const raised = new Date(item.createdAt);
+  const raisedLabel = Number.isNaN(raised.getTime())
+    ? ""
+    : raised.toLocaleString([], { day: "2-digit", month: "short", hour: "2-digit", minute: "2-digit" });
+  const statusLabel = open ? "Waiting" : acknowledged ? "Acknowledged" : "Resolved";
+
+  return (
+    <div
+      className={cn(
+        "rounded-lg border bg-card p-3 text-sm",
+        open && "border-l-4 border-l-red-500",
+        acknowledged && "border-l-4 border-l-amber-500",
+        !open && !acknowledged && "border-l-4 border-l-emerald-500/70",
+      )}
+    >
+      <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0 space-y-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <p className="font-semibold">{item.productName}</p>
+            <span
+              className={cn(
+                "rounded-full px-2 py-0.5 text-[11px] font-medium",
+                open && "bg-red-100 text-red-800 dark:bg-red-950 dark:text-red-200",
+                acknowledged && "bg-amber-100 text-amber-900 dark:bg-amber-950 dark:text-amber-200",
+                !open && !acknowledged && "bg-emerald-100 text-emerald-900 dark:bg-emerald-950 dark:text-emerald-200",
+              )}
+            >
+              {statusLabel}
+            </span>
+            {item.vendorNotified && (
+              <span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">Vendor alerted</span>
+            )}
+          </div>
+          <p className="font-medium">{item.reasonLabel}</p>
+          {item.note && <p className="line-clamp-2 break-words text-muted-foreground" title={item.note}>{item.note}</p>}
+          <p className="text-xs text-muted-foreground">
+            {item.customerName}
+            {item.customerPhone ? ` · ${item.customerPhone}` : ""} · Order {item.orderNumber}
+            {raisedLabel ? ` · ${raisedLabel}` : ""}
+          </p>
+        </div>
+        <div className="flex shrink-0 flex-wrap gap-2">
+          {open && (
+            <Button type="button" size="sm" variant="destructive" disabled={busy} onClick={onAcknowledge}>
+              Acknowledge
+            </Button>
+          )}
+          {(open || acknowledged) && (
+            <Button type="button" size="sm" variant={open ? "outline" : "default"} disabled={busy} onClick={onResolve}>
+              Resolve
+            </Button>
+          )}
+          <Button type="button" size="sm" variant="outline" onClick={onOpen}>
+            Open order
+          </Button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 export default AdminNotifications;

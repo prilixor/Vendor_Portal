@@ -106,7 +106,8 @@ internal sealed class RecalculateProductRentalPricingCommandHandler(
                 fileUrlResolver,
                 liveIcons),
             ProductCatalogDocuments.ToDtos(entity, fileUrlResolver),
-            entity.MinimumRentalDays));
+            entity.MinimumRentalDays,
+            entity.EmergencySupport));
     }
 }
 

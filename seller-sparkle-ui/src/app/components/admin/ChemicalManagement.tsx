@@ -412,6 +412,7 @@ const ChemicalManagement = () => {
         installationRequired: category.installationRequired,
         isChemical: category.isChemical,
         isActive: action === 'activate',
+        emergencySupportEnabled: category.emergencySupportEnabled ?? false,
       });
 
       setCategories(categories.map((c) => (c.id === id ? updated : c)));
@@ -461,6 +462,7 @@ const ChemicalManagement = () => {
         isBuyEnabled: true,
         isActive: action === 'activate',
         minimumRentalDays: product.minimumRentalDays,
+        emergencySupport: product.emergencySupport ?? null,
         casNumber: product.casNumber,
         chemicalFormula: product.chemicalFormula,
         purityPercentage: product.purityPercentage,
@@ -494,6 +496,7 @@ const ChemicalManagement = () => {
         installationRequired: category.installationRequired,
         isChemical: category.isChemical,
         isActive: category.isActive,
+        emergencySupportEnabled: category.emergencySupportEnabled ?? false,
       });
     } else {
       setEditingCategory(null);

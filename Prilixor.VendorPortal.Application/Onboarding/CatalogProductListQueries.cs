@@ -277,6 +277,7 @@ internal sealed class GetProductQueryHandler(
             favoriteCount,
             ProductRentalPricingPlanSync.ToProjectedDtos(x, durationMasters, pricingOptions, fileUrlResolver, liveIcons),
             ProductCatalogDocuments.ToDtos(x, fileUrlResolver),
-            x.MinimumRentalDays);
+            x.MinimumRentalDays,
+            x.EmergencySupport);
     }
 }

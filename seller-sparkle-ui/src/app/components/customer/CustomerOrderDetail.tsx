@@ -36,6 +36,7 @@ import { Dialog, DialogContent, DialogFooter, DialogHeader, DialogTitle } from "
 import { Label } from "@/app/components/ui/label";
 import { LegalPolicyLinks } from "@/app/components/legal/LegalPolicyLinks";
 import { CancelOrderConfirm } from "@/app/components/legal/CancelOrderConfirm";
+import { CustomerEquipmentEmergency } from "@/app/components/customer/CustomerEquipmentEmergency";
 
 /** Hide Buyout Item on the customer order page. Extend Rental stays. */
 const SHOW_CUSTOMER_BUYOUT = false;
@@ -1729,6 +1730,8 @@ const CustomerOrderDetail = () => {
           </CardContent>
         </Card>
       )}
+
+      <CustomerEquipmentEmergency orderId={activeItem.id} status={activeItem.status} />
 
       {/* Support and Cancellation Actions for Selected Item */}
       <div className="grid grid-cols-2 gap-2 pb-[max(0.5rem,env(safe-area-inset-bottom))] sm:flex sm:flex-wrap sm:gap-3">

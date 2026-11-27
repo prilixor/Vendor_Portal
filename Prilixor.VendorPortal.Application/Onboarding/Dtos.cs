@@ -94,7 +94,8 @@ public sealed record ProductCategoryDto(
     bool DepositRequired,
     bool InstallationRequired,
     bool IsChemical,
-    bool IsActive);
+    bool IsActive,
+    bool EmergencySupportEnabled = false);
 
 public sealed record ProductDto(
     string Id,
@@ -130,7 +131,8 @@ public sealed record ProductDto(
     int FavoriteCount = 0,
     List<ProductRentalPricingPlanDto>? RentalPricingPlans = null,
     List<ProductDocumentDto>? Documents = null,
-    int? MinimumRentalDays = null);
+    int? MinimumRentalDays = null,
+    bool? EmergencySupport = null);
 
 public sealed record ProductVariantDto(
     string Id,
@@ -276,7 +278,8 @@ public sealed record VendorNotificationDto(
     string Channel,
     string Status,
     DateTimeOffset? SentAt,
-    DateTimeOffset? ReadAt);
+    DateTimeOffset? ReadAt,
+    string? RelatedOrderId = null);
 
 public sealed record AdminUserDto(
     string Id,

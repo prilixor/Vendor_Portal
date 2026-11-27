@@ -20,6 +20,7 @@ public sealed class CustomerPortalDbContext(DbContextOptions<CustomerPortalDbCon
     public DbSet<CustomerRentalOrderAsset> CustomerRentalOrderAssets => Set<CustomerRentalOrderAsset>();
     public DbSet<CustomerOrderVendorOffer> CustomerOrderVendorOffers => Set<CustomerOrderVendorOffer>();
     public DbSet<CustomerNotification> CustomerNotifications => Set<CustomerNotification>();
+    public DbSet<CustomerOrderEmergency> CustomerOrderEmergencies => Set<CustomerOrderEmergency>();
     public DbSet<CustomerNotificationPreference> CustomerNotificationPreferences => Set<CustomerNotificationPreference>();
     public DbSet<ChatSession> ChatSessions => Set<ChatSession>();
     public DbSet<ChatMessage> ChatMessages => Set<ChatMessage>();
@@ -667,6 +668,36 @@ public sealed class CustomerPortalDbContext(DbContextOptions<CustomerPortalDbCon
             entity.HasOne(x => x.CheckoutSession)
                 .WithMany()
                 .HasForeignKey(x => x.CheckoutSessionId);
+        });
+
+        modelBuilder.Entity<CustomerOrderEmergency>(entity =>
+        {
+            entity.ToTable("customer_order_emergencies");
+            entity.HasKey(x => x.Id);
+            entity.Property(x => x.Id).HasColumnName("id");
+            entity.Property(x => x.CustomerRentalOrderId).HasColumnName("customer_rental_order_id");
+            entity.Property(x => x.CustomerId).HasColumnName("customer_id");
+            entity.Property(x => x.VendorId).HasColumnName("vendor_id");
+            entity.Property(x => x.OrderNumber).HasColumnName("order_number").HasMaxLength(120);
+            entity.Property(x => x.CustomerName).HasColumnName("customer_name").HasMaxLength(200);
+            entity.Property(x => x.CustomerPhone).HasColumnName("customer_phone").HasMaxLength(40);
+            entity.Property(x => x.VendorName).HasColumnName("vendor_name").HasMaxLength(200);
+            entity.Property(x => x.ProductName).HasColumnName("product_name").HasMaxLength(300);
+            entity.Property(x => x.Reason).HasColumnName("reason").HasMaxLength(40);
+            entity.Property(x => x.Note).HasColumnName("note");
+            entity.Property(x => x.Status).HasColumnName("status").HasMaxLength(20);
+            entity.Property(x => x.VendorNotified).HasColumnName("vendor_notified");
+            entity.Property(x => x.AcknowledgedAt).HasColumnName("acknowledged_at");
+            entity.Property(x => x.AcknowledgedByAdminId).HasColumnName("acknowledged_by_admin_id");
+            entity.Property(x => x.ResolvedAt).HasColumnName("resolved_at");
+            entity.Property(x => x.ResolvedByAdminId).HasColumnName("resolved_by_admin_id");
+            entity.Property(x => x.CreatedOnUtc).HasColumnName("created_at");
+            entity.Property(x => x.ModifiedOnUtc).HasColumnName("updated_at");
+            entity.Property(x => x.IsDeleted).HasColumnName("is_deleted");
+            entity.Property(x => x.DeletedAt).HasColumnName("deleted_at");
+            entity.Property(x => x.DeletedBy).HasColumnName("deleted_by");
+            entity.Ignore(x => x.CreatedBy);
+            entity.Ignore(x => x.ModifiedBy);
         });
     }
 

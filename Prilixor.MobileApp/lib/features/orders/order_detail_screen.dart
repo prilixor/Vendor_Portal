@@ -26,6 +26,7 @@ import '../product/product_detail_screen.dart';
 import '../../core/providers/chat_provider.dart';
 import '../chat/chat_detail_screen.dart';
 import '../profile/support_screen.dart';
+import 'equipment_emergency_sheet.dart';
 
 /// Hide Buyout Item on the customer order page. Extend Rental stays.
 const bool kShowCustomerBuyout = false;
@@ -1264,6 +1265,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                             children: [
                               const OrderConfirmPolicyLinks(),
                               const SizedBox(height: 10),
+                              EquipmentEmergencySection(orderId: order.id, status: order.status),
+                              const SizedBox(height: 8),
                               _fitOutlinedAction(
                                 colors: colors,
                                 icon: Icons.support_agent,

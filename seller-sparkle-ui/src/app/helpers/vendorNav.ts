@@ -166,6 +166,10 @@ export const getVendorRoute = (notificationType?: string, title?: string): strin
     return VENDOR_SUPPORT_PANEL_ROUTE;
   }
   
+  if (type === "equipment_emergency") {
+    return "/vendor/orders";
+  }
+
   if (type === "dispatch_offer" || type === "new_order" || type.includes("order_request")) {
     return "/vendor/order-requests";
   }

@@ -16,6 +16,7 @@ public sealed class CreateProductCategoryRequest
     public bool InstallationRequired { get; set; }
     public bool IsChemical { get; set; }
     public bool IsActive { get; set; } = true;
+    public bool EmergencySupportEnabled { get; set; }
 }
 
 public sealed class UpdateProductCategoryRequest
@@ -27,6 +28,7 @@ public sealed class UpdateProductCategoryRequest
     public bool InstallationRequired { get; set; }
     public bool IsChemical { get; set; }
     public bool IsActive { get; set; }
+    public bool EmergencySupportEnabled { get; set; }
 }
 
 public sealed class CreateProductRequest
@@ -61,6 +63,7 @@ public sealed class CreateProductRequest
     public string? SdsDocumentUrl { get; set; }
     public string? CoaDocumentUrl { get; set; }
     public int? MinimumRentalDays { get; set; }
+    public bool? EmergencySupport { get; set; }
 }
 
 public sealed class UpdateProductRequest
@@ -96,6 +99,7 @@ public sealed class UpdateProductRequest
     public string? SdsDocumentUrl { get; set; }
     public string? CoaDocumentUrl { get; set; }
     public int? MinimumRentalDays { get; set; }
+    public bool? EmergencySupport { get; set; }
 }
 
 public sealed class AddProductImageRequest
@@ -178,7 +182,8 @@ public sealed class CreateProductCategoryEndpoint(IMediator mediator)
             req.DepositRequired,
             req.InstallationRequired,
             req.IsChemical,
-            req.IsActive), ct);
+            req.IsActive,
+            req.EmergencySupportEnabled), ct);
 
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
@@ -203,7 +208,8 @@ public sealed class UpdateProductCategoryEndpoint(IMediator mediator)
             req.DepositRequired,
             req.InstallationRequired,
             req.IsChemical,
-            req.IsActive), ct);
+            req.IsActive,
+            req.EmergencySupportEnabled), ct);
 
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
@@ -363,7 +369,8 @@ public sealed class CreateProductEndpoint(IMediator mediator)
             req.BaseUnit,
             req.SdsDocumentUrl,
             req.CoaDocumentUrl,
-            RentalPricingEngine.NormalizeMinimumRentalDays(req.MinimumRentalDays)), ct);
+            RentalPricingEngine.NormalizeMinimumRentalDays(req.MinimumRentalDays),
+            req.EmergencySupport), ct);
 
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }
@@ -413,7 +420,8 @@ public sealed class UpdateProductEndpoint(IMediator mediator)
             req.BaseUnit,
             req.SdsDocumentUrl,
             req.CoaDocumentUrl,
-            RentalPricingEngine.NormalizeMinimumRentalDays(req.MinimumRentalDays)), ct);
+            RentalPricingEngine.NormalizeMinimumRentalDays(req.MinimumRentalDays),
+            req.EmergencySupport), ct);
 
         return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
     }

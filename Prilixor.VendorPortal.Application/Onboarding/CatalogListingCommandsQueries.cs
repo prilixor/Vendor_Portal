@@ -13,7 +13,8 @@ public sealed record CreateProductCategoryCommand(
     bool DepositRequired,
     bool InstallationRequired,
     bool IsChemical,
-    bool IsActive) : ICommand<ProductCategoryDto>;
+    bool IsActive,
+    bool EmergencySupportEnabled = false) : ICommand<ProductCategoryDto>;
 
 public sealed class CreateProductCategoryCommandValidator : AbstractValidator<CreateProductCategoryCommand>
 {
@@ -35,7 +36,8 @@ internal sealed class CreateProductCategoryCommandHandler(IVendorOnboardingRepos
             DepositRequired = request.DepositRequired,
             InstallationRequired = request.InstallationRequired,
             IsChemical = request.IsChemical,
-            IsActive = request.IsActive
+            IsActive = request.IsActive,
+            EmergencySupportEnabled = request.EmergencySupportEnabled
         };
 
         await repository.AddProductCategoryAsync(entity, cancellationToken);
@@ -48,7 +50,8 @@ internal sealed class CreateProductCategoryCommandHandler(IVendorOnboardingRepos
             entity.DepositRequired,
             entity.InstallationRequired,
             entity.IsChemical,
-            entity.IsActive));
+            entity.IsActive,
+            entity.EmergencySupportEnabled));
     }
 }
 
@@ -67,7 +70,8 @@ internal sealed class GetProductCategoriesQueryHandler(IVendorOnboardingReposito
             x.DepositRequired,
             x.InstallationRequired,
             x.IsChemical,
-            x.IsActive)).ToList();
+            x.IsActive,
+            x.EmergencySupportEnabled)).ToList();
 
         return Result.Success(result);
     }
@@ -132,7 +136,8 @@ public sealed record CreateProductCommand(
     string? BaseUnit = null,
     string? SdsDocumentUrl = null,
     string? CoaDocumentUrl = null,
-    int? MinimumRentalDays = null) : ICommand<ProductDto>;
+    int? MinimumRentalDays = null,
+    bool? EmergencySupport = null) : ICommand<ProductDto>;
 
 public sealed class CreateProductCommandValidator : AbstractValidator<CreateProductCommand>
 {
@@ -199,7 +204,8 @@ internal sealed class CreateProductCommandHandler(
             IsRentEnabled = request.IsRentEnabled,
             IsBuyEnabled = request.IsBuyEnabled,
             IsActive = request.IsActive,
-            MinimumRentalDays = RentalPricingEngine.NormalizeMinimumRentalDays(request.MinimumRentalDays)
+            MinimumRentalDays = RentalPricingEngine.NormalizeMinimumRentalDays(request.MinimumRentalDays),
+            EmergencySupport = request.EmergencySupport
         };
 
         if (request.Variants != null && request.Variants.Count > 0)
@@ -305,7 +311,8 @@ internal sealed class CreateProductCommandHandler(
             0,
             ProductRentalPricingPlanSync.ToDtos(entity.RentalPricingPlans, fileUrlResolver, liveIcons),
             ProductCatalogDocuments.ToDtos(entity, fileUrlResolver),
-            entity.MinimumRentalDays));
+            entity.MinimumRentalDays,
+            entity.EmergencySupport));
     }
 }
 
@@ -393,7 +400,8 @@ internal sealed class GetProductsQueryHandler(
             favoriteCounts.GetValueOrDefault(x.Id, 0),
             ProductRentalPricingPlanSync.ToProjectedDtos(x, durationMasters, pricingOptions, fileUrlResolver, liveIcons),
             ProductCatalogDocuments.ToDtos(x, fileUrlResolver),
-            x.MinimumRentalDays)).ToList();
+            x.MinimumRentalDays,
+            x.EmergencySupport)).ToList();
 
         return Result.Success(result);
     }
@@ -1445,7 +1453,8 @@ public sealed record UpdateProductCategoryCommand(
     bool DepositRequired,
     bool InstallationRequired,
     bool IsChemical,
-    bool IsActive) : ICommand<ProductCategoryDto>;
+    bool IsActive,
+    bool EmergencySupportEnabled = false) : ICommand<ProductCategoryDto>;
 
 public sealed class UpdateProductCategoryCommandValidator : AbstractValidator<UpdateProductCategoryCommand>
 {
@@ -1478,6 +1487,7 @@ internal sealed class UpdateProductCategoryCommandHandler(IVendorOnboardingRepos
         entity.InstallationRequired = request.InstallationRequired;
         entity.IsChemical = request.IsChemical;
         entity.IsActive = request.IsActive;
+        entity.EmergencySupportEnabled = request.EmergencySupportEnabled;
 
         await repository.UpdateProductCategoryAsync(entity, cancellationToken);
         await repository.SaveChangesAsync(cancellationToken);
@@ -1489,7 +1499,8 @@ internal sealed class UpdateProductCategoryCommandHandler(IVendorOnboardingRepos
             entity.DepositRequired,
             entity.InstallationRequired,
             entity.IsChemical,
-            entity.IsActive));
+            entity.IsActive,
+            entity.EmergencySupportEnabled));
     }
 }
 
@@ -1564,7 +1575,8 @@ public sealed record UpdateProductCommand(
     string? BaseUnit = null,
     string? SdsDocumentUrl = null,
     string? CoaDocumentUrl = null,
-    int? MinimumRentalDays = null) : ICommand<ProductDto>;
+    int? MinimumRentalDays = null,
+    bool? EmergencySupport = null) : ICommand<ProductDto>;
 
 public sealed class UpdateProductCommandValidator : AbstractValidator<UpdateProductCommand>
 {
@@ -1641,6 +1653,7 @@ internal sealed class UpdateProductCommandHandler(
         entity.IsBuyEnabled = request.IsBuyEnabled;
         entity.IsActive = request.IsActive;
         entity.MinimumRentalDays = RentalPricingEngine.NormalizeMinimumRentalDays(request.MinimumRentalDays);
+        entity.EmergencySupport = request.EmergencySupport;
 
         if (request.Variants != null)
         {
@@ -1779,7 +1792,8 @@ internal sealed class UpdateProductCommandHandler(
             0,
             ProductRentalPricingPlanSync.ToDtos(entity.RentalPricingPlans, fileUrlResolver, liveIcons),
             ProductCatalogDocuments.ToDtos(entity, fileUrlResolver),
-            entity.MinimumRentalDays));
+            entity.MinimumRentalDays,
+            entity.EmergencySupport));
     }
 
     private static ProductVariant? FindMatchingVariant(

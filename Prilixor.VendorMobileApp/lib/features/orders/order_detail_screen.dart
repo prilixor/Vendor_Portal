@@ -21,6 +21,7 @@ import '../../shared/widgets/catalog_image.dart';
 import '../../shared/widgets/catalog_image_viewer_screen.dart';
 import 'dispatch_details_sheet.dart';
 import 'order_group_utils.dart';
+import 'vendor_order_emergency_card.dart';
 
 bool _canAssignOrderSerials(VendorOrder order) {
   final s = order.normalizedStatus.replaceAll(' ', '_');
@@ -685,6 +686,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                             showDeposit: showGroupPayout && showGroupDeposit && groupItems.length > 1,
                           ),
                           const SizedBox(height: 10),
+                          VendorOrderEmergencyCard(orderId: _selectedOrderId),
                           _SectionCard(
                             title: 'Items in this order',
                             subtitle: 'Tap an item to view details and update status.',

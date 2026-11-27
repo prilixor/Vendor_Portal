@@ -3575,6 +3575,111 @@ public sealed class CustomerRepository(
 
         customerDb.SaveChangesAsync(cancellationToken);
 
+    public async Task<EmergencyListingSnapshot?> GetEmergencyListingSnapshotAsync(Guid listingId, CancellationToken cancellationToken)
+    {
+        var listing = await vendorDb.VendorProductListings
+            .AsNoTracking()
+            .Include(l => l.Vendor)
+            .ThenInclude(v => v.Profile)
+            .Include(l => l.Product)
+            .ThenInclude(p => p.Category)
+            .FirstOrDefaultAsync(l => l.Id == listingId && !l.IsDeleted, cancellationToken);
+
+        var category = listing?.Product?.Category;
+        if (listing is null || category is null || category.IsDeleted)
+            return null;
+
+        var vendorName = listing.Vendor?.Profile?.BusinessName;
+        if (string.IsNullOrWhiteSpace(vendorName))
+            vendorName = listing.Vendor?.Email;
+        if (string.IsNullOrWhiteSpace(vendorName))
+            vendorName = "Vendor";
+
+        var productName = string.IsNullOrWhiteSpace(listing.ListingTitle)
+            ? listing.Product.ProductName
+            : listing.ListingTitle;
+
+        return new EmergencyListingSnapshot(
+            listing.VendorId,
+            vendorName.Trim(),
+            productName.Trim(),
+            // Product override wins; null means follow the category flag.
+            (listing.Product.EmergencySupport ?? category.EmergencySupportEnabled) && category.IsActive);
+    }
+
+    public Task<CustomerOrderEmergency?> GetLatestOrderEmergencyAsync(Guid orderId, CancellationToken cancellationToken) =>
+        customerDb.CustomerOrderEmergencies
+            .Where(x => x.CustomerRentalOrderId == orderId && !x.IsDeleted)
+            .OrderByDescending(x => x.CreatedOnUtc)
+            .FirstOrDefaultAsync(cancellationToken);
+
+    public Task<CustomerOrderEmergency?> GetActiveOrderEmergencyAsync(Guid orderId, CancellationToken cancellationToken) =>
+        customerDb.CustomerOrderEmergencies
+            .Where(x => x.CustomerRentalOrderId == orderId
+                && !x.IsDeleted
+                && (x.Status == EquipmentEmergencyStatuses.Open
+                    || x.Status == EquipmentEmergencyStatuses.Acknowledged))
+            .OrderByDescending(x => x.CreatedOnUtc)
+            .FirstOrDefaultAsync(cancellationToken);
+
+    public Task<CustomerOrderEmergency?> GetOrderEmergencyByIdAsync(Guid emergencyId, CancellationToken cancellationToken) =>
+        customerDb.CustomerOrderEmergencies
+            .FirstOrDefaultAsync(x => x.Id == emergencyId && !x.IsDeleted, cancellationToken);
+
+    public async Task AddOrderEmergencyAsync(CustomerOrderEmergency emergency, CancellationToken cancellationToken) =>
+        await customerDb.CustomerOrderEmergencies.AddAsync(emergency, cancellationToken);
+
+    private IQueryable<CustomerOrderEmergency> EmergenciesByStatus(string? status)
+    {
+        var query = customerDb.CustomerOrderEmergencies.AsNoTracking().Where(x => !x.IsDeleted);
+        return status?.Trim().ToLowerInvariant() switch
+        {
+            "live" => query.Where(x => x.Status == EquipmentEmergencyStatuses.Open || x.Status == EquipmentEmergencyStatuses.Acknowledged),
+            "open" => query.Where(x => x.Status == EquipmentEmergencyStatuses.Open),
+            "acknowledged" => query.Where(x => x.Status == EquipmentEmergencyStatuses.Acknowledged),
+            "resolved" => query.Where(x => x.Status == EquipmentEmergencyStatuses.Resolved),
+            _ => query,
+        };
+    }
+
+    public Task<List<CustomerOrderEmergency>> ListRecentOrderEmergenciesAsync(int take, Guid? orderId, string? status, CancellationToken cancellationToken) =>
+        EmergenciesByStatus(status)
+            .Where(x => orderId == null || x.CustomerRentalOrderId == orderId)
+            .OrderByDescending(x => x.CreatedOnUtc)
+            .Take(take)
+            .ToListAsync(cancellationToken);
+
+    public async Task<(List<CustomerOrderEmergency> Items, int TotalCount)> ListOrderEmergencyPageAsync(
+        string? status,
+        int page,
+        int pageSize,
+        CancellationToken cancellationToken)
+    {
+        var query = EmergenciesByStatus(status);
+        var total = await query.CountAsync(cancellationToken);
+        var items = await query
+            .OrderByDescending(x => x.CreatedOnUtc)
+            .Skip((page - 1) * pageSize)
+            .Take(pageSize)
+            .ToListAsync(cancellationToken);
+        return (items, total);
+    }
+
+    public async Task<(int Open, int Acknowledged, int Resolved)> GetEmergencyStatusCountsAsync(CancellationToken cancellationToken)
+    {
+        var grouped = await customerDb.CustomerOrderEmergencies
+            .AsNoTracking()
+            .Where(x => !x.IsDeleted)
+            .GroupBy(x => x.Status)
+            .Select(g => new { Status = g.Key, Count = g.Count() })
+            .ToListAsync(cancellationToken);
+        int Count(string status) => grouped.Where(g => g.Status == status).Sum(g => g.Count);
+        return (
+            Count(EquipmentEmergencyStatuses.Open),
+            Count(EquipmentEmergencyStatuses.Acknowledged),
+            Count(EquipmentEmergencyStatuses.Resolved));
+    }
+
 
 
     private async Task<VendorProductListing?> LoadListingWithVendorAsync(Guid listingId, CancellationToken cancellationToken) =>

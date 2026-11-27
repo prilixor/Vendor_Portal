@@ -206,6 +206,25 @@ public sealed class GetVendorOrderByIdEndpoint(IMediator mediator)
     }
 }
 
+public sealed class GetVendorOrderEmergencyEndpoint(IMediator mediator)
+    : Endpoint<VendorDispatchOrderRequest, Results<Ok<VendorOrderEmergencyDto>, ProblemHttpResult>>
+{
+    public override void Configure()
+    {
+        Get("{vendorId}/orders/{orderId}/emergency");
+        Group<VendorOnboardingGroup>();
+    }
+
+    public override async Task<Results<Ok<VendorOrderEmergencyDto>, ProblemHttpResult>> ExecuteAsync(VendorDispatchOrderRequest req, CancellationToken ct)
+    {
+        if (!Guid.TryParse(req.VendorId, out var vendorId))
+            return TypedResults.Problem(title: "vendors.invalid_id", detail: "Vendor id must be a valid UUID.", statusCode: 400);
+
+        var result = await mediator.Send(new GetVendorOrderEmergencyQuery(vendorId, req.OrderId), ct);
+        return result.IsSuccess ? TypedResults.Ok(result.Value) : result.ToErrorResponse();
+    }
+}
+
 public sealed class VendorUpdateOrderStatusEndpoint(IMediator mediator)
     : Endpoint<VendorUpdateOrderStatusRequest, Results<Ok<CustomerOrderDto>, ProblemHttpResult>>
 {
