@@ -21,7 +21,7 @@ import {
 } from "lucide-react";
 import { formatOrderStatusLabel, formatOrderStatusTitle, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
 import { adminRefundChip } from "@/app/helpers/orderReturn";
-import { adminCancellationChip } from "@/app/helpers/orderCancellation";
+import { adminCancellationChip, cancelInfoChip, cancelInfoChipClass } from "@/app/helpers/orderCancellation";
 import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
 import {
   ActiveFilterChips,
@@ -52,6 +52,7 @@ const statusTabs = [
   { id: "bought_out", label: "Bought Out" },
   { id: "cancelled", label: "Cancelled" },
   { id: "dispatch_failed", label: "Dispatch Failed" },
+  { id: "awaiting_payment", label: "Awaiting Payment" },
 ] as const;
 
 function orderStatusBadgeClass(status: string): string {
@@ -475,6 +476,14 @@ export const AdminOrders = () => {
                           {adminRefundChip(item.returnSettlement) ? (
                             <span className="shrink-0 whitespace-nowrap rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold leading-none text-sky-900 dark:bg-sky-950/50 dark:text-sky-200">
                               {adminRefundChip(item.returnSettlement)}
+                            </span>
+                          ) : null}
+                          {cancelInfoChip(item.cancelInfo) ? (
+                            <span
+                              title={item.cancelInfo?.label}
+                              className={cn("shrink-0 whitespace-nowrap rounded px-1.5 py-0.5 text-[10px] font-bold leading-none", cancelInfoChipClass(item.cancelInfo))}
+                            >
+                              {cancelInfoChip(item.cancelInfo)}
                             </span>
                           ) : null}
                           {adminCancellationChip(item.cancellationRefund) ? (

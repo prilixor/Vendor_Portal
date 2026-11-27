@@ -46,6 +46,20 @@ public class CustomerRentalOrder : AuditableEntity<Guid>, ISoftDelete
     public string? DiscountCode { get; set; }
     public decimal DiscountAmount { get; set; }
 
+    /// <summary>Who ended the order: customer | admin | system. Set when the status becomes cancelled.</summary>
+    public string? CancelledBy { get; set; }
+    /// <summary>Why it was cancelled, see <see cref="OrderCancelReasons"/>.</summary>
+    public string? CancelReason { get; set; }
+    public DateTimeOffset? CancelledAt { get; set; }
+
+    /// <summary>Records who cancelled the order and why. The caller still sets <see cref="Status"/>.</summary>
+    public void RecordCancellation(string cancelledBy, string reason)
+    {
+        CancelledBy = cancelledBy;
+        CancelReason = reason;
+        CancelledAt = DateTimeOffset.UtcNow;
+    }
+
     public bool IsDeleted { get; set; }
     public DateTimeOffset? DeletedAt { get; set; }
     public Guid? DeletedBy { get; set; }

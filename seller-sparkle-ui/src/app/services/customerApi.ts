@@ -256,6 +256,7 @@ export interface CustomerOrderApi {
   isExtended?: boolean;
   returnSettlement?: import("@/app/helpers/orderReturn").OrderReturnApi | null;
   cancellationRefund?: import("@/app/helpers/orderCancellation").OrderCancellationApi | null;
+  cancelInfo?: import("@/app/helpers/orderCancellation").OrderCancelInfoApi | null;
 }
 
 export interface CustomerPrescriptionFileApi {
@@ -701,6 +702,11 @@ export const customerApi = {
     razorpaySignature: string;
   }): Promise<CustomerCheckoutApi> {
     return apiClient.post<CustomerCheckoutApi>("/customers/me/payments/verify", payload);
+  },
+
+  /** Reopen payment for an unpaid draft order (before it expires). */
+  resumeCheckout(orderId: string): Promise<CustomerCheckoutApi> {
+    return apiClient.post<CustomerCheckoutApi>(`/customers/me/orders/${orderId}/payments/resume`, {});
   },
 
   quoteOrders(payload: {

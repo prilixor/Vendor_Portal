@@ -12,6 +12,7 @@ import { useAuth } from "@/app/guards/AuthContext";
 import { vendorOnboardingApi, type VendorOrderApiDto } from "@/app/services/vendorOnboardingApi";
 import { toast } from "sonner";
 import { ChevronRight, RefreshCw, User } from "lucide-react";
+import { cancelInfoChip, cancelInfoChipClass } from "@/app/helpers/orderCancellation";
 import { formatOrderStatusLabel, formatOrderStatusTitle, formatOrderTypeLabel, orderShowsVendorPayout, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
 import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
 import { formatInr } from "@/app/helpers/orderReturn";
@@ -315,7 +316,7 @@ const VendorOrders = () => {
         </FilterPanel>
 
         <p className="mb-4 text-xs text-muted-foreground">
-          Status note: <span className="font-medium">Cancelled</span> means customer cancelled the order.
+          Status note: <span className="font-medium">Cancelled</span> means the order was cancelled (the reason is shown next to the status).
           {" "}
           <span className="font-medium">Dispatch failed</span> means reassignment could not find an eligible vendor.
         </p>
@@ -425,6 +426,15 @@ const VendorOrders = () => {
                             >
                               {formatOrderStatusLabel(order.status)}
                             </Badge>
+                            {cancelInfoChip(order.cancelInfo) ? (
+                              <Badge
+                                title={order.cancelInfo?.label}
+                                className={cn("h-5 shrink-0 whitespace-nowrap px-2 py-0 text-[10px] font-semibold leading-none", cancelInfoChipClass(order.cancelInfo))}
+                                variant="outline"
+                              >
+                                {cancelInfoChip(order.cancelInfo)}
+                              </Badge>
+                            ) : null}
                             <Badge className={cn("h-5 shrink-0 whitespace-nowrap px-2 py-0 text-[10px] font-semibold leading-none", orderTypeBadgeClass(order.orderType))} variant="outline">
                               {formatOrderTypeLabel(order.orderType)}
                             </Badge>

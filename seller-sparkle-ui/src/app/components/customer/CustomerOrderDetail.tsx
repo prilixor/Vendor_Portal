@@ -12,7 +12,13 @@ import {
 } from "@/app/services/customerApi";
 import { openRazorpayCheckout } from "@/app/helpers/razorpayCheckout";
 import { customerRefundChip, formatInr } from "@/app/helpers/orderReturn";
-import { combinedRefundSummary, customerCancellationChip } from "@/app/helpers/orderCancellation";
+import {
+  cancelInfoChip,
+  cancelInfoChipClass,
+  combinedRefundSummary,
+  customerCancellationChip,
+  type OrderCancelInfoApi,
+} from "@/app/helpers/orderCancellation";
 import { chatApi } from "@/app/services/chatApi";
 import { Button } from "@/app/components/ui/button";
 import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
@@ -43,7 +49,7 @@ const SHOW_CUSTOMER_BUYOUT = false;
 
 function orderStatusBadgeClass(status: string): string {
   const s = status.toLowerCase().replace(/_/g, " ");
-  if (s === "pending" || s === "awaiting vendor acceptance" || s === "pending vendor acceptance") {
+  if (s === "pending" || s === "awaiting payment" || s === "awaiting vendor acceptance" || s === "pending vendor acceptance") {
     return "bg-amber-100 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200";
   }
   if (s === "confirmed") {
@@ -82,8 +88,12 @@ function formatDetailDate(value?: string | null): string {
 }
 
 function isCustomerOrderCancellable(status: string): boolean {
-  const s = status.trim().toLowerCase();
-  return s === "pending" || s === "awaiting vendor acceptance";
+  const s = status.trim().toLowerCase().replace(/_/g, " ");
+  return s === "pending" || s === "awaiting vendor acceptance" || s === "awaiting payment";
+}
+
+function isAwaitingPayment(status: string): boolean {
+  return status.trim().toLowerCase().replace(/_/g, " ") === "awaiting payment";
 }
 
 /** Match Customer Mobile order detail polling while the page is open. */
@@ -318,7 +328,15 @@ function DetailRow({
   );
 }
 
-function OrderTimeline({ status, orderType }: { status: string; orderType?: string }) {
+function OrderTimeline({
+  status,
+  orderType,
+  cancelInfo,
+}: {
+  status: string;
+  orderType?: string;
+  cancelInfo?: OrderCancelInfoApi | null;
+}) {
   const { cancelled, dispatchFailed, completedThrough, currentIndex } = getTimelineProgress(status, orderType);
 
   if (dispatchFailed) {
@@ -326,6 +344,16 @@ function OrderTimeline({ status, orderType }: { status: string; orderType?: stri
   }
 
   if (cancelled) {
+    if (cancelInfo) {
+      return (
+        <div className="space-y-1 text-sm text-muted-foreground">
+          <p className="font-medium text-foreground">{cancelInfo.label}</p>
+          {cancelInfo.isUnpaidAbandonment ? (
+            <p>Nothing was charged. You can place this order again anytime.</p>
+          ) : null}
+        </div>
+      );
+    }
     return (
       <p className="text-sm text-muted-foreground">
         This order was cancelled — steps shown may have completed before cancellation.
@@ -668,6 +696,40 @@ const CustomerOrderDetail = () => {
       queryClient.invalidateQueries({ queryKey: ["customer-order-summaries"] });
     },
     onError: (err: Error) => toast.error(err.message || "Extension payment failed."),
+  });
+
+  /** Finish paying for an order whose payment window was closed (before it expires). */
+  const payOrderMut = useMutation({
+    mutationFn: async (orderId: string) => {
+      const checkout = await customerApi.resumeCheckout(orderId);
+      if (!checkout.razorpayOrderId) throw new Error("Payment is no longer available. Please place the order again.");
+      const payment = await openRazorpayCheckout({
+        key: checkout.razorpayKeyId,
+        amountPaise: Math.round(Number(checkout.amount) * 100),
+        currency: checkout.currency || "INR",
+        orderId: checkout.razorpayOrderId,
+        description: `Pay for ${checkout.orders.length} order(s)`,
+      });
+      return customerApi.verifyCheckout({
+        checkoutSessionId: checkout.checkoutSessionId,
+        razorpayOrderId: payment.razorpay_order_id,
+        razorpayPaymentId: payment.razorpay_payment_id,
+        razorpaySignature: payment.razorpay_signature,
+      });
+    },
+    onSuccess: () => {
+      toast.success("Payment successful. Your order was sent to vendors.");
+      queryClient.invalidateQueries({ queryKey: ["customer-order"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-orders"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-order-summaries"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-order-group"] });
+    },
+    onError: (err: Error) =>
+      toast.error(
+        err.message === "Payment cancelled."
+          ? "Payment was not completed. You can pay again from this page."
+          : err.message,
+      ),
   });
 
   const quoteBuyoutMut = useMutation({
@@ -1020,6 +1082,14 @@ const CustomerOrderDetail = () => {
                           {customerRefundChip(item.returnSettlement)}
                         </span>
                       ) : null}
+                      {cancelInfoChip(item.cancelInfo) ? (
+                        <span
+                          title={item.cancelInfo?.label}
+                          className={cn("inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-full px-2 text-[10px] font-bold leading-none", cancelInfoChipClass(item.cancelInfo))}
+                        >
+                          {cancelInfoChip(item.cancelInfo)}
+                        </span>
+                      ) : null}
                       {customerCancellationChip(item.cancellationRefund) ? (
                         <span className="inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-full bg-sky-100 px-2 text-[10px] font-bold leading-none text-sky-900 dark:bg-sky-950/50 dark:text-sky-200">
                           {customerCancellationChip(item.cancellationRefund)}
@@ -1145,7 +1215,7 @@ const CustomerOrderDetail = () => {
           </Button>
         </CardHeader>
         <CardContent className="px-3 pb-3 pt-1 sm:px-4 sm:pb-4">
-          <OrderTimeline status={activeItem.status} orderType={activeItem.orderType} />
+          <OrderTimeline status={activeItem.status} orderType={activeItem.orderType} cancelInfo={activeItem.cancelInfo} />
         </CardContent>
       </Card>
 
@@ -1751,6 +1821,16 @@ const CustomerOrderDetail = () => {
           <span className="sm:hidden">Chat</span>
           <span className="hidden sm:inline">Chat with BlinksMed</span>
         </Button>
+
+        {isAwaitingPayment(activeItem.status) && (
+          <Button
+            className="col-span-2 w-full sm:col-auto sm:w-auto"
+            disabled={payOrderMut.isPending}
+            onClick={() => payOrderMut.mutate(activeItem.id)}
+          >
+            {payOrderMut.isPending ? "Opening payment…" : "Pay now"}
+          </Button>
+        )}
 
         {isCustomerOrderCancellable(activeItem.status) && (
           <Button

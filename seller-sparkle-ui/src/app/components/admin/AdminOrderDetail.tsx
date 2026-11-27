@@ -11,7 +11,7 @@ import { formatOrderStatusLabel, formatOrderStatusTitle, orderShowsVendorPayout,
 import { cn, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
 import { adminRefundChip, formatInr } from "@/app/helpers/orderReturn";
 import { mediaObjectKey, useStableMediaUrls } from "@/app/helpers/stableMediaUrl";
-import { adminCancellationChip, type OrderCancellationApi } from "@/app/helpers/orderCancellation";
+import { adminCancellationChip, cancelInfoChip, cancelInfoChipClass, type OrderCancellationApi } from "@/app/helpers/orderCancellation";
 import { getUserFriendlyMessage } from "@/app/utils/errorMessages";
 import { toast } from "sonner";
 import { BackLink } from "@/app/components/shared/BackLink";
@@ -785,6 +785,14 @@ const AdminOrderDetail = () => {
                       {adminRefundChip(item.returnSettlement)}
                     </span>
                   ) : null}
+                  {cancelInfoChip(item.cancelInfo) ? (
+                    <span
+                      title={item.cancelInfo?.label}
+                      className={cn("max-w-full whitespace-normal rounded px-1.5 py-0.5 text-[10px] font-bold leading-snug", cancelInfoChipClass(item.cancelInfo))}
+                    >
+                      {cancelInfoChip(item.cancelInfo)}
+                    </span>
+                  ) : null}
                   {adminCancellationChip(item.cancellationRefund) ? (
                     <span className="max-w-full whitespace-normal rounded bg-sky-100 px-1.5 py-0.5 text-[10px] font-bold leading-snug text-sky-900 dark:bg-sky-950/50 dark:text-sky-200">
                       {adminCancellationChip(item.cancellationRefund)}
@@ -1313,6 +1321,30 @@ const AdminOrderDetail = () => {
               ) : null}
             </DialogContent>
           </Dialog>
+
+          {selectedOrder.cancelInfo ? (
+            <Card className="border-border/80 shadow-sm">
+              <CardContent className="flex flex-col gap-2 p-4 sm:flex-row sm:items-center sm:justify-between sm:p-5">
+                <div className="min-w-0">
+                  <p className="text-sm font-semibold">Why this order was cancelled</p>
+                  <p className="mt-1 text-sm text-muted-foreground">{selectedOrder.cancelInfo.label}</p>
+                  {selectedOrder.cancelInfo.isUnpaidAbandonment ? (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Nothing was paid, so no refund or follow-up is needed.
+                    </p>
+                  ) : null}
+                  {selectedOrder.cancelInfo.cancelledAt ? (
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      {new Date(selectedOrder.cancelInfo.cancelledAt).toLocaleString()}
+                    </p>
+                  ) : null}
+                </div>
+                <span className={cn("w-fit shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold", cancelInfoChipClass(selectedOrder.cancelInfo))}>
+                  {cancelInfoChip(selectedOrder.cancelInfo)}
+                </span>
+              </CardContent>
+            </Card>
+          ) : null}
 
           {selectedOrder.cancellationRefund ? (
             <Card className="border-border/80 shadow-sm">

@@ -41,7 +41,8 @@ public sealed record AdminOrderListRow(
     DateOnly? StartDate,
     DateOnly? EndDate,
     string? PrimaryImageUrl,
-    bool IsExtended);
+    bool IsExtended,
+    OrderCancelInfoDto? CancelInfo = null);
 
 public sealed class AdminOrderListResult
 {

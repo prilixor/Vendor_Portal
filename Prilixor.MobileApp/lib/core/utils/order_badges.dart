@@ -7,6 +7,7 @@ String formatOrderStatusLabel(String status) {
     return 'Awaiting';
   }
   if (s == 'dispatch failed') return 'Dispatch failed';
+  if (s == 'awaiting payment') return 'Payment pending';
   if (s.isEmpty) return status;
   return s
       .split(' ')

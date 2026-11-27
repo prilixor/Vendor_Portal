@@ -363,6 +363,32 @@ class CheckoutProvider extends ChangeNotifier {
     }
   }
 
+  /// Reopen payment for an unpaid ("Payment pending") order, before it expires.
+  Future<CheckoutSessionModel?> resumeCheckout(String orderId) async {
+    _errorMessage = null;
+    try {
+      final response = await _apiClient.dio.post(
+        '/customers/me/orders/$orderId/payments/resume',
+        data: <String, dynamic>{},
+      );
+      if (response.statusCode == 200) {
+        return CheckoutSessionModel.fromJson(Map<String, dynamic>.from(response.data as Map));
+      }
+      _errorMessage = 'Payment could not be started. Please try again.';
+      return null;
+    } on DioException catch (e) {
+      _errorMessage = userFriendlyDioMessage(
+        e.response?.data,
+        e.message,
+        'Payment could not be started. Please try again.',
+      );
+      return null;
+    } catch (_) {
+      _errorMessage = 'An unexpected error occurred.';
+      return null;
+    }
+  }
+
   List<Map<String, dynamic>> _lastPlacedOrders = [];
   List<Map<String, dynamic>> get lastPlacedOrders => _lastPlacedOrders;
 

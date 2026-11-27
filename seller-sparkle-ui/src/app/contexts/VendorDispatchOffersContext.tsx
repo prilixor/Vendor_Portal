@@ -56,8 +56,9 @@ export const VendorDispatchOffersProvider = ({
     if (!vendorId) return;
 
     const interval = setInterval(() => {
+      if (document.visibilityState === "hidden") return;
       refreshPendingCount();
-    }, 30000);
+    }, 15000);
 
     return () => clearInterval(interval);
   }, [vendorId, refreshPendingCount]);

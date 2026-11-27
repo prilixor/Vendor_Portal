@@ -1049,6 +1049,7 @@ export interface AdminOrderDto {
   isExtended?: boolean;
   returnSettlement?: import("@/app/helpers/orderReturn").OrderReturnApi | null;
   cancellationRefund?: import("@/app/helpers/orderCancellation").OrderCancellationApi | null;
+  cancelInfo?: import("@/app/helpers/orderCancellation").OrderCancelInfoApi | null;
   productVariantId?: string | null;
   doctorId?: string;
   doctorName?: string;

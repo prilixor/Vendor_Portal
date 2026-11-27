@@ -742,6 +742,8 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                                                     spacing: 4,
                                                     runSpacing: 4,
                                                     children: [
+                                                      if (item.cancelInfo?.chipLabel != null)
+                                                        OrderMetaChip(label: item.cancelInfo!.chipLabel!),
                                                       OrderTypeChip(orderType: item.orderType),
                                                       OrderMetaChip(label: 'Qty ${item.quantity}'),
                                                       if (item.isExtended && item.orderType.toLowerCase() != 'buy')
@@ -853,6 +855,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen>
                             status: (activeItem ?? order).status,
                             orderType: (activeItem ?? order).orderType,
                             listingTitle: (activeItem ?? order).listingTitle,
+                            cancelInfo: (activeItem ?? order).cancelInfo,
                           ),
                           if (provider.prescriptionLoading ||
                               provider.prescriptionFiles.isNotEmpty) ...[
@@ -2204,6 +2207,8 @@ class _ItemDetailsPanel extends StatelessWidget {
                       runSpacing: 4,
                       children: [
                         OrderStatusChip(status: order.status),
+                        if (order.cancelInfo?.chipLabel != null)
+                          OrderMetaChip(label: order.cancelInfo!.chipLabel!),
                         OrderTypeChip(orderType: order.orderType),
                         if (order.isExtended && !isBuy)
                           OrderMetaChip(label: 'EXTENDED', highlight: true),
@@ -2788,11 +2793,13 @@ class _OrderTimelineCard extends StatelessWidget {
   final String status;
   final String orderType;
   final String listingTitle;
+  final OrderCancelInfo? cancelInfo;
 
   const _OrderTimelineCard({
     required this.status,
     required this.orderType,
     required this.listingTitle,
+    this.cancelInfo,
   });
 
   @override
@@ -2801,7 +2808,9 @@ class _OrderTimelineCard extends StatelessWidget {
     final raw = status.toLowerCase().trim();
     final compact = raw.replaceAll(RegExp(r'\s+'), '_');
     final closedMessage = (compact == 'cancelled' || compact == 'canceled')
-        ? 'This product was cancelled.'
+        ? ((cancelInfo?.label.isNotEmpty ?? false)
+            ? cancelInfo!.label
+            : 'This product was cancelled.')
         : (compact == 'dispatch_failed' || raw.contains('dispatch failed'))
             ? 'No vendor accepted this product.'
             : null;

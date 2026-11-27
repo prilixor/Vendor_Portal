@@ -194,7 +194,8 @@ public sealed record AdminOrderDto(
     OrderReturnDto? ReturnSettlement = null,
     OrderCancellationRefundDto? CancellationRefund = null,
     string? DiscountCode = null,
-    decimal DiscountAmount = 0);
+    decimal DiscountAmount = 0,
+    OrderCancelInfoDto? CancelInfo = null);
 
 public sealed record GetAdminAllOrdersQuery() : IQuery<List<AdminOrderDto>>;
 

@@ -797,7 +797,8 @@ public sealed record CustomerOrderDto(
     OrderCancellationRefundDto? CancellationRefund = null,
     string? DiscountCode = null,
     decimal DiscountAmount = 0,
-    DateTime CreatedOnUtc = default);
+    DateTime CreatedOnUtc = default,
+    OrderCancelInfoDto? CancelInfo = null);
 
 internal static class CustomerOrderPricingRules
 {
@@ -1773,7 +1774,10 @@ internal sealed class PlaceCustomerOrdersCommandHandler(
 
             if (request.AwaitPayment)
             {
-                await customers.AddCustomerNotificationAsync(
+                // Checkout opens the payment window immediately, so a "Payment due" alert would only be noise
+                // (and wrong if the window is closed). It is useful only for admin payment links paid later.
+                if (string.Equals(request.SourceSurface, CheckoutSessionSources.AdminPaymentLink, StringComparison.OrdinalIgnoreCase))
+                    await customers.AddCustomerNotificationAsync(
                     new CustomerNotification
                     {
                         Id = Guid.NewGuid(),
@@ -2133,7 +2137,20 @@ public static class CustomerOrderStatusMapper
 }
 
 /// <summary>Cancel pending rental request (local state only until vendor workflow exists).</summary>
-public sealed record CancelCustomerOrderCommand(Guid CustomerId, Guid OrderId) : ICommand<CustomerOrderDto>;
+/// <param name="Expired">
+/// True when the system cancels an unpaid checkout draft that was abandoned. Only works on
+/// <c>awaiting_payment</c> orders and sends the customer a quiet in-app note, no SMS.
+/// </param>
+/// <param name="SystemCancelReason">
+/// Reason recorded for a system cancel (<see cref="OrderCancelReasons"/>); defaults to
+/// <c>payment_not_completed</c>. Ignored unless <paramref name="Expired"/> is true.
+/// </param>
+public sealed record CancelCustomerOrderCommand(
+    Guid CustomerId,
+    Guid OrderId,
+    bool Expired = false,
+    bool NotifyCustomer = true,
+    string? SystemCancelReason = null) : ICommand<CustomerOrderDto>;
 
 internal sealed class CancelCustomerOrderCommandHandler(
     ICustomerRepository customers,
@@ -2155,6 +2172,10 @@ internal sealed class CancelCustomerOrderCommandHandler(
             string.Equals(o.Status, "awaiting_vendor_acceptance", StringComparison.OrdinalIgnoreCase);
         if (!isCancellable)
             return Result.Failure<CustomerOrderDto>(new Error("customers.order_not_cancellable", "Only pending orders can be cancelled.", ErrorCategory.Validation));
+
+        // A paid order must never be cancelled by the expiry job (it may have been paid a moment ago).
+        if (request.Expired && !string.Equals(o.Status, "awaiting_payment", StringComparison.OrdinalIgnoreCase))
+            return Result.Failure<CustomerOrderDto>(new Error("customers.order_not_cancellable", "Order is no longer awaiting payment.", ErrorCategory.Validation));
 
         var agg = await customers.GetListingForCustomerAsync(o.VendorProductListingId, cancellationToken);
         if (agg is null)
@@ -2239,6 +2260,11 @@ internal sealed class CancelCustomerOrderCommandHandler(
         }
 
         o.Status = "cancelled";
+        if (request.Expired)
+            o.RecordCancellation(CancellationActors.System, request.SystemCancelReason ?? OrderCancelReasons.PaymentNotCompleted);
+        else
+            o.RecordCancellation(CancellationActors.Customer, OrderCancelReasons.CustomerRequest);
+        await customers.RemoveAwaitingPaymentNotificationsAsync(o.Id, cancellationToken);
         await DispatchOfferClosing.CloseForOrderAsync(
             customers,
             vendors,
@@ -2254,8 +2280,8 @@ internal sealed class CancelCustomerOrderCommandHandler(
             customers,
             o,
             CancellationOutcomes.Cancelled,
-            CancellationActors.Customer,
-            o.Customer?.FullName,
+            request.Expired ? CancellationActors.System : CancellationActors.Customer,
+            request.Expired ? null : o.Customer?.FullName,
             cancellationToken);
         if (openedCancel.IsFailure)
             return Result.Failure<CustomerOrderDto>(openedCancel.Errors[0]);
@@ -2265,24 +2291,30 @@ internal sealed class CancelCustomerOrderCommandHandler(
         {
             listingTitleForNotif += $" ({row.VariantDescription})";
         }
-        await customers.AddCustomerNotificationAsync(
+        if (request.NotifyCustomer)
+            await customers.AddCustomerNotificationAsync(
             new CustomerNotification
             {
                 Id = Guid.NewGuid(),
                 CustomerId = request.CustomerId,
-                Title = $"Order {o.OrderNumber} cancelled",
-                Body = openedCancel.Value is null
-                    ? $"Your rental request for \"{listingTitleForNotif}\" was cancelled."
-                    : $"Your rental request for \"{listingTitleForNotif}\" was cancelled. BlinksMed will review the payment for this product.",
+                Title = request.Expired ? $"Order {o.OrderNumber} not placed" : $"Order {o.OrderNumber} cancelled",
+                Body = request.Expired
+                    ? $"Payment for \"{listingTitleForNotif}\" was not completed, so the request was cancelled and nothing was charged. You can place it again anytime."
+                    : openedCancel.Value is null
+                        ? $"Your rental request for \"{listingTitleForNotif}\" was cancelled."
+                        : $"Your rental request for \"{listingTitleForNotif}\" was cancelled. BlinksMed will review the payment for this product.",
                 NotificationType = CustomerNotificationTypes.OrderCancelled,
                 RelatedOrderId = o.Id,
             },
             cancellationToken);
-        await customerSms.TrySendAsync(
-            request.CustomerId,
-            SmsTemplates.CustomerOrderCancelled(o.OrderNumber),
-            CustomerSmsKind.OrderCancelled,
-            cancellationToken);
+        if (!request.Expired)
+        {
+            await customerSms.TrySendAsync(
+                request.CustomerId,
+                SmsTemplates.CustomerOrderCancelled(o.OrderNumber),
+                CustomerSmsKind.OrderCancelled,
+                cancellationToken);
+        }
         await customers.SaveChangesAsync(cancellationToken);
         await vendors.SaveChangesAsync(cancellationToken);
 

@@ -48,6 +48,9 @@ function formatCheckoutInr(value: number): string {
   return `₹${Number(value || 0).toLocaleString("en-IN", { maximumFractionDigits: 0 })}`;
 }
 
+/** Payment window closed without paying; the order was kept as "Payment pending". */
+class PaymentPendingError extends Error {}
+
 function hasPrescriptionFiles(files?: File[]) {
   return (files?.length ?? 0) > 0;
 }
@@ -213,17 +216,30 @@ const CustomerCheckout = () => {
         throw new Error("Payment could not be started. Please try again.");
       }
 
-      const payment = await openRazorpayCheckout({
-        key: checkout.razorpayKeyId,
-        amountPaise: Math.round(Number(checkout.amount) * 100),
-        currency: checkout.currency || "INR",
-        orderId: checkout.razorpayOrderId,
-        description: `Pay for ${checkout.orders.length} order(s)`,
-        prefill: {
-          name: user?.name || undefined,
-          email: user?.email || undefined,
-        },
-      });
+      let payment;
+      try {
+        payment = await openRazorpayCheckout({
+          key: checkout.razorpayKeyId,
+          amountPaise: Math.round(Number(checkout.amount) * 100),
+          currency: checkout.currency || "INR",
+          orderId: checkout.razorpayOrderId,
+          description: `Pay for ${checkout.orders.length} order(s)`,
+          prefill: {
+            name: user?.name || undefined,
+            email: user?.email || undefined,
+          },
+        });
+      } catch (err) {
+        // The payment window was closed without paying. The order is saved as "Payment pending":
+        // the items are now in that order, so empty the cart (no duplicate on retry) and let the
+        // customer pay again from My Orders. Unpaid orders expire on their own after a while.
+        clear();
+        queryClient.invalidateQueries({ queryKey: ["customer-orders"] });
+        queryClient.invalidateQueries({ queryKey: ["customer-order-summaries"] });
+        toast.info("Payment not completed. Your order is saved as Payment pending. Tap Pay now to finish it.");
+        navigate("/customer/orders");
+        throw new PaymentPendingError(err instanceof Error ? err.message : "Payment cancelled.");
+      }
 
       const verified = await customerApi.verifyCheckout({
         checkoutSessionId: checkout.checkoutSessionId,
@@ -267,7 +283,10 @@ const CustomerCheckout = () => {
       queryClient.invalidateQueries({ queryKey: ["customer-dashboard-summary"] });
       navigate("/customer/orders");
     },
-    onError: (err: Error) => toast.error(getUserFriendlyMessage(err, "Unable to complete payment. Please try again.")),
+    onError: (err: Error) => {
+      if (err instanceof PaymentPendingError) return; // already told the customer and moved to My Orders
+      toast.error(getUserFriendlyMessage(err, "Unable to complete payment. Please try again."));
+    },
   });
 
   useEffect(() => {

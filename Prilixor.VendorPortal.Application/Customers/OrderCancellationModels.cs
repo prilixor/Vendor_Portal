@@ -16,6 +16,32 @@ public sealed record OrderCancellationRefundDto(
     string? RefundReference,
     bool HasOnlinePayment);
 
+/// <summary>Who cancelled an order and why, for every screen. Present for every cancelled order that has a reason.</summary>
+public sealed record OrderCancelInfoDto(
+    string CancelledBy,
+    string Reason,
+    string Label,
+    DateTimeOffset? CancelledAt,
+    /// <summary>True when nothing was paid and the system gave up (payment not completed / checkout failed).</summary>
+    bool IsUnpaidAbandonment)
+{
+    public static OrderCancelInfoDto? FromOrder(CustomerRentalOrder o)
+    {
+        var status = o.Status?.Trim().ToLowerInvariant();
+        if (status is not ("cancelled" or "canceled") || string.IsNullOrWhiteSpace(o.CancelReason))
+            return null;
+        var label = OrderCancelReasons.Label(o.CancelReason);
+        if (label is null)
+            return null;
+        return new OrderCancelInfoDto(
+            string.IsNullOrWhiteSpace(o.CancelledBy) ? CancellationActors.Unknown : o.CancelledBy.Trim().ToLowerInvariant(),
+            o.CancelReason.Trim().ToLowerInvariant(),
+            label,
+            o.CancelledAt,
+            OrderCancelReasons.IsUnpaidAbandonment(o.CancelReason));
+    }
+}
+
 public sealed record PendingCancellationRefundRow(
     Guid OrderId,
     string OrderNumber,
@@ -46,8 +72,13 @@ public static class OrderCancellationMapper
         CustomerOrderDto dto,
         CancellationToken cancellationToken)
     {
-        var map = await customers.GetOrderCancellationRefundDtosByOrderIdsAsync([dto.Id], cancellationToken);
-        return map.TryGetValue(dto.Id, out var row) ? dto with { CancellationRefund = row } : dto;
+        var refunds = await customers.GetOrderCancellationRefundDtosByOrderIdsAsync([dto.Id], cancellationToken);
+        var info = await customers.GetOrderCancelInfosByOrderIdsAsync([dto.Id], cancellationToken);
+        return dto with
+        {
+            CancellationRefund = refunds.TryGetValue(dto.Id, out var r) ? r : dto.CancellationRefund,
+            CancelInfo = info.TryGetValue(dto.Id, out var c) ? c : dto.CancelInfo,
+        };
     }
 
     public static async Task<List<CustomerOrderDto>> AttachAsync(
@@ -58,12 +89,18 @@ public static class OrderCancellationMapper
         if (items.Count == 0)
             return items;
 
-        var map = await customers.GetOrderCancellationRefundDtosByOrderIdsAsync(items.ConvertAll(i => i.Id), cancellationToken);
-        if (map.Count == 0)
+        var ids = items.ConvertAll(i => i.Id);
+        var refunds = await customers.GetOrderCancellationRefundDtosByOrderIdsAsync(ids, cancellationToken);
+        var info = await customers.GetOrderCancelInfosByOrderIdsAsync(ids, cancellationToken);
+        if (refunds.Count == 0 && info.Count == 0)
             return items;
 
         return items
-            .Select(i => map.TryGetValue(i.Id, out var row) ? i with { CancellationRefund = row } : i)
+            .Select(i => i with
+            {
+                CancellationRefund = refunds.TryGetValue(i.Id, out var r) ? r : i.CancellationRefund,
+                CancelInfo = info.TryGetValue(i.Id, out var c) ? c : i.CancelInfo,
+            })
             .ToList();
     }
 
@@ -72,8 +109,13 @@ public static class OrderCancellationMapper
         AdminOrderDto dto,
         CancellationToken cancellationToken)
     {
-        var map = await customers.GetOrderCancellationRefundDtosByOrderIdsAsync([dto.OrderId], cancellationToken);
-        return map.TryGetValue(dto.OrderId, out var row) ? dto with { CancellationRefund = row } : dto;
+        var refunds = await customers.GetOrderCancellationRefundDtosByOrderIdsAsync([dto.OrderId], cancellationToken);
+        var info = await customers.GetOrderCancelInfosByOrderIdsAsync([dto.OrderId], cancellationToken);
+        return dto with
+        {
+            CancellationRefund = refunds.TryGetValue(dto.OrderId, out var r) ? r : dto.CancellationRefund,
+            CancelInfo = info.TryGetValue(dto.OrderId, out var c) ? c : dto.CancelInfo,
+        };
     }
 
     public static async Task<List<AdminOrderDto>> AttachAsync(
@@ -84,12 +126,18 @@ public static class OrderCancellationMapper
         if (items.Count == 0)
             return items;
 
-        var map = await customers.GetOrderCancellationRefundDtosByOrderIdsAsync(items.ConvertAll(i => i.OrderId), cancellationToken);
-        if (map.Count == 0)
+        var ids = items.ConvertAll(i => i.OrderId);
+        var refunds = await customers.GetOrderCancellationRefundDtosByOrderIdsAsync(ids, cancellationToken);
+        var info = await customers.GetOrderCancelInfosByOrderIdsAsync(ids, cancellationToken);
+        if (refunds.Count == 0 && info.Count == 0)
             return items;
 
         return items
-            .Select(i => map.TryGetValue(i.OrderId, out var row) ? i with { CancellationRefund = row } : i)
+            .Select(i => i with
+            {
+                CancellationRefund = refunds.TryGetValue(i.OrderId, out var r) ? r : i.CancellationRefund,
+                CancelInfo = info.TryGetValue(i.OrderId, out var c) ? c : i.CancelInfo,
+            })
             .ToList();
     }
 }

@@ -8,10 +8,12 @@ import { PageContentGate } from "@/app/components/shared/PageLoader";
 import { TablePagination } from "@/app/components/shared/TablePagination";
 import { ListingThumb } from "@/app/components/shared/ListingThumb";
 import { toast } from "sonner";
+import { useAuth } from "@/app/guards/AuthContext";
+import { openRazorpayCheckout } from "@/app/helpers/razorpayCheckout";
 import { formatCustomerOrderStatusTitle, formatCustomerOrderStatusLabel, formatOrderTypeLabel, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
 import { cn, resolveItemImageUrl } from "@/app/helpers/utils";
 import { customerRefundChip } from "@/app/helpers/orderReturn";
-import { customerCancellationChip } from "@/app/helpers/orderCancellation";
+import { cancelInfoChip, cancelInfoChipClass, customerCancellationChip } from "@/app/helpers/orderCancellation";
 import { Badge } from "@/app/components/ui/badge";
 import { CancelOrderConfirm } from "@/app/components/legal/CancelOrderConfirm";
 import {
@@ -112,12 +114,18 @@ function orderTypeBadgeClass(orderType: string): string {
 }
 
 function isCustomerOrderCancellable(status: string): boolean {
-  const s = status.trim().toLowerCase();
-  return s === "pending" || s === "awaiting vendor acceptance";
+  const s = status.trim().toLowerCase().replace(/_/g, " ");
+  return s === "pending" || s === "awaiting vendor acceptance" || s === "awaiting payment";
+}
+
+/** Unpaid checkout draft: the customer left the payment window. Expires automatically after ~30 min. */
+function isAwaitingPayment(status: string): boolean {
+  return status.trim().toLowerCase().replace(/_/g, " ") === "awaiting payment";
 }
 
 const CustomerOrders = () => {
   const queryClient = useQueryClient();
+  const { user } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
   const initialStatus = searchParams.get("status") as StatusFilter;
   
@@ -196,6 +204,38 @@ const CustomerOrders = () => {
       toast.success("Order cancelled.");
     },
     onError: (err: Error) => toast.error(err.message),
+  });
+
+  const payMut = useMutation({
+    mutationFn: async (orderId: string) => {
+      const checkout = await customerApi.resumeCheckout(orderId);
+      if (!checkout.razorpayOrderId) throw new Error("Payment is no longer available. Please place the order again.");
+      const payment = await openRazorpayCheckout({
+        key: checkout.razorpayKeyId,
+        amountPaise: Math.round(Number(checkout.amount) * 100),
+        currency: checkout.currency || "INR",
+        orderId: checkout.razorpayOrderId,
+        description: `Pay for ${checkout.orders.length} order(s)`,
+        prefill: { name: user?.name || undefined, email: user?.email || undefined },
+      });
+      return customerApi.verifyCheckout({
+        checkoutSessionId: checkout.checkoutSessionId,
+        razorpayOrderId: payment.razorpay_order_id,
+        razorpayPaymentId: payment.razorpay_payment_id,
+        razorpaySignature: payment.razorpay_signature,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["customer-order-summaries"] });
+      queryClient.invalidateQueries({ queryKey: ["customer-orders"] });
+      toast.success("Payment successful. Your order was sent to vendors.");
+    },
+    onError: (err: Error) =>
+      toast.error(
+        err.message === "Payment cancelled."
+          ? "Payment was not completed. You can try again from this list."
+          : err.message,
+      ),
   });
 
   const pageSlice = data?.items ?? [];
@@ -433,6 +473,14 @@ const CustomerOrders = () => {
                                   {customerRefundChip(o.returnSettlement)}
                                 </span>
                               ) : null}
+                              {cancelInfoChip(o.cancelInfo) ? (
+                                <span
+                                  title={o.cancelInfo?.label}
+                                  className={cn(orderMetaChipClass, cancelInfoChipClass(o.cancelInfo))}
+                                >
+                                  {cancelInfoChip(o.cancelInfo)}
+                                </span>
+                              ) : null}
                               {customerCancellationChip(o.cancellationRefund) ? (
                                 <span className={cn(orderMetaChipClass, "bg-sky-100 text-sky-900 dark:bg-sky-950/50 dark:text-sky-200")}>
                                   {customerCancellationChip(o.cancellationRefund)}
@@ -448,6 +496,16 @@ const CustomerOrders = () => {
                             </div>
                             <div className="ml-auto flex shrink-0 flex-nowrap items-center gap-1 sm:ml-0 sm:gap-3">
                               <span className="text-xs font-semibold tabular-nums text-foreground sm:text-sm">₹{o.totalAmount.toFixed(0)}</span>
+                              {isAwaitingPayment(o.status) ? (
+                                <Button
+                                  size="sm"
+                                  className="h-7 shrink-0 px-2 text-xs font-semibold sm:h-8 sm:px-3"
+                                  disabled={payMut.isPending}
+                                  onClick={() => payMut.mutate(o.id)}
+                                >
+                                  {payMut.isPending && payMut.variables === o.id ? "Opening…" : "Pay now"}
+                                </Button>
+                              ) : null}
                               {isCustomerOrderCancellable(o.status) ? (
                                 <Button
                                   variant="ghost"

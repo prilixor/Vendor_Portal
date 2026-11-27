@@ -36,13 +36,14 @@ export const NotificationProvider = ({ children, vendorId }: { children: ReactNo
     }
   }, [vendorId]);
 
-  // Set up periodic polling for new notifications every 30 seconds
+  // Poll for new notifications every 15 seconds (skipped while the tab is hidden).
   useEffect(() => {
     if (!vendorId) return;
 
     const interval = setInterval(() => {
+      if (document.visibilityState === "hidden") return;
       refreshUnreadCount();
-    }, 30000); // 30 seconds
+    }, 15000);
 
     return () => clearInterval(interval);
   }, [vendorId]);

@@ -14,11 +14,13 @@ export function formatOrderStatusTitle(status: string): string {
 export function formatCustomerOrderStatusTitle(status: string): string {
   const normalized = normalizeOrderStatus(status);
   if (normalized === "dispatch failed") return "Dispatch failed";
+  if (normalized === "awaiting payment") return "Payment pending. Pay now to send this order to vendors.";
   return formatOrderStatusTitle(status).replace(/\bvendors?\b/gi, "BlinksMed");
 }
 
 /** Compact customer badge. Dispatch failed stays distinct from a real cancellation. */
 export function formatCustomerOrderStatusLabel(status: string): string {
+  if (normalizeOrderStatus(status) === "awaiting payment") return "Payment pending";
   return formatOrderStatusLabel(status);
 }
 

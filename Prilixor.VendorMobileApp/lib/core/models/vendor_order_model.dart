@@ -46,6 +46,7 @@ class VendorOrder {
   final String? discountCode;
   final double discountAmount;
   final OrderReturnInfo? returnSettlement;
+  final OrderCancelInfo? cancelInfo;
 
   const VendorOrder({
     required this.orderId,
@@ -86,6 +87,7 @@ class VendorOrder {
     this.discountCode,
     this.discountAmount = 0,
     this.returnSettlement,
+    this.cancelInfo,
   });
 
   double get payoutAmount =>
@@ -156,7 +158,48 @@ class VendorOrder {
       discountCode: json['discountCode']?.toString(),
       discountAmount: (json['discountAmount'] as num?)?.toDouble() ?? 0,
       returnSettlement: OrderReturnInfo.fromJson(json['returnSettlement']),
+      cancelInfo: OrderCancelInfo.fromJson(json['cancelInfo']),
     );
+  }
+}
+
+/// Who/why an order was cancelled (customer, admin, or the system).
+class OrderCancelInfo {
+  final String cancelledBy;
+  final String reason;
+  final String label;
+  final bool isUnpaidAbandonment;
+
+  const OrderCancelInfo({
+    required this.cancelledBy,
+    required this.reason,
+    required this.label,
+    required this.isUnpaidAbandonment,
+  });
+
+  static OrderCancelInfo? fromJson(dynamic raw) {
+    if (raw is! Map) return null;
+    final json = Map<String, dynamic>.from(raw);
+    return OrderCancelInfo(
+      cancelledBy: json['cancelledBy']?.toString() ?? '',
+      reason: json['reason']?.toString() ?? '',
+      label: json['label']?.toString() ?? '',
+      isUnpaidAbandonment: json['isUnpaidAbandonment'] == true,
+    );
+  }
+
+  String? get chipLabel {
+    switch (reason) {
+      case 'customer_request':
+        return 'By customer';
+      case 'admin_cancelled':
+        return 'By admin';
+      case 'payment_not_completed':
+        return 'Payment not completed';
+      case 'checkout_failed':
+        return 'Payment failed to start';
+    }
+    return null;
   }
 }
 

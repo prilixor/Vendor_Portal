@@ -3,6 +3,7 @@ import { useNavigate, useParams } from "react-router-dom";
 import { Check, Barcode, CheckCircle2, ImageOff, ImagePlus, Images, Info, Loader2, Pencil, Plus, X } from "lucide-react";
 import { formatGstRateLabel } from "@/app/helpers/gstLabel";
 import { mediaObjectKey, useStableMediaUrls } from "@/app/helpers/stableMediaUrl";
+import type { OrderCancelInfoApi } from "@/app/helpers/orderCancellation";
 import { formatOrderStatusLabel, formatOrderStatusTitle, formatOrderTypeLabel, orderShowsVendorPayout, orderStatusBadgeSizeClass } from "@/app/helpers/orderStatus";
 import { cn, orderPhotoTileUrl, originalUrlFromThumb, photoAtSlot, resolveItemImageUrl, retryOriginalOnImageError } from "@/app/helpers/utils";
 import { Card, CardContent, CardHeader } from "@/app/components/ui/card";
@@ -286,11 +287,23 @@ function isShortTimeline(status: string): boolean {
   return compact === "cancelled" || compact === "canceled" || compact === "dispatch_failed" || raw.includes("dispatch failed");
 }
 
-function OrderTimeline({ status, orderType }: { status: string; orderType?: string }) {
+function OrderTimeline({
+  status,
+  orderType,
+  cancelInfo,
+}: {
+  status: string;
+  orderType?: string;
+  cancelInfo?: OrderCancelInfoApi | null;
+}) {
   const raw = status.toLowerCase().trim();
   const compact = raw.replace(/\s+/g, "_");
   if (compact === "cancelled" || compact === "canceled") {
-    return <p className="text-sm text-muted-foreground">This product was cancelled.</p>;
+    return (
+      <p className="text-sm text-muted-foreground">
+        {cancelInfo?.label ?? "This product was cancelled."}
+      </p>
+    );
   }
   if (compact === "dispatch_failed" || raw.includes("dispatch failed")) {
     return <p className="text-sm text-muted-foreground">No vendor accepted this product.</p>;
@@ -1596,7 +1609,7 @@ const VendorOrderDetail = () => {
                       Tracking: <span className="font-semibold text-foreground">{order.listingTitle}</span>
                     </p>
                   </div>
-                  <OrderTimeline status={order.status} orderType={order.orderType} />
+                  <OrderTimeline status={order.status} orderType={order.orderType} cancelInfo={order.cancelInfo} />
                 </CardContent>
               </Card>
             ) : (
@@ -1608,7 +1621,7 @@ const VendorOrderDetail = () => {
                 </p>
               </CardHeader>
               <CardContent className="px-4 pb-4 pt-2 sm:px-6 sm:pb-6">
-                <OrderTimeline status={order.status} orderType={order.orderType} />
+                <OrderTimeline status={order.status} orderType={order.orderType} cancelInfo={order.cancelInfo} />
               </CardContent>
             </Card>
             )}

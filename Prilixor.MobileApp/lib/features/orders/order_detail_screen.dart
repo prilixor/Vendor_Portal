@@ -6,6 +6,7 @@ import 'package:flutter/material.dart';
 import 'package:razorpay_flutter/razorpay_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../../shared/utils/razorpay_web_checkout.dart';
+import '../../shared/utils/pending_order_payment.dart';
 import '../../core/theme.dart';
 import 'package:provider/provider.dart';
 import '../../core/providers/order_detail_provider.dart';
@@ -62,6 +63,13 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
   String? _payCheckoutSessionId;
   bool _payingExtension = false;
 
+  /// "Pay now" for an order left as Payment pending (payment window was closed).
+  late final PendingOrderPayment _pendingPayment = PendingOrderPayment(
+    onPaid: () {
+      if (mounted) _refreshLive(silent: false);
+    },
+  );
+
   /// Keep status/photos in sync with vendor actions while this screen is open.
   static const _pollInterval = Duration(seconds: 5);
 
@@ -92,6 +100,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
   void dispose() {
     WidgetsBinding.instance.removeObserver(this);
     _pollTimer?.cancel();
+    _pendingPayment.dispose();
     if (!kIsWeb) _razorpay.clear();
     super.dispose();
   }
@@ -899,6 +908,19 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                                 ),
                                               ),
                                             ],
+                                            if (order.cancelInfo?.chipLabel != null) ...[
+                                              const SizedBox(height: 4),
+                                              Text(
+                                                order.cancelInfo!.chipLabel!,
+                                                style: TextStyle(
+                                                  color: order.cancelInfo!.isUnpaidAbandonment
+                                                      ? const Color(0xFFD97706)
+                                                      : colors.textMuted,
+                                                  fontSize: 10,
+                                                  fontWeight: FontWeight.w800,
+                                                ),
+                                              ),
+                                            ],
                                             if (order.cancellationRefund?.chipLabel != null) ...[
                                               const SizedBox(height: 4),
                                               Text(
@@ -1024,7 +1046,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                               ],
                             ),
                             const SizedBox(height: 8),
-                            _buildTimeline(order.status, order.orderType),
+                            _buildTimeline(order.status, order.orderType, cancelInfo: order.cancelInfo),
                           ],
                         ),
                       ),
@@ -1249,8 +1271,10 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                       // Bottom action buttons
                       Builder(
                         builder: (context) {
-                          final status = order.status.trim().toLowerCase();
-                          final canCancel = status == 'pending' || status == 'awaiting vendor acceptance';
+                          final status = order.status.trim().toLowerCase().replaceAll('_', ' ');
+                          final awaitingPayment = status == 'awaiting payment';
+                          final canCancel =
+                              status == 'pending' || status == 'awaiting vendor acceptance' || awaitingPayment;
                           final canExtendBuyout = status == 'active' && order.orderType.toLowerCase() == 'rent';
                           final lineExtensions = provider.extensionsFor(order.id);
                           CustomerExtensionModel? awaitingExtension;
@@ -1310,6 +1334,21 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
                                   }
                                 },
                               ),
+                              if (awaitingPayment) ...[
+                                const SizedBox(height: 8),
+                                FilledButton.icon(
+                                  style: FilledButton.styleFrom(
+                                    padding: const EdgeInsets.symmetric(vertical: 12),
+                                    minimumSize: const Size.fromHeight(44),
+                                  ),
+                                  icon: const Icon(Icons.payment, size: 18),
+                                  label: const Text(
+                                    'Pay now',
+                                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700),
+                                  ),
+                                  onPressed: () => _pendingPayment.start(context, order.id),
+                                ),
+                              ],
                               if (canCancel) ...[
                                 const SizedBox(height: 8),
                                 OutlinedButton.icon(
@@ -1954,7 +1993,7 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
     return colors.textSecondary;
   }
 
-  Widget _buildTimeline(String status, String orderType) {
+  Widget _buildTimeline(String status, String orderType, {OrderCancelInfo? cancelInfo}) {
     final colors = context.appColors;
     final progress = _timelineProgress(status, orderType);
 
@@ -1962,6 +2001,30 @@ class _OrderDetailScreenState extends State<OrderDetailScreen> with WidgetsBindi
       return Text(
         'No vendor accepted this product.',
         style: TextStyle(color: colors.textMuted, fontSize: 13, height: 1.35),
+      );
+    }
+
+    if (progress.cancelled && cancelInfo != null && cancelInfo.label.isNotEmpty) {
+      return Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            cancelInfo.label,
+            style: TextStyle(
+              color: colors.textPrimary,
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              height: 1.35,
+            ),
+          ),
+          if (cancelInfo.isUnpaidAbandonment) ...[
+            const SizedBox(height: 4),
+            Text(
+              'Nothing was charged. You can place this order again anytime.',
+              style: TextStyle(color: colors.textMuted, fontSize: 13, height: 1.35),
+            ),
+          ],
+        ],
       );
     }
 

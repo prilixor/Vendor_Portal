@@ -29,6 +29,7 @@ builder.Services.AddHostedService<Prilixor.VendorPortal.API.Services.BootstrapSu
 builder.Services.AddHostedService<Prilixor.VendorPortal.API.Services.CustomerExpirationReminderHostedService>();
 builder.Services.AddHostedService<Prilixor.VendorPortal.API.Services.LegalDocumentSeedHostedService>();
 builder.Services.AddHostedService<Prilixor.VendorPortal.API.Services.SequentialDispatchHostedService>();
+builder.Services.AddHostedService<Prilixor.VendorPortal.API.Services.UnpaidCheckoutExpiryHostedService>();
 
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddHttpClient();

@@ -82,7 +82,8 @@ public sealed record VendorOrderDto(
     decimal GstAmount = 0,
     OrderReturnDto? ReturnSettlement = null,
     string? DiscountCode = null,
-    decimal DiscountAmount = 0);
+    decimal DiscountAmount = 0,
+    OrderCancelInfoDto? CancelInfo = null);
 
 public sealed record GetVendorOrdersQuery(string VendorId, string? Status) : IQuery<List<VendorOrderDto>>;
 
@@ -754,7 +755,8 @@ public static class VendorOrderMapper
             DepositAmount: o.DepositAmount,
             GstAmount: o.GstAmount,
             DiscountCode: o.DiscountCode,
-            DiscountAmount: o.DiscountAmount);
+            DiscountAmount: o.DiscountAmount,
+            CancelInfo: OrderCancelInfoDto.FromOrder(o));
     }
 }
 

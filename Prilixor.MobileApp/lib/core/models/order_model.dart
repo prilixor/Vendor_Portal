@@ -80,6 +80,7 @@ class OrderModel {
   final DateTime? createdAtUtc;
   final OrderReturnInfo? returnSettlement;
   final OrderCancellationInfo? cancellationRefund;
+  final OrderCancelInfo? cancelInfo;
 
   OrderModel({
     required this.id,
@@ -122,6 +123,7 @@ class OrderModel {
     this.createdAtUtc,
     this.returnSettlement,
     this.cancellationRefund,
+    this.cancelInfo,
   });
 
   bool get hasMedicalReference {
@@ -174,7 +176,49 @@ class OrderModel {
       createdAtUtc: _parseCreatedAt(json['createdOnUtc'] ?? json['createdAtUtc']),
       returnSettlement: OrderReturnInfo.fromJson(json['returnSettlement']),
       cancellationRefund: OrderCancellationInfo.fromJson(json['cancellationRefund']),
+      cancelInfo: OrderCancelInfo.fromJson(json['cancelInfo']),
     );
+  }
+}
+
+/// Who/why an order was cancelled (customer, admin, or the system after an unpaid checkout).
+class OrderCancelInfo {
+  final String cancelledBy;
+  final String reason;
+  final String label;
+  final bool isUnpaidAbandonment;
+
+  const OrderCancelInfo({
+    required this.cancelledBy,
+    required this.reason,
+    required this.label,
+    required this.isUnpaidAbandonment,
+  });
+
+  static OrderCancelInfo? fromJson(dynamic raw) {
+    if (raw is! Map) return null;
+    final json = Map<String, dynamic>.from(raw);
+    return OrderCancelInfo(
+      cancelledBy: json['cancelledBy']?.toString() ?? '',
+      reason: json['reason']?.toString() ?? '',
+      label: json['label']?.toString() ?? '',
+      isUnpaidAbandonment: json['isUnpaidAbandonment'] == true,
+    );
+  }
+
+  /// Short chip next to the "Cancelled" status.
+  String? get chipLabel {
+    switch (reason) {
+      case 'customer_request':
+        return 'By customer';
+      case 'admin_cancelled':
+        return 'By admin';
+      case 'payment_not_completed':
+        return 'Payment not completed';
+      case 'checkout_failed':
+        return 'Payment failed to start';
+    }
+    return null;
   }
 }
 

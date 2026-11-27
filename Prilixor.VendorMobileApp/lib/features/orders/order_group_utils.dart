@@ -605,6 +605,8 @@ class OrderGroupListItem extends StatelessWidget {
                       crossAxisAlignment: WrapCrossAlignment.center,
                       children: [
                         OrderStatusChip(status: order.status),
+                        if (order.cancelInfo?.chipLabel != null)
+                          OrderMetaChip(label: order.cancelInfo!.chipLabel!),
                         OrderTypeChip(orderType: order.orderType),
                         if (order.isExtended && order.orderType.toLowerCase() != 'buy')
                           const OrderMetaChip(label: 'EXTENDED', highlight: true),

@@ -82,6 +82,8 @@ public static class CancellationActors
             return who is null
                 ? "Cancelled by admin."
                 : $"Cancelled by admin ({who}).";
+        if (string.Equals(role, System, StringComparison.OrdinalIgnoreCase))
+            return "Cancelled automatically by the system. Payment arrived after the order was cancelled.";
         return "This product was cancelled. Confirm who cancelled it before refunding.";
     }
 }

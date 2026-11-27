@@ -7,6 +7,7 @@ import '../../core/theme.dart';
 import '../../core/providers/checkout_provider.dart';
 import '../../shared/utils/razorpay_web_checkout.dart';
 import '../../core/providers/cart_provider.dart';
+import '../../core/providers/order_provider.dart';
 import '../../core/providers/address_provider.dart';
 import '../../core/models/cart_model.dart';
 import '../../core/models/medical_model.dart';
@@ -136,6 +137,25 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
   void _handlePaymentError(PaymentFailureResponse response) {
     if (!mounted) return;
     setState(() => _isProcessingCheckout = false);
+
+    if (_activeCheckoutSessionId != null) {
+      // The payment window was closed without paying. The order is saved as "Payment pending":
+      // the items now belong to that order, so empty the cart (no duplicate on retry) and let the
+      // customer pay again from Orders. Unpaid orders expire on their own after a while.
+      _activeCheckoutSessionId = null;
+      Provider.of<CartProvider>(context, listen: false).clearCart();
+      Provider.of<OrderProvider>(context, listen: false).fetchOrders(silent: true);
+      Navigator.of(context).popUntil((route) => route.isFirst);
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Payment not completed. Your order is saved as Payment pending. Open Orders and tap Pay now to finish it.'),
+          backgroundColor: Colors.orangeAccent,
+          duration: Duration(seconds: 6),
+        ),
+      );
+      return;
+    }
+
     final message = response.message ?? 'Payment cancelled or failed.';
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
@@ -1012,12 +1032,8 @@ class _CheckoutScreenState extends State<CheckoutScreen> {
                             try {
                               _razorpay.open(options);
                             } catch (e) {
-                              if (mounted) {
-                                setState(() => _isProcessingCheckout = false);
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  SnackBar(content: Text('Unable to launch Razorpay: $e'), backgroundColor: Colors.redAccent),
-                                );
-                              }
+                              // The order already exists as Payment pending: treat like a closed window.
+                              _handlePaymentError(PaymentFailureResponse(0, 'Unable to launch Razorpay: $e', null));
                             }
                           }
                         },

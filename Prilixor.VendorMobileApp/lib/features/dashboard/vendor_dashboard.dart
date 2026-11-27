@@ -128,7 +128,7 @@ class _VendorDashboardState extends State<VendorDashboard>
 
   void _startPolling() {
     _pollTimer?.cancel();
-    _pollTimer = Timer.periodic(const Duration(seconds: 30), (_) {
+    _pollTimer = Timer.periodic(const Duration(seconds: 15), (_) {
       if (!mounted || _paused) return;
       // Poll badges only — never re-pull onboarding/orders on the timer.
       _refreshShell(silent: true, includeSecondary: false);

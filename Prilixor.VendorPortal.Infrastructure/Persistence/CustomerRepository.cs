@@ -1480,7 +1480,8 @@ public sealed class CustomerRepository(
             .AsNoTracking()
             .Include(o => o.Customer)
             .Include(o => o.CustomerAddress)
-            .Where(o => !o.IsDeleted);
+            // Vendors never see unpaid checkout drafts; the order reaches them only after payment.
+            .Where(o => !o.IsDeleted && o.Status.ToLower() != "awaiting_payment");
 
         if (!string.IsNullOrWhiteSpace(status))
         {
@@ -1856,6 +1857,7 @@ public sealed class CustomerRepository(
             .Include(o => o.CustomerAddress)
             .Where(o =>
                 !o.IsDeleted &&
+                o.Status.ToLower() != "awaiting_payment" &&
                 (listingIds.Contains(o.VendorProductListingId) || pendingOrderIds.Contains(o.Id)))
             .OrderByDescending(o => o.CreatedOnUtc)
             .ToListAsync(cancellationToken);
@@ -1935,7 +1937,7 @@ public sealed class CustomerRepository(
             .Include(o => o.CustomerAddress)
             .FirstOrDefaultAsync(o => o.Id == orderId && !o.IsDeleted, cancellationToken);
 
-        if (order is null)
+        if (order is null || IsAwaitingPaymentStatus(order.Status))
             return null;
 
         VendorProductListing? listing;
@@ -2074,12 +2076,18 @@ public sealed class CustomerRepository(
         var status = (spec.Status ?? "all").Trim().ToLowerInvariant();
         if (string.IsNullOrWhiteSpace(status)) status = "all";
 
-        var live = customerDb.CustomerRentalOrders.AsNoTracking().Where(o => !o.IsDeleted);
+        // Unpaid checkout drafts ("awaiting_payment") are not real orders: they stay out of the
+        // default list, the totals and revenue, and only show under their own status tab.
+        var withDrafts = customerDb.CustomerRentalOrders.AsNoTracking().Where(o => !o.IsDeleted);
+        var live = withDrafts.Where(o => o.Status.ToLower() != "awaiting_payment");
         var fromUtc = NormalizeAdminOrderInstant(spec.FromUtc);
         var toUtc = NormalizeAdminOrderInstant(spec.ToUtc);
         if (fromUtc.HasValue && toUtc.HasValue && fromUtc > toUtc)
             (fromUtc, toUtc) = (toUtc, fromUtc);
-        var placed = ApplyAdminOrderPlacedFilter(live, fromUtc, toUtc);
+        var placedWithDrafts = ApplyAdminOrderPlacedFilter(withDrafts, fromUtc, toUtc);
+        var placed = status == "awaiting_payment"
+            ? placedWithDrafts
+            : placedWithDrafts.Where(o => o.Status.ToLower() != "awaiting_payment");
 
         var stats = new AdminOrderListStats(
             await live.CountAsync(cancellationToken),
@@ -2093,7 +2101,7 @@ public sealed class CustomerRepository(
 
         if (string.IsNullOrEmpty(search))
         {
-            statusCounts = await BuildStatusCountsFromQueryAsync(placed, cancellationToken);
+            statusCounts = await BuildStatusCountsFromQueryAsync(placedWithDrafts, cancellationToken);
             var filtered = ApplyAdminOrderStatusFilter(placed, status);
             var hasPlacedFilter = fromUtc.HasValue || toUtc.HasValue;
             var totalCount = status == "all" && !hasPlacedFilter
@@ -2118,7 +2126,7 @@ public sealed class CustomerRepository(
             };
         }
 
-        var candidates = await placed
+        var candidates = await placedWithDrafts
             .Include(o => o.Customer)
             .OrderByDescending(o => o.CreatedOnUtc)
             .ToListAsync(cancellationToken);
@@ -2134,6 +2142,7 @@ public sealed class CustomerRepository(
         statusCounts = BuildStatusCountsFromOrders(searchable);
         var statusFiltered = searchable
             .Where(o => MatchesAdminOrderStatus(o.Status, status))
+            .Where(o => status == "awaiting_payment" || !IsAwaitingPaymentStatus(o.Status))
             .ToList();
         var searchTotal = statusFiltered.Count;
         pageOrders = statusFiltered
@@ -2158,6 +2167,10 @@ public sealed class CustomerRepository(
         return customerDb.CustomerRentalOrders
             .AsNoTracking()
             .Where(o => !o.IsDeleted)
+            // An unpaid order the system gave up on (payment not completed) is not a problem to act on.
+            .Where(o => o.CancelReason == null
+                        || (o.CancelReason != OrderCancelReasons.PaymentNotCompleted
+                            && o.CancelReason != OrderCancelReasons.CheckoutFailed))
             .Where(o =>
                 o.Status.ToLower().Contains("dispatch_failed") ||
                 o.Status.ToLower().Contains("dispatch failed") ||
@@ -2464,6 +2477,29 @@ public sealed class CustomerRepository(
             customerDb.Entry(local).State = EntityState.Detached;
 
         return settled == 1;
+    }
+
+    public async Task<Dictionary<Guid, OrderCancelInfoDto>> GetOrderCancelInfosByOrderIdsAsync(
+        IReadOnlyCollection<Guid> orderIds,
+        CancellationToken cancellationToken)
+    {
+        var ids = orderIds.Where(id => id != Guid.Empty).Distinct().ToList();
+        if (ids.Count == 0)
+            return [];
+
+        var rows = await customerDb.CustomerRentalOrders.AsNoTracking()
+            .Where(o => ids.Contains(o.Id) && o.CancelReason != null)
+            .ToListAsync(cancellationToken);
+
+        var map = new Dictionary<Guid, OrderCancelInfoDto>();
+        foreach (var o in rows)
+        {
+            var info = OrderCancelInfoDto.FromOrder(o);
+            if (info is not null)
+                map[o.Id] = info;
+        }
+
+        return map;
     }
 
     public async Task<Dictionary<Guid, OrderCancellationRefundDto>> GetOrderCancellationRefundDtosByOrderIdsAsync(
@@ -3157,6 +3193,20 @@ public sealed class CustomerRepository(
 
 
 
+    public async Task RemoveAwaitingPaymentNotificationsAsync(Guid orderId, CancellationToken cancellationToken)
+    {
+        var stale = await customerDb.CustomerNotifications
+            .Where(n => n.RelatedOrderId == orderId
+                        && !n.IsDeleted
+                        && n.NotificationType == "order_awaiting_payment")
+            .ToListAsync(cancellationToken);
+        foreach (var n in stale)
+        {
+            n.IsDeleted = true;
+            n.DeletedAt = DateTimeOffset.UtcNow;
+        }
+    }
+
     public async Task<int> MarkAllCustomerNotificationsReadAsync(Guid customerId, CancellationToken cancellationToken)
 
     {
@@ -3545,6 +3595,24 @@ public sealed class CustomerRepository(
     public async Task AddCheckoutSessionOrderAsync(CustomerCheckoutSessionOrder link, CancellationToken cancellationToken) =>
         await customerDb.CustomerCheckoutSessionOrders.AddAsync(link, cancellationToken);
 
+    public Task<List<AbandonedCheckoutDraft>> ListAbandonedCheckoutDraftsAsync(
+        DateTime createdBeforeUtc,
+        int take,
+        CancellationToken cancellationToken) =>
+        (from o in customerDb.CustomerRentalOrders.AsNoTracking()
+         join s in customerDb.CustomerCheckoutSessions.AsNoTracking() on o.CheckoutSessionId equals s.Id
+         where !o.IsDeleted
+               && !s.IsDeleted
+               && o.Status.ToLower() == "awaiting_payment"
+               && o.CreatedOnUtc < createdBeforeUtc
+               && s.Status.ToLower() == "created"
+               && s.Source.ToLower() != "admin_payment_link"
+               && s.Source.ToLower() != "rental_extension"
+         orderby o.CreatedOnUtc
+         select new AbandonedCheckoutDraft(o.Id, o.CustomerId, s.Id))
+        .Take(take)
+        .ToListAsync(cancellationToken);
+
     public Task<CustomerCheckoutSession?> GetCheckoutSessionByIdAsync(Guid sessionId, CancellationToken cancellationToken) =>
         customerDb.CustomerCheckoutSessions
             .Include(x => x.SessionOrders)
@@ -3700,7 +3768,7 @@ public sealed class CustomerRepository(
 
     private static readonly string[] AdminOrderStatusTabs =
     [
-        "all", "pending", "confirmed", "in_transit", "active", "returned", "bought_out", "cancelled", "dispatch_failed"
+        "all", "pending", "confirmed", "in_transit", "active", "returned", "bought_out", "cancelled", "dispatch_failed", "awaiting_payment"
     ];
 
     private static (DateTime? FromUtc, DateTime? ToUtc) NormalizePlacedWindow(DateTime? fromUtc, DateTime? toUtc)
@@ -3774,6 +3842,12 @@ public sealed class CustomerRepository(
         };
     }
 
+    private static bool IsAwaitingPaymentStatus(string? rawStatus) =>
+        string.Equals(
+            rawStatus?.Trim().Replace('_', ' '),
+            "awaiting payment",
+            StringComparison.OrdinalIgnoreCase);
+
     private static bool MatchesAdminOrderStatus(string rawStatus, string tab)
     {
         if (tab is "all" or "") return true;
@@ -3833,7 +3907,9 @@ public sealed class CustomerRepository(
         var counts = AdminOrderStatusTabs.ToDictionary(tab => tab, _ => 0);
         foreach (var (status, count) in groups)
         {
-            counts["all"] += count;
+            // Unpaid drafts are not real orders yet: they only appear under their own tab.
+            if (!IsAwaitingPaymentStatus(status))
+                counts["all"] += count;
             foreach (var tab in AdminOrderStatusTabs)
             {
                 if (tab == "all") continue;
@@ -3887,10 +3963,15 @@ public sealed class CustomerRepository(
             .ToList();
         var variants = variantIds.Count == 0
             ? new Dictionary<Guid, ProductVariant>()
-            : await commonDb.Set<ProductVariant>()
+                : await commonDb.Set<ProductVariant>()
                 .AsNoTracking()
                 .Where(v => variantIds.Contains(v.Id))
                 .ToDictionaryAsync(v => v.Id, cancellationToken);
+        var cancelInfos = await GetOrderCancelInfosByOrderIdsAsync(
+            orders.Where(o => o.Status.Contains("cancel", StringComparison.OrdinalIgnoreCase))
+                .Select(o => o.Id)
+                .ToList(),
+            cancellationToken);
 
         return orders.ConvertAll(o =>
         {
@@ -3927,7 +4008,8 @@ public sealed class CustomerRepository(
                 o.StartDate,
                 o.EndDate,
                 ResolveOrderPrimaryImageUrl(listing, productMap),
-                o.IsExtended);
+                o.IsExtended,
+                cancelInfos.GetValueOrDefault(o.Id));
         });
     }
 

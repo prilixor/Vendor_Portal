@@ -167,15 +167,7 @@ internal sealed class CreateCustomerCheckoutCommandHandler(
             {
                 session.Status = CheckoutSessionStatuses.Failed;
                 await customers.UpdateCheckoutSessionAsync(session, cancellationToken);
-                foreach (var orderDto in placed)
-                {
-                    var order = await customers.GetCustomerOrderEntityByIdAsync(orderDto.Id, cancellationToken);
-                    if (order is null)
-                        continue;
-                    order.Status = "cancelled";
-                    await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
-                }
-
+                await CancelFailedCheckoutDraftsAsync(request.CustomerId, placed, cancellationToken);
                 await customers.SaveChangesAsync(cancellationToken);
                 return Result.Failure<CustomerCheckoutDto>(reserved.Errors);
             }
@@ -258,19 +250,50 @@ internal sealed class CreateCustomerCheckoutCommandHandler(
             session.Status = CheckoutSessionStatuses.Failed;
             await discountCodes.ReleaseBySessionAsync(sessionId, cancellationToken);
             await customers.UpdateCheckoutSessionAsync(session, cancellationToken);
-            foreach (var orderDto in placed)
-            {
-                var order = await customers.GetCustomerOrderEntityByIdAsync(orderDto.Id, cancellationToken);
-                if (order is null) continue;
-                order.Status = "cancelled";
-                await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
-            }
-
+            await CancelFailedCheckoutDraftsAsync(request.CustomerId, placed, cancellationToken);
             await customers.SaveChangesAsync(cancellationToken);
             return Result.Failure<CustomerCheckoutDto>(new Error(
                 "payments.razorpay_create_failed",
                 "Unable to start payment. Please try again.",
                 ErrorCategory.Validation));
+        }
+    }
+
+    /// <summary>
+    /// Payment could not be started, so the draft orders are cancelled through the normal cancel
+    /// command. That also gives the reserved stock back (the old inline cancel did not).
+    /// </summary>
+    private async Task CancelFailedCheckoutDraftsAsync(
+        Guid customerId,
+        IReadOnlyCollection<CustomerOrderDto> placed,
+        CancellationToken cancellationToken)
+    {
+        foreach (var orderDto in placed)
+        {
+            try
+            {
+                var result = await mediator.Send(
+                    new CancelCustomerOrderCommand(
+                        customerId,
+                        orderDto.Id,
+                        Expired: true,
+                        NotifyCustomer: false,
+                        SystemCancelReason: OrderCancelReasons.CheckoutFailed),
+                    cancellationToken);
+                if (!result.IsSuccess)
+                    logger.LogWarning(
+                        "Failed checkout draft {OrderId} was not cancelled: {Error}",
+                        orderDto.Id,
+                        result.Errors.FirstOrDefault()?.Description);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                logger.LogError(ex, "Could not cancel failed checkout draft {OrderId}.", orderDto.Id);
+            }
         }
     }
 }
@@ -551,6 +574,37 @@ internal static class CheckoutPaymentActivator
         var orders = await customers.GetOrdersByCheckoutSessionIdAsync(session.Id, cancellationToken);
         foreach (var order in orders)
         {
+            // The draft was already cancelled or expired (stock released) before the money arrived.
+            // Never lose that payment: open a refund review so BlinksMed returns it.
+            if (string.Equals(order.Status, "cancelled", StringComparison.OrdinalIgnoreCase)
+                || string.Equals(order.Status, "canceled", StringComparison.OrdinalIgnoreCase))
+            {
+                var refund = await OrderCancellationRefunds.TryOpenAsync(
+                    customers,
+                    order,
+                    CancellationOutcomes.Cancelled,
+                    CancellationActors.System,
+                    null,
+                    cancellationToken);
+                if (refund.IsSuccess && refund.Value is not null)
+                {
+                    await customers.AddCustomerNotificationAsync(
+                        new CustomerNotification
+                        {
+                            Id = Guid.NewGuid(),
+                            CustomerId = order.CustomerId,
+                            Title = $"Payment received for cancelled order {order.OrderNumber}",
+                            Body = "Your payment arrived after this order was cancelled. BlinksMed will review it and refund you.",
+                            NotificationType = CustomerNotificationTypes.OrderCancelled,
+                            RelatedOrderId = order.Id,
+                        },
+                        cancellationToken);
+                }
+
+                await customers.SaveChangesAsync(cancellationToken);
+                continue;
+            }
+
             if (!string.Equals(order.Status, "awaiting_payment", StringComparison.OrdinalIgnoreCase))
                 continue;
 
@@ -572,6 +626,7 @@ internal static class CheckoutPaymentActivator
 
             var placementTitle = string.IsNullOrWhiteSpace(agg.ListingTitle) ? "item" : agg.ListingTitle;
             order.Status = "awaiting_vendor_acceptance";
+            await customers.RemoveAwaitingPaymentNotificationsAsync(order.Id, cancellationToken);
             await customers.UpdateCustomerRentalOrderAsync(order, cancellationToken);
             await customers.SaveChangesAsync(cancellationToken);
 

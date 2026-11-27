@@ -572,6 +572,7 @@ export interface VendorOrderApiDto {
   createdAtUtc: string;
   isExtended?: boolean;
   returnSettlement?: import("@/app/helpers/orderReturn").OrderReturnApi | null;
+  cancelInfo?: import("@/app/helpers/orderCancellation").OrderCancelInfoApi | null;
   doctorId?: string;
   doctorName?: string;
   doctorSpecialization?: string;

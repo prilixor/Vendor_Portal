@@ -1629,6 +1629,7 @@ internal sealed class AdminForceCancelRefundOrderCommandHandler(
             return Result.Failure<AdminOrderDto>(new Error("admin.invalid_order_status", "Order is already cancelled or returned.", ErrorCategory.Validation));
 
         o.Status = "cancelled";
+        o.RecordCancellation(CancellationActors.Admin, OrderCancelReasons.AdminCancelled);
         await DispatchOfferClosing.CloseForOrderAsync(
             customers,
             vendors,

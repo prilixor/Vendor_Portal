@@ -386,7 +386,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
               children: const [
                 TextSpan(text: 'Status note: '),
                 TextSpan(text: 'Cancelled', style: TextStyle(fontWeight: FontWeight.w700)),
-                TextSpan(text: ' means the customer cancelled the order. '),
+                TextSpan(text: ' means the order was cancelled (the reason is shown next to the status). '),
                 TextSpan(text: 'Dispatch failed', style: TextStyle(fontWeight: FontWeight.w700)),
                 TextSpan(text: ' means reassignment could not find an eligible vendor.'),
               ],

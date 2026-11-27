@@ -168,7 +168,7 @@ internal sealed class RaiseEquipmentEmergencyCommandHandler(
             return false;
 
         var reason = EquipmentEmergencyReasons.Label(entity.Reason) ?? entity.Reason;
-        var note = string.IsNullOrWhiteSpace(entity.Note) ? string.Empty : $" Note: {entity.Note}";
+        // The customer's free-text note is for admin only: it can contain phone numbers or addresses.
         await vendors.AddVendorNotificationAsync(new VendorNotification
         {
             Id = Guid.CreateVersion7(),
@@ -176,7 +176,7 @@ internal sealed class RaiseEquipmentEmergencyCommandHandler(
             NotificationType = "equipment_emergency",
             RelatedOrderId = entity.CustomerRentalOrderId,
             Title = "Equipment emergency",
-            Message = $"Emergency on order {entity.OrderNumber} for {entity.ProductName}. {reason}.{note}",
+            Message = $"Emergency on order {entity.OrderNumber} for {entity.ProductName}. {reason}.",
             Channel = "in_app",
             Status = "sent",
             SentAt = DateTimeOffset.UtcNow,
@@ -187,7 +187,9 @@ internal sealed class RaiseEquipmentEmergencyCommandHandler(
 }
 
 /// <summary>
-/// What a vendor may see about an emergency. Customer name, phone and address are not included.
+/// What a vendor may see about an emergency. Customer name, phone and address are not included,
+/// and neither is the customer's free-text note (it can contain contact details), so
+/// <c>Note</c> is always null for vendors.
 /// </summary>
 public sealed record VendorEquipmentEmergencyDto(
     Guid Id,
@@ -223,7 +225,7 @@ internal sealed class GetVendorOrderEmergencyQueryHandler(ICustomerRepository cu
             dto.OrderNumber,
             dto.ProductName,
             dto.ReasonLabel,
-            dto.Note,
+            null,
             dto.Status,
             dto.CreatedAt,
             dto.AcknowledgedAt,

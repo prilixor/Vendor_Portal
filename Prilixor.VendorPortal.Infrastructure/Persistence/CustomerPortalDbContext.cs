@@ -150,6 +150,9 @@ public sealed class CustomerPortalDbContext(DbContextOptions<CustomerPortalDbCon
             entity.Property(x => x.DiscountCodeId).HasColumnName("discount_code_id");
             entity.Property(x => x.DiscountCode).HasColumnName("discount_code").HasMaxLength(20);
             entity.Property(x => x.DiscountAmount).HasColumnName("discount_amount");
+            entity.Property(x => x.CancelledBy).HasColumnName("cancelled_by").HasMaxLength(20);
+            entity.Property(x => x.CancelReason).HasColumnName("cancel_reason").HasMaxLength(40);
+            entity.Property(x => x.CancelledAt).HasColumnName("cancelled_at");
             entity.HasOne(x => x.CustomerAddress)
                 .WithMany()
                 .HasForeignKey(x => x.CustomerAddressId)

@@ -11,6 +11,7 @@ import '../../shared/widgets/brand_page_loader.dart';
 import '../../shared/widgets/catalog_image.dart';
 import '../../shared/widgets/guest_sign_in_prompt.dart';
 import '../../shared/widgets/legal_policy_links.dart';
+import '../../shared/utils/pending_order_payment.dart';
 import 'order_detail_screen.dart';
 import 'placed_order_range.dart';
 
@@ -40,8 +41,17 @@ class _OrdersScreenState extends State<OrdersScreen> {
     'Bought Out',
   ];
 
+  /// "Pay now" for orders left as Payment pending (payment window was closed).
+  late final PendingOrderPayment _pendingPayment = PendingOrderPayment(
+    onPaid: () {
+      if (!mounted) return;
+      Provider.of<OrderProvider>(context, listen: false).fetchOrders(silent: true);
+    },
+  );
+
   @override
   void dispose() {
+    _pendingPayment.dispose();
     _searchController.dispose();
     super.dispose();
   }
@@ -106,9 +116,12 @@ class _OrdersScreenState extends State<OrdersScreen> {
     return groups;
   }
 
+  bool _isAwaitingPayment(String status) =>
+      status.trim().toLowerCase().replaceAll('_', ' ') == 'awaiting payment';
+
   bool _isCancellable(String status) {
-    final s = status.trim().toLowerCase();
-    return s == 'pending' || s == 'awaiting vendor acceptance';
+    final s = status.trim().toLowerCase().replaceAll('_', ' ');
+    return s == 'pending' || s == 'awaiting vendor acceptance' || s == 'awaiting payment';
   }
 
   Future<void> _confirmCancelOrder(OrderModel order) async {
@@ -1106,6 +1119,11 @@ class _OrdersScreenState extends State<OrdersScreen> {
                       context,
                       order.returnSettlement!.chipLabel!,
                     ),
+                  if (order.cancelInfo?.chipLabel != null)
+                    _buildRefundBadge(
+                      context,
+                      order.cancelInfo!.chipLabel!,
+                    ),
                   if (order.cancellationRefund?.chipLabel != null)
                     _buildRefundBadge(
                       context,
@@ -1124,6 +1142,22 @@ class _OrdersScreenState extends State<OrdersScreen> {
                         fontWeight: FontWeight.w700,
                       ),
                     ),
+                    if (_isAwaitingPayment(order.status)) ...[
+                      const SizedBox(width: 8),
+                      FilledButton(
+                        style: FilledButton.styleFrom(
+                          padding: const EdgeInsets.symmetric(horizontal: 10),
+                          minimumSize: const Size(0, 28),
+                          tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                          visualDensity: VisualDensity.compact,
+                        ),
+                        onPressed: () => _pendingPayment.start(context, order.id),
+                        child: const Text(
+                          'Pay now',
+                          style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                        ),
+                      ),
+                    ],
                     if (_isCancellable(order.status)) ...[
                       const SizedBox(width: 8),
                       TextButton(
@@ -1305,6 +1339,7 @@ class _OrdersScreenState extends State<OrdersScreen> {
             );
     }
     if (s == 'pending' ||
+        s == 'awaiting payment' ||
         s == 'awaiting vendor acceptance' ||
         s == 'awaiting') {
       return isDark

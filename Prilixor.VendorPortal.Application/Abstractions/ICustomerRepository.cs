@@ -96,6 +96,9 @@ public interface ICustomerRepository
     void DetachOrderCancellationRefund(CustomerOrderCancellationRefund row);
     Task<bool> TryClaimCancellationRefundAsync(Guid refundId, decimal chargeAmount, string? chargeReason, decimal refundAmount, CancellationToken cancellationToken);
     Task<bool> TrySettleCancellationRefundAsync(Guid refundId, decimal chargeAmount, string? chargeReason, CancellationToken cancellationToken);
+    /// <summary>Who cancelled each order and why (only cancelled orders that have a recorded reason).</summary>
+    Task<Dictionary<Guid, OrderCancelInfoDto>> GetOrderCancelInfosByOrderIdsAsync(IReadOnlyCollection<Guid> orderIds, CancellationToken cancellationToken);
+
     Task<Dictionary<Guid, OrderCancellationRefundDto>> GetOrderCancellationRefundDtosByOrderIdsAsync(IReadOnlyCollection<Guid> orderIds, CancellationToken cancellationToken);
     Task<int> CountPendingCancellationRefundsAsync(CancellationToken cancellationToken);
     Task<List<PendingCancellationRefundRow>> ListPendingCancellationRefundsAsync(int take, CancellationToken cancellationToken);
@@ -156,6 +159,9 @@ public interface ICustomerRepository
     Task<List<CustomerNotification>> GetCustomerNotificationsAsync(Guid customerId, CancellationToken cancellationToken);
     Task<CustomerNotification?> GetCustomerNotificationByIdAsync(Guid customerId, Guid notificationId, CancellationToken cancellationToken);
     Task AddCustomerNotificationAsync(CustomerNotification notification, CancellationToken cancellationToken);
+
+    /// <summary>Removes the "awaiting payment / Payment due" alerts of an order once it is paid or cancelled. Caller saves.</summary>
+    Task RemoveAwaitingPaymentNotificationsAsync(Guid orderId, CancellationToken cancellationToken);
     Task<int> MarkAllCustomerNotificationsReadAsync(Guid customerId, CancellationToken cancellationToken);
 
     Task<CustomerNotificationPreference?> GetCustomerNotificationPreferenceAsync(Guid customerId, CancellationToken cancellationToken);
@@ -259,6 +265,15 @@ public interface ICustomerRepository
     Task<CustomerCheckoutSession?> GetOpenCheckoutSessionByReceiptAsync(string receipt, CancellationToken cancellationToken);
     Task<List<CustomerRentalOrder>> GetOrdersByCheckoutSessionIdAsync(Guid sessionId, CancellationToken cancellationToken);
 
+    /// <summary>
+    /// Unpaid customer checkout drafts (status <c>awaiting_payment</c>) created before <paramref name="createdBeforeUtc"/>
+    /// whose Razorpay session is still open. Admin payment links and rental extensions are excluded.
+    /// </summary>
+    Task<List<AbandonedCheckoutDraft>> ListAbandonedCheckoutDraftsAsync(
+        DateTime createdBeforeUtc,
+        int take,
+        CancellationToken cancellationToken);
+
     Task<EmergencyListingSnapshot?> GetEmergencyListingSnapshotAsync(Guid listingId, CancellationToken cancellationToken);
     Task<CustomerOrderEmergency?> GetLatestOrderEmergencyAsync(Guid orderId, CancellationToken cancellationToken);
     Task<CustomerOrderEmergency?> GetActiveOrderEmergencyAsync(Guid orderId, CancellationToken cancellationToken);
@@ -273,6 +288,8 @@ public interface ICustomerRepository
 }
 
 /// <summary>Rental order row plus listing loaded from the vendor database (may be null if listing was removed).</summary>
+public sealed record AbandonedCheckoutDraft(Guid OrderId, Guid CustomerId, Guid CheckoutSessionId);
+
 public sealed record CustomerRentalOrderWithListing(
     CustomerRentalOrder Order,
     VendorProductListing? Listing,
